@@ -14,44 +14,73 @@ use super::{
 };
 
 #[derive(Debug, Subcommand)]
+/// Builds validator-related transactions that move a validator through its lifecycle: created, active, inactive, retired, deleted
 pub enum ValidatorCommands {
+    /// Creates a transaction to create a new validator by locking the fixed deposit and registering its keys
     Create {
+        /// Hex-encoded private key of the account paying the deposit and fee
         secret_key: String,
+        /// Hex-encoded private key of the validator's cold key; this key is used to create and delete the validator
         secret_cold_key: String,
+        /// Hex-encoded private key of the validator's signing key; this key is used to sign the blocks and signal transactions
         secret_signing_key: String,
+        /// Hex-encoded private key of the validator's voting key; this key is used to sign the votes for macro/skip blocks
         secret_voting_key: String,
+        /// NQ address that receives the block rewards
         reward_address: Address,
+        /// Optional hex-encoded signal data for validator coordination/upgrade signaling
         signal_data: Option<String>,
     },
+    /// Creates a transaction to update the validator's settings; update the validator's keys, reward address, and/or signal data
     Update {
+        /// Hex-encoded private key of the account paying the fee
         secret_key: String,
+        /// Hex-encoded private key of the validator's cold key; this key proves ownership of the validator
         secret_cold_key: String,
-        /// Whether to overwrite signal data.
-        /// If this flag is set but signal data is not provided, it will be deleted.
+        /// Use this flag to apply or clear signal data; without it, `new_signal_data` is ignored
         #[arg(short, long)]
         overwrite_signal_data: bool,
+        /// Optional replacement of the validator's hex-encoded signing key
         new_secret_signing_key: Option<String>,
+        /// Optional replacement of the validator's hex-encoded voting key
         new_secret_voting_key: Option<String>,
+        /// Optional replacement of the validator's reward address
         new_reward_address: Option<Address>,
+        /// Optional hex-encoded replacement of the validator's signal data; requires `--overwrite-signal-data`
         new_signal_data: Option<String>,
     },
+    /// Creates a transaction to deactivate an active validator; moves it to the inactive set
     Deactivate {
+        /// Hex-encoded private key of the account paying the fee
         secret_key: String,
+        /// NQ address of the validator to deactivate
         validator_address: Address,
+        /// Hex-encoded private key of the validator's signing key to authorize the deactivation
         secret_signing_key: String
     },
+    /// Creates a transaction to reactivate an inactive validator; moves it back to the active set. Note: this can be automated in the validator's config file
     Reactivate {
+        /// Hex-encoded private key of the account paying the fee
         secret_key: String,
+        /// NQ address of the validator to reactivate
         validator_address: Address,
+        /// Hex-encoded private key of the validator's signing key to authorize the reactivation
         secret_signing_key: String,
     },
+    /// Creates a transaction to permanently retire a validator; forces deactivation if still active and this command is mandatory before `delete`
     Retire {
+        /// Hex-encoded private key of the account paying the fee
         secret_key: String,
+        /// Hex-encoded private key of the validator's cold key to authorize the retirement
         secret_cold_key: String,
     },
+    /// Creates a transaction to delete a retired validator and withdraw its deposit (minus fee) to `recipient`; creates a tombstone if stakers remain
     Delete {
+        /// NQ address that receives the validator's deposit minus fee
         recipient: Address,
+        /// Hex-encoded private key of the validator's cold key signing the outgoing transaction
         secret_cold_key: String,
+        /// Amount of deposit to withdraw in Lunas; must match the validator's deposit
         value: Coin,
     },
 }

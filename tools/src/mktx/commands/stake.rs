@@ -7,48 +7,65 @@ use nimiq_transaction_builder::TransactionBuilder;
 use super::{hex_option_secret_key_to_option_pair, hex_secret_key_to_pair, CommandError, TransactionOrProof};
 
 #[derive(Debug, Subcommand)]
+/// Builds staking-related transactions that move a staker though its lifecycle: active, inactive, retired
 pub enum StakeCommands {
-    /// Creates a transaction that creates a new staker with a given initial stake and delegation.
+    /// Creates a transaction to create a new staker
     Create {
-        /// The key pair used to sign the outgoing transaction. The initial stake is sent from the basic account belonging to this key pair.
+        /// Hex-encoded private key of the account paying the stake and fee
         secret_key: String,
-        /// The key pair used to sign the incoming transaction. The staker address will be derived from this key pair.
+        /// Hex-encoded private key of the new staker; its derived address will be the staker address
         staker_secret_key: String,
+        /// The amount of stake to lock up as initial active balance in Lunas
         value: Coin,
+        /// Optional NQ address to delegate the stake to
         delegation: Option<Address>,
     },
-    /// Creates a transaction to add stake from the address of a given `key_pair` to a specified `staker_address`.
+    /// Creates a transaction to add more active stake to an existing staker; the coins come from a basic account
     Add {
-        secret_key: String,   
+        /// Hex-encoded private key of the basic account adding more stake
+        secret_key: String,
+        /// NQ address of the existing staker to add stake to
         staker_address: Address,
+        /// Amount of stake to add in Lunas
         value: u64,
     },
-    /// Creates an update staker transaction for a given staker that changes the delegation.
+    /// Creates a transaction to update the staker's settings; update the staker delegation and/or reactivate all inactive stake
     Update {
-        /// Activate all inactive stake as part of the update.
+        /// Reactivate all inactive stake before applying the new delegation (if any); this moves from inactive to active  and resets the release height
         #[arg(short, long)]
         reactivate_all_stake: bool,
-        /// Hex-encoded private key to the staker address that is being updated.
+        /// Hex-encoded staker private key authorizing the update
         staker_secret_key: String,
-        /// Pay the transaction fee from the basic account belonging to this hex-encoded private key.
+        /// Pay the transaction fee from the basic account belonging to this hex-encoded private key
         fee_key: Option<String>,
-        /// The new address to delegate to.
+        /// The new validator NQ address to delegate to
         new_delegation: Option<Address>,
     },
-    /// Creates a set active stake transaction for a given staker.
+    /// Sets the staker's active stake to a new value; can be used to both increase and decrease the active stake and restarts the lock-up timer
     Activate {
+        /// Hex-encoded staker private key authorizing the balance rebalancing
         staker_secret_key: String,
+        /// Target active stake balance in Lunas; the remaining stake (if any) becomes inactive
         new_active_balance: Coin,
+        /// Optional hex-encoded private key of a basic account that should pay the fee; defaults to the staker
         secret_key: Option<String>,
     },
+    /// Creates a transaction to retire part of the staker's stake; it moves already released inactive stake into the retired bucket so it can be withdrawn with the `remove` command
     Retire {
+        /// Hex-encoded staker private key authorizing the stake retirement
         staker_secret_key: String,
+        /// Amount of stake to retire in Lunas; must be <= the staker's inactive stake
         retire_stake: Coin,
+        /// Optional hex-encoded private key of a basic account that should pay the fee; defaults to the staker
         secret_key: Option<String>,
     },
+    /// Creates a transaction to remove the staker's entire retired stake; removes the staker once the total balance hits zero
     Remove {
+        /// Hex-encoded private key of the staker authorizing the removal
         secret_key: String,
+        /// NQ address of the basic account receiving the removed stake
         recipient: Address,
+        /// Amount of stake to remove in Lunas; must equal the full retired balance
         value: Coin,
     },
 }

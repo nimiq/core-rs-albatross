@@ -18,49 +18,75 @@ pub enum HashType {
 
 #[derive(Clone, Debug, Args)]
 pub struct HtlcRequiredArgs {
+    /// NQ address that receives the funds once the HTLC unlocks
     recipient: Address,
+    /// Amount to transfer in Lunas; ensure balance covers value + fee
     value: Coin,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum HtlcCommands {
+    /// Deploys a new HTLC
     Create {
         #[clap(flatten)]
         required_args: HtlcRequiredArgs,
+        /// Hex-encoded sender private key; signs the contract creation transaction
         hex_secret_key: String,
+        /// NQ address that funds the HTLC and can redeem it
         htlc_sender: Address,
+        /// Hash algorithm used
         hash_type: HashType,
+        /// Hex-encoded hash root that must be matched to redeem the HTLC
         hash_root: String,
+        /// Number of times the hash function must be applied to the pre-image to match the hash root
         hash_count: u8,
+        /// Timeout in number of blocks after which the sender can redeem the HTLC
         timeout: u64,
     },
+    /// Redeems an HTLC using the pre-image
     RedeemRegular {
         #[clap(flatten)]
         required_args: HtlcRequiredArgs,
+        /// Hex-encoded recipient private key signing the redemption transaction
         hex_secret_key: String,
+        /// Address of the HTLC contract to redeem
         contract_address: Address,
+        /// Hex-encoded pre-image that hashes to the hash root
         pre_image: String,
+        /// Hash algorithm used
         hash_type: HashType,
+        /// Hex-encoded hash root that must be matched to redeem the HTLC
         hash_root: String,
+        /// Hash counter that matches the contract’s expected value. Must be <= the contract’s hash count
         hash_count: u8,
     },
+    /// Redeems an HTLC after timeout
     RedeemTimeout {
         #[clap(flatten)]
         required_args: HtlcRequiredArgs,
+        /// Hex-encoded sender private key authorizing the timeout redemption
         hex_secret_key: String,
+        /// Address of the HTLC contract to redeem
         contract_address: Address,
     },
+    /// Redeems an HTLC early using signatures from both sender and recipient
     RedeemEarly {
         #[clap(flatten)]
         required_args: HtlcRequiredArgs,
+        /// Address of the HTLC contract to redeem
         contract_address: Address,
+        /// Hex-encoded signature proof produced by `htlc sign-early` using the sender key
         htlc_sender_signature: String,
+        /// Hex-encoded signature proof produced by `htlc sign-early` using the recipient key
         htlc_recipient_signature: String,
     },
+    /// Produces a signature proof for an early redeem transaction; either party signs this transaction and it emits a SignatureProof hex blob for the counterparty. Sign first, then use `htlc redeem-early`
     SignEarly {
         #[clap(flatten)]
         required_args: HtlcRequiredArgs,
+        /// Hex-encoded private key of the sender or recipient
         hex_secret_key: String,
+        /// Address of the HTLC contract to redeem
         contract_address: Address,
     },
 }

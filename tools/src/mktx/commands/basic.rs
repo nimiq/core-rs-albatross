@@ -9,13 +9,13 @@ use super::{hex_secret_key_to_pair, CommandError, TransactionOrProof};
 
 #[derive(Debug, Args)]
 pub struct AllArgs {
-    /// The hex-encoded private key to access the sender account.
+    /// Hex-encoded sender private key; this key signs the transaction
     hex_secret_key: String,
-    /// The recipient address in user friendly format (NQXXXXXX...).
+    /// Recipient address in NQ format
     recipient: Address,
-    /// The amount (in lunas) to transfer.
+    /// Amount to transfer in Lunas; ensure balance covers value + fee
     value: Coin,
-    /// The optional hex-encoded data that will be stored in the transaction's data field.
+    /// Optional hex-encoded data
     data: Option<String>,
 }
 

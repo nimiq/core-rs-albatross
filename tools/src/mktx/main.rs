@@ -29,11 +29,15 @@ struct CliGlobalOpts {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Create basic transactions with or without data
+    /// Create and sign basic transactions with or without data
     Basic(BasicArgs),
+    /// Manage HTLC transactions
     Htlc(HtlcArgs),
+    /// Build staking transactions
     Stake(StakeArgs),
+    /// Create and manage validator transactions
     Validator(ValidatorArgs),
+    /// Create or redeem vesting contracts
     Vesting(VestingArgs),
 }
 
