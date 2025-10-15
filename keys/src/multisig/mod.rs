@@ -250,7 +250,7 @@ impl KeyPair {
         Ok(partial_signature)
     }
 
-    /// Delinearized the private key in the same way as the public key delinearization.
+    /// Delinearized the private key in the same way as the public key demineralization.
     /// It multiplies it with a scalar derived from the hash and the public key itself.
     pub(crate) fn delinearize_private_key(&self, public_keys_hash: &[u8; 64]) -> Scalar {
         // Compute H(C||P).
@@ -339,7 +339,7 @@ pub fn hash_public_keys(public_keys: &[Ed25519PublicKey]) -> [u8; 64] {
     for public_key in public_keys {
         h.update(public_key.as_bytes());
     }
-    public_keys_hash.copy_from_slice(h.finalize().as_slice());
+    public_keys_hash.copy_from_slice(&h.finalize());
     public_keys_hash
 }
 
@@ -354,7 +354,7 @@ impl ToScalar for ::ed25519_zebra::SigningKey {
 
         // Convert the low half to a scalar with Ed25519 "clamping"
         let mut scalar_bytes = [0u8; 32];
-        scalar_bytes[..].copy_from_slice(&h.as_slice()[0..32]);
+        scalar_bytes[..].copy_from_slice(&h[0..32]);
         scalar_bytes[0] &= 248;
         scalar_bytes[31] &= 127;
         scalar_bytes[31] |= 64;

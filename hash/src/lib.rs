@@ -332,7 +332,7 @@ impl Hasher for Sha256Hasher {
 
     fn finish(self) -> Sha256Hash {
         let result = self.0.finalize();
-        Sha256Hash::from(result.as_slice())
+        Sha256Hash::from(&result[..])
     }
 }
 

@@ -30,7 +30,7 @@ impl PrivateKey {
         // Convert to scalar as in RFC 8032, section 6, `def secret_expand(secret)`:
         // https://www.rfc-editor.org/rfc/rfc8032.html#section-6
         let mut scalar_bytes = [0u8; 32];
-        scalar_bytes.copy_from_slice(&Sha512::digest(self.as_bytes()).as_slice()[..32]);
+        scalar_bytes.copy_from_slice(&Sha512::digest(self.as_bytes())[..32]);
         scalar_bytes[0] &= 248;
         scalar_bytes[31] &= 127;
         scalar_bytes[31] |= 64;

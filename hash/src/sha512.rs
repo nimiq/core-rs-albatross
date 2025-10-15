@@ -176,6 +176,6 @@ impl Hasher for Sha512Hasher {
 
     fn finish(self) -> Sha512Hash {
         let result = self.0.finalize();
-        Sha512Hash::from(result.as_slice())
+        Sha512Hash::from(&result[..])
     }
 }
