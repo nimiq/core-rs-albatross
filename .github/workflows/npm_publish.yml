@@ -5,12 +5,13 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -22,9 +23,11 @@ jobs:
         run: ./scripts/build.sh
       - uses: actions/setup-node@v4
         with:
+          node-version: 'lts/*'
           registry-url: 'https://registry.npmjs.org'
+      # Ensure npm 11.5.1 or later is installed
+      - name: Update npm
+        run: sudo npm install -g npm@latest
       - name: Publish to npm
         working-directory: ./web-client/dist
-        run: npm publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.SISOU_NPM_TOKEN }}
+        run: npm publish
