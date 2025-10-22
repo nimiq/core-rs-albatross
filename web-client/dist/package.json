@@ -4,11 +4,11 @@
     "The Nimiq Core Development Team <info@nimiq.com>"
   ],
   "description": "Nimiq's Rust-to-WASM web client",
-  "version": "2.1.2-rc.0",
+  "version": "2.2.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nimiq/core-rs-albatross"
+    "url": "git+https://github.com/nimiq/core-rs-albatross.git"
   },
   "main": "./nodejs/index.js",
   "module": "./bundler/index.js",
