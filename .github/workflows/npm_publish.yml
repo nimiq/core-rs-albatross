@@ -27,7 +27,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       # Ensure npm 11.5.1 or later is installed
       - name: Update npm
-        run: sudo npm install -g npm@latest
+        run: npm install -g npm@latest
       - name: Publish to npm
         working-directory: ./web-client/dist
         run: npm publish
