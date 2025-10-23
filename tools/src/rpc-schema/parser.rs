@@ -347,6 +347,39 @@ impl ParsedTraitItemFn {
 
         if is_rust_type {
             if json_type == "array" {
+                // Check if the inner type is a tuple (e.g., Vec<(Type1, Type2)>)
+                if let PathArguments::AngleBracketed(args) = &ident.arguments
+                    && let Some(GenericArgument::Type(Type::Tuple(tuple))) = args.args.first()
+                {
+                    // Handle tuple case: generate schema for array of tuples
+                    let mut properties = Map::new();
+                    for (idx, elem) in tuple.elems.iter().enumerate() {
+                        if let Type::Path(elem_path) = elem {
+                            let elem_ident = elem_path
+                                .path
+                                .segments
+                                .first()
+                                .expect("Tuple element must have an identity.");
+                            let (_, json_elem_type) = Self::to_json_type(&elem_ident.ident);
+                            properties.insert(
+                                idx.to_string(),
+                                json_schema!({
+                                    "type": json_elem_type
+                                })
+                                .into(),
+                            );
+                        }
+                    }
+                    return json_schema!({
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": properties
+                        }
+                    });
+                }
+
+                // Handle non-tuple cases
                 let inner_type = Self::unwrap_type(ident);
                 let (_inner_is_rust_type, inner_json_type) = Self::to_json_type(&inner_type.1);
 
@@ -408,15 +441,16 @@ impl ParsedTraitItemFn {
 
         match ident.to_string().as_str() {
             "Vec" | "Option" => {
-                if let PathArguments::AngleBracketed(outer_type) = &path_segment.arguments {
-                    if let GenericArgument::Type(Type::Path(inner_type)) =
+                if let PathArguments::AngleBracketed(outer_type) = &path_segment.arguments
+                    && let GenericArgument::Type(Type::Path(inner_type)) =
                         outer_type.args.first().unwrap()
-                    {
-                        let segment = inner_type.path.segments.first().unwrap();
-                        return (segment.to_owned(), segment.ident.clone());
-                    }
-                    unreachable!()
+                {
+                    let segment = inner_type.path.segments.first().unwrap();
+                    return (segment.to_owned(), segment.ident.clone());
                 }
+
+                // For non-path types (e.g., tuples like Vec<(Blake2bHash, u32)>),
+                // return the wrapper as-is since we can't extract a simple inner type
                 (path_segment.to_owned(), ident)
             }
             _ => (path_segment.to_owned(), ident),
