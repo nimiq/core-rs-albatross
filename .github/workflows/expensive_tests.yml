@@ -2,7 +2,7 @@ name: Expensive tests
 
 on:
   schedule:
-    - cron: '57 0 * * *'
+    - cron: '57 0 * * THU' # run on Thursday at 00:57
   workflow_dispatch:
 
 jobs:

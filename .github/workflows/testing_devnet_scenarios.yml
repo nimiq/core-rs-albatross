@@ -2,7 +2,7 @@ name: Debugging - Devnet Scenarios
 
 on:
   schedule:
-    - cron: '55 */2 * * *'
+    - cron: '55 */12 * * *'
   workflow_dispatch:
 
 jobs:
