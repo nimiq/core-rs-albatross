@@ -16,7 +16,7 @@ use nimiq::client::ConsensusProxy;
 pub use nimiq::{
     config::{
         config::ClientConfig,
-        config_file::{LogSettings, Seed},
+        config_file::{LogSettings, NetworkSettings, Seed},
     },
     extras::{panic::initialize_panic_reporting, web_logging::initialize_web_logging},
 };
@@ -176,6 +176,8 @@ impl Client {
         config.network.peer_count_per_ip_max = web_config.peer_count_per_ip_max;
         config.network.peer_count_per_subnet_max = web_config.peer_count_per_subnet_max;
         config.network.num_initial_connections = web_config.num_initial_connections;
+        // Ensure bounded channels use a non-zero buffer size (matches the config default of 1024).
+        config.network.network_buffer_size = NetworkSettings::default_network_buffer_size();
 
         log::info!(?config, "Final configuration");
 
