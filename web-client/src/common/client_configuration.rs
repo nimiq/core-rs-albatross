@@ -32,6 +32,8 @@ pub struct ClientConfiguration {
     #[wasm_bindgen(skip)]
     pub peer_count_per_subnet_max: usize,
     #[wasm_bindgen(skip)]
+    pub network_buffer_size: usize,
+    #[wasm_bindgen(skip)]
     pub sync_mode: String,
     #[wasm_bindgen(skip)]
     pub num_initial_connections: usize,
@@ -62,6 +64,8 @@ pub struct PlainClientConfiguration {
     pub peer_count_per_ip_max: Option<usize>,
     #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
     pub peer_count_per_subnet_max: Option<usize>,
+    #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
+    pub network_buffer_size: Option<usize>,
     #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
     pub sync_mode: Option<String>,
     #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
@@ -96,6 +100,7 @@ impl Default for ClientConfiguration {
             peer_count_per_subnet_max: 10,
             sync_mode: "light".to_string(),
             num_initial_connections: 4,
+            network_buffer_size: 1024,
         }
     }
 }
@@ -176,6 +181,16 @@ impl ClientConfiguration {
         self.peer_count_per_subnet_max = peer_count_per_subnet_max;
     }
 
+    /// Sets the maximum network buffer size, which should be greater than 0
+    /// Default is `1024`.
+    #[wasm_bindgen(js_name = networkBufferSize)]
+    pub fn network_buffer_size(&mut self, network_buffer_size: usize) {
+        if network_buffer_size == 0_usize {
+            panic!("The network buffer size needs to be greater than 0")
+        }
+        self.network_buffer_size = network_buffer_size;
+    }
+
     /// Sets the sync mode that shoud be used.
     /// Only "light" and "pico" are supported for web clients
     /// Default is "light"
@@ -207,6 +222,7 @@ impl ClientConfiguration {
             peer_count_per_subnet_max: Some(self.peer_count_per_subnet_max),
             sync_mode: Some(self.sync_mode.clone()),
             num_initial_connections: Some(self.num_initial_connections),
+            network_buffer_size: Some(self.network_buffer_size),
         })
         .unwrap()
         .into()
@@ -251,6 +267,10 @@ impl TryFrom<PlainClientConfiguration> for ClientConfiguration {
 
         if let Some(peer_count_per_subnet_max) = config.peer_count_per_subnet_max {
             client_config.peer_count_per_subnet_max = peer_count_per_subnet_max;
+        }
+
+        if let Some(network_buffer_size) = config.network_buffer_size {
+            client_config.network_buffer_size = network_buffer_size;
         }
 
         if let Some(sync_mode) = config.sync_mode {
