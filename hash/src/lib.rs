@@ -22,6 +22,7 @@ use nimiq_mmr::hash::Merge;
 use nimiq_serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha512};
 use subtle::ConstantTimeEq;
+use tiny_keccak::{Hasher as KeccakHasher, Keccak};
 
 pub mod argon2kdf;
 pub mod blake2s;
@@ -333,6 +334,106 @@ impl Hasher for Sha256Hasher {
     fn finish(self) -> Sha256Hash {
         let result = self.0.finalize();
         Sha256Hash::from(&result[..])
+    }
+}
+
+// Keccak256
+
+const KECCAK256_LENGTH: usize = 32;
+create_typed_array!(Keccak256Hash, u8, KECCAK256_LENGTH);
+add_hex_io_fns_typed_arr!(Keccak256Hash, KECCAK256_LENGTH);
+add_serialization_fns_typed_arr!(Keccak256Hash, KECCAK256_LENGTH);
+add_constant_time_eq_typed_arr!(Keccak256Hash);
+pub struct Keccak256Hasher(Keccak);
+
+impl HashOutput for Keccak256Hash {
+    type Builder = Keccak256Hasher;
+
+    fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+    fn len() -> usize {
+        KECCAK256_LENGTH
+    }
+}
+
+impl SerializeContent for Keccak256Hash {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(self.as_bytes())?;
+        Ok(())
+    }
+}
+
+impl Keccak256Hasher {
+    pub fn new() -> Self {
+        Keccak256Hasher(Keccak::v256())
+    }
+}
+
+impl Default for Keccak256Hasher {
+    fn default() -> Self {
+        Keccak256Hasher::new()
+    }
+}
+
+impl io::Write for Keccak256Hasher {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.update(buf);
+        Ok(buf.len())
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.0.update(buf);
+        Ok(())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Hasher for Keccak256Hasher {
+    type Output = Keccak256Hash;
+
+    fn finish(self) -> Keccak256Hash {
+        let mut result = [0u8; KECCAK256_LENGTH];
+        self.0.finalize(&mut result);
+        Keccak256Hash::from(&result[..])
+    }
+}
+
+impl AsDatabaseBytes for Keccak256Hash {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Borrowed(self.as_bytes())
+    }
+
+    const FIXED_SIZE: Option<usize> = Some(KECCAK256_LENGTH);
+}
+
+impl FromDatabaseBytes for Keccak256Hash {
+    fn from_key_bytes(bytes: &[u8]) -> Self
+    where
+        Self: Sized,
+    {
+        bytes.into()
+    }
+}
+
+impl Merge for Keccak256Hash {
+    /// Hashes just a prefix.
+    fn empty(prefix: u64) -> Self {
+        let mut hasher = Keccak256Hasher::new();
+        hasher.write_all(&prefix.to_be_bytes()).unwrap();
+        hasher.finish()
+    }
+
+    /// Hashes a prefix and two Keccak256 hashes together.
+    fn merge(&self, other: &Self, prefix: u64) -> Self {
+        let mut hasher = Keccak256Hasher::new();
+        hasher.write_all(&prefix.to_be_bytes()).unwrap();
+        self.serialize_to_writer(&mut hasher).unwrap();
+        other.serialize_to_writer(&mut hasher).unwrap();
+        hasher.finish()
     }
 }
 
