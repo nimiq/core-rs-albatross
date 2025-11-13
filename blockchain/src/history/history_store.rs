@@ -384,6 +384,34 @@ impl HistoryStore {
         tree
     }
 
+    /// Gets the Keccak256 history tree root for a given block number.
+    /// This method computes the root on-demand by building a temporary in-memory MMR
+    /// with Keccak256 hashing from the stored historic transactions.
+    pub fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash> {
+        let txn = txn_option.or_new(&self.db);
+
+        // Determine the epoch number from the block number
+        let epoch_number = Policy::epoch_at(block_number);
+
+        // Build the Keccak256 MMR for the epoch
+        let tree = self.build_keccak256_mmr(epoch_number, Some(&txn));
+
+        // Get the number of leaves at the block number
+        let leaf_count = self.length_at(block_number, Some(&txn))? as usize;
+
+        // Handle edge case: empty history
+        if leaf_count == 0 {
+            return None;
+        }
+
+        // Compute and return the root hash from the MMR
+        tree.get_root().ok()
+    }
+
     /// Internal function for `add_to_history`, which also returns leaf indices.
     pub(crate) fn put_historic_txns(
         &self,
@@ -1716,5 +1744,178 @@ mod tests {
         // Verify we can get a root
         let root = tree.get_root().expect("Should be able to get root");
         assert_eq!(root.as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn get_keccak256_history_root_for_various_block_numbers() {
+        use nimiq_hash::HashOutput;
+
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions at different block numbers
+        let ext_0 = create_transaction(3, 0);
+        let ext_1 = create_transaction(4, 1);
+        let ext_2 = create_transaction(5, 2);
+
+        let mut txn = env.write_transaction();
+
+        // Add transactions incrementally
+        history_store.add_to_history(&mut txn, 3, &[ext_0]).unwrap();
+        let root_at_3 = history_store
+            .get_keccak256_history_root(3, Some(&txn))
+            .expect("Should have root at block 3");
+
+        history_store.add_to_history(&mut txn, 4, &[ext_1]).unwrap();
+        let root_at_4 = history_store
+            .get_keccak256_history_root(4, Some(&txn))
+            .expect("Should have root at block 4");
+
+        history_store.add_to_history(&mut txn, 5, &[ext_2]).unwrap();
+        let root_at_5 = history_store
+            .get_keccak256_history_root(5, Some(&txn))
+            .expect("Should have root at block 5");
+
+        // Verify all roots are valid 32-byte hashes
+        assert_eq!(root_at_3.as_bytes().len(), 32);
+        assert_eq!(root_at_4.as_bytes().len(), 32);
+        assert_eq!(root_at_5.as_bytes().len(), 32);
+
+        // Verify roots change as more transactions are added
+        assert_ne!(root_at_3.as_bytes(), root_at_4.as_bytes());
+        assert_ne!(root_at_4.as_bytes(), root_at_5.as_bytes());
+    }
+
+    #[test]
+    fn get_keccak256_history_root_with_empty_history() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        let txn = env.read_transaction();
+
+        // Try to get root for empty history
+        let root = history_store.get_keccak256_history_root(0, Some(&txn));
+
+        // Should return None for empty history
+        assert!(root.is_none());
+    }
+
+    #[test]
+    fn get_keccak256_history_root_with_partial_epoch() {
+        use nimiq_hash::HashOutput;
+
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create transactions but don't fill the entire epoch
+        let ext_0 = create_transaction(Policy::genesis_block_number(), 0);
+        let ext_1 = create_transaction(Policy::genesis_block_number() + 1, 1);
+
+        let mut txn = env.write_transaction();
+        history_store
+            .add_to_history(&mut txn, Policy::genesis_block_number(), &[ext_0])
+            .unwrap();
+        history_store
+            .add_to_history(&mut txn, Policy::genesis_block_number() + 1, &[ext_1])
+            .unwrap();
+
+        // Get root at first block
+        let root_at_first = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have root at first block");
+
+        // Get root at second block
+        let root_at_second = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number() + 1, Some(&txn))
+            .expect("Should have root at second block");
+
+        // Verify both roots are valid
+        assert_eq!(root_at_first.as_bytes().len(), 32);
+        assert_eq!(root_at_second.as_bytes().len(), 32);
+
+        // Roots should be different (different number of leaves)
+        assert_ne!(root_at_first.as_bytes(), root_at_second.as_bytes());
+    }
+
+    #[test]
+    fn get_keccak256_history_root_consistency_across_multiple_calls() {
+        use nimiq_hash::HashOutput;
+
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+
+        // Get root multiple times
+        let root1 = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have root");
+        let root2 = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have root");
+        let root3 = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have root");
+
+        // All roots should be identical (deterministic computation)
+        assert_eq!(root1.as_bytes(), root2.as_bytes());
+        assert_eq!(root2.as_bytes(), root3.as_bytes());
+    }
+
+    #[test]
+    fn get_keccak256_history_root_across_epoch_boundary() {
+        use nimiq_hash::HashOutput;
+
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        let genesis_block = Policy::genesis_block_number();
+        let first_block_next_epoch = Policy::first_block_of(1).expect("Should have epoch 1");
+
+        // Create transactions in two different epochs
+        let ext_epoch_0 = create_transaction(genesis_block, 0);
+        let ext_epoch_1 = create_transaction(first_block_next_epoch, 1);
+
+        let mut txn = env.write_transaction();
+
+        // Add transaction to epoch 0
+        history_store
+            .add_to_history(&mut txn, genesis_block, &[ext_epoch_0])
+            .unwrap();
+
+        // Add transaction to epoch 1
+        history_store
+            .add_to_history(&mut txn, first_block_next_epoch, &[ext_epoch_1])
+            .unwrap();
+
+        // Get roots for both epochs
+        let root_epoch_0 = history_store
+            .get_keccak256_history_root(genesis_block, Some(&txn))
+            .expect("Should have root for epoch 0");
+
+        let root_epoch_1 = history_store
+            .get_keccak256_history_root(first_block_next_epoch, Some(&txn))
+            .expect("Should have root for epoch 1");
+
+        // Verify both roots are valid
+        assert_eq!(root_epoch_0.as_bytes().len(), 32);
+        assert_eq!(root_epoch_1.as_bytes().len(), 32);
+
+        // Verify roots are different (different epochs have independent trees)
+        assert_ne!(root_epoch_0.as_bytes(), root_epoch_1.as_bytes());
+
+        // Verify epoch 0 root is still the same (epoch 1 transactions don't affect it)
+        let root_epoch_0_again = history_store
+            .get_keccak256_history_root(genesis_block, Some(&txn))
+            .expect("Should have root for epoch 0");
+        assert_eq!(root_epoch_0.as_bytes(), root_epoch_0_again.as_bytes());
     }
 }
