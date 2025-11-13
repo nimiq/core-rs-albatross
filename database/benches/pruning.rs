@@ -1,7 +1,7 @@
-use std::ops::Range;
+use std::{hint::black_box, ops::Range};
 
 use criterion::{
-    black_box, criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
+    criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
 };
 use nimiq_database::{
     mdbx::{DatabaseConfig, MdbxDatabase},
