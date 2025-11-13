@@ -7,6 +7,7 @@ use thiserror::Error;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum NetworkId {
     Test = 1,
     Dev = 2,
@@ -15,6 +16,7 @@ pub enum NetworkId {
     Main = 42,
 
     TestAlbatross = 5,
+    #[default]
     DevAlbatross = 6,
     UnitAlbatross = 7,
     MainAlbatross = 24,
@@ -54,12 +56,6 @@ impl NetworkId {
                 | NetworkId::UnitAlbatross
                 | NetworkId::MainAlbatross
         )
-    }
-}
-
-impl Default for NetworkId {
-    fn default() -> Self {
-        Self::DevAlbatross
     }
 }
 

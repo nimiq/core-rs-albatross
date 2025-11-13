@@ -152,8 +152,7 @@ impl<N: Network> MempoolTask<N> {
                         .get_block(hash, true)
                         .expect("Head block not found");
 
-                    self.mempool
-                        .update(&vec![(hash.clone(), block)], [].as_ref());
+                    self.mempool.update(&[(hash.clone(), block)], [].as_ref());
                 }
             }
             BlockchainEvent::Rebranched(old_chain, new_chain) => {

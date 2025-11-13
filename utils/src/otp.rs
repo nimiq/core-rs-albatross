@@ -148,11 +148,12 @@ impl<T: Clear + Deserialize + Serialize> Deref for Unlocked<T> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 pub enum Algorithm {
     Argon2d = 0,
 
     /// With side-channel protection.
+    #[default]
     Argon2id = 2,
 }
 
@@ -168,12 +169,6 @@ impl From<Algorithm> for Argon2Variant {
             Algorithm::Argon2d => Argon2Variant::Argon2d,
             Algorithm::Argon2id => Argon2Variant::Argon2id,
         }
-    }
-}
-
-impl Default for Algorithm {
-    fn default() -> Self {
-        Self::Argon2id
     }
 }
 

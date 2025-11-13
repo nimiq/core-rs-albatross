@@ -58,9 +58,10 @@ use crate::{
 ///
 /// * We'll probably have this enum somewhere in the primitives. So this is a placeholder.
 ///
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
 pub enum SyncMode {
     /// History nodes: They use HistoryMacroSync + BlockLiveSync
+    #[default]
     History,
     /// Full nodes: They use LightMacroSync + StateLiveSync
     Full,
@@ -74,12 +75,6 @@ pub enum SyncMode {
 impl fmt::Display for SyncMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
-    }
-}
-
-impl Default for SyncMode {
-    fn default() -> Self {
-        Self::History
     }
 }
 
