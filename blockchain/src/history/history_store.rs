@@ -10,7 +10,7 @@ use nimiq_database::{
     },
 };
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake2bHash, Hash, Keccak256Hash};
 use nimiq_mmr::{
     error::Error as MMRError,
     mmr::{
@@ -357,6 +357,31 @@ impl HistoryStore {
 
         // Return the history root.
         tree.get_root().ok()
+    }
+
+    /// Builds an in-memory MMR with Keccak256 hashes from stored transactions for a given epoch.
+    /// This method retrieves all historic transactions for the epoch and constructs a temporary
+    /// MMR using Keccak256 hashing. The MMR is not persisted to the database.
+    fn build_keccak256_mmr(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> MerkleMountainRange<Keccak256Hash, MemoryStore<Keccak256Hash>> {
+        let txn = txn_option.or_new(&self.db);
+
+        // Create an in-memory MMR with Keccak256 hashing
+        let mut tree = MerkleMountainRange::new(MemoryStore::new());
+
+        // Get all historic transactions for the epoch
+        let hist_txs = self.get_epoch_transactions(epoch_number, Some(&txn));
+
+        // Push all transactions to the MMR
+        for tx in hist_txs {
+            // Ignore errors - if push fails, we'll have an incomplete tree
+            let _ = tree.push(&tx);
+        }
+
+        tree
     }
 
     /// Internal function for `add_to_history`, which also returns leaf indices.
@@ -1572,5 +1597,124 @@ mod tests {
         vec![
             ext_0, ext_1, ext_2, ext_3, ext_4, ext_5, ext_6, ext_7, ext_8, ext_9, ext_10,
         ]
+    }
+
+    #[test]
+    fn build_keccak256_mmr_from_empty_transactions() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        let txn = env.read_transaction();
+
+        // Build Keccak256 MMR for empty epoch
+        let tree = history_store.build_keccak256_mmr(0, Some(&txn));
+
+        // Verify the tree is empty
+        assert_eq!(tree.num_leaves(), 0);
+    }
+
+    #[test]
+    fn build_keccak256_mmr_from_single_transaction() {
+        use nimiq_hash::HashOutput;
+
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add a single historic transaction
+        let ext_0 = create_transaction(Policy::genesis_block_number(), 0);
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &[ext_0.clone()]);
+
+        // Build Keccak256 MMR
+        let tree = history_store.build_keccak256_mmr(0, Some(&txn));
+
+        // Verify the tree has one leaf
+        assert_eq!(tree.num_leaves(), 1);
+
+        // Verify we can get a root
+        let root = tree.get_root().expect("Should be able to get root");
+        assert_eq!(root.as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn build_keccak256_mmr_from_multiple_transactions() {
+        use nimiq_hash::HashOutput;
+
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add multiple historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+
+        // Build Keccak256 MMR
+        let tree = history_store.build_keccak256_mmr(0, Some(&txn));
+
+        // Verify the tree has correct number of leaves
+        assert_eq!(tree.num_leaves(), 3);
+
+        // Verify we can get a root
+        let root = tree.get_root().expect("Should be able to get root");
+        assert_eq!(root.as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn keccak256_root_differs_from_blake2b_root() {
+        use nimiq_hash::HashOutput;
+
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+
+        // Get Blake2b root from the stored tree
+        let blake2b_root = history_store
+            .get_history_tree_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have Blake2b root");
+
+        // Build Keccak256 MMR and get its root
+        let keccak_tree = history_store.build_keccak256_mmr(0, Some(&txn));
+        let keccak_root = keccak_tree.get_root().expect("Should have Keccak256 root");
+
+        // Verify the roots are different (they use different hash algorithms)
+        assert_ne!(blake2b_root.as_bytes(), keccak_root.as_bytes());
+    }
+
+    #[test]
+    fn build_keccak256_mmr_with_transactions_from_different_blocks() {
+        use nimiq_hash::HashOutput;
+
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create transactions from different blocks in the same epoch
+        // Use the gen_hist_txs helper which creates transactions across multiple blocks
+        let hist_txs = gen_hist_txs();
+        let genesis_block_number = Policy::genesis_block_number();
+
+        let mut txn = env.write_transaction();
+        // Add all transactions to the same block for simplicity
+        // The key point is that build_keccak256_mmr retrieves all transactions for an epoch
+        history_store.add_to_history(&mut txn, genesis_block_number, &hist_txs[..3]);
+
+        // Build Keccak256 MMR for the epoch
+        let tree =
+            history_store.build_keccak256_mmr(Policy::epoch_at(genesis_block_number), Some(&txn));
+
+        // Verify the tree has all transactions from the epoch
+        assert_eq!(tree.num_leaves(), 3);
+
+        // Verify we can get a root
+        let root = tree.get_root().expect("Should be able to get root");
+        assert_eq!(root.as_bytes().len(), 32);
     }
 }

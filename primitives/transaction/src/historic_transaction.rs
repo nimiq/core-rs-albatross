@@ -312,6 +312,18 @@ impl MMRHash<Blake2bHash> for HistoricTransaction {
     }
 }
 
+impl MMRHash<nimiq_hash::Keccak256Hash> for HistoricTransaction {
+    /// Hashes a prefix and an historic transaction into a Keccak256Hash. The prefix is necessary
+    /// to include it into the History Tree.
+    /// This returns the executed transaction hash prefixed with 'prefix' number of leaves.
+    fn hash(&self, prefix: u64) -> nimiq_hash::Keccak256Hash {
+        let mut hasher = nimiq_hash::Keccak256Hasher::new();
+        hasher.write_all(&prefix.to_be_bytes()).unwrap();
+        self.serialize_to_writer(&mut hasher).unwrap();
+        hasher.finish()
+    }
+}
+
 /// An enum specifying the type of transaction and containing the necessary data to represent that
 /// transaction.
 // TODO: The transactions include a lot of unnecessary information (ex: the signature). Don't
