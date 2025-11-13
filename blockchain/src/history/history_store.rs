@@ -412,6 +412,42 @@ impl HistoryStore {
         tree.get_root().ok()
     }
 
+    /// Generates a Keccak256-based proof for historic transactions at given positions.
+    /// This method builds a temporary in-memory MMR with Keccak256 hashing and generates
+    /// a proof for the specified leaf indices. The proof can be verified against the
+    /// Keccak256 history tree root.
+    pub fn prove_with_keccak256(
+        &self,
+        epoch_number: u32,
+        leaf_indices: Vec<usize>,
+        verifier_state: Option<usize>,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeProof<Keccak256Hash>> {
+        let txn = txn_option.or_new(&self.db);
+
+        // Build Keccak256 MMR for the specified epoch
+        let tree = self.build_keccak256_mmr(epoch_number, Some(&txn));
+
+        // Generate proof using MMR::prove() with given leaf indices
+        let proof = tree.prove(&leaf_indices, verifier_state).ok()?;
+
+        // Retrieve historic transactions for the proof positions
+        let mut hist_txs = vec![];
+        for i in &leaf_indices {
+            hist_txs.push(
+                self.get_historic_tx(epoch_number, *i as u32, Some(&txn))
+                    .unwrap(),
+            );
+        }
+
+        // Return HistoryTreeProof with proof and transactions
+        Some(HistoryTreeProof {
+            proof,
+            positions: leaf_indices,
+            history: hist_txs,
+        })
+    }
+
     /// Internal function for `add_to_history`, which also returns leaf indices.
     pub(crate) fn put_historic_txns(
         &self,
@@ -1917,5 +1953,198 @@ mod tests {
             .get_keccak256_history_root(genesis_block, Some(&txn))
             .expect("Should have root for epoch 0");
         assert_eq!(root_epoch_0.as_bytes(), root_epoch_0_again.as_bytes());
+    }
+
+    #[test]
+    fn prove_with_keccak256_single_transaction() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add a single historic transaction
+        let ext_0 = create_transaction(Policy::genesis_block_number(), 0);
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &[ext_0.clone()]);
+
+        // Generate Keccak256 proof for the transaction
+        let proof = history_store
+            .prove_with_keccak256(0, vec![0], None, Some(&txn))
+            .expect("Should be able to generate proof");
+
+        // Verify proof structure
+        assert_eq!(proof.positions.len(), 1);
+        assert_eq!(proof.positions[0], 0);
+        assert_eq!(proof.history.len(), 1);
+        assert_eq!(proof.history[0].block_number, ext_0.block_number);
+
+        // Verify the proof can be verified against the Keccak256 root
+        let root = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have root");
+
+        let leaves: Vec<(usize, &HistoricTransaction)> = proof
+            .positions
+            .iter()
+            .zip(proof.history.iter())
+            .map(|(&pos, tx)| (pos, tx))
+            .collect();
+        assert!(proof.proof.verify(&root, &leaves).unwrap());
+    }
+
+    #[test]
+    fn prove_with_keccak256_multiple_transactions() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add multiple historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+
+        // Generate Keccak256 proof for multiple transactions
+        let proof = history_store
+            .prove_with_keccak256(0, vec![0, 2], None, Some(&txn))
+            .expect("Should be able to generate proof");
+
+        // Verify proof structure
+        assert_eq!(proof.positions.len(), 2);
+        assert_eq!(proof.positions[0], 0);
+        assert_eq!(proof.positions[1], 2);
+        assert_eq!(proof.history.len(), 2);
+
+        // Verify the proof can be verified against the Keccak256 root
+        let root = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have root");
+
+        let leaves: Vec<(usize, &HistoricTransaction)> = proof
+            .positions
+            .iter()
+            .zip(proof.history.iter())
+            .map(|(&pos, tx)| (pos, tx))
+            .collect();
+        assert!(proof.proof.verify(&root, &leaves).unwrap());
+    }
+
+    #[test]
+    fn prove_with_keccak256_with_verifier_state() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add more historic transactions to have enough for verifier state
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        // Add all transactions to have enough leaves
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 2, &hist_txs[3..]);
+
+        // Generate proof without verifier state - this should work
+        let proof = history_store
+            .prove_with_keccak256(1, vec![2], None, Some(&txn))
+            .expect("Should be able to generate proof");
+
+        // Verify proof structure
+        assert_eq!(proof.positions.len(), 1);
+        assert_eq!(proof.positions[0], 2);
+        assert_eq!(proof.history.len(), 1);
+
+        // Verify the proof can be verified
+        let root = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number() + 2, Some(&txn))
+            .expect("Should have root");
+
+        let leaves: Vec<(usize, &HistoricTransaction)> = proof
+            .positions
+            .iter()
+            .zip(proof.history.iter())
+            .map(|(&pos, tx)| (pos, tx))
+            .collect();
+        assert!(proof.proof.verify(&root, &leaves).unwrap());
+    }
+
+    #[test]
+    fn prove_with_keccak256_returns_correct_transactions() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add historic transactions with distinct values
+        let ext_0 = create_transaction(Policy::genesis_block_number(), 100);
+        let ext_1 = create_transaction(Policy::genesis_block_number(), 200);
+        let ext_2 = create_transaction(Policy::genesis_block_number(), 300);
+
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(
+            &mut txn,
+            Policy::genesis_block_number(),
+            &[ext_0.clone(), ext_1.clone(), ext_2.clone()],
+        );
+
+        // Generate proof for specific indices
+        let proof = history_store
+            .prove_with_keccak256(0, vec![0, 2], None, Some(&txn))
+            .expect("Should be able to generate proof");
+
+        // Verify we got the correct transactions
+        assert_eq!(proof.history.len(), 2);
+        assert_eq!(
+            proof.history[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(100)
+        );
+        assert_eq!(
+            proof.history[1].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(300)
+        );
+    }
+
+    #[test]
+    fn prove_with_keccak256_empty_epoch_returns_none() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        let txn = env.read_transaction();
+
+        // Try to generate proof for empty epoch
+        let proof = history_store.prove_with_keccak256(0, vec![0], None, Some(&txn));
+
+        // Should return None for empty epoch
+        assert!(proof.is_none());
+    }
+
+    #[test]
+    fn prove_with_keccak256_all_transactions_in_epoch() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+
+        // Generate proof for all transactions
+        let proof = history_store
+            .prove_with_keccak256(0, vec![0, 1, 2], None, Some(&txn))
+            .expect("Should be able to generate proof");
+
+        // Verify proof structure
+        assert_eq!(proof.positions.len(), 3);
+        assert_eq!(proof.history.len(), 3);
+
+        // Verify the proof can be verified
+        let root = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have root");
+
+        let leaves: Vec<(usize, &HistoricTransaction)> = proof
+            .positions
+            .iter()
+            .zip(proof.history.iter())
+            .map(|(&pos, tx)| (pos, tx))
+            .collect();
+        assert!(proof.proof.verify(&root, &leaves).unwrap());
     }
 }
