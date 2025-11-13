@@ -8,7 +8,7 @@
 ## Build and run
 
 ```bash
-cargo run --bin nimiq-mktx -- <command> [options]
+cargo run --release --bin nimiq-mktx -- <command> [options]
 ```
 
 Append `--help` to the root command or any subcommand to inspect flags and examples.
