@@ -443,7 +443,7 @@ impl HistoryInterface for HistoryStoreIndex {
         chunk_size: usize,
         chunk_index: usize,
         txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<HistoryTreeChunk> {
+    ) -> Option<HistoryTreeChunk<Blake2bHash>> {
         self.history_store.prove_chunk(
             epoch_number,
             verifier_block_number,
@@ -666,7 +666,7 @@ impl HistoryIndexInterface for HistoryStoreIndex {
         hashes: Vec<&Blake2bHash>,
         verifier_state: Option<usize>,
         txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<HistoryTreeProof> {
+    ) -> Option<HistoryTreeProof<Blake2bHash>> {
         // Get the leaf indexes.
         let mut positions = vec![];
 

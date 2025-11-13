@@ -342,7 +342,7 @@ impl RequestCommon for RequestHistoryChunk {
 /// This message contains a chunk of the history.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HistoryChunk {
-    pub chunk: HistoryTreeChunk,
+    pub chunk: HistoryTreeChunk<Blake2bHash>,
 }
 
 /// Error returned when [`RequestHistoryChunk`] fails.
@@ -503,7 +503,7 @@ test_max_req_size!(RequestHead, request_head_req_size, request_head_resp_size);
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTransactionsProof {
     /// The history MMR proof
-    pub proof: HistoryTreeProof,
+    pub proof: HistoryTreeProof<Blake2bHash>,
     /// Block used to generate the history tree proof.
     ///
     /// The block is determined by internal logic (see the `prove_txns_with_block_number`

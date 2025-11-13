@@ -158,7 +158,7 @@ pub struct SyncCluster<TNetwork: Network> {
     history_queue: SyncQueue<
         TNetwork,
         HistoryChunkRequest,
-        (HistoryChunkRequest, HistoryTreeChunk),
+        (HistoryChunkRequest, HistoryTreeChunk<Blake2bHash>),
         HistoryRequestError,
         (),
     >,
@@ -487,7 +487,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         &mut self,
         epoch_number: u32,
         block_number: u32,
-        mut history_chunk: HistoryTreeChunk,
+        mut history_chunk: HistoryTreeChunk<Blake2bHash>,
     ) -> Result<(), SyncClusterResult> {
         // Find batch set in pending_batch_sets.
         let batch_set_idx = &mut self
@@ -653,7 +653,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
         request: HistoryChunkRequest,
-    ) -> Result<HistoryTreeChunk, HistoryRequestError> {
+    ) -> Result<HistoryTreeChunk<Blake2bHash>, HistoryRequestError> {
         let req = RequestHistoryChunk {
             epoch_number: request.epoch_number,
             block_number: request.block_number,

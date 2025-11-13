@@ -269,7 +269,7 @@ impl<S: HistoryInterface> HistoryInterface for HistoryStoreMerger<S> {
         chunk_size: usize,
         chunk_index: usize,
         txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<super::HistoryTreeChunk> {
+    ) -> Option<super::HistoryTreeChunk<Blake2bHash>> {
         if epoch_number == 0 {
             // The pre-genesis database has separate transactions.
             // Since it is read-only, we can pass None as the transaction.
@@ -384,7 +384,7 @@ impl<S: HistoryInterface + HistoryIndexInterface> HistoryIndexInterface for Hist
         hashes: Vec<&Blake2bHash>,
         verifier_state: Option<usize>,
         txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<HistoryTreeProof> {
+    ) -> Option<HistoryTreeProof<Blake2bHash>> {
         // The regular store always provides a proof.
         if epoch_number == 0 && self.pre_genesis.is_some() {
             // The pre-genesis database has separate transactions.

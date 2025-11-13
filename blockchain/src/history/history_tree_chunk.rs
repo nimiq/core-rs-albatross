@@ -1,7 +1,10 @@
 use std::fmt::{self, Debug, Formatter};
 
 use nimiq_hash::Blake2bHash;
-use nimiq_mmr::mmr::proof::RangeProof;
+use nimiq_mmr::{
+    hash::{Hash, Merge},
+    mmr::proof::RangeProof,
+};
 use nimiq_transaction::historic_transaction::HistoricTransaction;
 use serde::{Deserialize, Serialize};
 
@@ -10,12 +13,12 @@ use serde::{Deserialize, Serialize};
 pub const CHUNK_SIZE: usize = 1024;
 
 #[derive(Serialize, Deserialize)]
-pub struct HistoryTreeChunk {
-    pub(crate) proof: RangeProof<Blake2bHash>,
+pub struct HistoryTreeChunk<H = Blake2bHash> {
+    pub(crate) proof: RangeProof<H>,
     pub history: Vec<HistoricTransaction>,
 }
 
-impl Debug for HistoryTreeChunk {
+impl<H> Debug for HistoryTreeChunk<H> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let mut dbg = f.debug_struct("HistoryTreeChunk");
         let len = self.history.len();
@@ -30,9 +33,13 @@ impl Debug for HistoryTreeChunk {
     }
 }
 
-impl HistoryTreeChunk {
+impl<H> HistoryTreeChunk<H>
+where
+    H: Merge + Clone + Eq,
+    HistoricTransaction: Hash<H>,
+{
     /// Tries to verify
-    pub fn verify(&self, expected_root: &Blake2bHash, leaf_index: usize) -> Option<bool> {
+    pub fn verify(&self, expected_root: &H, leaf_index: usize) -> Option<bool> {
         self.proof
             .verify_with_start(expected_root, leaf_index, &self.history)
             .ok()

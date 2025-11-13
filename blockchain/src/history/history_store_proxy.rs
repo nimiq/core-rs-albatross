@@ -346,7 +346,7 @@ impl<S: HistoryInterface, I: HistoryIndexInterface> HistoryInterface for History
         chunk_size: usize,
         chunk_index: usize,
         txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<HistoryTreeChunk> {
+    ) -> Option<HistoryTreeChunk<Blake2bHash>> {
         match self {
             HistoryStoreProxy::WithIndex(index) => index.prove_chunk(
                 epoch_number,

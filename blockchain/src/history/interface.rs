@@ -157,7 +157,7 @@ pub trait HistoryInterface: Debug {
         chunk_size: usize,
         chunk_index: usize,
         txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<HistoryTreeChunk>;
+    ) -> Option<HistoryTreeChunk<Blake2bHash>>;
 
     /// Creates a new history tree from chunks and returns the root hash.
     fn tree_from_chunks(
@@ -217,5 +217,5 @@ pub trait HistoryIndexInterface: HistoryInterface {
         hashes: Vec<&Blake2bHash>,
         verifier_state: Option<usize>,
         txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<HistoryTreeProof>;
+    ) -> Option<HistoryTreeProof<Blake2bHash>>;
 }

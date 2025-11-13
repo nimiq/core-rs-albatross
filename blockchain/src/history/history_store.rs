@@ -272,7 +272,7 @@ impl HistoryStore {
         leaf_indices: Vec<usize>,
         verifier_state: Option<usize>,
         txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<HistoryTreeProof> {
+    ) -> Option<HistoryTreeProof<Blake2bHash>> {
         let txn = txn_option.or_new(&self.db);
 
         // Get history tree for given epoch.
@@ -691,7 +691,7 @@ impl HistoryInterface for HistoryStore {
         chunk_size: usize,
         chunk_index: usize,
         txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<HistoryTreeChunk> {
+    ) -> Option<HistoryTreeChunk<Blake2bHash>> {
         let txn = txn_option.or_new(&self.db);
 
         // Get history tree for given epoch.
