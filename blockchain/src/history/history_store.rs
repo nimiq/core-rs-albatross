@@ -448,6 +448,48 @@ impl HistoryStore {
         })
     }
 
+    /// Generates a Keccak256-based range proof for transaction chunks.
+    /// This method builds a temporary in-memory MMR with Keccak256 hashing and generates
+    /// a range proof for the specified chunk. The proof can be verified against the
+    /// Keccak256 history tree root.
+    pub fn prove_chunk_keccak256(
+        &self,
+        epoch_number: u32,
+        verifier_block_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeChunk<Keccak256Hash>> {
+        let txn = txn_option.or_new(&self.db);
+
+        // Build Keccak256 MMR for the specified epoch
+        let tree = self.build_keccak256_mmr(epoch_number, Some(&txn));
+
+        // Calculate number of nodes in the verifier's history tree
+        let leaf_count = self.length_at(verifier_block_number, Some(&txn))? as usize;
+        let number_of_nodes = leaf_number_to_index(leaf_count);
+
+        // Calculate chunk boundaries based on chunk size and index
+        let start = cmp::min(chunk_size * chunk_index, leaf_count);
+        // Do not go beyond the verifier's block
+        let end = cmp::min(start + chunk_size, leaf_count);
+
+        // Generate range proof using MMR::prove_range()
+        // Setting `assume_previous` to false allows the proofs to be verified independently
+        let proof = tree
+            .prove_range(start..end, Some(number_of_nodes), false)
+            .ok()?;
+
+        // Retrieve historic transactions for the chunk
+        let hist_txs = self.get_historic_txns(epoch_number, start as u32..end as u32, Some(&txn));
+
+        // Return HistoryTreeChunk with proof and transactions
+        Some(HistoryTreeChunk {
+            proof,
+            history: hist_txs,
+        })
+    }
+
     /// Internal function for `add_to_history`, which also returns leaf indices.
     pub(crate) fn put_historic_txns(
         &self,
@@ -2146,5 +2188,111 @@ mod tests {
             .map(|(&pos, tx)| (pos, tx))
             .collect();
         assert!(proof.proof.verify(&root, &leaves).unwrap());
+    }
+
+    #[test]
+    fn prove_chunk_keccak256_basic() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+
+        // Generate Keccak256 chunk proof for first chunk
+        let chunk = history_store
+            .prove_chunk_keccak256(0, Policy::genesis_block_number(), 2, 0, Some(&txn))
+            .expect("Should be able to generate chunk proof");
+
+        // Verify chunk structure - should contain 2 transactions (chunk_size=2, chunk_index=0)
+        assert_eq!(chunk.history.len(), 2);
+        assert_eq!(
+            chunk.history[0].block_number,
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            chunk.history[1].block_number,
+            Policy::genesis_block_number()
+        );
+
+        // Verify the chunk proof can be verified against the Keccak256 root
+        let root = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have root");
+
+        assert!(chunk.verify(&root, 0).unwrap());
+    }
+
+    #[test]
+    fn prove_chunk_keccak256_with_chunk_boundaries() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add multiple historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 2, &hist_txs[3..]);
+
+        // Generate chunk proof for second chunk (chunk_size=3, chunk_index=1)
+        let chunk = history_store
+            .prove_chunk_keccak256(1, Policy::genesis_block_number() + 2, 3, 1, Some(&txn))
+            .expect("Should be able to generate chunk proof");
+
+        // Verify chunk structure - should contain transactions from index 3 to 6 (3 transactions)
+        assert_eq!(chunk.history.len(), 3);
+
+        // Verify the chunk proof can be verified
+        let root = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number() + 2, Some(&txn))
+            .expect("Should have root");
+
+        assert!(chunk.verify(&root, 3).unwrap());
+    }
+
+    #[test]
+    fn prove_chunk_keccak256_respects_verifier_block() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 2, &hist_txs[3..]);
+
+        // Generate chunk proof with verifier block at genesis + 1 (middle of epoch)
+        // This should limit the chunk to only include transactions up to that block
+        let chunk = history_store
+            .prove_chunk_keccak256(1, Policy::genesis_block_number() + 1, 10, 0, Some(&txn))
+            .expect("Should be able to generate chunk proof");
+
+        // Should only contain transactions up to block genesis + 1 (which is 2 transactions in epoch 1)
+        assert_eq!(chunk.history.len(), 2);
+    }
+
+    #[test]
+    fn prove_chunk_keccak256_partial_chunk() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+
+        // Try to get a chunk that extends beyond available transactions
+        // chunk_size=10, chunk_index=0, but only 3 transactions available
+        let chunk = history_store
+            .prove_chunk_keccak256(0, Policy::genesis_block_number(), 10, 0, Some(&txn))
+            .expect("Should be able to generate chunk proof");
+
+        // Should return all 3 available transactions (not 10)
+        assert_eq!(chunk.history.len(), 3);
     }
 }
