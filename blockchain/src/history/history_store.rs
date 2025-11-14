@@ -490,6 +490,37 @@ impl HistoryStore {
         })
     }
 
+    /// Generates a size proof using Keccak256 hashes.
+    /// This method builds a temporary in-memory MMR with Keccak256 hashing and generates
+    /// a proof for the number of leaves at the specified block number. The proof can be
+    /// verified against the Keccak256 history tree root.
+    pub fn prove_num_leaves_keccak256(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Result<SizeProof<Keccak256Hash, HistoricTransaction>, MMRError> {
+        let txn = txn_option.or_new(&self.db);
+
+        // Get the history tree for the epoch containing the block
+        let epoch_number = Policy::epoch_at(block_number);
+        let tree = self.build_keccak256_mmr(epoch_number, Some(&txn));
+
+        // Closure to retrieve historic transactions by leaf index
+        let f = |leaf_index| self.get_historic_tx(epoch_number, leaf_index as u32, txn_option);
+
+        // Calculate leaf count at the specified block number
+        let leaf_count = match self.length_at(block_number, Some(&txn)) {
+            Some(count) => count as usize,
+            None => return Ok(SizeProof::EmptyTree),
+        };
+
+        // Calculate number of nodes in the verifier's history tree
+        let number_of_nodes = leaf_number_to_index(leaf_count);
+
+        // Generate size proof using MMR::prove_num_leaves()
+        tree.prove_num_leaves(f, Some(number_of_nodes))
+    }
+
     /// Internal function for `add_to_history`, which also returns leaf indices.
     pub(crate) fn put_historic_txns(
         &self,
@@ -2294,5 +2325,205 @@ mod tests {
 
         // Should return all 3 available transactions (not 10)
         assert_eq!(chunk.history.len(), 3);
+    }
+
+    #[test]
+    fn prove_num_leaves_keccak256_works() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        let mut txn = env.write_transaction();
+        let history_root_initial = history_store
+            .get_keccak256_history_root(0, Some(&txn))
+            .unwrap_or_else(|| {
+                // For empty tree, build an empty MMR to get its root
+                let tree = history_store.build_keccak256_mmr(0, Some(&txn));
+                tree.get_root().unwrap()
+            });
+
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(0, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root_initial));
+        assert_eq!(size_proof.size(), 0);
+
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(100, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root_initial));
+        assert_eq!(size_proof.size(), 0);
+
+        // Create historic transactions
+        let ext_0 = create_transaction(3, 0);
+        let ext_1 = create_transaction(4, 1);
+        let ext_2 = create_transaction(5, 2);
+        let ext_3 = create_transaction(8, 3);
+
+        // Add first historic transaction to History Store
+        history_store.add_to_history(&mut txn, 3, &[ext_0]).unwrap();
+        let history_root0 = history_store
+            .get_keccak256_history_root(3, Some(&txn))
+            .expect("Should have root");
+
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(0, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root_initial));
+        assert_eq!(size_proof.size(), 0);
+
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(100, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root0));
+        assert_eq!(size_proof.size(), 1);
+
+        // Add remaining historic transactions to History Store
+        history_store.add_to_history(&mut txn, 4, &[ext_1]).unwrap();
+        let history_root1 = history_store
+            .get_keccak256_history_root(4, Some(&txn))
+            .expect("Should have root");
+
+        history_store.add_to_history(&mut txn, 5, &[ext_2]).unwrap();
+        let history_root2 = history_store
+            .get_keccak256_history_root(5, Some(&txn))
+            .expect("Should have root");
+
+        history_store.add_to_history(&mut txn, 8, &[ext_3]).unwrap();
+        let history_root3 = history_store
+            .get_keccak256_history_root(8, Some(&txn))
+            .expect("Should have root");
+
+        // Prove number of leaves at different block numbers
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(2, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root_initial));
+        assert_eq!(size_proof.size(), 0);
+
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(3, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root0));
+        assert_eq!(size_proof.size(), 1);
+
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(4, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root1));
+        assert_eq!(size_proof.size(), 2);
+
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(5, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root2));
+        assert_eq!(size_proof.size(), 3);
+
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(8, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root3));
+        assert_eq!(size_proof.size(), 4);
+
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(100, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root3));
+        assert_eq!(size_proof.size(), 4);
+    }
+
+    #[test]
+    fn prove_num_leaves_keccak256_empty_tree() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        let txn = env.read_transaction();
+
+        // Prove number of leaves for empty tree
+        let size_proof = history_store
+            .prove_num_leaves_keccak256(0, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+
+        // Should return EmptyTree proof
+        assert_eq!(size_proof.size(), 0);
+    }
+
+    #[test]
+    fn prove_num_leaves_keccak256_consistency() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+
+        // Get root
+        let root = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have root");
+
+        // Prove number of leaves multiple times
+        let size_proof1 = history_store
+            .prove_num_leaves_keccak256(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should be able to prove number of leaves");
+
+        let size_proof2 = history_store
+            .prove_num_leaves_keccak256(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should be able to prove number of leaves");
+
+        // Both proofs should verify against the same root
+        assert!(size_proof1.verify(&root));
+        assert!(size_proof2.verify(&root));
+
+        // Both proofs should report the same size
+        assert_eq!(size_proof1.size(), 3);
+        assert_eq!(size_proof2.size(), 3);
+    }
+
+    #[test]
+    fn prove_num_leaves_keccak256_differs_from_blake2b() {
+        // Initialize History Store
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create and add historic transactions
+        let hist_txs = gen_hist_txs();
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+
+        // Get Blake2b root and proof
+        let blake2b_root = history_store
+            .get_history_tree_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have Blake2b root");
+
+        let blake2b_size_proof = history_store
+            .prove_num_leaves(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should be able to prove number of leaves with Blake2b");
+
+        // Get Keccak256 root and proof
+        let keccak_root = history_store
+            .get_keccak256_history_root(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should have Keccak256 root");
+
+        let keccak_size_proof = history_store
+            .prove_num_leaves_keccak256(Policy::genesis_block_number(), Some(&txn))
+            .expect("Should be able to prove number of leaves with Keccak256");
+
+        // Both proofs should report the same size (same number of leaves)
+        assert_eq!(blake2b_size_proof.size(), keccak_size_proof.size());
+        assert_eq!(blake2b_size_proof.size(), 3);
+
+        // Blake2b proof should verify against Blake2b root
+        assert!(blake2b_size_proof.verify(&blake2b_root));
+
+        // Keccak256 proof should verify against Keccak256 root
+        assert!(keccak_size_proof.verify(&keccak_root));
+
+        // Roots should be different (different hash algorithms)
+        use nimiq_hash::HashOutput;
+        assert_ne!(blake2b_root.as_bytes(), keccak_root.as_bytes());
     }
 }
