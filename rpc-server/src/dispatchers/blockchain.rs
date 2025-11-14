@@ -4,15 +4,15 @@ use nimiq_account::{BlockLog as BBlockLog, TransactionLog};
 use nimiq_blockchain::interface::{HistoryIndexInterface, HistoryInterface};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, HashOutput};
 use nimiq_keys::Address;
 use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
     types::{
         is_of_log_type_and_related_to_addresses, Account, Block, BlockLog, BlockchainState,
-        ExecutedTransaction, Inherent, LogType, PenalizedSlots, RPCData, RPCResult, Slot, Staker,
-        Validator,
+        ExecutedTransaction, HistoryTreeProofData, Inherent, LogType, PenalizedSlots, RPCData,
+        RPCResult, Slot, Staker, Validator,
     },
 };
 use tokio_stream::wrappers::BroadcastStream;
@@ -780,6 +780,108 @@ impl BlockchainInterface for BlockchainDispatcher {
                     })
                     .boxed())
             }
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
+    }
+
+    async fn get_keccak256_history_root(
+        &self,
+        epoch_number: u32,
+    ) -> RPCResult<String, (), Self::Error> {
+        if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            // Validate epoch number and convert to block number
+            let block_number = Policy::election_block_of(epoch_number).ok_or_else(|| {
+                Error::InvalidKeccak256Parameters(format!("Invalid epoch number: {}", epoch_number))
+            })?;
+
+            // Call history store method to get Keccak256 root
+            let root = blockchain
+                .history_store
+                .get_keccak256_history_root(block_number, None)
+                .ok_or(Error::Keccak256HistoryNotFound)?;
+
+            // Format result as hex string with "0x" prefix
+            Ok(format!("0x{}", hex::encode(root.as_bytes())).into())
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
+    }
+
+    async fn get_keccak256_transaction_proof(
+        &self,
+        block_number: u32,
+        leaf_indices: Vec<usize>,
+    ) -> RPCResult<HistoryTreeProofData, (), Self::Error> {
+        if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            // Validate block number
+            if block_number < Policy::genesis_block_number() {
+                return Err(Error::BlockNumberBeforeGenesis);
+            }
+
+            // Validate leaf indices (must not be empty)
+            if leaf_indices.is_empty() {
+                return Err(Error::InvalidKeccak256Parameters(
+                    "Leaf indices cannot be empty".to_string(),
+                ));
+            }
+
+            // Determine epoch from block number
+            let epoch_number = Policy::epoch_at(block_number);
+
+            // Call history store proof generation method
+            let proof = blockchain
+                .history_store
+                .prove_with_keccak256(epoch_number, leaf_indices, None, None)
+                .ok_or(Error::Keccak256ProofGenerationFailed)?;
+
+            // Convert proof to RPC response format with hex-encoded hashes
+            let head_height = blockchain.block_number();
+            Ok(HistoryTreeProofData::from_proof(proof, Some(head_height)).into())
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
+    }
+
+    async fn get_keccak256_chunk_proof(
+        &self,
+        epoch_number: u32,
+        chunk_index: usize,
+        chunk_size: Option<usize>,
+    ) -> RPCResult<nimiq_rpc_interface::types::HistoryTreeChunkData, (), Self::Error> {
+        if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            // Validate epoch number and convert to block number
+            let verifier_block = Policy::election_block_of(epoch_number).ok_or_else(|| {
+                Error::InvalidKeccak256Parameters(format!("Invalid epoch number: {}", epoch_number))
+            })?;
+
+            // Use default chunk size if not provided
+            let chunk_size = chunk_size.unwrap_or(1000);
+
+            // Validate chunk size (must be positive)
+            if chunk_size == 0 {
+                return Err(Error::InvalidKeccak256Parameters(
+                    "Chunk size must be greater than 0".to_string(),
+                ));
+            }
+
+            // Call history store chunk proof method
+            let chunk = blockchain
+                .history_store
+                .prove_chunk_keccak256(epoch_number, verifier_block, chunk_size, chunk_index, None)
+                .ok_or(Error::Keccak256ProofGenerationFailed)?;
+
+            // Convert chunk proof to RPC response format
+            let head_height = blockchain.block_number();
+            let (proof, history) = chunk.into_parts();
+            Ok(
+                nimiq_rpc_interface::types::HistoryTreeChunkData::from_chunk_with_proof(
+                    proof,
+                    history,
+                    Some(head_height),
+                )
+                .into(),
+            )
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }

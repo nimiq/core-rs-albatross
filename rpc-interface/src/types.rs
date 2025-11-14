@@ -16,6 +16,7 @@ use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PrivateKey};
+use nimiq_mmr::{hash::Merge, mmr::proof::RangeProof};
 use nimiq_primitives::{
     coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators,
 };
@@ -25,6 +26,7 @@ use nimiq_transaction::{
     historic_transaction::{
         HistoricTransaction, HistoricTransactionData, JailEvent, PenalizeEvent, RewardEvent,
     },
+    history_proof::HistoryTreeProof,
 };
 use nimiq_vrf::VrfSeed;
 use serde::{de::Error, Deserialize, Serialize};
@@ -1382,5 +1384,96 @@ impl MempoolInfo {
         }
 
         info
+    }
+}
+
+/// RPC representation of a history tree proof with hex-encoded hash nodes.
+/// This type is used to serialize proofs for transmission over RPC.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryTreeProofData {
+    /// Hex-encoded proof nodes (hashes)
+    pub proof_nodes: Vec<String>,
+    /// The size of the MMR at the time the proof was created
+    pub mmr_size: usize,
+    /// Positions of the proven leaves in the tree
+    pub positions: Vec<usize>,
+    /// The historic transactions being proven
+    pub transactions: Vec<ExecutedTransaction>,
+}
+
+impl HistoryTreeProofData {
+    /// Converts a generic HistoryTreeProof to RPC format with hex-encoded hashes
+    pub fn from_proof<H>(proof: HistoryTreeProof<H>, head_height: Option<u32>) -> Self
+    where
+        H: Merge + AsRef<[u8]>,
+    {
+        let proof_nodes = proof
+            .proof
+            .nodes
+            .iter()
+            .map(|node| format!("0x{}", hex::encode(node.as_ref())))
+            .collect();
+
+        let transactions = proof
+            .history
+            .into_iter()
+            .filter_map(|tx| ExecutedTransaction::try_from_historic_transaction(tx, head_height))
+            .collect();
+
+        HistoryTreeProofData {
+            proof_nodes,
+            mmr_size: proof.proof.mmr_size,
+            positions: proof.positions,
+            transactions,
+        }
+    }
+}
+
+/// RPC representation of a history tree chunk with hex-encoded hash nodes.
+/// This type is used to serialize chunk proofs for transmission over RPC.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryTreeChunkData {
+    /// Hex-encoded proof nodes (hashes)
+    pub proof_nodes: Vec<String>,
+    /// The size of the MMR at the time the proof was created
+    pub mmr_size: usize,
+    /// Whether this proof assumes the previous chunk was verified
+    pub assume_previous: bool,
+    /// The historic transactions in this chunk
+    pub transactions: Vec<ExecutedTransaction>,
+}
+
+impl HistoryTreeChunkData {
+    /// Converts a generic HistoryTreeChunk to RPC format with hex-encoded hashes
+    /// Note: This method is generic and will be used by the RPC server implementation
+    /// which has access to the blockchain module types
+    pub fn from_chunk_with_proof<H>(
+        proof: RangeProof<H>,
+        history: Vec<HistoricTransaction>,
+        head_height: Option<u32>,
+    ) -> Self
+    where
+        H: Merge + AsRef<[u8]>,
+    {
+        let proof_nodes = proof
+            .proof
+            .nodes
+            .iter()
+            .map(|node| format!("0x{}", hex::encode(node.as_ref())))
+            .collect();
+
+        let transactions = history
+            .into_iter()
+            .filter_map(|tx| ExecutedTransaction::try_from_historic_transaction(tx, head_height))
+            .collect();
+
+        HistoryTreeChunkData {
+            proof_nodes,
+            mmr_size: proof.proof.mmr_size,
+            assume_previous: proof.assume_previous,
+            transactions,
+        }
     }
 }

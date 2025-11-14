@@ -4685,6 +4685,7 @@ dependencies = [
  "nimiq-jsonrpc-core",
  "nimiq-jsonrpc-derive",
  "nimiq-keys",
+ "nimiq-mmr",
  "nimiq-primitives",
  "nimiq-serde",
  "nimiq-transaction",

@@ -5,8 +5,9 @@ use nimiq_keys::Address;
 use nimiq_primitives::networks::NetworkId;
 
 use crate::types::{
-    Account, Block, BlockLog, BlockchainState, ExecutedTransaction, Inherent, LogType,
-    PenalizedSlots, RPCData, RPCResult, Slot, Staker, Validator,
+    Account, Block, BlockLog, BlockchainState, ExecutedTransaction, HistoryTreeChunkData,
+    HistoryTreeProofData, Inherent, LogType, PenalizedSlots, RPCData, RPCResult, Slot, Staker,
+    Validator,
 };
 
 #[nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")]
@@ -210,4 +211,54 @@ pub trait BlockchainInterface {
         addresses: Vec<Address>,
         log_types: Vec<LogType>,
     ) -> Result<BoxStream<'static, RPCData<BlockLog, BlockchainState>>, Self::Error>;
+
+    /// Gets the Keccak256 history tree root for a given epoch.
+    /// This computes the root hash on-demand using the Keccak256 hash algorithm
+    /// instead of the default Blake2b algorithm. The root is returned as a hex-encoded string.
+    ///
+    /// # Parameters
+    /// - `epoch_number`: The epoch number for which to compute the history root
+    ///
+    /// # Returns
+    /// A hex-encoded string (with "0x" prefix) representing the Keccak256 history tree root
+    async fn get_keccak256_history_root(
+        &self,
+        epoch_number: u32,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Gets a Keccak256-based proof for transactions at a given block number.
+    /// This generates a proof using the Keccak256 hash algorithm that can be verified
+    /// with Ethereum-compatible tools.
+    ///
+    /// # Parameters
+    /// - `block_number`: The block number containing the transactions to prove
+    /// - `leaf_indices`: The indices of the transactions within the epoch to include in the proof
+    ///
+    /// # Returns
+    /// A `HistoryTreeProofData` structure containing hex-encoded Keccak256 proof nodes,
+    /// positions, and the proven transactions
+    async fn get_keccak256_transaction_proof(
+        &self,
+        block_number: u32,
+        leaf_indices: Vec<usize>,
+    ) -> RPCResult<HistoryTreeProofData, (), Self::Error>;
+
+    /// Gets a Keccak256-based chunk proof for an epoch.
+    /// This generates a range proof for a chunk of transactions using the Keccak256 hash algorithm.
+    /// Chunks allow efficient synchronization of large epochs by breaking them into smaller pieces.
+    ///
+    /// # Parameters
+    /// - `epoch_number`: The epoch number to retrieve the chunk from
+    /// - `chunk_index`: The index of the chunk within the epoch (0-based)
+    /// - `chunk_size`: Optional chunk size in number of transactions (defaults to a reasonable value if not specified)
+    ///
+    /// # Returns
+    /// A `HistoryTreeChunkData` structure containing hex-encoded Keccak256 proof nodes
+    /// and the transactions in the chunk
+    async fn get_keccak256_chunk_proof(
+        &self,
+        epoch_number: u32,
+        chunk_index: usize,
+        chunk_size: Option<usize>,
+    ) -> RPCResult<HistoryTreeChunkData, (), Self::Error>;
 }

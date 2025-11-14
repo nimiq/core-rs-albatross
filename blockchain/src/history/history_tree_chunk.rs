@@ -45,3 +45,15 @@ where
             .ok()
     }
 }
+
+impl<H> HistoryTreeChunk<H> {
+    /// Returns a reference to the proof
+    pub fn proof(&self) -> &RangeProof<H> {
+        &self.proof
+    }
+
+    /// Consumes the chunk and returns the proof and history
+    pub fn into_parts(self) -> (RangeProof<H>, Vec<HistoricTransaction>) {
+        (self.proof, self.history)
+    }
+}

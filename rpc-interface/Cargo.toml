@@ -44,6 +44,7 @@ nimiq-jsonrpc-client = { workspace = true }
 nimiq-jsonrpc-core = { workspace = true }
 nimiq-jsonrpc-derive = { workspace = true }
 nimiq-keys = { workspace = true, features = ["serde-derive"] }
+nimiq-mmr = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["coin", "account", "serde-derive"] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
