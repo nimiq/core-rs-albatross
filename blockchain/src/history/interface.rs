@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use nimiq_block::{Block, MicroBlock};
 use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Keccak256Hash};
 use nimiq_keys::Address;
 use nimiq_mmr::{
     error::Error as MMRError,
@@ -184,6 +184,50 @@ pub trait HistoryInterface: Debug {
         block_number: u32,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Result<SizeProof<Blake2bHash, HistoricTransaction>, MMRError>;
+
+    /// Gets the Keccak256 history tree root for a given block number.
+    /// This method computes the root on-demand by building a temporary in-memory MMR
+    /// with Keccak256 hashing from the stored historic transactions.
+    fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash>;
+
+    /// Generates a Keccak256-based proof for historic transactions at given positions.
+    /// This method builds a temporary in-memory MMR with Keccak256 hashing and generates
+    /// a proof for the specified leaf indices. The proof can be verified against the
+    /// Keccak256 history tree root.
+    fn prove_with_keccak256(
+        &self,
+        epoch_number: u32,
+        leaf_indices: Vec<usize>,
+        verifier_state: Option<usize>,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeProof<Keccak256Hash>>;
+
+    /// Generates a Keccak256-based range proof for transaction chunks.
+    /// This method builds a temporary in-memory MMR with Keccak256 hashing and generates
+    /// a range proof for the specified chunk. The proof can be verified against the
+    /// Keccak256 history tree root.
+    fn prove_chunk_keccak256(
+        &self,
+        epoch_number: u32,
+        verifier_block_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeChunk<Keccak256Hash>>;
+
+    /// Generates a size proof using Keccak256 hashes.
+    /// This method builds a temporary in-memory MMR with Keccak256 hashing and generates
+    /// a proof for the number of leaves at the specified block number. The proof can be
+    /// verified against the Keccak256 history tree root.
+    fn prove_num_leaves_keccak256(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Result<SizeProof<Keccak256Hash, HistoricTransaction>, MMRError>;
 }
 
 /// Defines several methods to interact with a history store.

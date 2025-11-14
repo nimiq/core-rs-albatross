@@ -9,7 +9,7 @@ use nimiq_database::{
     traits::{Database, DupReadCursor, ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
 };
 use nimiq_genesis::NetworkId;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Keccak256Hash};
 use nimiq_keys::Address;
 use nimiq_mmr::{
     error::Error as MMRError,
@@ -572,6 +572,56 @@ impl HistoryInterface for HistoryStoreIndex {
             .remove_epoch_from_history(txn, epoch_number);
 
         Some(())
+    }
+
+    fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash> {
+        self.history_store
+            .get_keccak256_history_root(block_number, txn_option)
+    }
+
+    fn prove_with_keccak256(
+        &self,
+        epoch_number: u32,
+        leaf_indices: Vec<usize>,
+        verifier_state: Option<usize>,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeProof<Keccak256Hash>> {
+        self.history_store.prove_with_keccak256(
+            epoch_number,
+            leaf_indices,
+            verifier_state,
+            txn_option,
+        )
+    }
+
+    fn prove_chunk_keccak256(
+        &self,
+        epoch_number: u32,
+        verifier_block_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeChunk<Keccak256Hash>> {
+        self.history_store.prove_chunk_keccak256(
+            epoch_number,
+            verifier_block_number,
+            chunk_size,
+            chunk_index,
+            txn_option,
+        )
+    }
+
+    fn prove_num_leaves_keccak256(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Result<SizeProof<Keccak256Hash, HistoricTransaction>, MMRError> {
+        self.history_store
+            .prove_num_leaves_keccak256(block_number, txn_option)
     }
 }
 

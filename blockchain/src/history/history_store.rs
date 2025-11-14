@@ -1079,6 +1079,49 @@ impl HistoryInterface for HistoryStore {
 
         (first, last)
     }
+
+    fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash> {
+        self.get_keccak256_history_root(block_number, txn_option)
+    }
+
+    fn prove_with_keccak256(
+        &self,
+        epoch_number: u32,
+        leaf_indices: Vec<usize>,
+        verifier_state: Option<usize>,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeProof<Keccak256Hash>> {
+        self.prove_with_keccak256(epoch_number, leaf_indices, verifier_state, txn_option)
+    }
+
+    fn prove_chunk_keccak256(
+        &self,
+        epoch_number: u32,
+        verifier_block_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeChunk<Keccak256Hash>> {
+        self.prove_chunk_keccak256(
+            epoch_number,
+            verifier_block_number,
+            chunk_size,
+            chunk_index,
+            txn_option,
+        )
+    }
+
+    fn prove_num_leaves_keccak256(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Result<SizeProof<Keccak256Hash, HistoricTransaction>, MMRError> {
+        self.prove_num_leaves_keccak256(block_number, txn_option)
+    }
 }
 
 #[cfg(test)]

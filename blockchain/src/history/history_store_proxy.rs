@@ -1,13 +1,14 @@
 use nimiq_block::{Block, MicroBlock};
 use nimiq_database::mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_genesis::NetworkId;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Keccak256Hash};
 use nimiq_mmr::{
     error::Error as MMRError,
     mmr::proof::{RangeProof, SizeProof},
 };
 use nimiq_transaction::{
     historic_transaction::{HistoricTransaction, RawTransactionHash},
+    history_proof::HistoryTreeProof,
     inherent::Inherent,
     EquivocationLocator,
 };
@@ -417,6 +418,79 @@ impl<S: HistoryInterface, I: HistoryIndexInterface> HistoryInterface for History
             HistoryStoreProxy::WithIndex(index) => index.prove_num_leaves(block_number, txn_option),
             HistoryStoreProxy::WithoutIndex(store) => {
                 store.prove_num_leaves(block_number, txn_option)
+            }
+        }
+    }
+
+    fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash> {
+        match self {
+            HistoryStoreProxy::WithIndex(index) => {
+                index.get_keccak256_history_root(block_number, txn_option)
+            }
+            HistoryStoreProxy::WithoutIndex(store) => {
+                store.get_keccak256_history_root(block_number, txn_option)
+            }
+        }
+    }
+
+    fn prove_with_keccak256(
+        &self,
+        epoch_number: u32,
+        leaf_indices: Vec<usize>,
+        verifier_state: Option<usize>,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeProof<Keccak256Hash>> {
+        match self {
+            HistoryStoreProxy::WithIndex(index) => {
+                index.prove_with_keccak256(epoch_number, leaf_indices, verifier_state, txn_option)
+            }
+            HistoryStoreProxy::WithoutIndex(store) => {
+                store.prove_with_keccak256(epoch_number, leaf_indices, verifier_state, txn_option)
+            }
+        }
+    }
+
+    fn prove_chunk_keccak256(
+        &self,
+        epoch_number: u32,
+        verifier_block_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeChunk<Keccak256Hash>> {
+        match self {
+            HistoryStoreProxy::WithIndex(index) => index.prove_chunk_keccak256(
+                epoch_number,
+                verifier_block_number,
+                chunk_size,
+                chunk_index,
+                txn_option,
+            ),
+            HistoryStoreProxy::WithoutIndex(store) => store.prove_chunk_keccak256(
+                epoch_number,
+                verifier_block_number,
+                chunk_size,
+                chunk_index,
+                txn_option,
+            ),
+        }
+    }
+
+    fn prove_num_leaves_keccak256(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Result<SizeProof<Keccak256Hash, HistoricTransaction>, MMRError> {
+        match self {
+            HistoryStoreProxy::WithIndex(index) => {
+                index.prove_num_leaves_keccak256(block_number, txn_option)
+            }
+            HistoryStoreProxy::WithoutIndex(store) => {
+                store.prove_num_leaves_keccak256(block_number, txn_option)
             }
         }
     }

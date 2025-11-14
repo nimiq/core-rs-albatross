@@ -2,7 +2,7 @@ use std::cmp;
 
 use nimiq_block::{Block, MicroBlock};
 use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Keccak256Hash};
 use nimiq_keys::Address;
 use nimiq_mmr::{
     error::Error,
@@ -17,6 +17,7 @@ use nimiq_transaction::{
 };
 
 use super::interface::{HistoryIndexInterface, HistoryInterface};
+use crate::HistoryTreeChunk;
 
 /// A wrapper around two history stores, one for the pre-genesis epoch and one for the main epoch.
 #[derive(Debug)]
@@ -269,7 +270,7 @@ impl<S: HistoryInterface> HistoryInterface for HistoryStoreMerger<S> {
         chunk_size: usize,
         chunk_index: usize,
         txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<super::HistoryTreeChunk<Blake2bHash>> {
+    ) -> Option<HistoryTreeChunk<Blake2bHash>> {
         if epoch_number == 0 {
             // The pre-genesis database has separate transactions.
             // Since it is read-only, we can pass None as the transaction.
@@ -329,6 +330,92 @@ impl<S: HistoryInterface> HistoryInterface for HistoryStoreMerger<S> {
                 .prove_num_leaves(block_number, None)
         } else {
             self.main.prove_num_leaves(block_number, txn_option)
+        }
+    }
+
+    fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash> {
+        if Policy::epoch_at(block_number) == 0 {
+            // The pre-genesis database has separate transactions.
+            // Since it is read-only, we can pass None as the transaction.
+            self.pre_genesis
+                .as_ref()?
+                .get_keccak256_history_root(block_number, None)
+        } else {
+            self.main
+                .get_keccak256_history_root(block_number, txn_option)
+        }
+    }
+
+    fn prove_with_keccak256(
+        &self,
+        epoch_number: u32,
+        leaf_indices: Vec<usize>,
+        verifier_state: Option<usize>,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeProof<Keccak256Hash>> {
+        if epoch_number == 0 {
+            // The pre-genesis database has separate transactions.
+            // Since it is read-only, we can pass None as the transaction.
+            self.pre_genesis.as_ref()?.prove_with_keccak256(
+                epoch_number,
+                leaf_indices,
+                verifier_state,
+                None,
+            )
+        } else {
+            self.main
+                .prove_with_keccak256(epoch_number, leaf_indices, verifier_state, txn_option)
+        }
+    }
+
+    fn prove_chunk_keccak256(
+        &self,
+        epoch_number: u32,
+        verifier_block_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<HistoryTreeChunk<Keccak256Hash>> {
+        if epoch_number == 0 {
+            // The pre-genesis database has separate transactions.
+            // Since it is read-only, we can pass None as the transaction.
+            self.pre_genesis.as_ref()?.prove_chunk_keccak256(
+                epoch_number,
+                verifier_block_number,
+                chunk_size,
+                chunk_index,
+                None,
+            )
+        } else {
+            self.main.prove_chunk_keccak256(
+                epoch_number,
+                verifier_block_number,
+                chunk_size,
+                chunk_index,
+                txn_option,
+            )
+        }
+    }
+
+    fn prove_num_leaves_keccak256(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Result<SizeProof<Keccak256Hash, HistoricTransaction>, Error> {
+        if Policy::epoch_at(block_number) == 0 {
+            // The pre-genesis database has separate transactions.
+            // Since it is read-only, we can pass None as the transaction.
+            self.pre_genesis
+                .as_ref()
+                .ok_or(Error::EmptyTree)?
+                .prove_num_leaves_keccak256(block_number, None)
+        } else {
+            self.main
+                .prove_num_leaves_keccak256(block_number, txn_option)
         }
     }
 }
