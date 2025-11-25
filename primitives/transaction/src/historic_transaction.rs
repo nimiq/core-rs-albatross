@@ -312,6 +312,16 @@ impl MMRHash<Blake2bHash> for HistoricTransaction {
     }
 }
 
+impl nimiq_hash::SerializeContent for HistoricTransaction {
+    fn serialize_content<W: Write, H: nimiq_hash::HashOutput>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
+        self.serialize_to_writer(writer)?;
+        Ok(())
+    }
+}
+
 /// An enum specifying the type of transaction and containing the necessary data to represent that
 /// transaction.
 // TODO: The transactions include a lot of unnecessary information (ex: the signature). Don't
