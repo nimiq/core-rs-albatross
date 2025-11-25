@@ -525,3 +525,166 @@ fn it_correctly_serializes_and_deserializes_proof() {
     let proof2 = MerkleProof::<Blake2bHash>::deserialize_from_vec(&serialization);
     assert_eq!(proof2, Ok(proof));
 }
+
+// Keccak256 Merkle tree tests
+#[cfg(test)]
+mod keccak256_tests {
+    use nimiq_hash::{Blake2bHasher, HashOutput, Hasher, Keccak256Hasher};
+    use nimiq_test_log::test;
+    use nimiq_utils::merkle::{compute_root_from_content, MerklePath};
+
+    const VALUE: &str = "merkletree";
+
+    #[test]
+    fn it_correctly_computes_keccak256_root_from_content() {
+        // Test with single value
+        let hash = Keccak256Hasher::default().digest(VALUE.as_bytes());
+        let root = compute_root_from_content::<Keccak256Hasher, &'static str>(&[VALUE]);
+        assert_eq!(root, hash);
+
+        // Test with multiple values
+        let values = vec!["1", "2", "3", "4"];
+        let root = compute_root_from_content::<Keccak256Hasher, &str>(&values);
+
+        // Manually compute expected root
+        let h0 = Keccak256Hasher::default().digest(values[0].as_bytes());
+        let h1 = Keccak256Hasher::default().digest(values[1].as_bytes());
+        let h2 = Keccak256Hasher::default().digest(values[2].as_bytes());
+        let h3 = Keccak256Hasher::default().digest(values[3].as_bytes());
+
+        let h4 = Keccak256Hasher::default().chain(&h0).chain(&h1).finish();
+        let h5 = Keccak256Hasher::default().chain(&h2).chain(&h3).finish();
+        let expected_root = Keccak256Hasher::default().chain(&h4).chain(&h5).finish();
+
+        assert_eq!(root, expected_root);
+    }
+
+    #[test]
+    fn it_correctly_computes_keccak256_merkle_path() {
+        let values = vec!["1", "2", "3", "4"];
+
+        // Compute root with Keccak256
+        let root = compute_root_from_content::<Keccak256Hasher, &str>(&values);
+
+        // Generate proof for second value
+        let proof = MerklePath::new::<Keccak256Hasher, &str>(&values, &values[1]);
+        assert_eq!(proof.len(), 2);
+
+        // Verify proof
+        let computed_root = proof.compute_root(&values[1]);
+        assert_eq!(computed_root, root);
+    }
+
+    #[test]
+    fn it_correctly_verifies_keccak256_merkle_path() {
+        let values = vec!["1", "2", "3", "4", "5", "6", "7"];
+        let root = compute_root_from_content::<Keccak256Hasher, &str>(&values);
+
+        // Test proof for various indices
+        for (i, value) in values.iter().enumerate() {
+            let proof = MerklePath::new::<Keccak256Hasher, &str>(&values, value);
+            let computed_root = proof.compute_root(value);
+            assert_eq!(
+                computed_root, root,
+                "Proof verification failed for index {}",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn blake2b_and_keccak256_roots_differ() {
+        let values = vec!["1", "2", "3", "4"];
+
+        // Compute root with Blake2b
+        let blake2b_root = compute_root_from_content::<Blake2bHasher, &str>(&values);
+
+        // Compute root with Keccak256
+        let keccak256_root = compute_root_from_content::<Keccak256Hasher, &str>(&values);
+
+        // Verify they are different (convert to bytes for comparison)
+        assert_ne!(
+            blake2b_root.as_bytes(),
+            keccak256_root.as_bytes(),
+            "Blake2b and Keccak256 roots should differ for the same data"
+        );
+    }
+
+    #[test]
+    fn it_handles_various_input_sizes_with_keccak256() {
+        // Test empty input
+        let empty_hash = Keccak256Hasher::default().digest(&[]);
+        let root = compute_root_from_content::<Keccak256Hasher, [u8; 32]>(&[]);
+        assert_eq!(root, empty_hash);
+
+        // Test single element
+        let values = vec!["single"];
+        let root = compute_root_from_content::<Keccak256Hasher, &str>(&values);
+        let expected = Keccak256Hasher::default().digest(values[0].as_bytes());
+        assert_eq!(root, expected);
+
+        // Test power of 2 sizes
+        for size in [2, 4, 8, 16] {
+            let values: Vec<String> = (0..size).map(|i| i.to_string()).collect();
+            let values_ref: Vec<&str> = values.iter().map(|s| s.as_str()).collect();
+            let root = compute_root_from_content::<Keccak256Hasher, &str>(&values_ref);
+
+            // Verify proof for first element
+            let proof = MerklePath::new::<Keccak256Hasher, &str>(&values_ref, &values_ref[0]);
+            let computed_root = proof.compute_root(&values_ref[0]);
+            assert_eq!(computed_root, root, "Failed for size {}", size);
+        }
+
+        // Test non-power of 2 sizes
+        for size in [3, 5, 7, 9] {
+            let values: Vec<String> = (0..size).map(|i| i.to_string()).collect();
+            let values_ref: Vec<&str> = values.iter().map(|s| s.as_str()).collect();
+            let root = compute_root_from_content::<Keccak256Hasher, &str>(&values_ref);
+
+            // Verify proof for last element
+            let last_idx = values_ref.len() - 1;
+            let proof =
+                MerklePath::new::<Keccak256Hasher, &str>(&values_ref, &values_ref[last_idx]);
+            let computed_root = proof.compute_root(&values_ref[last_idx]);
+            assert_eq!(computed_root, root, "Failed for size {}", size);
+        }
+    }
+
+    #[test]
+    fn it_correctly_computes_complex_keccak256_paths() {
+        let values = vec!["1", "2", "3"];
+        let root = compute_root_from_content::<Keccak256Hasher, &str>(&values);
+
+        // Test proof for middle element
+        let proof = MerklePath::new::<Keccak256Hasher, &str>(&values, &values[1]);
+        assert_eq!(proof.len(), 2);
+        assert_eq!(proof.compute_root(&values[1]), root);
+
+        // Test proof for last element
+        let proof = MerklePath::new::<Keccak256Hasher, &str>(&values, &values[2]);
+        assert_eq!(proof.len(), 1);
+        assert_eq!(proof.compute_root(&values[2]), root);
+
+        // Test with 7 elements
+        let values = vec!["1", "2", "3", "4", "5", "6", "7"];
+        let root = compute_root_from_content::<Keccak256Hasher, &str>(&values);
+
+        // Test proof for last element
+        let proof = MerklePath::new::<Keccak256Hasher, &str>(&values, &values[6]);
+        assert_eq!(proof.len(), 2);
+        assert_eq!(proof.compute_root(&values[6]), root);
+
+        // Test proof for middle element
+        let proof = MerklePath::new::<Keccak256Hasher, &str>(&values, &values[2]);
+        assert_eq!(proof.len(), 3);
+        assert_eq!(proof.compute_root(&values[2]), root);
+    }
+
+    #[test]
+    fn keccak256_empty_path_differs_from_root() {
+        let root = compute_root_from_content::<Keccak256Hasher, [u8; 32]>(&[]);
+        let proof = MerklePath::new::<Keccak256Hasher, [u8; 32]>(&[], &[0u8; 32]);
+        assert_eq!(proof.len(), 0);
+        assert_ne!(proof.compute_root(&[0u8; 32]), root);
+    }
+}
