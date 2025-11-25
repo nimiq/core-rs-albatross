@@ -1,7 +1,7 @@
 use nimiq_block::{Block, MicroBlock};
 use nimiq_database::mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_genesis::NetworkId;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Keccak256Hash};
 use nimiq_mmr::{
     error::Error as MMRError,
     mmr::proof::{RangeProof, SizeProof},
@@ -11,6 +11,7 @@ use nimiq_transaction::{
     inherent::Inherent,
     EquivocationLocator,
 };
+use nimiq_utils::merkle::MerklePath;
 
 use super::{HistoryStore, HistoryStoreIndex, HistoryStoreMerger};
 use crate::{
@@ -417,6 +418,37 @@ impl<S: HistoryInterface, I: HistoryIndexInterface> HistoryInterface for History
             HistoryStoreProxy::WithIndex(index) => index.prove_num_leaves(block_number, txn_option),
             HistoryStoreProxy::WithoutIndex(store) => {
                 store.prove_num_leaves(block_number, txn_option)
+            }
+        }
+    }
+
+    fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash> {
+        match self {
+            HistoryStoreProxy::WithIndex(index) => {
+                index.get_keccak256_history_root(block_number, txn_option)
+            }
+            HistoryStoreProxy::WithoutIndex(store) => {
+                store.get_keccak256_history_root(block_number, txn_option)
+            }
+        }
+    }
+
+    fn get_keccak256_proof(
+        &self,
+        block_number: u32,
+        transaction_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<MerklePath<Keccak256Hash>> {
+        match self {
+            HistoryStoreProxy::WithIndex(index) => {
+                index.get_keccak256_proof(block_number, transaction_index, txn_option)
+            }
+            HistoryStoreProxy::WithoutIndex(store) => {
+                store.get_keccak256_proof(block_number, transaction_index, txn_option)
             }
         }
     }

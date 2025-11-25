@@ -420,77 +420,6 @@ impl HistoryStore {
         // Return the history root.
         Some((root, txns_size, leaf_idx))
     }
-
-    /// Gets the Keccak256 history root for a macro block (election or checkpoint).
-    /// Returns None if the block is not a macro block or if there are no transactions.
-    pub fn get_keccak256_history_root(
-        &self,
-        block_number: u32,
-        txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<Keccak256Hash> {
-        // Verify the block number is a macro block
-        if !Policy::is_macro_block_at(block_number) {
-            return None;
-        }
-
-        // Determine epoch number from block number
-        let epoch_number = Policy::epoch_at(block_number);
-
-        // Retrieve all historic transactions for the epoch from database
-        let hist_txs = self.get_epoch_transactions(epoch_number, txn_option);
-
-        // If there are no transactions, return None
-        if hist_txs.is_empty() {
-            return None;
-        }
-
-        // Hash each transaction with Keccak256
-        let mut hashes: Vec<Keccak256Hash> = Vec::with_capacity(hist_txs.len());
-        for tx in &hist_txs {
-            let mut hasher = Keccak256Hasher::default();
-            tx.serialize_to_writer(&mut hasher).ok()?;
-            hashes.push(HashHasher::finish(hasher));
-        }
-
-        // Compute root from hashes
-        let root = compute_root_from_hashes::<Keccak256Hash>(&hashes);
-
-        Some(root.into_owned())
-    }
-
-    /// Generates a Keccak256-based Merkle proof for a transaction at a given index.
-    /// Returns None if the block is not a macro block, if the transaction index is invalid,
-    /// or if there are no transactions in the epoch.
-    pub fn get_keccak256_proof(
-        &self,
-        block_number: u32,
-        transaction_index: usize,
-        txn_option: Option<&MdbxReadTransaction>,
-    ) -> Option<MerklePath<Keccak256Hash>> {
-        // Verify the block number is a macro block (election or checkpoint)
-        if !Policy::is_macro_block_at(block_number) {
-            return None;
-        }
-
-        // Determine epoch from block number
-        let epoch_number = Policy::epoch_at(block_number);
-
-        // Retrieve all historic transactions for the epoch from database
-        let hist_txs = self.get_epoch_transactions(epoch_number, txn_option);
-
-        // Check if transaction_index is valid
-        if transaction_index >= hist_txs.len() {
-            return None;
-        }
-
-        // Get the transaction at transaction_index
-        let target_tx = &hist_txs[transaction_index];
-
-        // Generate proof using MerklePath::new::<Keccak256Hasher>()
-        let proof = MerklePath::new::<Keccak256Hasher, HistoricTransaction>(&hist_txs, target_tx);
-
-        Some(proof)
-    }
 }
 
 impl HistoryInterface for HistoryStore {
@@ -988,6 +917,72 @@ impl HistoryInterface for HistoryStore {
         let last = cursor.last().unwrap_or_default().0;
 
         (first, last)
+    }
+
+    fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash> {
+        // Verify the block number is a macro block
+        if !Policy::is_macro_block_at(block_number) {
+            return None;
+        }
+
+        // Determine epoch number from block number
+        let epoch_number = Policy::epoch_at(block_number);
+
+        // Retrieve all historic transactions for the epoch from database
+        let hist_txs = self.get_epoch_transactions(epoch_number, txn_option);
+
+        // If there are no transactions, return None
+        if hist_txs.is_empty() {
+            return None;
+        }
+
+        // Hash each transaction with Keccak256
+        let mut hashes: Vec<Keccak256Hash> = Vec::with_capacity(hist_txs.len());
+        for tx in &hist_txs {
+            let mut hasher = Keccak256Hasher::default();
+            tx.serialize_to_writer(&mut hasher).ok()?;
+            hashes.push(HashHasher::finish(hasher));
+        }
+
+        // Compute root from hashes
+        let root = compute_root_from_hashes::<Keccak256Hash>(&hashes);
+
+        Some(root.into_owned())
+    }
+
+    fn get_keccak256_proof(
+        &self,
+        block_number: u32,
+        transaction_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<MerklePath<Keccak256Hash>> {
+        // Verify the block number is a macro block (election or checkpoint)
+        if !Policy::is_macro_block_at(block_number) {
+            return None;
+        }
+
+        // Determine epoch from block number
+        let epoch_number = Policy::epoch_at(block_number);
+
+        // Retrieve all historic transactions for the epoch from database
+        let hist_txs = self.get_epoch_transactions(epoch_number, txn_option);
+
+        // Check if transaction_index is valid
+        if transaction_index >= hist_txs.len() {
+            return None;
+        }
+
+        // Get the transaction at transaction_index
+        let target_tx = &hist_txs[transaction_index];
+
+        // Generate proof using MerklePath::new::<Keccak256Hasher>()
+        let proof = MerklePath::new::<Keccak256Hasher, HistoricTransaction>(&hist_txs, target_tx);
+
+        Some(proof)
     }
 }
 
