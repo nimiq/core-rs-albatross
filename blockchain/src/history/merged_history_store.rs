@@ -2,7 +2,7 @@ use std::cmp;
 
 use nimiq_block::{Block, MicroBlock};
 use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Keccak256Hash};
 use nimiq_keys::Address;
 use nimiq_mmr::{
     error::Error,
@@ -15,6 +15,7 @@ use nimiq_transaction::{
     inherent::Inherent,
     EquivocationLocator,
 };
+use nimiq_utils::merkle::MerklePath;
 
 use super::interface::{HistoryIndexInterface, HistoryInterface};
 
@@ -329,6 +330,41 @@ impl<S: HistoryInterface> HistoryInterface for HistoryStoreMerger<S> {
                 .prove_num_leaves(block_number, None)
         } else {
             self.main.prove_num_leaves(block_number, txn_option)
+        }
+    }
+
+    fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash> {
+        if Policy::epoch_at(block_number) == 0 {
+            // The pre-genesis database has separate transactions.
+            // Since it is read-only, we can pass None as the transaction.
+            self.pre_genesis
+                .as_ref()?
+                .get_keccak256_history_root(block_number, None)
+        } else {
+            self.main
+                .get_keccak256_history_root(block_number, txn_option)
+        }
+    }
+
+    fn get_keccak256_proof(
+        &self,
+        block_number: u32,
+        transaction_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<MerklePath<Keccak256Hash>> {
+        if Policy::epoch_at(block_number) == 0 {
+            // The pre-genesis database has separate transactions.
+            // Since it is read-only, we can pass None as the transaction.
+            self.pre_genesis
+                .as_ref()?
+                .get_keccak256_proof(block_number, transaction_index, None)
+        } else {
+            self.main
+                .get_keccak256_proof(block_number, transaction_index, txn_option)
         }
     }
 }
