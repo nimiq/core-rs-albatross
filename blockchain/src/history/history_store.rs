@@ -10,7 +10,7 @@ use nimiq_database::{
     },
 };
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake2bHash, Hash, Hasher as HashHasher, Keccak256Hash, Keccak256Hasher};
 use nimiq_mmr::{
     error::Error as MMRError,
     mmr::{position::leaf_number_to_index, proof::SizeProof, MerkleMountainRange},
@@ -26,6 +26,7 @@ use nimiq_transaction::{
     inherent::Inherent,
     EquivocationLocator,
 };
+use nimiq_utils::merkle::compute_root_from_hashes;
 
 use super::{
     interface::HistoryInterface, utils::IndexedTransaction, validity_store::ValidityStore,
@@ -419,6 +420,43 @@ impl HistoryStore {
 
         // Return the history root.
         Some((root, txns_size, leaf_idx))
+    }
+
+    /// Gets the Keccak256 history root for a macro block (election or checkpoint).
+    /// Returns None if the block is not a macro block or if there are no transactions.
+    pub fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash> {
+        // Verify the block number is a macro block
+        if !Policy::is_macro_block_at(block_number) {
+            return None;
+        }
+
+        // Determine epoch number from block number
+        let epoch_number = Policy::epoch_at(block_number);
+
+        // Retrieve all historic transactions for the epoch from database
+        let hist_txs = self.get_epoch_transactions(epoch_number, txn_option);
+
+        // If there are no transactions, return None
+        if hist_txs.is_empty() {
+            return None;
+        }
+
+        // Hash each transaction with Keccak256
+        let mut hashes: Vec<Keccak256Hash> = Vec::with_capacity(hist_txs.len());
+        for tx in &hist_txs {
+            let mut hasher = Keccak256Hasher::default();
+            tx.serialize_to_writer(&mut hasher).ok()?;
+            hashes.push(HashHasher::finish(hasher));
+        }
+
+        // Compute root from hashes
+        let root = compute_root_from_hashes::<Keccak256Hash>(&hashes);
+
+        Some(root.into_owned())
     }
 }
 
@@ -1558,5 +1596,179 @@ mod tests {
         vec![
             ext_0, ext_1, ext_2, ext_3, ext_4, ext_5, ext_6, ext_7, ext_8, ext_9, ext_10,
         ]
+    }
+
+    #[test]
+    fn keccak256_history_root_for_election_macro_blocks() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 2, &hist_txs[3..]);
+
+        // Get the election block number for epoch 0
+        let election_block = Policy::election_block_of(0).unwrap();
+
+        // Verify we can get Keccak256 root for election macro block
+        let keccak_root = history_store.get_keccak256_history_root(election_block, Some(&txn));
+        assert!(
+            keccak_root.is_some(),
+            "Should return Keccak256 root for election macro block"
+        );
+
+        // Verify the root is deterministic (calling again returns same result)
+        let keccak_root2 = history_store.get_keccak256_history_root(election_block, Some(&txn));
+        assert_eq!(
+            keccak_root, keccak_root2,
+            "Keccak256 root should be deterministic"
+        );
+    }
+
+    #[test]
+    fn keccak256_history_root_for_checkpoint_macro_blocks() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 2, &hist_txs[3..]);
+
+        // Get a checkpoint block number (first batch of epoch 0)
+        let checkpoint_block = Policy::macro_block_of(1).unwrap();
+
+        // Verify we can get Keccak256 root for checkpoint macro block
+        let keccak_root = history_store.get_keccak256_history_root(checkpoint_block, Some(&txn));
+        assert!(
+            keccak_root.is_some(),
+            "Should return Keccak256 root for checkpoint macro block"
+        );
+    }
+
+    #[test]
+    fn keccak256_history_root_returns_none_for_micro_blocks() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs[..3]);
+
+        // Try to get Keccak256 root for a micro block
+        let micro_block = Policy::genesis_block_number() + 1;
+        assert!(
+            Policy::is_micro_block_at(micro_block),
+            "Block should be a micro block"
+        );
+
+        let keccak_root = history_store.get_keccak256_history_root(micro_block, Some(&txn));
+        assert!(keccak_root.is_none(), "Should return None for micro blocks");
+    }
+
+    #[test]
+    fn keccak256_history_root_with_empty_history() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        let txn = env.write_transaction();
+
+        // Get the election block number for epoch 0
+        let election_block = Policy::election_block_of(0).unwrap();
+
+        // Verify we get None for empty history
+        let keccak_root = history_store.get_keccak256_history_root(election_block, Some(&txn));
+        assert!(
+            keccak_root.is_none(),
+            "Should return None for empty history"
+        );
+    }
+
+    #[test]
+    fn keccak256_history_root_with_various_epoch_sizes() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        let mut txn = env.write_transaction();
+
+        // Test with 1 transaction
+        let hist_tx_1 = vec![create_transaction(Policy::genesis_block_number(), 0)];
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_tx_1);
+
+        let election_block = Policy::election_block_of(0).unwrap();
+        let root_1 = history_store.get_keccak256_history_root(election_block, Some(&txn));
+        assert!(root_1.is_some(), "Should compute root for 1 transaction");
+
+        // Test with 3 transactions (different epoch)
+        let hist_tx_3 = vec![
+            create_transaction(Policy::genesis_block_number() + 1, 1),
+            create_transaction(Policy::genesis_block_number() + 1, 2),
+            create_transaction(Policy::genesis_block_number() + 1, 3),
+        ];
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 1, &hist_tx_3);
+
+        let election_block_1 = Policy::election_block_of(1).unwrap();
+        let root_3 = history_store.get_keccak256_history_root(election_block_1, Some(&txn));
+        assert!(root_3.is_some(), "Should compute root for 3 transactions");
+
+        // Verify roots are different for different epochs
+        assert_ne!(
+            root_1, root_3,
+            "Roots should differ for different transaction sets"
+        );
+    }
+
+    #[test]
+    fn keccak256_history_root_matches_manually_computed_values() {
+        use nimiq_hash::Hasher as HashHasher;
+        use nimiq_utils::merkle::compute_root_from_hashes;
+
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create a simple set of transactions
+        let hist_txs = vec![
+            create_transaction(Policy::genesis_block_number(), 0),
+            create_transaction(Policy::genesis_block_number(), 1),
+        ];
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs);
+
+        // Manually compute the expected root
+        let mut hashes: Vec<Keccak256Hash> = Vec::new();
+        for tx in &hist_txs {
+            let mut hasher = Keccak256Hasher::default();
+            tx.serialize_to_writer(&mut hasher).unwrap();
+            hashes.push(HashHasher::finish(hasher));
+        }
+        let expected_root = compute_root_from_hashes::<Keccak256Hash>(&hashes);
+
+        // Get the root from history store
+        let election_block = Policy::election_block_of(0).unwrap();
+        let actual_root = history_store.get_keccak256_history_root(election_block, Some(&txn));
+
+        assert_eq!(
+            actual_root,
+            Some(expected_root.into_owned()),
+            "History store root should match manually computed root"
+        );
     }
 }
