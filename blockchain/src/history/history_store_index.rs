@@ -9,7 +9,7 @@ use nimiq_database::{
     traits::{Database, DupReadCursor, ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
 };
 use nimiq_genesis::NetworkId;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Keccak256Hash};
 use nimiq_keys::Address;
 use nimiq_mmr::{error::Error as MMRError, mmr::proof::SizeProof};
 use nimiq_primitives::policy::Policy;
@@ -19,6 +19,7 @@ use nimiq_transaction::{
     inherent::Inherent,
     EquivocationLocator,
 };
+use nimiq_utils::merkle::MerklePath;
 
 use super::{
     interface::HistoryInterface,
@@ -559,6 +560,25 @@ impl HistoryInterface for HistoryStoreIndex {
             .remove_epoch_from_history(txn, epoch_number);
 
         Some(())
+    }
+
+    fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash> {
+        self.history_store
+            .get_keccak256_history_root(block_number, txn_option)
+    }
+
+    fn get_keccak256_proof(
+        &self,
+        block_number: u32,
+        transaction_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<MerklePath<Keccak256Hash>> {
+        self.history_store
+            .get_keccak256_proof(block_number, transaction_index, txn_option)
     }
 }
 

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use nimiq_block::{Block, MicroBlock};
 use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Keccak256Hash};
 use nimiq_keys::Address;
 use nimiq_mmr::{error::Error as MMRError, mmr::proof::SizeProof};
 use nimiq_transaction::{
@@ -11,6 +11,7 @@ use nimiq_transaction::{
     inherent::Inherent,
     EquivocationLocator,
 };
+use nimiq_utils::merkle::MerklePath;
 
 use crate::HistoryTreeChunk;
 
@@ -173,6 +174,47 @@ pub trait HistoryInterface: Debug {
         block_number: u32,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Result<SizeProof<Blake2bHash, HistoricTransaction>, MMRError>;
+
+    /// Gets the Keccak256 history root for a macro block (election or checkpoint).
+    ///
+    /// This method computes the Keccak256 Merkle tree root on-demand from the stored
+    /// historic transactions for the epoch corresponding to the given block number.
+    /// The computation is performed in-memory and the tree is not persisted.
+    ///
+    /// # Arguments
+    /// * `block_number` - The block number (must be a macro block)
+    /// * `txn_option` - Optional database transaction
+    ///
+    /// # Returns
+    /// * `Some(Keccak256Hash)` - The Keccak256 Merkle tree root for the epoch
+    /// * `None` - If the block is not a macro block or if no history exists for the epoch
+    fn get_keccak256_history_root(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<Keccak256Hash>;
+
+    /// Generates a Keccak256-based Merkle proof for a historic transaction.
+    ///
+    /// This method builds a Keccak256 Merkle tree on-demand from the stored historic
+    /// transactions for the epoch and generates a proof for the transaction at the
+    /// specified index. The tree is built in-memory and not persisted.
+    ///
+    /// # Arguments
+    /// * `block_number` - The block number (must be a macro block)
+    /// * `transaction_index` - The index of the transaction within the epoch
+    /// * `txn_option` - Optional database transaction
+    ///
+    /// # Returns
+    /// * `Some(MerklePath<Keccak256Hash>)` - A Merkle proof for the transaction
+    /// * `None` - If the block is not a macro block, the transaction index is invalid,
+    ///   or no history exists for the epoch
+    fn get_keccak256_proof(
+        &self,
+        block_number: u32,
+        transaction_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<MerklePath<Keccak256Hash>>;
 }
 
 /// Defines several methods to interact with a history store.
