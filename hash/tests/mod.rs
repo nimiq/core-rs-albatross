@@ -3,7 +3,8 @@ use std::io::Write;
 use nimiq_hash::{
     argon2kdf,
     sha512::{Sha512Hash, Sha512Hasher},
-    Blake2bHash, Blake2bHasher, Blake2sHash, Blake2sHasher, Hasher, Sha256Hash, Sha256Hasher,
+    Blake2bHash, Blake2bHasher, Blake2sHash, Blake2sHasher, Hasher, Keccak256Hash, Keccak256Hasher,
+    Sha256Hash, Sha256Hasher,
 };
 use nimiq_test_log::test;
 
@@ -106,4 +107,61 @@ fn it_can_compute_argon2_kdf() {
         res2id.unwrap(),
         hex::decode("8d8a0ac8da6f305cfc505411db3d3d17cda3aa1773e4c63b85aade07fdfa637e").unwrap()
     );
+}
+
+#[test]
+fn it_can_compute_keccak256() {
+    // keccak256('test') = '9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658'
+    // This is the standard Keccak256 test vector
+
+    assert_eq!(
+        Keccak256Hasher::default().digest(b"test"),
+        Keccak256Hash::from("9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658")
+    );
+    let mut h = Keccak256Hasher::default();
+    h.write_all(b"te").unwrap();
+    h.write_all(b"st").unwrap();
+    assert_eq!(
+        h.finish(),
+        Keccak256Hash::from("9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658")
+    );
+}
+
+#[test]
+fn it_can_compute_keccak256_empty() {
+    // keccak256('') = 'c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470'
+    assert_eq!(
+        Keccak256Hasher::default().digest(b""),
+        Keccak256Hash::from("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
+    );
+}
+
+#[test]
+fn it_can_encode_decode_keccak256_hex() {
+    let hash =
+        Keccak256Hash::from("9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658");
+    let hex_string = hash.to_hex();
+    assert_eq!(
+        hex_string,
+        "9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658"
+    );
+
+    let decoded: Keccak256Hash = hex_string.parse().unwrap();
+    assert_eq!(hash, decoded);
+}
+
+#[test]
+fn it_can_serialize_deserialize_keccak256() {
+    use nimiq_serde::{Deserialize, Serialize};
+
+    let hash = Keccak256Hasher::default().digest(b"test");
+
+    // Serialize
+    let mut serialized = Vec::new();
+    hash.serialize_to_writer(&mut serialized).unwrap();
+
+    // Deserialize
+    let deserialized = Keccak256Hash::deserialize_from_vec(&serialized).unwrap();
+
+    assert_eq!(hash, deserialized);
 }

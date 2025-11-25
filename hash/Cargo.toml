@@ -27,6 +27,7 @@ rust-argon2 = "3.0"
 serde = "1.0"
 sha2 = "0.11"
 subtle = "2.6"
+tiny-keccak = { version = "2.0", features = ["keccak"] }
 
 nimiq-database-value = { workspace = true }
 nimiq-macros = { workspace = true }
