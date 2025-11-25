@@ -26,7 +26,7 @@ use nimiq_transaction::{
     inherent::Inherent,
     EquivocationLocator,
 };
-use nimiq_utils::merkle::compute_root_from_hashes;
+use nimiq_utils::merkle::{compute_root_from_hashes, MerklePath};
 
 use super::{
     interface::HistoryInterface, utils::IndexedTransaction, validity_store::ValidityStore,
@@ -457,6 +457,40 @@ impl HistoryStore {
         let root = compute_root_from_hashes::<Keccak256Hash>(&hashes);
 
         Some(root.into_owned())
+    }
+
+    /// Generates a Keccak256-based Merkle proof for a transaction at a given index.
+    /// Returns None if the block is not a macro block, if the transaction index is invalid,
+    /// or if there are no transactions in the epoch.
+    pub fn get_keccak256_proof(
+        &self,
+        block_number: u32,
+        transaction_index: usize,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<MerklePath<Keccak256Hash>> {
+        // Verify the block number is a macro block (election or checkpoint)
+        if !Policy::is_macro_block_at(block_number) {
+            return None;
+        }
+
+        // Determine epoch from block number
+        let epoch_number = Policy::epoch_at(block_number);
+
+        // Retrieve all historic transactions for the epoch from database
+        let hist_txs = self.get_epoch_transactions(epoch_number, txn_option);
+
+        // Check if transaction_index is valid
+        if transaction_index >= hist_txs.len() {
+            return None;
+        }
+
+        // Get the transaction at transaction_index
+        let target_tx = &hist_txs[transaction_index];
+
+        // Generate proof using MerklePath::new::<Keccak256Hasher>()
+        let proof = MerklePath::new::<Keccak256Hasher, HistoricTransaction>(&hist_txs, target_tx);
+
+        Some(proof)
     }
 }
 
@@ -1770,5 +1804,206 @@ mod tests {
             Some(expected_root.into_owned()),
             "History store root should match manually computed root"
         );
+    }
+
+    #[test]
+    fn keccak256_proof_generation_for_various_transaction_indices() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions.
+        let hist_txs = vec![
+            create_transaction(Policy::genesis_block_number(), 0),
+            create_transaction(Policy::genesis_block_number(), 1),
+            create_transaction(Policy::genesis_block_number(), 2),
+            create_transaction(Policy::genesis_block_number(), 3),
+        ];
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs);
+
+        let election_block = Policy::election_block_of(0).unwrap();
+
+        // Test proof generation for each transaction index
+        for i in 0..hist_txs.len() {
+            let proof = history_store.get_keccak256_proof(election_block, i, Some(&txn));
+            assert!(
+                proof.is_some(),
+                "Should generate proof for transaction index {}",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn keccak256_proof_verification_using_generated_proofs() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions.
+        let hist_txs = vec![
+            create_transaction(Policy::genesis_block_number(), 0),
+            create_transaction(Policy::genesis_block_number(), 1),
+            create_transaction(Policy::genesis_block_number(), 2),
+        ];
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs);
+
+        let election_block = Policy::election_block_of(0).unwrap();
+
+        // Get the root
+        let root = history_store
+            .get_keccak256_history_root(election_block, Some(&txn))
+            .expect("Should have root");
+
+        // Test proof verification for each transaction
+        for i in 0..hist_txs.len() {
+            let proof = history_store
+                .get_keccak256_proof(election_block, i, Some(&txn))
+                .expect("Should generate proof");
+
+            // Compute root from proof using the transaction
+            let computed_root = proof.compute_root(&hist_txs[i]);
+
+            assert_eq!(
+                computed_root, root,
+                "Proof verification should succeed for transaction index {}",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn keccak256_proof_with_different_epoch_sizes() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        let mut txn = env.write_transaction();
+
+        // Test with 1 transaction
+        let hist_tx_1 = vec![create_transaction(Policy::genesis_block_number(), 0)];
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_tx_1);
+
+        let election_block = Policy::election_block_of(0).unwrap();
+        let proof_1 = history_store.get_keccak256_proof(election_block, 0, Some(&txn));
+        assert!(proof_1.is_some(), "Should generate proof for 1 transaction");
+
+        // Test with 5 transactions (different epoch)
+        let hist_tx_5 = vec![
+            create_transaction(Policy::genesis_block_number() + 1, 1),
+            create_transaction(Policy::genesis_block_number() + 1, 2),
+            create_transaction(Policy::genesis_block_number() + 1, 3),
+            create_transaction(Policy::genesis_block_number() + 1, 4),
+            create_transaction(Policy::genesis_block_number() + 1, 5),
+        ];
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 1, &hist_tx_5);
+
+        let election_block_1 = Policy::election_block_of(1).unwrap();
+        for i in 0..5 {
+            let proof = history_store.get_keccak256_proof(election_block_1, i, Some(&txn));
+            assert!(
+                proof.is_some(),
+                "Should generate proof for transaction {} in epoch with 5 transactions",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn keccak256_proof_with_election_and_checkpoint_blocks() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions for epoch 0.
+        let hist_txs_epoch0 = vec![
+            create_transaction(Policy::genesis_block_number(), 0),
+            create_transaction(Policy::genesis_block_number(), 1),
+        ];
+
+        // Create historic transactions for epoch 1.
+        let hist_txs_epoch1 = vec![
+            create_transaction(Policy::genesis_block_number() + 1, 2),
+            create_transaction(Policy::genesis_block_number() + 1, 3),
+        ];
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs_epoch0);
+        history_store.add_to_history(
+            &mut txn,
+            Policy::genesis_block_number() + 1,
+            &hist_txs_epoch1,
+        );
+
+        // Test with election block for epoch 0
+        let election_block = Policy::election_block_of(0).unwrap();
+        let proof_election = history_store.get_keccak256_proof(election_block, 0, Some(&txn));
+        assert!(
+            proof_election.is_some(),
+            "Should generate proof for election block"
+        );
+
+        // Test with checkpoint block (first batch of epoch 1)
+        let checkpoint_block = Policy::macro_block_of(1).unwrap();
+        assert!(
+            Policy::is_macro_block_at(checkpoint_block),
+            "Block should be a macro block"
+        );
+        assert!(
+            !Policy::is_election_block_at(checkpoint_block),
+            "Block should not be an election block"
+        );
+        let proof_checkpoint = history_store.get_keccak256_proof(checkpoint_block, 0, Some(&txn));
+        assert!(
+            proof_checkpoint.is_some(),
+            "Should generate proof for checkpoint block"
+        );
+    }
+
+    #[test]
+    fn keccak256_proof_error_cases() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions.
+        let hist_txs = vec![
+            create_transaction(Policy::genesis_block_number(), 0),
+            create_transaction(Policy::genesis_block_number(), 1),
+        ];
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs);
+
+        let election_block = Policy::election_block_of(0).unwrap();
+
+        // Test invalid index (too large)
+        let proof_invalid = history_store.get_keccak256_proof(election_block, 10, Some(&txn));
+        assert!(
+            proof_invalid.is_none(),
+            "Should return None for invalid transaction index"
+        );
+
+        // Test micro block
+        let micro_block = Policy::genesis_block_number() + 1;
+        assert!(
+            Policy::is_micro_block_at(micro_block),
+            "Block should be a micro block"
+        );
+        let proof_micro = history_store.get_keccak256_proof(micro_block, 0, Some(&txn));
+        assert!(proof_micro.is_none(), "Should return None for micro blocks");
+
+        // Test empty epoch
+        let election_block_empty = Policy::election_block_of(1).unwrap();
+        let proof_empty = history_store.get_keccak256_proof(election_block_empty, 0, Some(&txn));
+        assert!(proof_empty.is_none(), "Should return None for empty epoch");
     }
 }
