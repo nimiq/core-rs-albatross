@@ -10,7 +10,9 @@ use nimiq_database::{
     },
 };
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Hash, Hasher as HashHasher, Keccak256Hash, Keccak256Hasher};
+use nimiq_hash::{
+    Blake2bHash, Hash, HashOutput, Hasher as HashHasher, Keccak256Hash, Keccak256Hasher,
+};
 use nimiq_mmr::{
     error::Error as MMRError,
     mmr::{
@@ -919,6 +921,12 @@ impl HistoryInterface for HistoryStore {
         (first, last)
     }
 
+    /// Gets the Keccak256 history root for a macro block (election or checkpoint).
+    /// Returns None if the block is not a macro block or if there are no transactions.
+    ///
+    /// The Merkle tree is constructed from sorted transaction hashes to create a canonical
+    /// structure that doesn't require left/right metadata in proofs, making it more compatible
+    /// with Ethereum tooling.
     fn get_keccak256_history_root(
         &self,
         block_number: u32,
@@ -948,7 +956,11 @@ impl HistoryInterface for HistoryStore {
             hashes.push(HashHasher::finish(hasher));
         }
 
-        // Compute root from hashes
+        // Sort hashes to create a canonical Merkle tree structure
+        // This eliminates the need for left/right metadata in proofs
+        hashes.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+
+        // Compute root from sorted hashes
         let root = compute_root_from_hashes::<Keccak256Hash>(&hashes);
 
         Some(root.into_owned())
@@ -976,11 +988,29 @@ impl HistoryInterface for HistoryStore {
             return None;
         }
 
-        // Get the transaction at transaction_index
-        let target_tx = &hist_txs[transaction_index];
+        // Get the transaction at transaction_index before sorting
+        let target_tx = hist_txs[transaction_index].clone();
+
+        // Hash each transaction with Keccak256 and create pairs of (hash, transaction)
+        let mut tx_hash_pairs: Vec<(Keccak256Hash, HistoricTransaction)> =
+            Vec::with_capacity(hist_txs.len());
+        for tx in hist_txs {
+            let mut hasher = Keccak256Hasher::default();
+            tx.serialize_to_writer(&mut hasher).ok()?;
+            let hash = HashHasher::finish(hasher);
+            tx_hash_pairs.push((hash, tx));
+        }
+
+        // Sort by hash to create a canonical Merkle tree structure
+        tx_hash_pairs.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+
+        // Extract sorted transactions
+        let sorted_txs: Vec<HistoricTransaction> =
+            tx_hash_pairs.iter().map(|(_, tx)| tx.clone()).collect();
 
         // Generate proof using MerklePath::new::<Keccak256Hasher>()
-        let proof = MerklePath::new::<Keccak256Hasher, HistoricTransaction>(&hist_txs, target_tx);
+        let proof =
+            MerklePath::new::<Keccak256Hasher, HistoricTransaction>(&sorted_txs, &target_tx);
 
         Some(proof)
     }
@@ -1795,13 +1825,15 @@ mod tests {
         let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs);
 
-        // Manually compute the expected root
+        // Manually compute the expected root with sorting
         let mut hashes: Vec<Keccak256Hash> = Vec::new();
         for tx in &hist_txs {
             let mut hasher = Keccak256Hasher::default();
             tx.serialize_to_writer(&mut hasher).unwrap();
             hashes.push(HashHasher::finish(hasher));
         }
+        // Sort hashes to match the implementation
+        hashes.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
         let expected_root = compute_root_from_hashes::<Keccak256Hash>(&hashes);
 
         // Get the root from history store
@@ -1812,6 +1844,63 @@ mod tests {
             actual_root,
             Some(expected_root.into_owned()),
             "History store root should match manually computed root"
+        );
+    }
+
+    #[test]
+    fn keccak256_history_root_uses_sorted_hashes() {
+        use nimiq_hash::Hasher as HashHasher;
+        use nimiq_utils::merkle::compute_root_from_hashes;
+
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create transactions
+        let hist_txs = vec![
+            create_transaction(Policy::genesis_block_number(), 0),
+            create_transaction(Policy::genesis_block_number(), 1),
+            create_transaction(Policy::genesis_block_number(), 2),
+        ];
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs);
+
+        // Compute root with unsorted hashes
+        let mut unsorted_hashes: Vec<Keccak256Hash> = Vec::new();
+        for tx in &hist_txs {
+            let mut hasher = Keccak256Hasher::default();
+            tx.serialize_to_writer(&mut hasher).unwrap();
+            unsorted_hashes.push(HashHasher::finish(hasher));
+        }
+        let unsorted_root = compute_root_from_hashes::<Keccak256Hash>(&unsorted_hashes);
+
+        // Compute root with sorted hashes
+        let mut sorted_hashes = unsorted_hashes.clone();
+        sorted_hashes.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+        let sorted_root = compute_root_from_hashes::<Keccak256Hash>(&sorted_hashes);
+
+        // Get the root from history store
+        let election_block = Policy::election_block_of(0).unwrap();
+        let actual_root = history_store
+            .get_keccak256_history_root(election_block, Some(&txn))
+            .expect("Should have root");
+
+        // Verify that sorted and unsorted roots are different (unless hashes happened to be sorted)
+        if unsorted_hashes != sorted_hashes {
+            assert_ne!(
+                unsorted_root.as_ref(),
+                sorted_root.as_ref(),
+                "Sorted and unsorted roots should differ when hash order changes"
+            );
+        }
+
+        // Verify that the history store uses sorted hashes
+        assert_eq!(
+            actual_root,
+            sorted_root.into_owned(),
+            "History store should use sorted hashes"
         );
     }
 
