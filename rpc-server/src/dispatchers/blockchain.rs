@@ -791,18 +791,20 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<String, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
             // Convert epoch number to election block number
-            let block_number = Policy::election_block_of(epoch_number)
-                .ok_or_else(|| Error::InvalidArgument("Invalid epoch number".to_string()))?;
+            let block_number = Policy::election_block_of(epoch_number).ok_or_else(|| {
+                Error::InvalidKeccak256Parameters(format!("Invalid epoch number: {}", epoch_number))
+            })?;
+
+            // Verify it's a macro block
+            if !Policy::is_macro_block_at(block_number) {
+                return Err(Error::NotAMacroBlock(block_number));
+            }
 
             // Get the Keccak256 history root from the history store
             let root = blockchain
                 .history_store
                 .get_keccak256_history_root(block_number, None)
-                .ok_or_else(|| {
-                    Error::InvalidArgument(
-                        "No history available for the specified epoch".to_string(),
-                    )
-                })?;
+                .ok_or(Error::Keccak256HistoryNotFound)?;
 
             // Format as hex string with "0x" prefix
             Ok(format!("0x{}", hex::encode(root.as_bytes())).into())
@@ -813,10 +815,58 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     async fn get_keccak256_transaction_proof(
         &self,
-        _epoch_number: u32,
-        _transaction_index: usize,
+        epoch_number: u32,
+        transaction_index: usize,
     ) -> RPCResult<nimiq_rpc_interface::types::MerklePathData, (), Self::Error> {
-        // TODO: Implement in task 9
-        Err(Error::NotImplemented)
+        if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            // Validate epoch number and convert to election block number
+            let block_number = Policy::election_block_of(epoch_number).ok_or_else(|| {
+                Error::InvalidKeccak256Parameters(format!("Invalid epoch number: {}", epoch_number))
+            })?;
+
+            // Verify it's a macro block
+            if !Policy::is_macro_block_at(block_number) {
+                return Err(Error::NotAMacroBlock(block_number));
+            }
+
+            // Get all transactions for the epoch to validate the transaction index
+            let transactions = blockchain
+                .history_store
+                .get_epoch_transactions(epoch_number, None);
+
+            // Validate transaction index
+            if transaction_index >= transactions.len() {
+                return Err(Error::InvalidKeccak256Parameters(format!(
+                    "Transaction index {} out of bounds (epoch has {} transactions)",
+                    transaction_index,
+                    transactions.len()
+                )));
+            }
+
+            // Get the specific transaction
+            let transaction = transactions[transaction_index].clone();
+
+            // Generate the Keccak256 Merkle proof
+            let proof = blockchain
+                .history_store
+                .get_keccak256_proof(block_number, transaction_index, None)
+                .ok_or(Error::Keccak256ProofGenerationFailed)?;
+
+            // Convert proof to RPC response format with hex-encoded hashes
+            let merkle_path_data = nimiq_rpc_interface::types::MerklePathData::from_path(
+                proof,
+                transaction,
+                Some(blockchain.block_number()),
+            )
+            .ok_or_else(|| {
+                Error::InvalidKeccak256Parameters(
+                    "Failed to convert transaction to RPC format".to_string(),
+                )
+            })?;
+
+            Ok(merkle_path_data.into())
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
     }
 }
