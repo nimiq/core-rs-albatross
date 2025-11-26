@@ -4,7 +4,7 @@ use nimiq_account::{BlockLog as BBlockLog, TransactionLog};
 use nimiq_blockchain::interface::{HistoryIndexInterface, HistoryInterface};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, HashOutput};
 use nimiq_keys::Address;
 use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
 use nimiq_rpc_interface::{
@@ -783,5 +783,40 @@ impl BlockchainInterface for BlockchainDispatcher {
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }
+    }
+
+    async fn get_keccak256_history_root(
+        &self,
+        epoch_number: u32,
+    ) -> RPCResult<String, (), Self::Error> {
+        if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            // Convert epoch number to election block number
+            let block_number = Policy::election_block_of(epoch_number)
+                .ok_or_else(|| Error::InvalidArgument("Invalid epoch number".to_string()))?;
+
+            // Get the Keccak256 history root from the history store
+            let root = blockchain
+                .history_store
+                .get_keccak256_history_root(block_number, None)
+                .ok_or_else(|| {
+                    Error::InvalidArgument(
+                        "No history available for the specified epoch".to_string(),
+                    )
+                })?;
+
+            // Format as hex string with "0x" prefix
+            Ok(format!("0x{}", hex::encode(root.as_bytes())).into())
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
+    }
+
+    async fn get_keccak256_transaction_proof(
+        &self,
+        _epoch_number: u32,
+        _transaction_index: usize,
+    ) -> RPCResult<nimiq_rpc_interface::types::MerklePathData, (), Self::Error> {
+        // TODO: Implement in task 9
+        Err(Error::NotImplemented)
     }
 }
