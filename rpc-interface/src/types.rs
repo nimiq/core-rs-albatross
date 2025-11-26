@@ -14,7 +14,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError};
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, Keccak256Hash};
 use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PrivateKey};
 use nimiq_primitives::{
     coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators,
@@ -26,6 +26,7 @@ use nimiq_transaction::{
         HistoricTransaction, HistoricTransactionData, JailEvent, PenalizeEvent, RewardEvent,
     },
 };
+use nimiq_utils::merkle::MerklePath;
 use nimiq_vrf::VrfSeed;
 use serde::{de::Error, Deserialize, Serialize};
 use serde_with::{serde_as, SerializeDisplay};
@@ -1382,5 +1383,48 @@ impl MempoolInfo {
         }
 
         info
+    }
+}
+
+/// Represents a Merkle path proof for RPC responses.
+/// Contains the sibling hashes needed to verify a transaction's inclusion in a sorted Merkle tree.
+///
+/// The Merkle tree is built with lexicographically sorted hashes at each level, which means
+/// verification can be done without explicit left/right position information - the verifier
+/// simply sorts the current hash and sibling hash at each step.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MerklePathData {
+    /// Hex-encoded sibling hashes (with "0x" prefix)
+    /// These are the hashes needed to reconstruct the path from leaf to root.
+    /// At each level, sort the current hash with the sibling hash lexicographically,
+    /// then hash them together: hash(min || max)
+    pub hashes: Vec<String>,
+    /// The transaction being proven
+    pub transaction: ExecutedTransaction,
+}
+
+impl MerklePathData {
+    /// Converts a MerklePath and HistoricTransaction into RPC-friendly MerklePathData
+    pub fn from_path(
+        path: MerklePath<Keccak256Hash>,
+        transaction: HistoricTransaction,
+        cur_block_height: Option<u32>,
+    ) -> Option<Self> {
+        // Extract hashes and convert to hex strings with "0x" prefix
+        let hashes: Vec<String> = path
+            .hashes()
+            .iter()
+            .map(|h| format!("0x{}", hex::encode(h.as_bytes())))
+            .collect();
+
+        // Convert HistoricTransaction to ExecutedTransaction
+        let executed_transaction =
+            ExecutedTransaction::try_from_historic_transaction(transaction, cur_block_height)?;
+
+        Some(Self {
+            hashes,
+            transaction: executed_transaction,
+        })
     }
 }
