@@ -89,6 +89,18 @@ pub enum Error {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("Failed to generate Keccak256 proof")]
+    Keccak256ProofGenerationFailed,
+
+    #[error("Keccak256 history not found for the specified epoch")]
+    Keccak256HistoryNotFound,
+
+    #[error("Block {0} is not a macro block")]
+    NotAMacroBlock(u32),
+
+    #[error("Invalid Keccak256 parameters: {0}")]
+    InvalidKeccak256Parameters(String),
 }
 
 impl From<Error> for RpcError {
