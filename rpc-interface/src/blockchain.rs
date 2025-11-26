@@ -6,7 +6,7 @@ use nimiq_primitives::networks::NetworkId;
 
 use crate::types::{
     Account, Block, BlockLog, BlockchainState, ExecutedTransaction, Inherent, LogType,
-    PenalizedSlots, RPCData, RPCResult, Slot, Staker, Validator,
+    MerklePathData, PenalizedSlots, RPCData, RPCResult, Slot, Staker, Validator,
 };
 
 #[nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")]
@@ -210,4 +210,17 @@ pub trait BlockchainInterface {
         addresses: Vec<Address>,
         log_types: Vec<LogType>,
     ) -> Result<BoxStream<'static, RPCData<BlockLog, BlockchainState>>, Self::Error>;
+
+    /// Gets the Keccak256 history root for a given epoch.
+    async fn get_keccak256_history_root(
+        &self,
+        epoch_number: u32,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Gets a Keccak256-based Merkle proof for a specific transaction in an epoch.
+    async fn get_keccak256_transaction_proof(
+        &self,
+        epoch_number: u32,
+        transaction_index: usize,
+    ) -> RPCResult<MerklePathData, (), Self::Error>;
 }
