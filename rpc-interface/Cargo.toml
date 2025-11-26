@@ -46,6 +46,7 @@ nimiq-keys = { workspace = true, features = ["serde-derive"] }
 nimiq-primitives = { workspace = true, features = ["coin", "account", "serde-derive"] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
+nimiq-utils = { workspace = true }
 nimiq-vrf = { workspace = true, features = ["serde-derive"] }
 
 [dev-dependencies]
