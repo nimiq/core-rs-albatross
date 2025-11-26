@@ -4632,6 +4632,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-serde",
  "nimiq-transaction",
+ "nimiq-utils",
  "nimiq-vrf",
  "parking_lot",
  "serde",
