@@ -6,7 +6,7 @@ use nimiq_primitives::networks::NetworkId;
 
 use crate::types::{
     Account, Block, BlockLog, BlockchainState, ExecutedTransaction, Inherent, LogType,
-    PenalizedSlots, RPCData, RPCResult, Slot, Staker, Validator,
+    MerklePathData, PenalizedSlots, RPCData, RPCResult, Slot, Staker, Validator,
 };
 
 #[nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")]
@@ -210,4 +210,49 @@ pub trait BlockchainInterface {
         addresses: Vec<Address>,
         log_types: Vec<LogType>,
     ) -> Result<BoxStream<'static, RPCData<BlockLog, BlockchainState>>, Self::Error>;
+
+    /// Gets the Keccak256 history root for a given epoch.
+    ///
+    /// This method computes the Keccak256 Merkle tree root on-demand from the historic
+    /// transactions stored for the specified epoch. The root is computed for the macro block
+    /// (either election or checkpoint) that ends the epoch.
+    ///
+    /// # Parameters
+    /// * `epoch_number` - The epoch number for which to compute the Keccak256 history root
+    ///
+    /// # Returns
+    /// * `Ok(String)` - Hex-encoded Keccak256 root hash with "0x" prefix
+    /// * `Err` - If the epoch is invalid, no history exists, or this is a light blockchain
+    ///
+    /// # Requirements
+    /// Validates: Requirements 6.1, 6.3, 6.4
+    async fn get_keccak256_history_root(
+        &self,
+        epoch_number: u32,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Gets a Keccak256-based Merkle proof for a specific transaction in an epoch.
+    ///
+    /// This method generates a Merkle proof that demonstrates a transaction's inclusion
+    /// in the Keccak256 Merkle tree for the specified epoch. The proof can be verified
+    /// against the Keccak256 history root.
+    ///
+    /// The Merkle tree uses lexicographically sorted hashes at each level, which means
+    /// verification can be done without explicit left/right position information.
+    ///
+    /// # Parameters
+    /// * `epoch_number` - The epoch number containing the transaction
+    /// * `transaction_index` - The index of the transaction within the epoch's transaction list
+    ///
+    /// # Returns
+    /// * `Ok(MerklePathData)` - The Merkle proof with sibling hashes and the transaction
+    /// * `Err` - If the epoch/index is invalid, transaction not found, or this is a light blockchain
+    ///
+    /// # Requirements
+    /// Validates: Requirements 6.2, 6.3, 6.4
+    async fn get_keccak256_transaction_proof(
+        &self,
+        epoch_number: u32,
+        transaction_index: usize,
+    ) -> RPCResult<MerklePathData, (), Self::Error>;
 }
