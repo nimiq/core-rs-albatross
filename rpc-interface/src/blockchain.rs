@@ -220,7 +220,7 @@ pub trait BlockchainInterface {
     /// Gets a Keccak256-based Merkle proof for a specific transaction in an epoch.
     async fn get_keccak256_transaction_proof(
         &self,
-        epoch_number: u32,
-        transaction_index: usize,
+        block_number: u32,
+        transaction_hash: Blake2bHash,
     ) -> RPCResult<MerklePathData, (), Self::Error>;
 }
