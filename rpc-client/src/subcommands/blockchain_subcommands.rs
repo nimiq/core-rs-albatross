@@ -50,6 +50,12 @@ pub enum BlockchainCommand {
         hash: Blake2bHash,
     },
 
+    /// Query a raw transaction (hex-encoded) from the blockchain.
+    RawTransaction {
+        /// The transaction hash.
+        hash: Blake2bHash,
+    },
+
     /// Query for all transactions present within a block or batch.
     /// Block or batch number arguments are mutually exclusive, only exactly one of them can be provided.
     #[clap(group(
@@ -257,6 +263,16 @@ impl HandleSubcommand for BlockchainCommand {
                 println!(
                     "{:#?}",
                     client.blockchain.get_transaction_by_hash(hash).await?
+                )
+            }
+            BlockchainCommand::RawTransaction { hash } => {
+                println!(
+                    "{}",
+                    client
+                        .blockchain
+                        .get_raw_transaction_by_hash(hash)
+                        .await?
+                        .data
                 )
             }
             BlockchainCommand::Transactions {
