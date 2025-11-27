@@ -66,6 +66,12 @@ pub trait BlockchainInterface {
         hash: Blake2bHash,
     ) -> RPCResult<ExecutedTransaction, (), Self::Error>;
 
+    /// Returns the raw transaction (hex-encoded) given its hash.
+    async fn get_raw_transaction_by_hash(
+        &self,
+        hash: Blake2bHash,
+    ) -> RPCResult<String, (), Self::Error>;
+
     /// Returns all the transactions (including reward transactions) for the given block number. Note
     /// that this only considers blocks in the main chain.
     async fn get_transactions_by_block_number(
