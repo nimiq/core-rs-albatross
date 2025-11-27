@@ -33,7 +33,7 @@ use nimiq_transaction::{
     inherent::Inherent,
     EquivocationLocator,
 };
-use nimiq_utils::merkle::{compute_root_from_hashes, MerklePath};
+use nimiq_utils::merkle::MerklePath;
 
 use super::{
     interface::HistoryInterface, utils::IndexedTransaction, validity_store::ValidityStore,
@@ -999,8 +999,9 @@ impl HistoryInterface for HistoryStore {
         // This eliminates the need for left/right metadata in proofs
         hashes.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
 
-        // Compute root from sorted hashes
-        let root = compute_root_from_hashes::<Keccak256Hash>(&hashes);
+        // Compute root from sorted hashes using sorted Merkle tree algorithm
+        // This is compatible with OpenZeppelin's MerkleProof.verify()
+        let root = nimiq_utils::merkle::compute_root_from_hashes_sorted::<Keccak256Hash>(&hashes);
 
         Some(root.into_owned())
     }
@@ -1084,9 +1085,9 @@ impl HistoryInterface for HistoryStore {
         let sorted_txs: Vec<HistoricTransaction> =
             tx_hash_pairs.iter().map(|(_, tx)| tx.clone()).collect();
 
-        // Generate proof using MerklePath::new::<Keccak256Hasher>()
+        // Generate proof using sorted Merkle tree algorithm for OpenZeppelin compatibility
         let proof =
-            MerklePath::new::<Keccak256Hasher, HistoricTransaction>(&sorted_txs, &target_tx);
+            MerklePath::new_sorted::<Keccak256Hasher, HistoricTransaction>(&sorted_txs, &target_tx);
 
         Some(proof)
     }
@@ -1919,7 +1920,6 @@ mod tests {
     #[test]
     fn keccak256_history_root_matches_manually_computed_values() {
         use nimiq_hash::Hasher as HashHasher;
-        use nimiq_utils::merkle::compute_root_from_hashes;
 
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
@@ -1944,7 +1944,8 @@ mod tests {
         }
         // Sort hashes to match the implementation
         hashes.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
-        let expected_root = compute_root_from_hashes::<Keccak256Hash>(&hashes);
+        let expected_root =
+            nimiq_utils::merkle::compute_root_from_hashes_sorted::<Keccak256Hash>(&hashes);
 
         // Get the root from history store
         let election_block = Policy::election_block_of(0).unwrap();
@@ -1986,10 +1987,11 @@ mod tests {
         }
         let unsorted_root = compute_root_from_hashes::<Keccak256Hash>(&unsorted_hashes);
 
-        // Compute root with sorted hashes
+        // Compute root with sorted hashes using sorted algorithm
         let mut sorted_hashes = unsorted_hashes.clone();
         sorted_hashes.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
-        let sorted_root = compute_root_from_hashes::<Keccak256Hash>(&sorted_hashes);
+        let sorted_root =
+            nimiq_utils::merkle::compute_root_from_hashes_sorted::<Keccak256Hash>(&sorted_hashes);
 
         // Get the root from history store
         let election_block = Policy::election_block_of(0).unwrap();
@@ -2075,8 +2077,8 @@ mod tests {
                 .get_keccak256_proof(election_block, i, Some(&txn))
                 .expect("Should generate proof");
 
-            // Compute root from proof using the transaction
-            let computed_root = proof.compute_root(&hist_txs[i]);
+            // Compute root from proof using the transaction with sorted verification
+            let computed_root = proof.compute_root_sorted(&hist_txs[i]);
 
             assert_eq!(
                 computed_root, root,
