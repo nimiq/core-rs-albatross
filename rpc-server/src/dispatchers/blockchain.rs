@@ -15,6 +15,7 @@ use nimiq_rpc_interface::{
         Validator,
     },
 };
+use nimiq_serde::Serialize;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::error::Error;
@@ -175,6 +176,39 @@ impl BlockchainInterface for BlockchainDispatcher {
             )
             .ok_or_else(|| Error::TransactionNotFound(hash.clone()))?
             .into())
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
+    }
+
+    async fn get_raw_transaction_by_hash(
+        &self,
+        hash: Blake2bHash,
+    ) -> RPCResult<String, (), Self::Error> {
+        if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            // Get the historic transaction that corresponds to this hash.
+            let hist_tx = blockchain
+                .history_store
+                .history_index()
+                .ok_or(Error::RequiresHistoryIndex)?
+                .get_hist_tx_by_hash(&hash, None)
+                .ok_or_else(|| Error::TransactionNotFound(hash.clone()))?;
+
+            // Extract the raw transaction from the historic transaction.
+            // Only basic transactions can be serialized as raw transactions.
+            // Reward, penalize, jail, and equivocation events are inherents and cannot be represented as raw transactions.
+            match hist_tx.data {
+                nimiq_transaction::historic_transaction::HistoricTransactionData::Basic(
+                    nimiq_transaction::ExecutedTransaction::Ok(tx),
+                ) => Ok(hex::encode(tx.serialize_to_vec()).into()),
+                nimiq_transaction::historic_transaction::HistoricTransactionData::Basic(
+                    nimiq_transaction::ExecutedTransaction::Err(tx, ..),
+                ) => Ok(hex::encode(tx.serialize_to_vec()).into()),
+                _ => Err(Error::InvalidArgument(
+                    "Transaction is an inherent and cannot be represented as a raw transaction"
+                        .to_string(),
+                )),
+            }
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }
