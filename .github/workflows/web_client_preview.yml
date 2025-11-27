@@ -1,0 +1,28 @@
+name: Web Client Preview
+
+on:
+  pull_request:
+    paths:
+      - 'web-client/**'
+      - 'primitives/**'
+      - 'lib/**'
+  workflow_dispatch:
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Build package
+        working-directory: ./web-client
+        run: ./scripts/build.sh
+      - uses: actions/setup-node@v4
+      - name: Publish preview
+        run: npx pkg-pr-new publish './web-client/dist' --comment=update
