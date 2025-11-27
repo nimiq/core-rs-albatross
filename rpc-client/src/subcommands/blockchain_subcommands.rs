@@ -173,6 +173,21 @@ pub enum BlockchainCommand {
         #[clap(short = 'l', long, value_enum)]
         log_types: Vec<LogType>,
     },
+
+    /// Gets the Keccak256 history root for a given macro block.
+    Keccak256HistoryRoot {
+        /// The macro block number to get the history root for.
+        block_number: u32,
+    },
+
+    /// Gets a Keccak256-based Merkle proof for a transaction at a given macro block.
+    Keccak256TransactionProof {
+        /// The macro block number.
+        block_number: u32,
+
+        /// The transaction hash.
+        transaction_hash: Blake2bHash,
+    },
 }
 
 #[async_trait]
@@ -370,6 +385,27 @@ impl HandleSubcommand for BlockchainCommand {
                 while let Some(blocklog) = stream.next().await {
                     println!("{blocklog:#?}");
                 }
+            }
+            BlockchainCommand::Keccak256HistoryRoot { block_number } => {
+                println!(
+                    "{:#?}",
+                    client
+                        .blockchain
+                        .get_keccak256_history_root(block_number)
+                        .await?
+                )
+            }
+            BlockchainCommand::Keccak256TransactionProof {
+                block_number,
+                transaction_hash,
+            } => {
+                println!(
+                    "{:#?}",
+                    client
+                        .blockchain
+                        .get_keccak256_transaction_proof(block_number, transaction_hash)
+                        .await?
+                )
             }
         }
         Ok(client)

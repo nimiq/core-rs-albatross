@@ -932,11 +932,40 @@ impl HistoryInterface for HistoryStore {
     }
 
     /// Gets the Keccak256 history root for a macro block (election or checkpoint).
-    /// Returns None if the block is not a macro block or if there are no transactions.
     ///
-    /// The Merkle tree is constructed from sorted transaction hashes to create a canonical
-    /// structure that doesn't require left/right metadata in proofs, making it more compatible
-    /// with Ethereum tooling.
+    /// This method computes a Keccak256-based Merkle tree root **on-demand** from stored
+    /// historic transactions. Unlike the Blake2b MMR which is stored persistently, the
+    /// Keccak256 Merkle tree is built in-memory and discarded after computation.
+    ///
+    /// # On-Demand Computation Approach
+    ///
+    /// The Keccak256 Merkle tree is not stored in the database. Instead:
+    /// 1. Historic transactions are retrieved from the existing database
+    /// 2. Each transaction is hashed with Keccak256
+    /// 3. Hashes are sorted lexicographically to create a canonical tree structure
+    /// 4. The Merkle root is computed from the sorted hashes
+    /// 5. The tree is discarded after returning the root
+    ///
+    /// This approach:
+    /// - Eliminates storage overhead (no duplicate tree structures)
+    /// - Ensures consistency with the Blake2b MMR (same transaction data)
+    /// - Enables Ethereum-compatible verification without database migrations
+    ///
+    /// # Sorted Merkle Tree Structure
+    ///
+    /// The Merkle tree uses lexicographically sorted hashes at each level:
+    /// - At each level, sibling hashes are sorted before hashing
+    /// - Hash computation: `keccak256(min(left, right) || max(left, right))`
+    /// - This eliminates the need for left/right position metadata in proofs
+    /// - Makes proofs more compact and compatible with Ethereum tooling
+    ///
+    /// # Macro Block Availability
+    ///
+    /// Keccak256 roots are available for **all macro blocks**:
+    /// - **Election blocks**: Mark the end of an epoch and elect new validators
+    /// - **Checkpoint blocks**: Intermediate macro blocks within an epoch
+    ///
+    /// Both types use the same epoch's transaction data for root computation.
     fn get_keccak256_history_root(
         &self,
         block_number: u32,
@@ -976,6 +1005,43 @@ impl HistoryInterface for HistoryStore {
         Some(root.into_owned())
     }
 
+    /// Generates a Keccak256-based Merkle proof for a specific transaction.
+    ///
+    /// This method generates a Merkle proof **on-demand** by rebuilding the Keccak256
+    /// Merkle tree from stored historic transactions. The proof can be used to verify
+    /// that a transaction is included in the epoch's history using Ethereum-compatible
+    /// tools and libraries.
+    ///
+    /// # On-Demand Proof Generation
+    ///
+    /// The proof generation process:
+    /// 1. Retrieve all historic transactions for the epoch from database
+    /// 2. Hash each transaction with Keccak256
+    /// 3. Sort hashes lexicographically (same as root computation)
+    /// 4. Build the Merkle tree in-memory
+    /// 5. Generate the proof path from leaf to root
+    /// 6. Return the proof and discard the tree
+    ///
+    /// # Proof Structure
+    ///
+    /// The returned `MerklePath` contains:
+    /// - A sequence of sibling hashes needed to compute the root
+    /// - No left/right position metadata (due to sorted tree structure)
+    ///
+    /// To verify the proof:
+    /// 1. Start with the transaction hash (leaf)
+    /// 2. For each sibling hash: sort current and sibling, then hash the concatenation
+    /// 3. Compare the final computed hash with the root
+    ///
+    /// # Important: Transaction Ordering
+    ///
+    /// The `transaction_index` refers to the **original transaction order** in the epoch,
+    /// not the sorted order. The method:
+    /// 1. Retrieves the transaction at the original index
+    /// 2. Sorts all transactions by hash
+    /// 3. Generates the proof for the transaction in its sorted position
+    ///
+    /// This ensures the proof is valid against the sorted Merkle tree root.
     fn get_keccak256_proof(
         &self,
         block_number: u32,
