@@ -13,16 +13,39 @@ pub mod incremental;
 pub mod partial;
 
 pub fn compute_root_from_content<D: Hasher, T: SerializeContent>(values: &[T]) -> D::Output {
+    compute_root_from_content_internal::<D, T>(values, false)
+}
+
+pub fn compute_root_from_content_sorted<D: Hasher, T: SerializeContent>(values: &[T]) -> D::Output {
+    compute_root_from_content_internal::<D, T>(values, true)
+}
+
+fn compute_root_from_content_internal<D: Hasher, T: SerializeContent>(
+    values: &[T],
+    sorted: bool,
+) -> D::Output {
     let mut v: Vec<D::Output> = Vec::with_capacity(values.len());
     for h in values {
         let mut hasher = D::default();
         h.serialize_content::<_, D::Output>(&mut hasher).unwrap();
         v.push(hasher.finish());
     }
-    compute_root_from_hashes::<D::Output>(&v).into_owned()
+    if sorted {
+        compute_root_from_hashes_sorted::<D::Output>(&v).into_owned()
+    } else {
+        compute_root_from_hashes::<D::Output>(&v).into_owned()
+    }
 }
 
 pub fn compute_root_from_hashes<T: HashOutput>(values: &[T]) -> Cow<'_, T> {
+    compute_root_from_hashes_internal::<T>(values, false)
+}
+
+pub fn compute_root_from_hashes_sorted<T: HashOutput>(values: &[T]) -> Cow<'_, T> {
+    compute_root_from_hashes_internal::<T>(values, true)
+}
+
+fn compute_root_from_hashes_internal<T: HashOutput>(values: &[T], sorted: bool) -> Cow<'_, T> {
     let mut hasher = T::Builder::default();
     match values.len() {
         0 => {
@@ -33,10 +56,22 @@ pub fn compute_root_from_hashes<T: HashOutput>(values: &[T]) -> Cow<'_, T> {
         }
         len => {
             let mid = len.div_ceil(2);
-            let left_hash = compute_root_from_hashes::<T>(&values[..mid]);
-            let right_hash = compute_root_from_hashes::<T>(&values[mid..]);
-            hasher.hash(&*left_hash);
-            hasher.hash(&*right_hash);
+            let left_hash = compute_root_from_hashes_internal::<T>(&values[..mid], sorted);
+            let right_hash = compute_root_from_hashes_internal::<T>(&values[mid..], sorted);
+
+            if sorted {
+                // Sort hashes lexicographically for OpenZeppelin compatibility
+                if left_hash.as_bytes() <= right_hash.as_bytes() {
+                    hasher.hash(&*left_hash);
+                    hasher.hash(&*right_hash);
+                } else {
+                    hasher.hash(&*right_hash);
+                    hasher.hash(&*left_hash);
+                }
+            } else {
+                hasher.hash(&*left_hash);
+                hasher.hash(&*right_hash);
+            }
         }
     };
     Cow::Owned(hasher.finish())
@@ -56,16 +91,32 @@ impl<H: HashOutput> MerklePath<H> {
         values: &[T],
         leaf_value: &T,
     ) -> MerklePath<H> {
+        Self::new_internal::<D, T>(values, leaf_value, false)
+    }
+
+    pub fn new_sorted<D: Hasher<Output = H>, T: SerializeContent>(
+        values: &[T],
+        leaf_value: &T,
+    ) -> MerklePath<H> {
+        Self::new_internal::<D, T>(values, leaf_value, true)
+    }
+
+    fn new_internal<D: Hasher<Output = H>, T: SerializeContent>(
+        values: &[T],
+        leaf_value: &T,
+        sorted: bool,
+    ) -> MerklePath<H> {
         let leaf_hash = D::default().chain(leaf_value).finish();
         let mut path: Vec<MerklePathNode<D::Output>> = Vec::new();
-        MerklePath::<H>::compute::<D, T>(values, &leaf_hash, &mut path);
+        MerklePath::<H>::compute_internal::<D, T>(values, &leaf_hash, &mut path, sorted);
         MerklePath { nodes: path }
     }
 
-    fn compute<D: Hasher<Output = H>, T: SerializeContent>(
+    fn compute_internal<D: Hasher<Output = H>, T: SerializeContent>(
         values: &[T],
         leaf_hash: &D::Output,
         path: &mut Vec<MerklePathNode<H>>,
+        sorted: bool,
     ) -> (bool, H) {
         let mut hasher = D::default();
         let mut contains_leaf = false;
@@ -80,12 +131,32 @@ impl<H: HashOutput> MerklePath<H> {
             }
             len => {
                 let mid = len.div_ceil(2);
-                let (contains_left, left_hash) =
-                    MerklePath::<H>::compute::<D, T>(&values[..mid], leaf_hash, path);
-                let (contains_right, right_hash) =
-                    MerklePath::<H>::compute::<D, T>(&values[mid..], leaf_hash, path);
-                hasher.hash(&left_hash);
-                hasher.hash(&right_hash);
+                let (contains_left, left_hash) = MerklePath::<H>::compute_internal::<D, T>(
+                    &values[..mid],
+                    leaf_hash,
+                    path,
+                    sorted,
+                );
+                let (contains_right, right_hash) = MerklePath::<H>::compute_internal::<D, T>(
+                    &values[mid..],
+                    leaf_hash,
+                    path,
+                    sorted,
+                );
+
+                if sorted {
+                    // For sorted mode, hash in lexicographic order
+                    if left_hash.as_bytes() <= right_hash.as_bytes() {
+                        hasher.hash(&left_hash);
+                        hasher.hash(&right_hash);
+                    } else {
+                        hasher.hash(&right_hash);
+                        hasher.hash(&left_hash);
+                    }
+                } else {
+                    hasher.hash(&left_hash);
+                    hasher.hash(&right_hash);
+                }
 
                 if contains_left {
                     path.push(MerklePathNode {
@@ -106,15 +177,35 @@ impl<H: HashOutput> MerklePath<H> {
     }
 
     pub fn compute_root<T: SerializeContent>(&self, leaf_value: &T) -> H {
+        self.compute_root_internal::<T>(leaf_value, false)
+    }
+
+    pub fn compute_root_sorted<T: SerializeContent>(&self, leaf_value: &T) -> H {
+        self.compute_root_internal::<T>(leaf_value, true)
+    }
+
+    fn compute_root_internal<T: SerializeContent>(&self, leaf_value: &T, sorted: bool) -> H {
         let mut root = H::Builder::default().chain(leaf_value).finish();
         for node in self.nodes.iter() {
             let mut h = H::Builder::default();
-            if node.left {
-                h.hash(&node.hash);
-            }
-            h.hash(&root);
-            if !node.left {
-                h.hash(&node.hash);
+            if sorted {
+                // For sorted mode, always sort the hashes lexicographically
+                if root.as_bytes() <= node.hash.as_bytes() {
+                    h.hash(&root);
+                    h.hash(&node.hash);
+                } else {
+                    h.hash(&node.hash);
+                    h.hash(&root);
+                }
+            } else {
+                // For unsorted mode, use the left flag
+                if node.left {
+                    h.hash(&node.hash);
+                }
+                h.hash(&root);
+                if !node.left {
+                    h.hash(&node.hash);
+                }
             }
             root = h.finish();
         }
