@@ -815,33 +815,33 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     async fn get_keccak256_transaction_proof(
         &self,
-        epoch_number: u32,
-        transaction_index: usize,
+        block_number: u32,
+        transaction_hash: Blake2bHash,
     ) -> RPCResult<nimiq_rpc_interface::types::MerklePathData, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
-            // Validate epoch number and convert to election block number
-            let block_number = Policy::election_block_of(epoch_number).ok_or_else(|| {
-                Error::InvalidKeccak256Parameters(format!("Invalid epoch number: {}", epoch_number))
-            })?;
-
             // Verify it's a macro block
             if !Policy::is_macro_block_at(block_number) {
                 return Err(Error::NotAMacroBlock(block_number));
             }
 
-            // Get all transactions for the epoch to validate the transaction index
+            // Calculate epoch number from block number for internal use
+            let epoch_number = Policy::epoch_at(block_number);
+
+            // Get all transactions for the epoch
             let transactions = blockchain
                 .history_store
                 .get_epoch_transactions(epoch_number, None);
 
-            // Validate transaction index
-            if transaction_index >= transactions.len() {
-                return Err(Error::InvalidKeccak256Parameters(format!(
-                    "Transaction index {} out of bounds (epoch has {} transactions)",
-                    transaction_index,
-                    transactions.len()
-                )));
-            }
+            // Find the transaction by hash
+            let transaction_index = transactions
+                .iter()
+                .position(|tx| tx.tx_hash() == transaction_hash.clone().into())
+                .ok_or_else(|| {
+                    Error::InvalidKeccak256Parameters(format!(
+                        "Transaction hash {} not found in epoch {}",
+                        transaction_hash, epoch_number
+                    ))
+                })?;
 
             // Get the specific transaction
             let transaction = transactions[transaction_index].clone();
