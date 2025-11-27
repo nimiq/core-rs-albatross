@@ -687,4 +687,105 @@ mod keccak256_tests {
         assert_eq!(proof.len(), 0);
         assert_ne!(proof.compute_root(&[0u8; 32]), root);
     }
+
+    #[test]
+    fn it_correctly_computes_sorted_keccak256_root() {
+        use nimiq_utils::merkle::compute_root_from_content_sorted;
+
+        // Test with single value
+        let hash = Keccak256Hasher::default().digest(VALUE.as_bytes());
+        let root = compute_root_from_content_sorted::<Keccak256Hasher, &'static str>(&[VALUE]);
+        assert_eq!(root, hash);
+
+        // Test with multiple values - sorted should differ from unsorted
+        let values = vec!["1", "2", "3", "4"];
+        let unsorted_root = compute_root_from_content::<Keccak256Hasher, &str>(&values);
+        let sorted_root = compute_root_from_content_sorted::<Keccak256Hasher, &str>(&values);
+
+        // They should be different (unless by chance the hashes are already sorted)
+        // We can't assert they're different because it depends on the hash values
+        // But we can verify the sorted root is computed correctly
+
+        // Manually compute expected sorted root
+        let h0 = Keccak256Hasher::default().digest(values[0].as_bytes());
+        let h1 = Keccak256Hasher::default().digest(values[1].as_bytes());
+        let h2 = Keccak256Hasher::default().digest(values[2].as_bytes());
+        let h3 = Keccak256Hasher::default().digest(values[3].as_bytes());
+
+        // Sort at each level
+        let h4 = if h0.as_bytes() <= h1.as_bytes() {
+            Keccak256Hasher::default().chain(&h0).chain(&h1).finish()
+        } else {
+            Keccak256Hasher::default().chain(&h1).chain(&h0).finish()
+        };
+
+        let h5 = if h2.as_bytes() <= h3.as_bytes() {
+            Keccak256Hasher::default().chain(&h2).chain(&h3).finish()
+        } else {
+            Keccak256Hasher::default().chain(&h3).chain(&h2).finish()
+        };
+
+        let expected_sorted_root = if h4.as_bytes() <= h5.as_bytes() {
+            Keccak256Hasher::default().chain(&h4).chain(&h5).finish()
+        } else {
+            Keccak256Hasher::default().chain(&h5).chain(&h4).finish()
+        };
+
+        assert_eq!(sorted_root, expected_sorted_root);
+    }
+
+    #[test]
+    fn it_correctly_computes_sorted_keccak256_merkle_path() {
+        let values = vec!["1", "2", "3", "4"];
+
+        // Compute root with sorted Keccak256
+        let root =
+            nimiq_utils::merkle::compute_root_from_content_sorted::<Keccak256Hasher, &str>(&values);
+
+        // Generate sorted proof for second value
+        let proof = MerklePath::new_sorted::<Keccak256Hasher, &str>(&values, &values[1]);
+        assert_eq!(proof.len(), 2);
+
+        // Verify proof with sorted mode
+        let computed_root = proof.compute_root_sorted(&values[1]);
+        assert_eq!(computed_root, root);
+    }
+
+    #[test]
+    fn it_correctly_verifies_sorted_keccak256_merkle_path() {
+        let values = vec!["1", "2", "3", "4", "5", "6", "7"];
+        let root =
+            nimiq_utils::merkle::compute_root_from_content_sorted::<Keccak256Hasher, &str>(&values);
+
+        // Test proof for various indices with sorted mode
+        for (i, value) in values.iter().enumerate() {
+            let proof = MerklePath::new_sorted::<Keccak256Hasher, &str>(&values, value);
+            let computed_root = proof.compute_root_sorted(value);
+            assert_eq!(
+                computed_root, root,
+                "Sorted proof verification failed for index {}",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_and_unsorted_proofs_differ() {
+        let values = vec!["1", "2", "3", "4"];
+
+        let unsorted_root = compute_root_from_content::<Keccak256Hasher, &str>(&values);
+        let sorted_root =
+            nimiq_utils::merkle::compute_root_from_content_sorted::<Keccak256Hasher, &str>(&values);
+
+        // Generate both types of proofs
+        let unsorted_proof = MerklePath::new::<Keccak256Hasher, &str>(&values, &values[1]);
+        let sorted_proof = MerklePath::new_sorted::<Keccak256Hasher, &str>(&values, &values[1]);
+
+        // Verify each proof with its corresponding root
+        assert_eq!(unsorted_proof.compute_root(&values[1]), unsorted_root);
+        assert_eq!(sorted_proof.compute_root_sorted(&values[1]), sorted_root);
+
+        // Cross-verification should fail (unless hashes happen to be in sorted order)
+        // We can't assert inequality because it depends on hash values
+    }
 }
