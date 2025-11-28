@@ -29,7 +29,7 @@ use nimiq_transaction::{
     },
     history_proof::HistoryTreeProof,
     inherent::Inherent,
-    EquivocationLocator,
+    EquivocationLocator, Transaction,
 };
 use nimiq_utils::merkle::MerklePath;
 
@@ -996,12 +996,28 @@ impl HistoryInterface for HistoryStore {
             return None;
         }
 
-        // Retrieve historic transactions up to the block number from database
-        let hist_txs = self.get_historic_txns(epoch_number, 0..num_txs as u32, Some(&txn));
+        // Retrieve transactions up to the block number from database
+        let txs: Vec<Transaction> = self
+            .get_historic_txns(epoch_number, 0..num_txs as u32, Some(&txn))
+            .iter()
+            .filter_map(|historic_tx| {
+                if historic_tx.is_not_basic() {
+                    None
+                } else {
+                    match historic_tx.unwrap_basic() {
+                        nimiq_transaction::ExecutedTransaction::Ok(transaction) => {
+                            Some(transaction)
+                        }
+                        nimiq_transaction::ExecutedTransaction::Err(_) => None,
+                    }
+                }
+            })
+            .cloned()
+            .collect();
 
         // Hash each transaction with Keccak256
-        let mut hashes: Vec<Keccak256Hash> = Vec::with_capacity(hist_txs.len());
-        for tx in &hist_txs {
+        let mut hashes: Vec<Keccak256Hash> = Vec::with_capacity(txs.len());
+        for tx in &txs {
             hashes.push(tx.hash());
         }
 
@@ -1112,11 +1128,38 @@ impl HistoryInterface for HistoryStore {
 
         // Get the transaction at transaction_index before sorting
         let target_tx = hist_txs[transaction_index].clone();
+        let target_tx = if target_tx.is_not_basic() {
+            return None;
+        } else {
+            match target_tx.unwrap_basic() {
+                nimiq_transaction::ExecutedTransaction::Ok(transaction) => transaction,
+                nimiq_transaction::ExecutedTransaction::Err(_) => return None,
+            }
+        };
+
+        // Retrieve transactions up to the block number from database
+        let txs: Vec<Transaction> = self
+            .get_historic_txns(epoch_number, 0..num_txs as u32, Some(&txn))
+            .iter()
+            .filter_map(|historic_tx| {
+                if historic_tx.is_not_basic() {
+                    None
+                } else {
+                    match historic_tx.unwrap_basic() {
+                        nimiq_transaction::ExecutedTransaction::Ok(transaction) => {
+                            Some(transaction)
+                        }
+                        nimiq_transaction::ExecutedTransaction::Err(_) => None,
+                    }
+                }
+            })
+            .cloned()
+            .collect();
 
         // Hash each transaction with Keccak256 and create pairs of (hash, transaction)
-        let mut tx_hash_pairs: Vec<(Keccak256Hash, HistoricTransaction)> =
+        let mut tx_hash_pairs: Vec<(Keccak256Hash, Transaction)> =
             Vec::with_capacity(hist_txs.len());
-        for tx in hist_txs {
+        for tx in txs {
             let hash = tx.hash();
             tx_hash_pairs.push((hash, tx));
         }
@@ -1125,12 +1168,10 @@ impl HistoryInterface for HistoryStore {
         tx_hash_pairs.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
 
         // Extract sorted transactions
-        let sorted_txs: Vec<HistoricTransaction> =
-            tx_hash_pairs.iter().map(|(_, tx)| tx.clone()).collect();
+        let sorted_txs: Vec<Transaction> = tx_hash_pairs.iter().map(|(_, tx)| tx.clone()).collect();
 
         // Generate proof using sorted Merkle tree algorithm for OpenZeppelin compatibility
-        let proof =
-            MerklePath::new_sorted::<Keccak256Hasher, HistoricTransaction>(&sorted_txs, &target_tx);
+        let proof = MerklePath::new_sorted::<Keccak256Hasher, Transaction>(&sorted_txs, &target_tx);
 
         Some(proof)
     }

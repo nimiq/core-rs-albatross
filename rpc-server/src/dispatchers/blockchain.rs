@@ -4,7 +4,7 @@ use nimiq_account::{BlockLog as BBlockLog, TransactionLog};
 use nimiq_blockchain::interface::{HistoryIndexInterface, HistoryInterface};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
-use nimiq_hash::{Blake2bHash, HashOutput};
+use nimiq_hash::{Blake2bHash, Hash, HashOutput, Keccak256Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
 use nimiq_rpc_interface::{
@@ -937,7 +937,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 transaction_index,
                 hex::encode(computed_root.as_bytes()),
                 hex::encode(proof_root.as_bytes()),
-                transaction_hash
+                transaction.hash::<Keccak256Hash>()
             );
 
             if !verified {
