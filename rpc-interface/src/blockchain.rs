@@ -220,7 +220,7 @@ pub trait BlockchainInterface {
     /// Gets the Keccak256 history root for a given epoch.
     async fn get_keccak256_history_root(
         &self,
-        epoch_number: u32,
+        block_number: u32,
     ) -> RPCResult<String, (), Self::Error>;
 
     /// Gets a Keccak256-based Merkle proof for a specific transaction in an epoch.
