@@ -10,9 +10,7 @@ use nimiq_database::{
     },
 };
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{
-    Blake2bHash, Hash, HashOutput, Hasher as HashHasher, Keccak256Hash, Keccak256Hasher,
-};
+use nimiq_hash::{Blake2bHash, Hash, HashOutput, Keccak256Hash, Keccak256Hasher};
 use nimiq_mmr::{
     error::Error as MMRError,
     mmr::{
@@ -1004,9 +1002,7 @@ impl HistoryInterface for HistoryStore {
         // Hash each transaction with Keccak256
         let mut hashes: Vec<Keccak256Hash> = Vec::with_capacity(hist_txs.len());
         for tx in &hist_txs {
-            let mut hasher = Keccak256Hasher::default();
-            tx.serialize_to_writer(&mut hasher).ok()?;
-            hashes.push(HashHasher::finish(hasher));
+            hashes.push(tx.hash());
         }
 
         // Sort hashes to create a canonical Merkle tree structure
@@ -1121,9 +1117,7 @@ impl HistoryInterface for HistoryStore {
         let mut tx_hash_pairs: Vec<(Keccak256Hash, HistoricTransaction)> =
             Vec::with_capacity(hist_txs.len());
         for tx in hist_txs {
-            let mut hasher = Keccak256Hasher::default();
-            tx.serialize_to_writer(&mut hasher).ok()?;
-            let hash = HashHasher::finish(hasher);
+            let hash = tx.hash();
             tx_hash_pairs.push((hash, tx));
         }
 
@@ -1144,6 +1138,8 @@ impl HistoryInterface for HistoryStore {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
     use nimiq_database::mdbx::MdbxDatabase;
     use nimiq_keys::Address;
     use nimiq_primitives::{coin::Coin, networks::NetworkId};
@@ -1955,7 +1951,9 @@ mod tests {
         for tx in &hist_txs {
             let mut hasher = Keccak256Hasher::default();
             tx.serialize_to_writer(&mut hasher).unwrap();
-            hashes.push(HashHasher::finish(hasher));
+            let hash = HashHasher::finish(hasher);
+            log::info!(?hash);
+            hashes.push(hash);
         }
         // Sort hashes to match the implementation
         hashes.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
@@ -1963,8 +1961,14 @@ mod tests {
             nimiq_utils::merkle::compute_root_from_hashes_sorted::<Keccak256Hash>(&hashes);
 
         // Get the root from history store
-        let election_block = Policy::election_block_of(0).unwrap();
+        let election_block = Policy::election_block_of(Policy::genesis_block_number()).unwrap();
         let actual_root = history_store.get_keccak256_history_root(election_block, Some(&txn));
+
+        let proof = history_store
+            .get_keccak256_proof(election_block, 0, None)
+            .unwrap();
+
+        log::info!(?proof, ?expected_root);
 
         assert_eq!(
             actual_root,
@@ -2230,5 +2234,58 @@ mod tests {
         let election_block_empty = Policy::election_block_of(1).unwrap();
         let proof_empty = history_store.get_keccak256_proof(election_block_empty, 0, Some(&txn));
         assert!(proof_empty.is_none(), "Should return None for empty epoch");
+    }
+
+    #[test]
+    fn keccak256_proof_and_root_logging() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create 2 historic transactions.
+        let hist_txs = vec![
+            create_transaction(Policy::genesis_block_number(), 0),
+            create_transaction(Policy::genesis_block_number(), 1),
+        ];
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number(), &hist_txs);
+
+        let election_block = Policy::election_block_of(0).unwrap();
+
+        // Get the history root
+        let root = history_store
+            .get_keccak256_history_root(election_block, Some(&txn))
+            .expect("Should have root");
+
+        log::debug!("=== Keccak256 Proof and Root Test ===");
+        log::debug!("History root: {:?}", root);
+
+        // Get proof and log details for each transaction
+        for i in 0..hist_txs.len() {
+            let proof = history_store
+                .get_keccak256_proof(election_block, i, Some(&txn))
+                .expect("Should generate proof");
+
+            // Get the keccak256 hash of the transaction
+            let keccak_hash: Keccak256Hash = hist_txs[i].hash();
+
+            log::debug!("--- Transaction {} ---", i);
+            log::debug!("  Keccak256 hash: {:?}", keccak_hash);
+            log::debug!("  Proof: {:?}", proof);
+
+            // Verify the proof works (using the transaction directly)
+            let computed_root = proof.compute_root_sorted(&hist_txs[i]);
+            log::debug!("  Computed root: {:?}", computed_root);
+
+            assert_eq!(
+                computed_root, root,
+                "Proof verification should succeed for transaction {}",
+                i
+            );
+        }
+
+        log::debug!("=== Test Complete ===");
     }
 }
