@@ -414,8 +414,12 @@ impl Client {
     /// Note that the web client is a light client and does not have block bodies, i.e. no transactions.
     #[wasm_bindgen(js_name = getHeadBlock)]
     pub async fn get_head_block(&self) -> Result<PlainBlockType, JsError> {
-        let block = self.inner.blockchain_head();
-        Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(&block))?.into())
+        let consensus_proxy = self.inner.consensus_proxy();
+        let blockchain = consensus_proxy.blockchain.read();
+        Ok(
+            serde_wasm_bindgen::to_value(&PlainBlock::from_block(&blockchain, blockchain.head()))?
+                .into(),
+        )
     }
 
     /// Returns the current address books peers.
@@ -443,13 +447,13 @@ impl Client {
     #[wasm_bindgen(js_name = getBlock)]
     pub async fn get_block(&self, hash: &str) -> Result<PlainBlockType, JsError> {
         let hash = Blake2bHash::from_str(hash)?;
-        let block = self
-            .inner
-            .consensus_proxy()
-            .blockchain
-            .read()
-            .get_block(&hash, false)?;
-        Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(&block))?.into())
+        let consensus_proxy = self.inner.consensus_proxy();
+        let blockchain = consensus_proxy.blockchain.read();
+        Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(
+            &blockchain,
+            &blockchain.get_block(&hash, false)?,
+        ))?
+        .into())
     }
 
     /// Fetches a block by its height (block number).
@@ -459,13 +463,13 @@ impl Client {
     /// Fetching blocks from the network is not yet available.
     #[wasm_bindgen(js_name = getBlockAt)]
     pub async fn get_block_at(&self, height: u32) -> Result<PlainBlockType, JsError> {
-        let block = self
-            .inner
-            .consensus_proxy()
-            .blockchain
-            .read()
-            .get_block_at(height, false)?;
-        Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(&block))?.into())
+        let consensus_proxy = self.inner.consensus_proxy();
+        let blockchain = consensus_proxy.blockchain.read();
+        Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(
+            &blockchain,
+            &blockchain.get_block_at(height, false)?,
+        ))?
+        .into())
     }
 
     /// Fetches the account for the provided address from the network.

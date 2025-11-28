@@ -1,9 +1,22 @@
 use nimiq_block::Block;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::Serialize;
 use serde::ser::SerializeStruct;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
+
+/// The slot/producer info for a micro block.
+#[derive(Tsify, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainSlot {
+    /// The slot number that produced this block.
+    pub slot_number: u16,
+    /// The validator address that produced this block, in user-friendly format.
+    pub validator: String,
+    /// The validator's BLS public key, in HEX format.
+    pub public_key: String,
+}
 
 /// JSON-compatible and human-readable format of blocks.
 #[derive(Tsify)]
@@ -64,6 +77,8 @@ pub struct PlainMacroBlock {
 pub struct PlainMicroBlock {
     #[serde(flatten)]
     common: PlainBlockCommonFields,
+    /// The producer of this micro block.
+    producer: PlainSlot,
 }
 
 #[derive(Tsify)]
@@ -86,7 +101,7 @@ impl serde::Serialize for PlainBlock {
 
         let length = match &self {
             PlainBlock::Macro(_) => common_fields_length + 3,
-            PlainBlock::Micro(_) => common_fields_length, // + 0
+            PlainBlock::Micro(_) => common_fields_length + 1, // producer
         };
 
         let mut plain = serializer.serialize_struct("PlainBlock", length)?;
@@ -103,6 +118,7 @@ impl serde::Serialize for PlainBlock {
             PlainBlock::Micro(block) => {
                 plain.serialize_field("type", "micro")?;
                 serialize_common_fields(&mut plain, &block.common)?;
+                plain.serialize_field("producer", &block.producer)?;
             }
         }
 
@@ -138,11 +154,12 @@ where
 
 impl PlainBlock {
     /// Creates a PlainBlock struct that can be serialized to JS from a native [nimiq_block::Block].
-    pub fn from_block(block: &Block) -> Self {
+    pub fn from_block(blockchain: &impl AbstractBlockchain, block: &Block) -> Self {
         let block_number = block.block_number();
+        let block_hash = block.hash();
 
         let common_fields = PlainBlockCommonFields {
-            hash: block.hash().to_hex(),
+            hash: block_hash.to_hex(),
             size: block.serialized_size() as u32,
             height: block_number,
             batch: Policy::batch_at(block_number),
@@ -167,9 +184,19 @@ impl PlainBlock {
                 round: block.round(),
                 prev_election_hash: block.header.parent_election_hash.to_hex(),
             }),
-            Block::Micro(_block) => PlainBlock::Micro(PlainMicroBlock {
-                common: common_fields,
-            }),
+            Block::Micro(_block) => {
+                let slot = blockchain
+                    .get_proposer_of(&block_hash)
+                    .expect("Block must have a proposer");
+                PlainBlock::Micro(PlainMicroBlock {
+                    common: common_fields,
+                    producer: PlainSlot {
+                        slot_number: slot.number,
+                        validator: slot.validator.address.to_user_friendly_address(),
+                        public_key: slot.validator.voting_key.compressed().to_hex(),
+                    },
+                })
+            }
         }
     }
 }
