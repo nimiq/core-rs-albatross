@@ -821,15 +821,10 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     async fn get_keccak256_history_root(
         &self,
-        epoch_number: u32,
+        block_number: u32,
     ) -> RPCResult<String, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
-            // Convert epoch number to election block number
-            let block_number = Policy::election_block_of(epoch_number).ok_or_else(|| {
-                Error::InvalidKeccak256Parameters(format!("Invalid epoch number: {}", epoch_number))
-            })?;
-
-            // Verify it's a macro block
+            // Verify it's a macro block (election or checkpoint)
             if !Policy::is_macro_block_at(block_number) {
                 return Err(Error::NotAMacroBlock(block_number));
             }
