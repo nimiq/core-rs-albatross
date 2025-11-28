@@ -287,10 +287,25 @@ pub trait BlockchainInterface {
     ///
     /// # Requirements
     ///
+    /// Gets the Keccak256 history root for any macro block.
+    ///
+    /// This method computes the Keccak256 Merkle tree root for all historic transactions
+    /// up to and including the specified macro block. Works for both election and checkpoint blocks.
+    ///
+    /// # Arguments
+    /// * `block_number` - The block number (must be a macro block - election or checkpoint)
+    ///
+    /// # Returns
+    /// * Hex-encoded Keccak256 root hash with "0x" prefix
+    ///
+    /// # Errors
+    /// * Returns error if block_number is not a macro block
+    /// * Returns error if no history exists for the block
+    ///
     /// Validates: Requirements 6.1, 6.3, 6.4
     async fn get_keccak256_history_root(
         &self,
-        epoch_number: u32,
+        block_number: u32,
     ) -> RPCResult<String, (), Self::Error>;
 
     /// Gets a Keccak256-based Merkle proof for a specific transaction in an epoch.
