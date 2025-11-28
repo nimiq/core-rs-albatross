@@ -985,16 +985,21 @@ impl HistoryInterface for HistoryStore {
             return None;
         }
 
+        let txn = txn_option.or_new(&self.db);
+
         // Determine epoch number from block number
         let epoch_number = Policy::epoch_at(block_number);
 
-        // Retrieve all historic transactions for the epoch from database
-        let hist_txs = self.get_epoch_transactions(epoch_number, txn_option);
+        // Get the number of transactions up to this block (inclusive)
+        let num_txs = self.num_epoch_transactions_before(block_number, Some(&txn));
 
         // If there are no transactions, return None
-        if hist_txs.is_empty() {
+        if num_txs == 0 {
             return None;
         }
+
+        // Retrieve historic transactions up to the block number from database
+        let hist_txs = self.get_historic_txns(epoch_number, 0..num_txs as u32, Some(&txn));
 
         // Hash each transaction with Keccak256
         let mut hashes: Vec<Keccak256Hash> = Vec::with_capacity(hist_txs.len());
@@ -1093,16 +1098,21 @@ impl HistoryInterface for HistoryStore {
             return None;
         }
 
+        let txn = txn_option.or_new(&self.db);
+
         // Determine epoch from block number
         let epoch_number = Policy::epoch_at(block_number);
 
-        // Retrieve all historic transactions for the epoch from database
-        let hist_txs = self.get_epoch_transactions(epoch_number, txn_option);
+        // Get the number of transactions up to this block (inclusive)
+        let num_txs = self.num_epoch_transactions_before(block_number, Some(&txn));
 
         // Check if transaction_index is valid
-        if transaction_index >= hist_txs.len() {
+        if transaction_index >= num_txs {
             return None;
         }
+
+        // Retrieve historic transactions up to the block number from database
+        let hist_txs = self.get_historic_txns(epoch_number, 0..num_txs as u32, Some(&txn));
 
         // Get the transaction at transaction_index before sorting
         let target_tx = hist_txs[transaction_index].clone();
