@@ -4,7 +4,7 @@ use nimiq_account::{BlockLog as BBlockLog, TransactionLog};
 use nimiq_blockchain::interface::{HistoryIndexInterface, HistoryInterface};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
-use nimiq_hash::{Blake2bHash, HashOutput};
+use nimiq_hash::{Blake2bHash, Hash, HashOutput, Keccak256Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
 use nimiq_rpc_interface::{
@@ -859,10 +859,23 @@ impl BlockchainInterface for BlockchainDispatcher {
             // Calculate epoch number from block number for internal use
             let epoch_number = Policy::epoch_at(block_number);
 
+            log::debug!(
+                "[Keccak256 Proof Debug] Requested proof for transaction {} at block {} (epoch {})",
+                transaction_hash,
+                block_number,
+                epoch_number
+            );
+
             // Get all transactions for the epoch
             let transactions = blockchain
                 .history_store
                 .get_epoch_transactions(epoch_number, None);
+
+            log::debug!(
+                "[Keccak256 Proof Debug] Found {} transactions in epoch {}",
+                transactions.len(),
+                epoch_number
+            );
 
             // Find the transaction by hash
             let transaction_index = transactions
@@ -875,6 +888,11 @@ impl BlockchainInterface for BlockchainDispatcher {
                     ))
                 })?;
 
+            log::debug!(
+                "[Keccak256 Proof Debug] Transaction found at index {} in epoch",
+                transaction_index
+            );
+
             // Get the specific transaction
             let transaction = transactions[transaction_index].clone();
 
@@ -883,6 +901,53 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .history_store
                 .get_keccak256_proof(block_number, transaction_index, None)
                 .ok_or(Error::Keccak256ProofGenerationFailed)?;
+
+            log::debug!(
+                "[Keccak256 Proof Debug] Generated proof with {} sibling hashes",
+                proof.len()
+            );
+
+            // Log the proof hashes
+            let proof_hashes = proof.hashes();
+            for (i, hash) in proof_hashes.iter().enumerate() {
+                log::debug!(
+                    "[Keccak256 Proof Debug] Proof[{}]: 0x{}",
+                    i,
+                    hex::encode(hash.as_bytes())
+                );
+            }
+
+            // Compute the history root for verification
+            let computed_root = blockchain
+                .history_store
+                .get_keccak256_history_root(block_number, None)
+                .ok_or(Error::Keccak256HistoryNotFound)?;
+
+            log::debug!(
+                "[Keccak256 Proof Debug] Computed history root: 0x{}",
+                hex::encode(computed_root.as_bytes())
+            );
+
+            // Verify the proof by computing the root from the proof and transaction
+            let proof_root = proof.compute_root_sorted(&transaction);
+            let verified = proof_root == computed_root;
+
+            log::info!(
+                "[Keccak256 Proof Debug] Proof verification result: {} | Block: {} | Epoch: {} | Tx Index: {} | Expected Root: 0x{} | Computed Root: 0x{} | Tx Hash: {}",
+                if verified { "✓ VALID" } else { "✗ INVALID" },
+                block_number,
+                epoch_number,
+                transaction_index,
+                hex::encode(computed_root.as_bytes()),
+                hex::encode(proof_root.as_bytes()),
+                transaction.hash::<Keccak256Hash>()
+            );
+
+            if !verified {
+                log::error!(
+                    "[Keccak256 Proof Debug] PROOF VERIFICATION FAILED! This should never happen."
+                );
+            }
 
             // Convert proof to RPC response format with hex-encoded hashes
             let merkle_path_data = nimiq_rpc_interface::types::MerklePathData::from_path(
