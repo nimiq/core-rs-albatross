@@ -35,8 +35,13 @@ impl KeyPair {
     /// Throws when the string is not valid hex format or when it represents less than 64 bytes.
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<KeyPair, JsError> {
+        if hex.len() < 128 {
+            return Err(JsError::new(
+                "Invalid hex: expected at least 128 characters (64 bytes)",
+            ));
+        }
         let private = nimiq_keys::PrivateKey::from_str(&hex[0..64])?;
-        let public = nimiq_keys::Ed25519PublicKey::from_str(&hex[64..])?;
+        let public = nimiq_keys::Ed25519PublicKey::from_str(&hex[64..128])?;
         // TODO: Deserialize locked state if bytes remaining
         let key_pair = nimiq_keys::KeyPair { private, public };
         Ok(KeyPair::from(key_pair))
