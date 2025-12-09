@@ -2,7 +2,7 @@ use std::{borrow::Cow, str::FromStr};
 
 use nimiq_hash::{
     sha512::{Sha512Hash, Sha512Hasher},
-    Blake2bHash, Blake2bHasher, Hasher, Sha256Hash, Sha256Hasher,
+    Blake2bHash, Blake2bHasher, Hasher, Keccak256Hash, Keccak256Hasher, Sha256Hash, Sha256Hasher,
 };
 use nimiq_keys::Address;
 use nimiq_macros::{add_hex_io_fns_typed_arr, add_serialization_fns_typed_arr, create_typed_array};
@@ -105,6 +105,7 @@ pub enum AnyHash {
     Blake2b(AnyHash32),
     Sha256(AnyHash32),
     Sha512(AnyHash64),
+    Keccak256(AnyHash32),
 }
 
 impl AnyHash {
@@ -114,6 +115,7 @@ impl AnyHash {
             AnyHash::Blake2b(hash) => hash.to_hex(),
             AnyHash::Sha256(hash) => hash.to_hex(),
             AnyHash::Sha512(hash) => hash.to_hex(),
+            AnyHash::Keccak256(hash) => hash.to_hex(),
         }
     }
 
@@ -123,6 +125,7 @@ impl AnyHash {
             AnyHash::Blake2b(hash) => &hash.0,
             AnyHash::Sha256(hash) => &hash.0,
             AnyHash::Sha512(hash) => &hash.0,
+            AnyHash::Keccak256(hash) => &hash.0,
         }
     }
 }
@@ -148,6 +151,12 @@ impl From<Sha256Hash> for AnyHash {
 impl From<Sha512Hash> for AnyHash {
     fn from(value: Sha512Hash) -> Self {
         AnyHash::Sha512(AnyHash64(value.into()))
+    }
+}
+
+impl From<Keccak256Hash> for AnyHash {
+    fn from(value: Keccak256Hash) -> Self {
+        AnyHash::Keccak256(AnyHash32(value.into()))
     }
 }
 
@@ -197,6 +206,12 @@ impl From<Sha256Hash> for PreImage {
 impl From<Sha512Hash> for PreImage {
     fn from(value: Sha512Hash) -> Self {
         PreImage::PreImage64(AnyHash64(value.into()))
+    }
+}
+
+impl From<Keccak256Hash> for PreImage {
+    fn from(value: Keccak256Hash) -> Self {
+        PreImage::PreImage32(AnyHash32(value.into()))
     }
 }
 
@@ -384,6 +399,11 @@ impl OutgoingHTLCTransactionProof {
                             tmp_hash =
                                 PreImage::from(Sha512Hasher::default().digest(tmp_hash.as_bytes()));
                         }
+                        AnyHash::Keccak256(_) => {
+                            tmp_hash = PreImage::from(
+                                Keccak256Hasher::default().digest(tmp_hash.as_bytes()),
+                            );
+                        }
                     }
                 }
 
@@ -499,6 +519,10 @@ impl PoWOutgoingHTLCTransactionProof {
                         AnyHash::Sha512(_) => {
                             tmp_hash =
                                 PreImage::from(Sha512Hasher::default().digest(tmp_hash.as_bytes()));
+                        }
+                        AnyHash::Keccak256(_) => {
+                            // PoW doesn't support Keccak256 hashes
+                            return Err(TransactionError::InvalidProof);
                         }
                     }
                 }
@@ -626,6 +650,14 @@ mod serde_derive {
                     }
                     state.serialize_field(ANYHASH_FIELDS[1], hash)?;
                 }
+                AnyHash::Keccak256(hash) => {
+                    if human_readable {
+                        state.serialize_field(ANYHASH_FIELDS[0], &"keccak256")?;
+                    } else {
+                        state.serialize_field(ANYHASH_FIELDS[0], &5u8)?;
+                    }
+                    state.serialize_field(ANYHASH_FIELDS[1], hash)?;
+                }
             }
             state.end()
         }
@@ -664,6 +696,12 @@ mod serde_derive {
                         .next_element()?
                         .ok_or_else(|| A::Error::invalid_length(1, &self))?;
                     Ok(AnyHash::Sha512(hash))
+                }
+                5u8 => {
+                    let hash: AnyHash32 = seq
+                        .next_element()?
+                        .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                    Ok(AnyHash::Keccak256(hash))
                 }
                 _ => Err(A::Error::invalid_value(
                     serde::de::Unexpected::Unsigned(algorithm as u64),
@@ -710,6 +748,10 @@ mod serde_derive {
                 "sha512" => {
                     let hash = AnyHash64::from_str(hash.as_str()).map_err(A::Error::custom)?;
                     Ok(AnyHash::Sha512(hash))
+                }
+                "keccak256" => {
+                    let hash = AnyHash32::from_str(hash.as_str()).map_err(A::Error::custom)?;
+                    Ok(AnyHash::Keccak256(hash))
                 }
                 _ => Err(A::Error::invalid_value(
                     serde::de::Unexpected::Str(algorithm.as_str()),
@@ -846,14 +888,15 @@ mod serde_derive {
                     AnyHash::Sha512(hash_root)
                 }
                 _ => {
+                    // This includes 5u8 on purpose since PoW doesn't support keccak256 hashes
                     return Err(Error::custom(format!(
                         "Invalid hash algorithm type: {hash_algorithm}"
-                    )))
+                    )));
                 }
             };
 
             let pre_image = match hash_root {
-                AnyHash::Blake2b(_) | AnyHash::Sha256(_) => {
+                AnyHash::Blake2b(_) | AnyHash::Sha256(_) | AnyHash::Keccak256(_) => {
                     let pre_image: AnyHash32 = seq
                         .next_element()?
                         .ok_or_else(|| Error::invalid_length(3, &self))?;
@@ -901,13 +944,14 @@ mod tests {
 
     use super::{AnyHash, AnyHash32, AnyHash64, PoWOutgoingHTLCTransactionProof, PreImage};
 
-    fn sample_anyhashes() -> [AnyHash; 3] {
+    fn sample_anyhashes() -> [AnyHash; 4] {
         let hash_32 = AnyHash32([0xC; AnyHash32::SIZE]);
         let hash_64 = AnyHash64([0xC; AnyHash64::SIZE]);
         [
             AnyHash::Sha256(hash_32.clone()),
-            AnyHash::Blake2b(hash_32),
+            AnyHash::Blake2b(hash_32.clone()),
             AnyHash::Sha512(hash_64),
+            AnyHash::Keccak256(hash_32),
         ]
     }
 
@@ -934,6 +978,12 @@ mod tests {
         );
         let bin = hashes[2].serialize_to_vec();
         assert_eq!(hex::decode("040C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C").unwrap(), bin);
+        let bin = hashes[3].serialize_to_vec();
+        assert_eq!(
+            hex::decode("050C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C")
+                .unwrap(),
+            bin
+        );
     }
 
     #[test]
@@ -950,6 +1000,10 @@ mod tests {
         let bin = hex::decode("040C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C").unwrap();
         let set = AnyHash::deserialize_from_vec(&bin).unwrap();
         assert_eq!(hashes[2], set);
+        let bin = hex::decode("050C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C")
+            .unwrap();
+        let set = AnyHash::deserialize_from_vec(&bin).unwrap();
+        assert_eq!(hashes[3], set);
     }
 
     #[test]
@@ -966,6 +1020,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&hashes[2]).unwrap(),
             r#"{"algorithm":"sha512","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#,
+        );
+        assert_eq!(
+            serde_json::to_string(&hashes[3]).unwrap(),
+            r#"{"algorithm":"keccak256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#,
         );
     }
 
@@ -987,6 +1045,11 @@ mod tests {
                 .unwrap(),
             hashes[2],
         );
+        assert_eq!(
+            serde_json::from_str::<AnyHash>(r#"{"algorithm":"keccak256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#)
+                .unwrap(),
+            hashes[3],
+        );
     }
 
     #[test]
@@ -998,9 +1061,10 @@ mod tests {
         assert!(serde_json::from_str::<AnyHash>(r#"sha256"#).is_err()); // invalid type
         assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"baKe2b","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err()); // invalid algorithm
         assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"blake2b","algorithm":"blake2b","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err()); // duplicate algorithm
-        assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"sha256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err());
-        // too small hash for 32 byte hash
+        assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"sha256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err()); // too small hash for 32 byte hash
+        assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"keccak256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err()); // too small hash for 32 byte hash
         assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"sha256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err());
+        assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"keccak256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err());
         // too large hash for 32 byte hash
         assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"sha512","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err());
         // too large hash for 64 byte hash
