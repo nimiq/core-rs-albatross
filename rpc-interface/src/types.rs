@@ -128,6 +128,7 @@ pub enum HashAlgorithm {
     Blake2b = 1,
     Sha256 = 3,
     Sha512 = 4,
+    Keccak256 = 5,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

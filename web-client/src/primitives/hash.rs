@@ -34,6 +34,14 @@ impl Hash {
             .serialize_to_vec()
     }
 
+    /// Computes a 32-byte [Keccak256] hash from the input data.
+    ///
+    /// [Keccak256]: https://github.com/ethereum/eth-hash
+    #[wasm_bindgen(js_name = computeKeccak256)]
+    pub fn compute_keccak256(data: &[u8]) -> Vec<u8> {
+        nimiq_hash::Hasher::digest(nimiq_hash::Keccak256Hasher::default(), data).serialize_to_vec()
+    }
+
     /// Computes an [Argon2d] hash with some Nimiq-specific parameters.
     ///
     /// `iterations` specifies the number of iterations done in the hash
