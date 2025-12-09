@@ -21,7 +21,7 @@ workspace = true
 
 [dependencies]
 async-trait = "0.1"
-derive_more = { version = "2.0", features = ["display", "from", "into"] }
+derive_more = { version = "2.1", features = ["display", "from", "into"] }
 futures = { workspace = true }
 log = { workspace = true }
 parking_lot = "0.12"
