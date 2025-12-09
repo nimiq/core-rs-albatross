@@ -370,6 +370,7 @@ impl TransactionCommand {
             HashAlgorithm::Blake2b => Ok(AnyHash::Blake2b(AnyHash32::from_str(&hash_str)?)),
             HashAlgorithm::Sha256 => Ok(AnyHash::Sha256(AnyHash32::from_str(&hash_str)?)),
             HashAlgorithm::Sha512 => Ok(AnyHash::Sha512(AnyHash64::from_str(&hash_str)?)),
+            HashAlgorithm::Keccak256 => Ok(AnyHash::Keccak256(AnyHash32::from_str(&hash_str)?)),
         }
     }
 }

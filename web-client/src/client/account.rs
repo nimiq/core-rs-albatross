@@ -78,6 +78,9 @@ impl From<&nimiq_account::Account> for PlainAccount {
                     nimiq_transaction::account::htlc_contract::AnyHash::Sha512(_) => {
                         "sha512".to_string()
                     }
+                    nimiq_transaction::account::htlc_contract::AnyHash::Keccak256(_) => {
+                        "keccak256".to_string()
+                    }
                 },
                 hash_root: match &acc.hash_root {
                     nimiq_transaction::account::htlc_contract::AnyHash::Blake2b(hash) => {
@@ -87,6 +90,9 @@ impl From<&nimiq_account::Account> for PlainAccount {
                         hash.to_hex()
                     }
                     nimiq_transaction::account::htlc_contract::AnyHash::Sha512(hash) => {
+                        hash.to_hex()
+                    }
+                    nimiq_transaction::account::htlc_contract::AnyHash::Keccak256(hash) => {
                         hash.to_hex()
                     }
                 },
