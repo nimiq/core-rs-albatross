@@ -1,4 +1,4 @@
-use nimiq_hash::{sha512::Sha512Hasher, Blake2bHasher, Hasher, Sha256Hasher};
+use nimiq_hash::{sha512::Sha512Hasher, Blake2bHasher, Hasher, Keccak256Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
@@ -153,6 +153,16 @@ fn it_can_verify_regular_transfer() {
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
         hash_depth: 1,
         hash_root: AnyHash::from(Sha256Hasher::default().digest(&[0u8; 32])),
+        pre_image: PreImage::PreImage32(AnyHash32::from([0u8; 32])),
+        signature_proof: recipient_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+
+    // regular: valid Keccak-256
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_depth: 1,
+        hash_root: AnyHash::from(Keccak256Hasher::default().digest(&[0u8; 32])),
         pre_image: PreImage::PreImage32(AnyHash32::from([0u8; 32])),
         signature_proof: recipient_signature_proof.clone(),
     };
