@@ -42,12 +42,22 @@ pub struct PlainStakingContract {
 }
 
 #[derive(serde::Serialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainOracleContract {
+    balance: u64,
+    owner: String,
+    hash_count: u16,
+    hashes: Vec<String>,
+}
+
+#[derive(serde::Serialize, Tsify)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum PlainAccount {
     Basic(PlainBasicAccount),
     Vesting(PlainVestingContract),
     Htlc(PlainHtlcContract),
     Staking(PlainStakingContract),
+    Oracle(PlainOracleContract),
 }
 
 impl From<&nimiq_account::Account> for PlainAccount {
@@ -128,6 +138,25 @@ impl From<&nimiq_account::Account> for PlainAccount {
                     .previous_batch_punished_slots
                     .iter()
                     .map(|slot| slot as u16)
+                    .collect(),
+            }),
+            nimiq_account::Account::Oracle(acc) => PlainAccount::Oracle(PlainOracleContract {
+                balance: acc.balance.into(),
+                owner: acc.owner.to_user_friendly_address(),
+                hash_count: acc.hash_count,
+                hashes: acc
+                    .hashes
+                    .iter()
+                    .map(|hash| match hash {
+                        nimiq_transaction::account::htlc_contract::AnyHash::Blake2b(h) => {
+                            h.to_hex()
+                        }
+                        nimiq_transaction::account::htlc_contract::AnyHash::Sha256(h) => h.to_hex(),
+                        nimiq_transaction::account::htlc_contract::AnyHash::Sha512(h) => h.to_hex(),
+                        nimiq_transaction::account::htlc_contract::AnyHash::Keccak256(h) => {
+                            h.to_hex()
+                        }
+                    })
                     .collect(),
             }),
         }

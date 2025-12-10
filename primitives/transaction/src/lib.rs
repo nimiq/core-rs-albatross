@@ -24,6 +24,9 @@ use thiserror::Error;
 
 use crate::account::{
     htlc_contract::{CreationTransactionData as HtlcCreationData, OutgoingHTLCTransactionProof},
+    oracle_contract::{
+        CreationTransactionData as OracleCreationData, IncomingOracleTransactionData,
+    },
     staking_contract::IncomingStakingTransactionData,
     vesting_contract::CreationTransactionData as VestingCreationData,
     AccountTransactionVerification,
@@ -476,6 +479,10 @@ impl Transaction {
                 // by the validator or staker. Signers of regular transaction proofs have already
                 // been added to the set above.
             }
+            AccountType::Oracle => {
+                // Transactions from the oracle contract are signed with a regular signature proof
+                // by the owner. Signers of regular transaction proofs have already been added to the set above.
+            }
         }
 
         match self.recipient_type {
@@ -588,6 +595,24 @@ impl Transaction {
                             // Add the validator address
                             addresses.insert(validator_address);
                             // The signer of the internal proof is the validator's signing key
+                            addresses.insert(proof.compute_signer());
+                        }
+                    }
+                }
+            }
+            AccountType::Oracle => {
+                if let Ok(contract_data) = OracleCreationData::parse(self) {
+                    // Add the owner of the new oracle contract
+                    addresses.insert(contract_data.owner);
+                } else if let Ok(transaction_data) = IncomingOracleTransactionData::parse(self) {
+                    match transaction_data {
+                        IncomingOracleTransactionData::Update { proof, .. } => {
+                            // Add the owner (signer of the proof)
+                            addresses.insert(proof.compute_signer());
+                        }
+                        IncomingOracleTransactionData::ChangeOwner { new_owner, proof } => {
+                            // Add the new owner and the current owner (signer of the proof)
+                            addresses.insert(new_owner);
                             addresses.insert(proof.compute_signer());
                         }
                     }
