@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::account::{
     basic_account::BasicAccount, htlc_contract::HashedTimeLockedContract,
-    staking_contract::StakingContract, vesting_contract::VestingContract,
+    oracle_contract::OracleContract, staking_contract::StakingContract,
+    vesting_contract::VestingContract,
 };
 #[cfg(feature = "interaction-traits")]
 use crate::{
@@ -21,7 +22,9 @@ use crate::{
 };
 
 pub mod basic_account;
+pub mod bridge_contract;
 pub mod htlc_contract;
+pub mod oracle_contract;
 pub mod staking_contract;
 pub mod vesting_contract;
 
@@ -33,6 +36,7 @@ macro_rules! gen_account_match {
             Account::Vesting(account) => account.$f($( $arg ),*),
             Account::HTLC(account) => account.$f($( $arg ),*),
             Account::Staking(account) => account.$f($( $arg ),*),
+            Account::Oracle(account) => account.$f($( $arg ),*),
         }
     };
 }
@@ -45,6 +49,7 @@ macro_rules! gen_account_type_match {
             AccountType::Vesting => VestingContract::$f($( $arg ),*),
             AccountType::HTLC => HashedTimeLockedContract::$f($( $arg ),*),
             AccountType::Staking => StakingContract::$f($( $arg ),*),
+            AccountType::Oracle => OracleContract::$f($( $arg ),*),
         }
     };
 }
@@ -56,6 +61,7 @@ pub enum Account {
     Vesting(VestingContract),
     HTLC(HashedTimeLockedContract),
     Staking(StakingContract),
+    Oracle(OracleContract),
 }
 
 impl Account {
@@ -65,6 +71,7 @@ impl Account {
             Account::Vesting(_) => AccountType::Vesting,
             Account::HTLC(_) => AccountType::HTLC,
             Account::Staking(_) => AccountType::Staking,
+            Account::Oracle(_) => AccountType::Oracle,
         }
     }
 
@@ -74,6 +81,7 @@ impl Account {
             Account::Vesting(ref account) => account.balance,
             Account::HTLC(ref account) => account.balance,
             Account::Staking(ref account) => account.balance,
+            Account::Oracle(ref account) => account.balance,
         }
     }
 
