@@ -865,6 +865,16 @@ pub enum AccountAdditionalFields {
     /// Additional account information for the staking contract.
     #[serde(rename_all = "camelCase")]
     Staking {},
+    /// Additional account information for oracle contracts.
+    #[serde(rename_all = "camelCase")]
+    Oracle {
+        /// User friendly address (NQ-address) of the owner of the oracle contract.
+        owner: Address,
+        /// The number of hashes that can be stored in this contract.
+        hash_count: u16,
+        /// The hashes currently stored in the contract.
+        hashes: Vec<AnyHash>,
+    },
 }
 
 impl Account {
@@ -903,6 +913,15 @@ impl Account {
                 address,
                 balance: staking.balance,
                 account_additional_fields: AccountAdditionalFields::Staking {},
+            },
+            nimiq_account::Account::Oracle(oracle) => Account {
+                address,
+                balance: oracle.balance,
+                account_additional_fields: AccountAdditionalFields::Oracle {
+                    owner: oracle.owner,
+                    hash_count: oracle.hash_count,
+                    hashes: oracle.hashes,
+                },
             },
         }
     }
@@ -1110,6 +1129,9 @@ pub enum LogType {
     JailValidator,
     RevertContract,
     FailedTransaction,
+    OracleCreate,
+    OracleUpdate,
+    OracleChangeOwner,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1164,6 +1186,9 @@ impl LogType {
             Log::FailedTransaction { .. } => Self::FailedTransaction,
             Log::ValidatorFeeDeduction { .. } => Self::ValidatorFeeDeduction,
             Log::StakerFeeDeduction { .. } => Self::StakerFeeDeduction,
+            Log::OracleCreate { .. } => Self::OracleCreate,
+            Log::OracleUpdate { .. } => Self::OracleUpdate,
+            Log::OracleChangeOwner { .. } => Self::OracleChangeOwner,
         }
     }
 }
