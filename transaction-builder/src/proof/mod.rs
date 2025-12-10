@@ -51,6 +51,9 @@ impl TransactionProofBuilder {
             AccountType::Staking => {
                 TransactionProofBuilder::OutStaking(StakingProofBuilder::new(transaction))
             }
+            AccountType::Oracle => {
+                TransactionProofBuilder::Basic(BasicProofBuilder::new(transaction))
+            }
         }
     }
 

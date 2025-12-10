@@ -13,8 +13,9 @@ pub use crate::data_store::{DataStore, DataStoreRead, DataStoreWrite};
 pub use crate::interaction_traits::*;
 pub use crate::{
     account::{
-        basic_account::BasicAccount, htlc_contract::HashedTimeLockedContract, staking_contract::*,
-        vesting_contract::VestingContract, Account,
+        basic_account::BasicAccount, htlc_contract::HashedTimeLockedContract,
+        oracle_contract::OracleContract, staking_contract::*, vesting_contract::VestingContract,
+        Account,
     },
     data_store_ops::DataStoreReadOps,
     logs::*,

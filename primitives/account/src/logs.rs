@@ -64,6 +64,27 @@ pub enum Log {
     },
 
     #[serde(rename_all = "camelCase")]
+    OracleCreate {
+        contract_address: Address,
+        owner: Address,
+        hash_count: u16,
+        deposit: Coin,
+    },
+
+    #[serde(rename_all = "camelCase")]
+    OracleUpdate {
+        contract_address: Address,
+        hashes: Vec<AnyHash>,
+    },
+
+    #[serde(rename_all = "camelCase")]
+    OracleChangeOwner {
+        contract_address: Address,
+        old_owner: Address,
+        new_owner: Address,
+    },
+
+    #[serde(rename_all = "camelCase")]
     CreateValidator {
         validator_address: Address,
         reward_address: Address,
@@ -239,6 +260,19 @@ impl Log {
                 owner,
                 ..
             } => contract_address == address || owner == address,
+            Log::OracleCreate {
+                contract_address,
+                owner,
+                ..
+            } => contract_address == address || owner == address,
+            Log::OracleUpdate {
+                contract_address, ..
+            } => contract_address == address,
+            Log::OracleChangeOwner {
+                contract_address,
+                old_owner,
+                new_owner,
+            } => contract_address == address || old_owner == address || new_owner == address,
             Log::CreateValidator {
                 validator_address,
                 reward_address,
