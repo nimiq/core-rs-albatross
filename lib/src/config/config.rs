@@ -97,6 +97,9 @@ pub struct ConsensusConfig {
     #[builder(setter(custom))]
     /// History indices enabled. Defaults to `true` for history nodes and `false` to full/light nodes.
     pub index_history: bool,
+    #[builder(default)]
+    /// Keccak256 history root computation and proofs enabled. Requires index history enabled to properly work.
+    pub keccak256_proofs: bool,
 }
 
 impl ConsensusConfigBuilder {
@@ -123,6 +126,7 @@ impl Default for ConsensusConfig {
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
             full_sync_threshold: 10800,
             index_history: true,
+            keccak256_proofs: false,
         }
     }
 }
@@ -895,12 +899,14 @@ impl ClientConfigBuilder {
             min_peers,
             full_sync_threshold,
             index_history,
+            keccak256_proofs,
         } = consensus;
 
         let mut consensus = ConsensusConfigBuilder::default()
             .sync_mode(*sync_mode)
             .index_history(*index_history, (*sync_mode).into())
             .max_epochs_stored(*max_epochs_stored as u32)
+            .keccak256_proofs(*keccak256_proofs)
             .build()
             .unwrap();
         if let Some(min_peers) = min_peers {

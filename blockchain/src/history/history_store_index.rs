@@ -53,9 +53,9 @@ pub struct HistoryStoreIndex {
 
 impl HistoryStoreIndex {
     /// Creates a new HistoryStore.
-    pub fn new(db: MdbxDatabase, network_id: NetworkId) -> Self {
+    pub fn new(db: MdbxDatabase, network_id: NetworkId, kecaak256_proofs: bool) -> Self {
         let index = HistoryStoreIndex {
-            history_store: HistoryStore::new(db.clone(), network_id),
+            history_store: HistoryStore::new(db.clone(), network_id, kecaak256_proofs),
             db,
             tx_hash_table: TxHashTable,
             address_table: AddressTable,
@@ -723,7 +723,7 @@ mod tests {
     fn prove_num_leaves_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         let mut txn = env.write_transaction();
         let history_root_initial = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
@@ -808,7 +808,7 @@ mod tests {
     fn length_at_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let ext_0 = create_transaction(1, 0);
@@ -836,7 +836,7 @@ mod tests {
     fn transaction_in_validity_window_matches_protocol_validity() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         let first_inclusion_block = Policy::genesis_block_number() + 1;
         let validity_start_height = first_inclusion_block + Policy::blocks_per_batch();
@@ -875,7 +875,7 @@ mod tests {
     fn get_root_from_hist_txs_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -903,7 +903,7 @@ mod tests {
     fn get_hist_tx_by_hash_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -951,7 +951,7 @@ mod tests {
         let genesis_block_number = Policy::genesis_block_number();
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1111,7 +1111,7 @@ mod tests {
         let genesis_block_number = Policy::genesis_block_number();
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1215,7 +1215,7 @@ mod tests {
     fn get_num_historic_transactions_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1243,7 +1243,7 @@ mod tests {
     fn get_tx_hashes_by_address_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1318,7 +1318,7 @@ mod tests {
     fn prove_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1390,7 +1390,7 @@ mod tests {
     fn prove_empty_tree_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         let txn = env.write_transaction();
 
@@ -1412,7 +1412,7 @@ mod tests {
         let genesis_block_number = Policy::genesis_block_number();
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross, false);
         let mut txn = env.write_transaction();
 
         for i in genesis_block_number..=(16 * Policy::blocks_per_batch() + genesis_block_number) {
