@@ -90,10 +90,10 @@ pub enum Error {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Failed to generate Keccak256 proof")]
+    #[error("Failed to generate Keccak256 proof or keccak256 proof support is disabled")]
     Keccak256ProofGenerationFailed,
 
-    #[error("Keccak256 history not found for the specified epoch")]
+    #[error("Keccak256 history not found for the specified epoch or keccak256 proof support is disabled")]
     Keccak256HistoryNotFound,
 
     #[error("Block {0} is not a macro block")]

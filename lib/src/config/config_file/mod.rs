@@ -251,6 +251,9 @@ pub struct ConsensusSettings {
     /// History indices enabled. Only effective for history and full nodes.
     #[serde(default)]
     pub index_history: Option<bool>,
+    /// Keccak256 history root computation and proofs enabled. To properly work it required index history enabled.
+    #[serde(default)]
+    pub keccak256_proofs: bool,
 }
 
 impl Default for ConsensusSettings {
@@ -262,6 +265,7 @@ impl Default for ConsensusSettings {
             min_peers: None,
             full_sync_threshold: None,
             index_history: None,
+            keccak256_proofs: false,
         }
     }
 }

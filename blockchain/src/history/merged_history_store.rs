@@ -719,17 +719,19 @@ mod tests {
         // Generate the reference store.
         let env_plain = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let history_store_plain =
-            HistoryStoreIndex::new(env_plain.clone(), NetworkId::UnitAlbatross);
+            HistoryStoreIndex::new(env_plain.clone(), NetworkId::UnitAlbatross, false);
 
         // Generate the merged store.
         let env_main = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store_main = HistoryStoreIndex::new(env_main.clone(), NetworkId::UnitAlbatross);
+        let history_store_main =
+            HistoryStoreIndex::new(env_main.clone(), NetworkId::UnitAlbatross, false);
 
         let history_store_pre = if with_pre_genesis {
             let env_pre = MdbxDatabase::new_volatile(Default::default()).unwrap();
             Some(HistoryStoreIndex::new(
                 env_pre.clone(),
                 NetworkId::UnitAlbatross,
+                false,
             ))
         } else {
             None
