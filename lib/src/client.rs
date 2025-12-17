@@ -320,6 +320,7 @@ impl ClientInner {
         #[cfg(feature = "full-consensus")]
         let mut blockchain_config = BlockchainConfig {
             max_epochs_stored: config.consensus.max_epochs_stored,
+            keccak256_proofs: config.consensus.keccak256_proofs,
             ..Default::default()
         };
 
