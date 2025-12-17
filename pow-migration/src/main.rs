@@ -224,6 +224,7 @@ async fn main() {
             None,
             false,
             config.network_id,
+            false,
         ));
         let chain_store = ChainStore::new(env, history_store);
         if chain_store.get_head(None).is_some() {
