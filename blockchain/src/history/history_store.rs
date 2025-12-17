@@ -61,11 +61,14 @@ pub struct HistoryStore {
 
     /// The network ID. It determines if this is the mainnet or one of the testnets.
     pub(crate) network_id: NetworkId,
+
+    /// Keccak256 merkle tree computation and proofs enabled
+    pub(crate) keccak256_proofs: bool,
 }
 
 impl HistoryStore {
     /// Creates a new HistoryStore.
-    pub fn new(db: MdbxDatabase, network_id: NetworkId) -> Self {
+    pub fn new(db: MdbxDatabase, network_id: NetworkId, keccak256_proofs: bool) -> Self {
         let store = HistoryStore {
             validity_store: Some(ValidityStore::new(db.clone())),
             db,
@@ -73,6 +76,7 @@ impl HistoryStore {
             hist_tree_table: HistoryTreeTable,
             hist_tx_table: HistoricTransactionTable,
             last_leaf_table: LastLeafTable,
+            keccak256_proofs,
         };
 
         store.create_tables();
@@ -81,7 +85,11 @@ impl HistoryStore {
     }
 
     /// Creates a new HistoryStore.
-    pub fn new_pre_genesis(db: MdbxDatabase, network_id: NetworkId) -> Self {
+    pub fn new_pre_genesis(
+        db: MdbxDatabase,
+        network_id: NetworkId,
+        keccak256_proofs: bool,
+    ) -> Self {
         let store = HistoryStore {
             validity_store: None,
             db,
@@ -89,6 +97,7 @@ impl HistoryStore {
             hist_tree_table: HistoryTreeTable,
             hist_tx_table: HistoricTransactionTable,
             last_leaf_table: LastLeafTable,
+            keccak256_proofs,
         };
 
         store.create_tables();
@@ -911,6 +920,10 @@ impl HistoryInterface for HistoryStore {
         block_number: u32,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<Keccak256Hash> {
+        // Check that keccak256 proofs support is enabled
+        if !self.keccak256_proofs {
+            return None;
+        }
         // Verify the block number is a macro block
         if !Policy::is_macro_block_at(block_number) {
             return None;
@@ -1008,6 +1021,10 @@ impl HistoryInterface for HistoryStore {
         transaction_index: usize,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<MerklePath<Keccak256Hash>> {
+        // Check that keccak256 proofs support is enabled
+        if !self.keccak256_proofs {
+            return None;
+        }
         // Verify the block number is a macro block (election or checkpoint)
         if !Policy::is_macro_block_at(block_number) {
             return None;
@@ -1097,7 +1114,7 @@ mod tests {
     fn prove_num_leaves_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         let mut txn = env.write_transaction();
         let history_root_initial = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
@@ -1216,7 +1233,7 @@ mod tests {
     fn length_at_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let ext_0 = create_transaction(1, 0);
@@ -1244,7 +1261,7 @@ mod tests {
     fn transaction_in_validity_window_matches_protocol_validity() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         let first_inclusion_block = Policy::genesis_block_number() + 1;
         let validity_start_height = first_inclusion_block + Policy::blocks_per_batch();
@@ -1289,7 +1306,7 @@ mod tests {
     #[test]
     fn reverting_the_only_tracked_block_frees_its_transactions() {
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         let block_number = Policy::genesis_block_number() + 1;
         let hist_tx = create_transaction_with_validity_start(block_number, 0, block_number);
@@ -1317,7 +1334,7 @@ mod tests {
     fn get_root_from_hist_txs_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1346,7 +1363,7 @@ mod tests {
         let genesis_block_number = Policy::genesis_block_number();
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1506,7 +1523,7 @@ mod tests {
         let genesis_block_number = Policy::genesis_block_number();
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1610,7 +1627,7 @@ mod tests {
     fn get_num_historic_transactions_works() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1639,7 +1656,7 @@ mod tests {
         let genesis_block_number = Policy::genesis_block_number();
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
         let mut txn = env.write_transaction();
 
         for i in genesis_block_number..=(16 * Policy::blocks_per_batch() + genesis_block_number) {
@@ -1804,7 +1821,7 @@ mod tests {
     fn keccak256_history_root_for_election_macro_blocks() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1836,7 +1853,7 @@ mod tests {
     fn keccak256_history_root_for_checkpoint_macro_blocks() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1861,7 +1878,7 @@ mod tests {
     fn keccak256_history_root_returns_none_for_micro_blocks() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         // Create historic transactions.
         let hist_txs = gen_hist_txs();
@@ -1885,7 +1902,7 @@ mod tests {
     fn keccak256_history_root_with_empty_history() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         let txn = env.write_transaction();
 
@@ -1904,7 +1921,7 @@ mod tests {
     fn keccak256_history_root_with_various_epoch_sizes() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         let mut txn = env.write_transaction();
 
@@ -1939,7 +1956,7 @@ mod tests {
     fn keccak256_history_root_matches_manually_computed_values() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         // Create a simple set of transactions
         let hist_txs = vec![
@@ -1990,7 +2007,7 @@ mod tests {
 
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         // Create transactions
         let hist_txs = vec![
@@ -2046,7 +2063,7 @@ mod tests {
     fn keccak256_proof_generation_for_various_transaction_indices() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         // Create historic transactions.
         let hist_txs = vec![
@@ -2077,7 +2094,7 @@ mod tests {
     fn keccak256_proof_verification_using_generated_proofs() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         // Create historic transactions.
         let hist_txs = vec![
@@ -2122,7 +2139,7 @@ mod tests {
     fn keccak256_proof_with_different_epoch_sizes() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         let mut txn = env.write_transaction();
 
@@ -2159,7 +2176,7 @@ mod tests {
     fn keccak256_proof_with_election_and_checkpoint_blocks() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         // Create historic transactions for epoch 0.
         let hist_txs_epoch0 = vec![
@@ -2211,7 +2228,7 @@ mod tests {
     fn keccak256_proof_error_cases() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         // Create historic transactions.
         let hist_txs = vec![
@@ -2251,7 +2268,7 @@ mod tests {
     fn keccak256_proof_and_root_logging() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, true);
 
         // Create 2 historic transactions.
         let hist_txs = vec![

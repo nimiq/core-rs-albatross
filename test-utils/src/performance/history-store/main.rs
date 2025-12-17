@@ -168,11 +168,15 @@ fn main() {
         Box::new(HistoryStoreIndex::new(
             env.clone(),
             NetworkId::UnitAlbatross,
+            false,
         )) as Box<dyn HistoryInterface + Sync + Send>
     } else {
         println!("Exercising the history store");
-        Box::new(HistoryStore::new(env.clone(), NetworkId::UnitAlbatross))
-            as Box<dyn HistoryInterface + Sync + Send>
+        Box::new(HistoryStore::new(
+            env.clone(),
+            NetworkId::UnitAlbatross,
+            false,
+        )) as Box<dyn HistoryInterface + Sync + Send>
     };
 
     let rounds = args.rounds.unwrap_or(1);

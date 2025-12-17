@@ -155,6 +155,10 @@ sync_mode = "full"
 # Default: true when the sync_mode is "history" and false when the sync_mode is "full".
 #index_history = true
 
+# Enable or disable keccak256 transaction merkle tree root computation and proofs.
+# Default: false. To properly work, it requires index_history enabled.
+#keccak256_proofs = true
+
 ##############################################################################
 # Database configuration
 ##############################################################################
