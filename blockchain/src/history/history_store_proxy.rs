@@ -35,15 +35,18 @@ impl MergedHistoryStoreProxy {
         pre_genesis_env: Option<MdbxDatabase>,
         with_index: bool,
         network_id: NetworkId,
+        keccak256_proofs: bool,
     ) -> Self {
         if with_index {
-            let main = HistoryStoreIndex::new(env, network_id);
-            let pre_genesis = pre_genesis_env.map(|env| HistoryStoreIndex::new(env, network_id));
+            let main = HistoryStoreIndex::new(env, network_id, keccak256_proofs);
+            let pre_genesis = pre_genesis_env
+                .map(|env| HistoryStoreIndex::new(env, network_id, keccak256_proofs));
 
             HistoryStoreProxy::WithIndex(HistoryStoreMerger::new(pre_genesis, main))
         } else {
-            let main = HistoryStore::new(env, network_id);
-            let pre_genesis = pre_genesis_env.map(|env| HistoryStore::new(env, network_id));
+            let main = HistoryStore::new(env, network_id, keccak256_proofs);
+            let pre_genesis =
+                pre_genesis_env.map(|env| HistoryStore::new(env, network_id, keccak256_proofs));
 
             HistoryStoreProxy::WithoutIndex(HistoryStoreMerger::new(pre_genesis, main))
         }
@@ -51,12 +54,17 @@ impl MergedHistoryStoreProxy {
 }
 
 impl UnmergedHistoryStoreProxy {
-    pub fn new(env: MdbxDatabase, with_index: bool, network_id: NetworkId) -> Self {
+    pub fn new(
+        env: MdbxDatabase,
+        with_index: bool,
+        network_id: NetworkId,
+        keccak256_proofs: bool,
+    ) -> Self {
         if with_index {
-            let main = HistoryStoreIndex::new(env, network_id);
+            let main = HistoryStoreIndex::new(env, network_id, keccak256_proofs);
             HistoryStoreProxy::WithIndex(main)
         } else {
-            let main = HistoryStore::new(env, network_id);
+            let main = HistoryStore::new(env, network_id, keccak256_proofs);
             HistoryStoreProxy::WithoutIndex(main)
         }
     }

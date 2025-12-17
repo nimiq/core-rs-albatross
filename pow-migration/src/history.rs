@@ -122,7 +122,8 @@ pub async fn migrate_history(
     index_history: bool,
 ) {
     let mut history_store_height = get_history_store_height(env.clone(), network_id).await;
-    let history_store = UnmergedHistoryStoreProxy::new(env.clone(), index_history, network_id);
+    let history_store =
+        UnmergedHistoryStoreProxy::new(env.clone(), index_history, network_id, false);
     let mut pow_head_height = async_retryer(|| pow_client.block_number()).await.unwrap();
 
     while let Some(candidate_block) = rx_candidate_block.recv().await {
@@ -254,14 +255,14 @@ pub async fn get_history_root(
     env: MdbxDatabase,
     network_id: NetworkId,
 ) -> Result<Blake2bHash, HistoryError> {
-    HistoryStore::new(env.clone(), network_id)
+    HistoryStore::new(env.clone(), network_id, false)
         .get_history_tree_root(0, None)
         .ok_or(HistoryError::HistoryRootError)
 }
 
 /// Get the current block height of the PoS history store
 pub async fn get_history_store_height(env: MdbxDatabase, network_id: NetworkId) -> u32 {
-    HistoryStore::new(env.clone(), network_id)
+    HistoryStore::new(env.clone(), network_id, false)
         .get_last_leaf_block_number(None)
         .unwrap_or(1)
 }

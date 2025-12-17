@@ -69,8 +69,10 @@ pub struct BlockchainConfig {
     /// Maximum number of epochs (other than the current one) that the ChainStore will store fully.
     /// Epochs older than this number will be pruned.
     pub max_epochs_stored: u32,
-    /// Enables/Disables indices in the history store.
+    /// Enables/disables indices in the history store.
     pub index_history: bool,
+    /// Enables/disables keccak256 merkle tree root computations and proofs
+    pub keccak256_proofs: bool,
 }
 
 impl Default for BlockchainConfig {
@@ -79,6 +81,7 @@ impl Default for BlockchainConfig {
             keep_history: true,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
             index_history: true,
+            keccak256_proofs: false,
         }
     }
 }
@@ -175,6 +178,7 @@ impl Blockchain {
             pre_genesis_env,
             config.index_history,
             network_id,
+            config.keccak256_proofs,
         ));
 
         let chain_store = ChainStore::new(env.clone(), Arc::clone(&history_store));
