@@ -1,0 +1,1 @@
+let chained = compute_chained_hash(result.last(), hash);

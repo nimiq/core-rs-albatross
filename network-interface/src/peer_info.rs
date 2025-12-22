@@ -44,6 +44,9 @@ bitflags! {
 
         /// This node provides pre-genesis information.
         const PRE_GENESIS_TRANSACTIONS = 1 << 8;
+
+        /// This node provides keccak256 history root and proofs.
+        const KECCAK256_PROOFS = 1 << 9;
     }
 }
 

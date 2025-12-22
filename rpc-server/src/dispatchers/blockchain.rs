@@ -863,35 +863,64 @@ impl BlockchainInterface for BlockchainDispatcher {
                 epoch_number
             );
 
-            // Get all transactions for the epoch
-            let transactions = blockchain
+            // Get the history index to access index methods
+            let history_index = blockchain
                 .history_store
-                .get_epoch_transactions(epoch_number, None);
+                .history_index()
+                .ok_or(Error::RequiresHistoryIndex)?;
 
-            log::debug!(
-                "[Keccak256 Proof Debug] Found {} transactions in epoch {}",
-                transactions.len(),
-                epoch_number
-            );
-
-            // Find the transaction by hash
-            let transaction_index = transactions
-                .iter()
-                .position(|tx| tx.tx_hash() == transaction_hash.clone().into())
+            // Get the leaf index (epoch and index) for the transaction hash
+            let epoch_based_index = history_index
+                .get_leaf_index_by_tx_hash(&transaction_hash, None)
                 .ok_or_else(|| {
                     Error::InvalidKeccak256Parameters(format!(
-                        "Transaction hash {} not found in epoch {}",
-                        transaction_hash, epoch_number
+                        "Transaction hash {} not found in history",
+                        transaction_hash
                     ))
                 })?;
 
             log::debug!(
-                "[Keccak256 Proof Debug] Transaction found at index {} in epoch",
-                transaction_index
+                "[Keccak256 Proof Debug] Transaction found at epoch {}, index {}",
+                epoch_based_index.epoch_number,
+                epoch_based_index.index
             );
 
-            // Get the specific transaction
-            let transaction = transactions[transaction_index].clone();
+            // Verify the epoch matches the requested block's epoch
+            if epoch_based_index.epoch_number != epoch_number {
+                return Err(Error::InvalidKeccak256Parameters(format!(
+                    "Transaction hash {} belongs to epoch {}, but requested proof for epoch {}",
+                    transaction_hash, epoch_based_index.epoch_number, epoch_number
+                )));
+            }
+
+            // Get the specific transaction using the hash
+            let historic_transaction = history_index
+                .get_hist_tx_by_hash(&transaction_hash, None)
+                .ok_or_else(|| {
+                Error::InvalidKeccak256Parameters(format!(
+                    "Transaction hash {} not found in epoch {}",
+                    transaction_hash, epoch_number
+                ))
+            })?;
+
+            // Extract the transaction from the historic transaction
+            let transaction = if historic_transaction.is_not_basic() {
+                return Err(Error::InvalidKeccak256Parameters(
+                    "Only basic transactions are supported for Keccak256 proofs".to_string(),
+                ));
+            } else {
+                match historic_transaction.unwrap_basic() {
+                    nimiq_transaction::ExecutedTransaction::Ok(tx) => tx,
+                    nimiq_transaction::ExecutedTransaction::Err(_) => {
+                        return Err(Error::InvalidKeccak256Parameters(
+                            "Transaction execution failed".to_string(),
+                        ));
+                    }
+                }
+            };
+
+            // Use the leaf index for proof generation
+            let transaction_index = epoch_based_index.index as usize;
 
             // Generate the Keccak256 Merkle proof
             let proof = blockchain
@@ -933,7 +962,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 "[Keccak256 Proof Debug] Proof verification result: {} | Block: {} | Epoch: {} | Tx Index: {} | Expected Root: 0x{} | Computed Root: 0x{} | Tx Hash: {}",
                 if verified { "✓ VALID" } else { "✗ INVALID" },
                 block_number,
-                epoch_number,
+                epoch_based_index.epoch_number,
                 transaction_index,
                 hex::encode(computed_root.as_bytes()),
                 hex::encode(proof_root.as_bytes()),
@@ -949,7 +978,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             // Convert proof to RPC response format with hex-encoded hashes
             let merkle_path_data = nimiq_rpc_interface::types::MerklePathData::from_path(
                 proof,
-                transaction,
+                historic_transaction,
                 Some(blockchain.block_number()),
             )
             .ok_or_else(|| {
