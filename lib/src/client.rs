@@ -97,7 +97,11 @@ pub(crate) struct ClientInner {
 }
 
 /// This function is used to generate the services flags (provided, needed) based upon the configured sync mode
-pub fn generate_service_flags(sync_mode: SyncMode, index_history: bool) -> (Services, Services) {
+pub fn generate_service_flags(
+    sync_mode: SyncMode,
+    index_history: bool,
+    keccak256_proofs: bool,
+) -> (Services, Services) {
     let provided_services = match sync_mode {
         // Services provided by history nodes
         SyncMode::History => {
@@ -105,6 +109,9 @@ pub fn generate_service_flags(sync_mode: SyncMode, index_history: bool) -> (Serv
             let mut services = Services::provided(NodeType::History);
             if index_history {
                 services |= Services::TRANSACTION_INDEX;
+            }
+            if keccak256_proofs {
+                services |= Services::KECCAK256_PROOFS;
             }
             services
         }
@@ -175,8 +182,11 @@ impl ClientInner {
             identity_keypair.public().to_peer_id().to_base58()
         );
 
-        let (mut provided_services, required_services) =
-            generate_service_flags(config.consensus.sync_mode, config.consensus.index_history);
+        let (mut provided_services, required_services) = generate_service_flags(
+            config.consensus.sync_mode,
+            config.consensus.index_history,
+            config.consensus.keccak256_proofs,
+        );
 
         // We update the services flags depending on our validator configuration
         #[cfg(feature = "validator")]

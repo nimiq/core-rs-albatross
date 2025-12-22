@@ -48,7 +48,7 @@ use crate::{
 #[cfg(feature = "full")]
 use crate::{
     messages::{
-        RequestBatchSet, RequestBlocksProof, RequestHistoryChunk,
+        RequestBatchSet, RequestBlocksProof, RequestHistoryChunk, RequestKeccak256TransactionProof,
         RequestTransactionReceiptsByAddress, RequestTransactionsProof, RequestTrieProof,
     },
     sync::live::{diff_queue::RequestTrieDiff, state_queue::RequestChunk},
@@ -296,7 +296,13 @@ impl<N: Network> Consensus<N> {
                 let stream = network.receive_requests::<RequestChunk>();
                 spawn(Box::pin(request_handler(network, stream, blockchain)));
 
-                let supports_history_index = blockchain.read().history_store.supports_index();
+                let (supports_history_index, supports_keccak256_proofs) = {
+                    let blockchain = blockchain.read();
+                    (
+                        blockchain.history_store.supports_index(),
+                        blockchain.config.keccak256_proofs,
+                    )
+                };
 
                 // Only spawn these handlers if the history index is enabled.
                 if supports_history_index {
@@ -304,6 +310,11 @@ impl<N: Network> Consensus<N> {
                     spawn(Box::pin(request_handler(network, stream, blockchain)));
 
                     let stream = network.receive_requests::<RequestTransactionReceiptsByAddress>();
+                    spawn(Box::pin(request_handler(network, stream, blockchain)));
+                }
+
+                if supports_keccak256_proofs {
+                    let stream = network.receive_requests::<RequestKeccak256TransactionProof>();
                     spawn(Box::pin(request_handler(network, stream, blockchain)));
                 }
 
