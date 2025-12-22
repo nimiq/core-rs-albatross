@@ -222,19 +222,42 @@ impl AccountTransactionInteraction for OracleContract {
                         Vec::new()
                     };
 
-                    // Add the new hashes
-                    self.hashes.extend(hashes.clone());
+                    // Store the previous hash state for revert
+                    let previous_hash_state = self.hashes.last().cloned();
+
+                    // Add the new hashes with chaining: hash_i = hash((hash_{i-1}, hash_i))
+                    for new_hash in &hashes {
+                        // Get the previous hash (last in the list, or zero hash if empty)
+                        let previous_hash = self.hashes.last().cloned().unwrap_or_else(|| {
+                            // Use a zero hash of the same type as the new hash
+                            new_hash.zero()
+                        });
+
+                        // Hash the previous hash and new hash using the same algorithm as the new hash
+                        // Chain: data_i = H(data_{i-1} || state_i) = H(previous_hash || new_hash)
+                        let chained_hash = previous_hash.digest(new_hash);
+
+                        // Store the chained hash
+                        self.hashes.push(chained_hash);
+                    }
 
                     tx_logger.push_log(Log::OracleUpdate {
                         contract_address: transaction.recipient.clone(),
                         hashes,
                     });
 
-                    // Return receipt with removed hashes for proper revert
-                    if removed_hashes.is_empty() {
+                    // Return receipt with removed hashes and previous hash state for proper revert
+                    // Only return a receipt if we removed hashes or if we need to track previous state
+                    if removed_hashes.is_empty() && previous_hash_state.is_none() {
                         Ok(None)
                     } else {
-                        Ok(Some(UpdateReceipt { removed_hashes }.into()))
+                        Ok(Some(
+                            UpdateReceipt {
+                                removed_hashes,
+                                previous_hash_state,
+                            }
+                            .into(),
+                        ))
                     }
                 }
                 IncomingOracleTransactionData::ChangeOwner { new_owner, proof } => {
@@ -280,7 +303,7 @@ impl AccountTransactionInteraction for OracleContract {
 
             match data {
                 IncomingOracleTransactionData::Update { hashes, .. } => {
-                    // Remove the hashes that were added (they're at the end)
+                    // Remove the chained hashes that were added (they're at the end)
                     for _ in 0..hashes.len() {
                         self.hashes.pop();
                     }
@@ -494,6 +517,8 @@ convert_receipt!(PrunedOracleContract);
 struct UpdateReceipt {
     /// The hashes that were removed from the beginning when the ring buffer limit was reached
     pub removed_hashes: Vec<AnyHash>,
+    /// The previous hash state before this update (for proper revert of chained hashes)
+    pub previous_hash_state: Option<AnyHash>,
 }
 
 convert_receipt!(UpdateReceipt);

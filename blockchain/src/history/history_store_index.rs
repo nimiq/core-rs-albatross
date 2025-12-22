@@ -641,6 +641,15 @@ impl HistoryIndexInterface for HistoryStoreIndex {
             .get_historic_tx(leaf.epoch_number, leaf.index, Some(&txn))
     }
 
+    /// Returns the epoch number and leaf index corresponding to the given transaction hash.
+    fn get_leaf_index_by_tx_hash(
+        &self,
+        raw_tx_hash: &Blake2bHash,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<EpochBasedIndex> {
+        self.get_leaf_indices_by_tx_hash(raw_tx_hash, txn_option)
+    }
+
     /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
     /// address. It fetches the transactions from most recent to least recent up to the maximum
     /// number given. It allows to give a starting point to fetch the transactions from (exclusive). If this hash is given

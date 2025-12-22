@@ -88,6 +88,26 @@ fn make_hash_keccak256(value: u8) -> AnyHash {
     AnyHash::from(Keccak256Hasher::default().digest(&[value; 32]))
 }
 
+fn compute_chained_hash(previous_hash: Option<&AnyHash>, new_hash: &AnyHash) -> AnyHash {
+    // Get the previous hash (or zero hash if None)
+    let prev = previous_hash.cloned().unwrap_or_else(|| new_hash.zero());
+
+    // Hash the previous hash and new hash together using the same algorithm as the previous hash
+    // Chain: data_i = H(data_{i-1} || state_i) = H(previous_hash || new_hash)
+    prev.digest(new_hash)
+}
+
+fn compute_chained_hashes(hashes: &[AnyHash]) -> Vec<AnyHash> {
+    hashes
+        .iter()
+        .scan(None, |prev, hash| {
+            let chained = compute_chained_hash(prev.as_ref(), hash);
+            *prev = Some(chained.clone());
+            Some(chained)
+        })
+        .collect()
+}
+
 fn make_update_transaction(
     contract_address: Address,
     key: &KeyPair,
@@ -277,9 +297,9 @@ fn it_can_update_contract_with_hashes() {
 
     assert_eq!(receipt, None);
     assert_eq!(oracle_contract.hashes.len(), 3);
-    assert_eq!(oracle_contract.hashes[0], make_hash(1));
-    assert_eq!(oracle_contract.hashes[1], make_hash(2));
-    assert_eq!(oracle_contract.hashes[2], make_hash(3));
+    // Verify the hashes are chained correctly
+    let expected_hashes = compute_chained_hashes(&vec![make_hash(1), make_hash(2), make_hash(3)]);
+    assert_eq!(oracle_contract.hashes, expected_hashes);
 
     assert_eq!(
         tx_logger.logs,
@@ -327,11 +347,26 @@ fn it_implements_ring_buffer() {
 
     // Should still have exactly hash_count hashes
     assert_eq!(oracle_contract.hashes.len(), 10);
-    // The first 3 should be removed (hashes 0, 1, 2)
-    // The last 3 should be the new ones (hashes 10, 11, 12)
-    assert_eq!(oracle_contract.hashes[0], make_hash(3)); // Oldest remaining
-    assert_eq!(oracle_contract.hashes[9], make_hash(12)); // Newest
-                                                          // Should have a receipt with the removed hashes
+    // The first 3 chained hashes should be removed
+    // The remaining hashes (indices 3-9) are still valid as they were chained from previous hashes
+    // Compute expected: original chained hashes for indices 3-9, then new chained hashes
+    let expected_original = compute_chained_hashes(&initial_hashes);
+    let expected_remaining: Vec<AnyHash> = expected_original[3..].to_vec();
+    // New hashes are chained from the last remaining hash (index 9 of original)
+    let expected_new: Vec<AnyHash> = new_hashes
+        .iter()
+        .scan(expected_remaining.last().cloned(), |prev, hash| {
+            let chained = compute_chained_hash(prev.as_ref(), hash);
+            *prev = Some(chained.clone());
+            Some(chained)
+        })
+        .collect();
+    let expected_all: Vec<AnyHash> = expected_remaining
+        .into_iter()
+        .chain(expected_new.into_iter())
+        .collect();
+    assert_eq!(oracle_contract.hashes, expected_all);
+    // Should have a receipt with the removed hashes
     assert!(receipt.is_some());
 
     // Test revert - should restore the removed hashes
@@ -347,9 +382,10 @@ fn it_implements_ring_buffer() {
             &mut tx_logger2,
         )
         .expect("Failed to revert");
-    // Should be back to the original 10 hashes
+    // Should be back to the original 10 chained hashes
     assert_eq!(oracle_contract.hashes.len(), 10);
-    assert_eq!(oracle_contract.hashes, initial_hashes);
+    let expected_initial = compute_chained_hashes(&initial_hashes);
+    assert_eq!(oracle_contract.hashes, expected_initial);
 }
 
 #[test]
@@ -532,6 +568,9 @@ fn it_can_apply_and_revert_transaction() {
         .expect("Failed to update contract");
 
     assert_eq!(oracle_contract.hashes.len(), 2);
+    // Verify the hashes are chained correctly
+    let expected_hashes = compute_chained_hashes(&hashes);
+    assert_eq!(oracle_contract.hashes, expected_hashes);
 }
 
 #[test]
