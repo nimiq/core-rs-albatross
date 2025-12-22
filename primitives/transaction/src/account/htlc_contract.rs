@@ -1,8 +1,13 @@
-use std::{borrow::Cow, str::FromStr};
+use std::{
+    borrow::Cow,
+    io::{self, Write},
+    str::FromStr,
+};
 
 use nimiq_hash::{
     sha512::{Sha512Hash, Sha512Hasher},
-    Blake2bHash, Blake2bHasher, Hasher, Keccak256Hash, Keccak256Hasher, Sha256Hash, Sha256Hasher,
+    Blake2bHash, Blake2bHasher, Hasher, Keccak256Hash, Keccak256Hasher, SerializeContent,
+    Sha256Hash, Sha256Hasher,
 };
 use nimiq_keys::Address;
 use nimiq_macros::{add_hex_io_fns_typed_arr, add_serialization_fns_typed_arr, create_typed_array};
@@ -121,6 +126,62 @@ impl AnyHash {
             AnyHash::Sha512(hash) => &hash.0,
             AnyHash::Keccak256(hash) => &hash.0,
         }
+    }
+
+    /// Returns a zero hash of the same type as this hash
+    pub fn zero(&self) -> Self {
+        match self {
+            AnyHash::Blake2b(_) => AnyHash::Blake2b(AnyHash32::default()),
+            AnyHash::Sha256(_) => AnyHash::Sha256(AnyHash32::default()),
+            AnyHash::Sha512(_) => AnyHash::Sha512(AnyHash64::default()),
+            AnyHash::Keccak256(_) => AnyHash::Keccak256(AnyHash32::default()),
+        }
+    }
+
+    /// Hashes this hash together with another hash using the same algorithm as this hash.
+    /// Returns a new hash of the same type.
+    /// Computes H(self || other).
+    pub fn digest(&self, other: &Self) -> Self {
+        match self {
+            AnyHash::Blake2b(_) => AnyHash::Blake2b(AnyHash32(
+                Blake2bHasher::default()
+                    .chain(self)
+                    .chain(other)
+                    .finish()
+                    .into(),
+            )),
+            AnyHash::Sha256(_) => AnyHash::Sha256(AnyHash32(
+                Sha256Hasher::default()
+                    .chain(self)
+                    .chain(other)
+                    .finish()
+                    .into(),
+            )),
+            AnyHash::Sha512(_) => AnyHash::Sha512(AnyHash64(
+                Sha512Hasher::default()
+                    .chain(self)
+                    .chain(other)
+                    .finish()
+                    .into(),
+            )),
+            AnyHash::Keccak256(_) => AnyHash::Keccak256(AnyHash32(
+                Keccak256Hasher::default()
+                    .chain(self)
+                    .chain(other)
+                    .finish()
+                    .into(),
+            )),
+        }
+    }
+}
+
+impl SerializeContent for AnyHash {
+    fn serialize_content<W: Write, H: nimiq_hash::HashOutput>(
+        &self,
+        writer: &mut W,
+    ) -> io::Result<()> {
+        writer.write_all(self.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -933,6 +994,9 @@ mod serde_derive {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
+    use nimiq_hash::{sha512::Sha512Hasher, Blake2bHasher, Hasher, Keccak256Hasher, Sha256Hasher};
     use nimiq_serde::{Deserialize, Serialize};
     use nimiq_test_log::test;
 
@@ -1138,5 +1202,115 @@ mod tests {
         let bin = hex::decode("0103013913543fa4e5b6c41176ee552d314db28d786bd87f103ee25f49f4e2555e51d1bff5b88ef94cd7c2ba354a8e4b50fef063ab1659646570b34effbb48f36ecb4c08600ec9f0d44dc8d43275c705d7780caa31497d2620da4d7838d10574a6dfa100410b82decb73b7c6f4047b4fb504000c364edd9a3337e5194b60f896d31904ccab8bf310cf808fd98a9b3b13096b6701d53bbba8402465d08cb99948c8407500")
             .unwrap();
         let _ = PoWOutgoingHTLCTransactionProof::deserialize_from_vec(&bin).unwrap();
+    }
+
+    #[test]
+    fn digest_preserves_hash_type() {
+        // Test that digest preserves the hash type
+        let blake2b_hash = AnyHash::Blake2b(AnyHash32([1; 32]));
+        let other = AnyHash::Blake2b(AnyHash32([2; 32]));
+        let result = blake2b_hash.digest(&other);
+        assert!(matches!(result, AnyHash::Blake2b(_)));
+
+        let sha256_hash = AnyHash::Sha256(AnyHash32([1; 32]));
+        let result = sha256_hash.digest(&other);
+        assert!(matches!(result, AnyHash::Sha256(_)));
+
+        let sha512_hash = AnyHash::Sha512(AnyHash64([1; 64]));
+        let other_sha512 = AnyHash::Sha512(AnyHash64([2; 64]));
+        let result = sha512_hash.digest(&other_sha512);
+        assert!(matches!(result, AnyHash::Sha512(_)));
+
+        let keccak256_hash = AnyHash::Keccak256(AnyHash32([1; 32]));
+        let result = keccak256_hash.digest(&other);
+        assert!(matches!(result, AnyHash::Keccak256(_)));
+    }
+
+    #[test]
+    fn digest_order_matters() {
+        // Test that digest(a, b) != digest(b, a) - order matters
+        let hash_a = AnyHash::Blake2b(AnyHash32([0xAA; 32]));
+        let hash_b = AnyHash::Blake2b(AnyHash32([0xBB; 32]));
+
+        let result_ab = hash_a.digest(&hash_b);
+        let result_ba = hash_b.digest(&hash_a);
+
+        assert_ne!(
+            result_ab, result_ba,
+            "digest(a, b) should not equal digest(b, a)"
+        );
+    }
+
+    #[test]
+    fn digest_concatenates_in_correct_order() {
+        // Test that digest(self, other) = H(self || other) by computing manually
+        let hash_a = AnyHash::Blake2b(AnyHash32([0xAA; 32]));
+        let hash_b = AnyHash::Blake2b(AnyHash32([0xBB; 32]));
+
+        // Compute expected: H(a || b) manually
+        let mut hasher = Blake2bHasher::default();
+        hasher.write_all(hash_a.as_bytes()).unwrap();
+        hasher.write_all(hash_b.as_bytes()).unwrap();
+        let expected = AnyHash::Blake2b(AnyHash32(hasher.finish().into()));
+
+        // Compare with digest result
+        let result = hash_a.digest(&hash_b);
+        assert_eq!(result, expected, "digest should compute H(self || other)");
+
+        // Verify reverse order gives different result
+        let mut hasher = Blake2bHasher::default();
+        hasher.write_all(hash_b.as_bytes()).unwrap();
+        hasher.write_all(hash_a.as_bytes()).unwrap();
+        let expected_reverse = AnyHash::Blake2b(AnyHash32(hasher.finish().into()));
+
+        let result_reverse = hash_b.digest(&hash_a);
+        assert_eq!(
+            result_reverse, expected_reverse,
+            "digest should compute H(self || other)"
+        );
+        assert_ne!(result, result_reverse, "Order should matter");
+    }
+
+    #[test]
+    fn digest_works_for_all_hash_types() {
+        // Test Blake2b
+        let a_blake2b = AnyHash::Blake2b(AnyHash32([1; 32]));
+        let b_blake2b = AnyHash::Blake2b(AnyHash32([2; 32]));
+        let result_blake2b = a_blake2b.digest(&b_blake2b);
+        let mut hasher = Blake2bHasher::default();
+        hasher.write_all(a_blake2b.as_bytes()).unwrap();
+        hasher.write_all(b_blake2b.as_bytes()).unwrap();
+        let expected_blake2b = AnyHash::Blake2b(AnyHash32(hasher.finish().into()));
+        assert_eq!(result_blake2b, expected_blake2b);
+
+        // Test Sha256
+        let a_sha256 = AnyHash::Sha256(AnyHash32([1; 32]));
+        let b_sha256 = AnyHash::Sha256(AnyHash32([2; 32]));
+        let result_sha256 = a_sha256.digest(&b_sha256);
+        let mut hasher = Sha256Hasher::default();
+        hasher.write_all(a_sha256.as_bytes()).unwrap();
+        hasher.write_all(b_sha256.as_bytes()).unwrap();
+        let expected_sha256 = AnyHash::Sha256(AnyHash32(hasher.finish().into()));
+        assert_eq!(result_sha256, expected_sha256);
+
+        // Test Sha512
+        let a_sha512 = AnyHash::Sha512(AnyHash64([1; 64]));
+        let b_sha512 = AnyHash::Sha512(AnyHash64([2; 64]));
+        let result_sha512 = a_sha512.digest(&b_sha512);
+        let mut hasher = Sha512Hasher::default();
+        hasher.write_all(a_sha512.as_bytes()).unwrap();
+        hasher.write_all(b_sha512.as_bytes()).unwrap();
+        let expected_sha512 = AnyHash::Sha512(AnyHash64(hasher.finish().into()));
+        assert_eq!(result_sha512, expected_sha512);
+
+        // Test Keccak256
+        let a_keccak256 = AnyHash::Keccak256(AnyHash32([1; 32]));
+        let b_keccak256 = AnyHash::Keccak256(AnyHash32([2; 32]));
+        let result_keccak256 = a_keccak256.digest(&b_keccak256);
+        let mut hasher = Keccak256Hasher::default();
+        hasher.write_all(a_keccak256.as_bytes()).unwrap();
+        hasher.write_all(b_keccak256.as_bytes()).unwrap();
+        let expected_keccak256 = AnyHash::Keccak256(AnyHash32(hasher.finish().into()));
+        assert_eq!(result_keccak256, expected_keccak256);
     }
 }
