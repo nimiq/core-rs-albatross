@@ -693,6 +693,54 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionsProof
     }
 }
 
+#[cfg(feature = "full")]
+impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestKeccak256TransactionProof {
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &Arc<RwLock<Blockchain>>,
+    ) -> Result<ResponseKeccak256TransactionProof, ResponseKeccak256TransactionProofError> {
+        // Keccak256 proof generation requires a macro block context.
+        if !Policy::is_macro_block_at(self.block_number) {
+            return Err(ResponseKeccak256TransactionProofError::NotAMacroBlock(
+                self.block_number,
+            ));
+        }
+
+        let blockchain = blockchain.read();
+
+        // Keccak256 proof generation requires the history index (to map tx hash -> leaf index).
+        let history_index = blockchain
+            .history_store
+            .history_index()
+            .ok_or(ResponseKeccak256TransactionProofError::NotSupported)?;
+
+        let leaf = history_index
+            .get_leaf_index_by_tx_hash(&self.hash, None)
+            .ok_or(ResponseKeccak256TransactionProofError::TransactionNotFound)?;
+
+        let block = blockchain
+            .chain_store
+            .get_block_at(self.block_number, false, None)
+            .map_err(|_| {
+                ResponseKeccak256TransactionProofError::BlockNotFound(self.block_number)
+            })?;
+
+        let proof = blockchain
+            .history_store
+            .get_keccak256_proof(self.block_number, leaf.index as usize, None)
+            .ok_or(ResponseKeccak256TransactionProofError::CouldntProveInclusion)?;
+
+        let root = blockchain
+            .history_store
+            .get_keccak256_history_root(self.block_number, None)
+            .ok_or(ResponseKeccak256TransactionProofError::CouldntProveInclusion)?;
+
+        Ok(ResponseKeccak256TransactionProof { proof, root, block })
+    }
+}
+
+#[cfg(feature = "full")]
 impl RequestTransactionReceiptsByAddress {
     const MAX_RECEIPTS: u16 = 500;
 }
