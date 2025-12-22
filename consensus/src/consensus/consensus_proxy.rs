@@ -36,8 +36,9 @@ use crate::{
     consensus::{remote_data_store::RemoteDataStore, SyncProgress},
     messages::{
         AddressNotification, AddressSubscriptionOperation, AddressSubscriptionTopic,
-        RequestBlocksProof, RequestSubscribeToAddress, RequestTransactionReceiptsByAddress,
-        RequestTransactionsProof, ResponseBlocksProof,
+        RequestBlocksProof, RequestKeccak256TransactionProof, RequestSubscribeToAddress,
+        RequestTransactionReceiptsByAddress, RequestTransactionsProof, ResponseBlocksProof,
+        ResponseKeccak256TransactionProof,
     },
     ConsensusEvent,
 };
@@ -257,6 +258,90 @@ impl<N: Network> ConsensusProxy<N> {
                 OutboundRequestError::NoReceiver,
             )),
         }
+    }
+
+    /// Requests a Keccak256-based Merkle proof for a transaction from multiple peers.
+    ///
+    /// This function requests a Keccak256 transaction proof for the given transaction hash
+    /// at the specified macro block number. The proof can be used to verify transaction
+    /// inclusion using Ethereum-compatible tools and libraries.
+    ///
+    /// # Arguments
+    /// * `tx_hash` - The transaction hash to get a proof for
+    /// * `block_number` - The macro block number (checkpoint or election) to use as proof context
+    /// * `min_peers` - Minimum number of peers that must support Keccak256 history
+    ///
+    /// # Returns
+    /// * `Ok(ResponseKeccak256TransactionProof)` - The proof, root, and block from a peer
+    /// * `Err(RequestError)` - If not enough peers are available or no valid response is received
+    ///
+    /// # Errors
+    /// This function will fail if:
+    /// - Not enough peers support `Services::KECCAK256_HISTORY`
+    /// - All peers return errors or cannot provide the proof
+    /// - The block number is not a macro block
+    pub async fn request_keccak256_transaction_proof(
+        &self,
+        tx_hash: Blake2bHash,
+        block_number: u32,
+        min_peers: usize,
+    ) -> Result<ResponseKeccak256TransactionProof, RequestError> {
+        // Get peers that support Keccak256 history
+        let peers = self
+            .get_peers_for_service(Services::KECCAK256_HISTORY, min_peers)
+            .await?;
+
+        // Try each peer until we get a valid response
+        for peer_id in peers {
+            log::debug!(
+                peer_id = %peer_id,
+                tx_hash = %tx_hash,
+                block_number = %block_number,
+                "Requesting Keccak256 transaction proof from peer",
+            );
+
+            let response = self
+                .network
+                .request::<RequestKeccak256TransactionProof>(
+                    RequestKeccak256TransactionProof {
+                        hash: tx_hash.clone(),
+                        block_number,
+                    },
+                    peer_id,
+                )
+                .await;
+
+            match response {
+                Ok(Ok(proof_response)) => {
+                    log::debug!(
+                        peer_id = %peer_id,
+                        "Successfully obtained Keccak256 transaction proof from peer",
+                    );
+                    return Ok(proof_response);
+                }
+                Ok(Err(error)) => {
+                    log::debug!(
+                        peer_id = %peer_id,
+                        %error,
+                        "Peer could not provide Keccak256 transaction proof",
+                    );
+                    // Continue to next peer
+                }
+                Err(error) => {
+                    log::debug!(
+                        peer_id = %peer_id,
+                        %error,
+                        "Error requesting Keccak256 transaction proof from peer",
+                    );
+                    // Continue to next peer
+                }
+            }
+        }
+
+        // If we get here, all peers failed
+        Err(RequestError::OutboundRequest(
+            OutboundRequestError::NoReceiver,
+        ))
     }
 
     /// Returns peers that support all requested services (e.g. full blocks, history, mempool).

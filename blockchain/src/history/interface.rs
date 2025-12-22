@@ -16,6 +16,7 @@ use nimiq_transaction::{
 };
 use nimiq_utils::merkle::MerklePath;
 
+use super::utils::EpochBasedIndex;
 use crate::HistoryTreeChunk;
 
 /// Defines several methods to interact with a history store.
@@ -236,6 +237,16 @@ pub trait HistoryIndexInterface: HistoryInterface {
         raw_tx_hash: &Blake2bHash,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<HistoricTransaction>;
+
+    /// Returns the epoch number and leaf index corresponding to the given transaction hash.
+    ///
+    /// This is the original (unsorted) leaf index within the epoch, which can be used for
+    /// Keccak256 proof generation via [`HistoryInterface::get_keccak256_proof`].
+    fn get_leaf_index_by_tx_hash(
+        &self,
+        raw_tx_hash: &Blake2bHash,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<EpochBasedIndex>;
 
     /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
     /// address. It fetches the transactions from most recent to least recent up to the maximum

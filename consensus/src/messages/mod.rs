@@ -17,7 +17,7 @@ use nimiq_block::{
 #[cfg(feature = "full")]
 use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_blockchain_interface::Direction;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, SerializeContent};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, Keccak256Hash, SerializeContent};
 use nimiq_keys::Address;
 use nimiq_macros::test_max_req_size;
 use nimiq_mmr::mmr::proof::SizeProof;
@@ -30,6 +30,7 @@ use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof,
 };
+use nimiq_utils::merkle::MerklePath;
 use thiserror::Error;
 
 use crate::error::SubscribeToAddressesError;
@@ -546,6 +547,91 @@ impl RequestCommon for RequestTransactionsProof {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 213;
     type Response = Result<ResponseTransactionsProof, ResponseTransactionProofError>;
+    const MAX_REQUESTS: u32 = 1000;
+}
+
+/// Response containing a Keccak256-based Merkle proof for a transaction.
+#[derive(Serialize, Deserialize)]
+pub struct ResponseKeccak256TransactionProof {
+    /// The Keccak256 Merkle proof (sorted tree, OpenZeppelin-compatible).
+    pub proof: MerklePath<Keccak256Hash>,
+    /// The Keccak256 root that this proof is expected to match.
+    pub root: Keccak256Hash,
+    /// Macro block used as proof context (checkpoint or election block).
+    pub block: Block,
+}
+
+/// Errors returned when generating a Keccak256 transaction proof in response to a [`RequestKeccak256TransactionProof`].
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum ResponseKeccak256TransactionProofError {
+    #[error("keccak256 proofs are disabled on this node")]
+    NotSupported,
+    #[error("block {0} is not a macro block")]
+    NotAMacroBlock(u32),
+    #[error("Block not found: {0}")]
+    BlockNotFound(u32),
+    #[error("transaction not found")]
+    TransactionNotFound,
+    #[error("couldn't prove inclusion")]
+    CouldntProveInclusion,
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
+}
+
+/// Request a Keccak256-based Merkle proof of inclusion for a transaction.
+///
+/// `block_number` must be a macro block (checkpoint or election). The proof is constructed for the
+/// epoch/batch up to that macro block.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestKeccak256TransactionProof {
+    pub hash: Blake2bHash,
+    pub block_number: u32,
+}
+
+impl RequestCommon for RequestKeccak256TransactionProof {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 218;
+    type Response =
+        Result<ResponseKeccak256TransactionProof, ResponseKeccak256TransactionProofError>;
+    const MAX_REQUESTS: u32 = 1000;
+}
+
+/// Response containing the Keccak256 history root for a macro block.
+#[derive(Serialize, Deserialize)]
+pub struct ResponseKeccak256HistoryRoot {
+    /// The Keccak256 history root (sorted Merkle tree root) for the epoch/batch up to `block`.
+    pub root: Keccak256Hash,
+    /// Macro block used as context (checkpoint or election block).
+    pub block: Block,
+}
+
+/// Errors returned when fetching the Keccak256 history root in response to a [`RequestKeccak256HistoryRoot`].
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum ResponseKeccak256HistoryRootError {
+    #[error("keccak256 proofs are disabled on this node")]
+    NotSupported,
+    #[error("block {0} is not a macro block")]
+    NotAMacroBlock(u32),
+    #[error("Block not found: {0}")]
+    BlockNotFound(u32),
+    #[error("history root not found")]
+    HistoryNotFound,
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
+}
+
+/// Request the Keccak256 history root for a macro block (checkpoint or election).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestKeccak256HistoryRoot {
+    pub block_number: u32,
+}
+
+impl RequestCommon for RequestKeccak256HistoryRoot {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 219;
+    type Response = Result<ResponseKeccak256HistoryRoot, ResponseKeccak256HistoryRootError>;
     const MAX_REQUESTS: u32 = 1000;
 }
 

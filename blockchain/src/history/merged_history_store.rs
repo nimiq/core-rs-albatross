@@ -17,7 +17,10 @@ use nimiq_transaction::{
 };
 use nimiq_utils::merkle::MerklePath;
 
-use super::interface::{HistoryIndexInterface, HistoryInterface};
+use super::{
+    interface::{HistoryIndexInterface, HistoryInterface},
+    utils::EpochBasedIndex,
+};
 
 /// A wrapper around two history stores, one for the pre-genesis epoch and one for the main epoch.
 #[derive(Debug)]
@@ -381,6 +384,20 @@ impl<S: HistoryInterface + HistoryIndexInterface> HistoryIndexInterface for Hist
                 self.pre_genesis
                     .as_ref()?
                     .get_hist_tx_by_hash(raw_tx_hash, None)
+            })
+    }
+
+    fn get_leaf_index_by_tx_hash(
+        &self,
+        raw_tx_hash: &Blake2bHash,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<EpochBasedIndex> {
+        self.main
+            .get_leaf_index_by_tx_hash(raw_tx_hash, txn_option)
+            .or_else(|| {
+                self.pre_genesis
+                    .as_ref()?
+                    .get_leaf_index_by_tx_hash(raw_tx_hash, None)
             })
     }
 
