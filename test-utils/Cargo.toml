@@ -42,8 +42,8 @@ rand = "0.9"
 rand_chacha = "0.9"
 rand_core_compat = { version = "0.1", features = ["rand_core_0_6", "rand_core_0_9"] }
 serde = "1.0"
-tempfile = "3.23"
-tokio = { version = "1.47", features = ["rt", "time", "tracing"] }
+tempfile = "3.24"
+tokio = { version = "1.49", features = ["rt", "time", "tracing"] }
 tokio-stream = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

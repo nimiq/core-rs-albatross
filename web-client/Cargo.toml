@@ -26,7 +26,7 @@ ark-serialize = "0.4"
 futures = { workspace = true }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 hex = "0.4"
-idb = "0.6.4"
+idb = "0.6.5"
 js-sys = "0.3"
 log = { workspace = true }
 rand = "0.9"
@@ -34,7 +34,7 @@ serde = "1.0"
 serde_bytes = "0.11"
 serde_json = "1.0"
 serde-wasm-bindgen = "0.6"
-tokio = { version = "1.47", features = ["sync"] }
+tokio = { version = "1.49", features = ["sync"] }
 tsify = { version = "0.5", default-features = false, features = ["js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
