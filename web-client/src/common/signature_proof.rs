@@ -6,10 +6,10 @@ use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "primitives")]
-use crate::common::address::Address;
-#[cfg(feature = "primitives")]
 use crate::common::transaction::PlainTransactionProofType;
 use crate::common::transaction::{PlainStandardProof, PlainTransactionProof};
+#[cfg(feature = "primitives")]
+use crate::common::{address::Address, merkle_path::MerklePath};
 #[cfg(feature = "primitives")]
 use crate::primitives::{
     es256_public_key::ES256PublicKey, es256_signature::ES256Signature, public_key::PublicKey,
@@ -184,6 +184,12 @@ impl SignatureProof {
                 JsValue::unchecked_into(key.into())
             }
         }
+    }
+
+    /// The embedded merkle path.
+    #[wasm_bindgen(getter, js_name = merklePath)]
+    pub fn merkle_path(&self) -> MerklePath {
+        self.inner.merkle_path.clone().into()
     }
 
     /// Serializes the proof to a byte array, e.g. for assigning it to a `transaction.proof` field.
