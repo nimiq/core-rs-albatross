@@ -1,7 +1,7 @@
 use nimiq_keys::Address;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::AccountType;
-use nimiq_primitives::{account::AccountError, coin::Coin};
+use nimiq_primitives::{account::AccountError, coin::Coin, transaction::TransactionError};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::account::htlc_contract::AnyHash;
 #[cfg(feature = "interaction-traits")]
@@ -75,6 +75,61 @@ impl OracleContract {
         }
 
         Ok(())
+    }
+
+    /// Gets the hash type from the first hash in the contract, if any.
+    /// Returns None if the contract has no hashes yet.
+    fn get_hash_type(&self) -> Option<HashType> {
+        self.hashes.first().map(HashType::from)
+    }
+
+    /// Validates that all hashes in the provided vector are of the same type,
+    /// and that they match the contract's hash type (if the contract already has hashes).
+    fn validate_hash_types(&self, new_hashes: &[AnyHash]) -> Result<(), AccountError> {
+        if new_hashes.is_empty() {
+            return Ok(());
+        }
+
+        // Determine the expected hash type
+        let expected_type = if let Some(contract_type) = self.get_hash_type() {
+            // Contract already has hashes, use that type
+            contract_type
+        } else {
+            // Contract is empty, use the type of the first new hash
+            HashType::from(&new_hashes[0])
+        };
+
+        // Validate all new hashes match the expected type
+        if new_hashes
+            .iter()
+            .all(|hash| HashType::from(hash) == expected_type)
+        {
+            Ok(())
+        } else {
+            Err(AccountError::InvalidTransaction(
+                TransactionError::InvalidData,
+            ))
+        }
+    }
+}
+
+/// Helper enum to represent the hash type without the actual hash value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HashType {
+    Blake2b,
+    Sha256,
+    Sha512,
+    Keccak256,
+}
+
+impl HashType {
+    fn from(hash: &AnyHash) -> Self {
+        match hash {
+            AnyHash::Blake2b(_) => HashType::Blake2b,
+            AnyHash::Sha256(_) => HashType::Sha256,
+            AnyHash::Sha512(_) => HashType::Sha512,
+            AnyHash::Keccak256(_) => HashType::Keccak256,
+        }
     }
 }
 
@@ -151,6 +206,9 @@ impl AccountTransactionInteraction for OracleContract {
                     if !proof.is_signed_by(&self.owner) {
                         return Err(AccountError::InvalidSignature);
                     }
+
+                    // Validate that all new hashes match the contract's hash type
+                    self.validate_hash_types(&hashes)?;
 
                     // Implement ring buffer: remove oldest hashes if we would exceed hash_count
                     let new_hash_count = self.hashes.len() + hashes.len();

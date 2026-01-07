@@ -69,6 +69,25 @@ fn make_hash(value: u8) -> AnyHash {
     AnyHash::Blake2b(AnyHash32::from([value; 32]))
 }
 
+fn make_hash_blake2b(value: u8) -> AnyHash {
+    AnyHash::Blake2b(AnyHash32::from([value; 32]))
+}
+
+fn make_hash_sha256(value: u8) -> AnyHash {
+    use nimiq_hash::{Hasher, Sha256Hasher};
+    AnyHash::from(Sha256Hasher::default().digest(&[value; 32]))
+}
+
+fn make_hash_sha512(value: u8) -> AnyHash {
+    use nimiq_hash::{sha512::Sha512Hasher, Hasher};
+    AnyHash::from(Sha512Hasher::default().digest(&[value; 32]))
+}
+
+fn make_hash_keccak256(value: u8) -> AnyHash {
+    use nimiq_hash::{Hasher, Keccak256Hasher};
+    AnyHash::from(Keccak256Hasher::default().digest(&[value; 32]))
+}
+
 fn make_update_transaction(
     contract_address: Address,
     key: &KeyPair,
@@ -643,4 +662,168 @@ fn it_can_restore_from_pruned_receipt() {
     assert_eq!(restored.owner, original_owner);
     assert_eq!(restored.hash_count, original_hash_count);
     assert_eq!(restored.hashes, original_hashes);
+}
+
+#[test]
+fn it_rejects_mixing_hash_types() {
+    let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
+
+    let block_state = BlockState::new(1, 1);
+
+    // First, add Blake2b hashes
+    let blake2b_hashes = vec![make_hash_blake2b(1), make_hash_blake2b(2)];
+    let tx1 = make_update_transaction(Address([1u8; 20]), &key_1, blake2b_hashes.clone());
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_incoming_transaction(
+        &mut oracle_contract,
+        &tx1,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+    assert!(result.is_ok(), "Should accept Blake2b hashes");
+    assert_eq!(oracle_contract.hashes.len(), 2);
+
+    // Try to add Sha256 hashes - should fail
+    let sha256_hashes = vec![make_hash_sha256(3)];
+    let tx2 = make_update_transaction(Address([1u8; 20]), &key_1, sha256_hashes);
+    let mut tx_logger2 = TransactionLog::empty();
+    let result = accounts.test_commit_incoming_transaction(
+        &mut oracle_contract,
+        &tx2,
+        &block_state,
+        &mut tx_logger2,
+        true,
+    );
+    assert_eq!(
+        result,
+        Err(AccountError::InvalidTransaction(
+            TransactionError::InvalidData
+        )),
+        "Should reject Sha256 hashes when contract uses Blake2b"
+    );
+    // Verify the contract state hasn't changed
+    assert_eq!(oracle_contract.hashes.len(), 2);
+
+    // Try to add Sha512 hashes - should fail
+    let sha512_hashes = vec![make_hash_sha512(4)];
+    let tx3 = make_update_transaction(Address([1u8; 20]), &key_1, sha512_hashes);
+    let mut tx_logger3 = TransactionLog::empty();
+    let result = accounts.test_commit_incoming_transaction(
+        &mut oracle_contract,
+        &tx3,
+        &block_state,
+        &mut tx_logger3,
+        true,
+    );
+    assert_eq!(
+        result,
+        Err(AccountError::InvalidTransaction(
+            TransactionError::InvalidData
+        )),
+        "Should reject Sha512 hashes when contract uses Blake2b"
+    );
+    // Verify the contract state hasn't changed
+    assert_eq!(oracle_contract.hashes.len(), 2);
+
+    // Try to add Keccak256 hashes - should fail
+    let keccak256_hashes = vec![make_hash_keccak256(5)];
+    let tx4 = make_update_transaction(Address([1u8; 20]), &key_1, keccak256_hashes);
+    let mut tx_logger4 = TransactionLog::empty();
+    let result = accounts.test_commit_incoming_transaction(
+        &mut oracle_contract,
+        &tx4,
+        &block_state,
+        &mut tx_logger4,
+        true,
+    );
+    assert_eq!(
+        result,
+        Err(AccountError::InvalidTransaction(
+            TransactionError::InvalidData
+        )),
+        "Should reject Keccak256 hashes when contract uses Blake2b"
+    );
+    // Verify the contract state hasn't changed
+    assert_eq!(oracle_contract.hashes.len(), 2);
+
+    // Adding more Blake2b hashes should still work
+    let more_blake2b_hashes = vec![make_hash_blake2b(6), make_hash_blake2b(7)];
+    let tx5 = make_update_transaction(Address([1u8; 20]), &key_1, more_blake2b_hashes.clone());
+    let mut tx_logger5 = TransactionLog::empty();
+    let result = accounts.test_commit_incoming_transaction(
+        &mut oracle_contract,
+        &tx5,
+        &block_state,
+        &mut tx_logger5,
+        true,
+    );
+    assert!(result.is_ok(), "Should accept more Blake2b hashes");
+    assert_eq!(oracle_contract.hashes.len(), 4);
+}
+
+#[test]
+fn it_allows_different_hash_types_in_different_contracts() {
+    let (accounts, mut oracle_contract1, key_1, _key_2) = init_tree();
+    let mut rng = test_rng(true);
+    let key_3 = KeyPair::generate(&mut rng);
+    let oracle_contract2 = OracleContract {
+        balance: 1000.try_into().unwrap(),
+        owner: Address::from(&key_3.public),
+        hash_count: 10,
+        hashes: Vec::new(),
+    };
+
+    let accounts2 = TestCommitRevert::with_initial_state(&[
+        (
+            Address::from(&key_3.public),
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(10000),
+            }),
+        ),
+        (
+            Address([2u8; 20]),
+            Account::Oracle(oracle_contract2.clone()),
+        ),
+    ]);
+
+    let block_state = BlockState::new(1, 1);
+
+    // Contract 1 uses Blake2b
+    let blake2b_hashes = vec![make_hash_blake2b(1)];
+    let tx1 = make_update_transaction(Address([1u8; 20]), &key_1, blake2b_hashes);
+    let mut tx_logger1 = TransactionLog::empty();
+    let result = accounts.test_commit_incoming_transaction(
+        &mut oracle_contract1,
+        &tx1,
+        &block_state,
+        &mut tx_logger1,
+        true,
+    );
+    assert!(result.is_ok(), "Contract 1 should accept Blake2b hashes");
+
+    // Contract 2 uses Sha256
+    let mut oracle_contract2_mut = oracle_contract2;
+    let sha256_hashes = vec![make_hash_sha256(1)];
+    let tx2 = make_update_transaction(Address([2u8; 20]), &key_3, sha256_hashes);
+    let mut tx_logger2 = TransactionLog::empty();
+    let result = accounts2.test_commit_incoming_transaction(
+        &mut oracle_contract2_mut,
+        &tx2,
+        &block_state,
+        &mut tx_logger2,
+        true,
+    );
+    assert!(result.is_ok(), "Contract 2 should accept Sha256 hashes");
+
+    // Both contracts should have their respective hash types
+    assert_eq!(oracle_contract1.hashes.len(), 1);
+    assert_eq!(oracle_contract2_mut.hashes.len(), 1);
+    // Verify hash types are different
+    match (&oracle_contract1.hashes[0], &oracle_contract2_mut.hashes[0]) {
+        (AnyHash::Blake2b(_), AnyHash::Sha256(_)) => {
+            // Correct - different hash types in different contracts
+        }
+        _ => panic!("Contracts should have different hash types"),
+    }
 }
