@@ -1,3 +1,4 @@
+use js_sys::Array;
 use nimiq_keys::multisig::{CommitmentsBuilder, MUSIG2_PARAMETER_V};
 use nimiq_serde::Deserialize;
 use wasm_bindgen::prelude::*;
@@ -10,6 +11,7 @@ use super::{
 use crate::primitives::{
     private_key::PrivateKey,
     public_key::{PublicKey, PublicKeyAnyArrayType},
+    signature::Signature,
 };
 
 /// A partial signature is a signature of one of the co-signers in a multisig.
@@ -37,11 +39,11 @@ impl PartialSignature {
     ///
     /// Throws when a PartialSignature cannot be parsed from the argument.
     #[wasm_bindgen(js_name = fromAny)]
-    pub fn from_any(secret: &PartialSignatureAnyType) -> Result<PartialSignature, JsError> {
-        let js_value: &JsValue = secret.unchecked_ref();
+    pub fn from_any(sig: &PartialSignatureAnyType) -> Result<PartialSignature, JsError> {
+        let js_value: &JsValue = sig.unchecked_ref();
 
-        if let Ok(secret) = PartialSignature::try_from(js_value) {
-            return Ok(secret);
+        if let Ok(sig) = PartialSignature::try_from(js_value) {
+            return Ok(sig);
         }
 
         if let Ok(string) = serde_wasm_bindgen::from_value::<String>(js_value.to_owned()) {
@@ -69,6 +71,22 @@ impl PartialSignature {
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> Result<PartialSignature, JsError> {
         Self::deserialize(bytes)
+    }
+
+    pub fn combine(
+        partial_signatures: PartialSignatureAnyArrayType,
+    ) -> Result<PartialSignature, JsError> {
+        let sigs = PartialSignature::unpack_partial_signatures(&partial_signatures)?;
+        let aggregated_signature =
+            sigs.iter()
+                .sum::<nimiq_keys::multisig::partial_signature::PartialSignature>();
+        Ok(PartialSignature::from(aggregated_signature))
+    }
+
+    #[wasm_bindgen(js_name = toSignature)]
+    pub fn to_signature(&self, aggregated_commitment: Commitment) -> Signature {
+        let sig = self.inner.to_signature(aggregated_commitment.native_ref());
+        sig.into()
     }
 
     pub fn create(
@@ -168,10 +186,31 @@ impl PartialSignature {
     pub fn take_native(self) -> nimiq_keys::multisig::partial_signature::PartialSignature {
         self.inner
     }
+
+    pub fn unpack_partial_signatures(
+        sigs: &PartialSignatureAnyArrayType,
+    ) -> Result<Vec<nimiq_keys::multisig::partial_signature::PartialSignature>, JsError> {
+        // Unpack the array of sigs
+        let js_value: &JsValue = sigs.unchecked_ref();
+        let array: &Array = js_value
+            .dyn_ref()
+            .ok_or_else(|| JsError::new("`sigs` must be an array"))?;
+
+        let mut sigs = Vec::<_>::with_capacity(array.length().try_into()?);
+        for any in array.iter() {
+            let sig = PartialSignature::from_any(&any.into())?.take_native();
+            sigs.push(sig);
+        }
+
+        Ok(sigs)
+    }
 }
 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(typescript_type = "PartialSignature | string | Uint8Array")]
     pub type PartialSignatureAnyType;
+
+    #[wasm_bindgen(typescript_type = "(PartialSignature | string | Uint8Array)[]")]
+    pub type PartialSignatureAnyArrayType;
 }
