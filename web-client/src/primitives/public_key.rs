@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use js_sys::Array;
+use nimiq_keys::multisig::address::combine_public_keys;
 use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
@@ -92,6 +93,22 @@ impl PublicKey {
             return Err(JsError::new("Public key primitive: Invalid raw length"));
         }
         Self::deserialize(raw_bytes)
+    }
+
+    pub fn combinations(
+        keys: &PublicKeyAnyArrayType,
+        num_signers: usize,
+    ) -> Result<Vec<PublicKey>, JsError> {
+        let keys = PublicKey::unpack_public_keys(keys)?;
+        let combined_keys = combine_public_keys(keys, num_signers);
+        Ok(combined_keys.into_iter().map(PublicKey::from).collect())
+    }
+
+    pub fn sum(keys: &PublicKeyAnyArrayType) -> Result<PublicKey, JsError> {
+        let keys = PublicKey::unpack_public_keys(keys)?;
+        let combined_key =
+            nimiq_keys::multisig::public_key::DelinearizedPublicKey::sum_delinearized(&keys);
+        Ok(PublicKey::from(combined_key))
     }
 
     /// Creates a new public key from a byte array.

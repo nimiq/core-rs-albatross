@@ -23,6 +23,11 @@ pub struct Address {
 
 #[wasm_bindgen]
 impl Address {
+    #[wasm_bindgen(getter = NULL)]
+    pub fn null() -> Address {
+        Address::from(nimiq_keys::Address::default())
+    }
+
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> Result<Address, JsError> {
         Ok(Address::from(nimiq_keys::Address::from(

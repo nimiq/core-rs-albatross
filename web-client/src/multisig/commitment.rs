@@ -1,11 +1,13 @@
 use std::iter::Sum;
 
 use js_sys::Array;
+use nimiq_keys::multisig::{CommitmentsBuilder, MUSIG2_PARAMETER_V};
 use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
 use super::random_secret::RandomSecret;
+use crate::primitives::public_key::{PublicKey, PublicKeyAnyArrayType};
 
 /// A cryptographic commitment to a {@link RandomSecret}. The commitment is public, while the secret is, well, secret.
 #[derive(TryFromJsValue)]
@@ -44,6 +46,45 @@ impl Commitment {
         let aggregate_commitment =
             nimiq_keys::multisig::commitment::Commitment::sum(commitments.into_iter());
         Ok(Commitment::from(aggregate_commitment))
+    }
+
+    #[wasm_bindgen(js_name = sumMuSig2)]
+    pub fn sum_musig2(
+        public_keys: &PublicKeyAnyArrayType,
+        commitments: &CommitmentAnyArrayArrayType,
+        data: &[u8],
+    ) -> Result<Commitment, JsError> {
+        let public_keys = PublicKey::unpack_public_keys(public_keys)?;
+
+        let commitments = Commitment::unpack_commitments_list(commitments)?;
+
+        assert_eq!(public_keys.len(), commitments.len());
+
+        // Pack commitments into compile-time-known groups of MUSIG2_PARAMETER_V
+        let mut commitment_pairs: Vec<
+            [nimiq_keys::multisig::commitment::Commitment; MUSIG2_PARAMETER_V],
+        > = vec![];
+
+        for group in &commitments {
+            let mut commitment_pair =
+                [nimiq_keys::multisig::commitment::Commitment::default(); MUSIG2_PARAMETER_V];
+            commitment_pair.copy_from_slice(group);
+            commitment_pairs.push(commitment_pair);
+        }
+
+        let mut builder =
+            CommitmentsBuilder::with_public_commitments(public_keys[0], commitment_pairs[0]);
+
+        public_keys[1..]
+            .iter()
+            .zip(commitment_pairs[1..].iter())
+            .for_each(|(&public_key, &commitments)| {
+                builder.push_signer(public_key, commitments);
+            });
+
+        let commitment_data = builder.build(data);
+
+        Ok(Commitment::from(commitment_data.aggregate_commitment))
     }
 
     /// Parses a commitment from a {@link Commitment} instance, a hex string representation, or a byte array.

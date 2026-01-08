@@ -73,10 +73,10 @@ impl PartialSignature {
         Self::deserialize(bytes)
     }
 
-    pub fn combine(
-        partial_signatures: PartialSignatureAnyArrayType,
+    pub fn sum(
+        partial_signatures: &PartialSignatureAnyArrayType,
     ) -> Result<PartialSignature, JsError> {
-        let sigs = PartialSignature::unpack_partial_signatures(&partial_signatures)?;
+        let sigs = PartialSignature::unpack_partial_signatures(partial_signatures)?;
         let aggregated_signature =
             sigs.iter()
                 .sum::<nimiq_keys::multisig::partial_signature::PartialSignature>();
