@@ -23,6 +23,7 @@ pub struct Address {
 
 #[wasm_bindgen]
 impl Address {
+    /// The all-zeroes burn address.
     #[wasm_bindgen(getter = NULL)]
     pub fn null() -> Address {
         Address::from(nimiq_keys::Address::default())

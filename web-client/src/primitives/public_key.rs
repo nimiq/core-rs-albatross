@@ -95,6 +95,7 @@ impl PublicKey {
         Self::deserialize(raw_bytes)
     }
 
+    /// Generates all possible combinations (sums) of delinearized public keys for a given number of signers.
     pub fn combinations(
         keys: &PublicKeyAnyArrayType,
         num_signers: usize,
@@ -104,6 +105,7 @@ impl PublicKey {
         Ok(combined_keys.into_iter().map(PublicKey::from).collect())
     }
 
+    /// Sums public keys into one combined public key.
     pub fn sum(keys: &PublicKeyAnyArrayType) -> Result<PublicKey, JsError> {
         let keys = PublicKey::unpack_public_keys(keys)?;
         let combined_key =

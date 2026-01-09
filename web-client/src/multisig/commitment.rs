@@ -37,6 +37,8 @@ impl Commitment {
     }
 
     /// Sums up multiple commitments into one aggregated commitment.
+    ///
+    /// Attention: This is a simple summation, not a MuSig2 aggregation! For MuSig2 aggregation, use {@link Commitment.sumMuSig2}.
     pub fn sum(commitments: &CommitmentAnyArrayType) -> Result<Commitment, JsError> {
         let commitments = Commitment::unpack_commitments(commitments)?;
         if commitments.is_empty() {
@@ -48,24 +50,32 @@ impl Commitment {
         Ok(Commitment::from(aggregate_commitment))
     }
 
+    /// Aggregates commitments into one aggregated commitment using the MuSig2 scheme.
+    ///
+    /// - Each commitment group must correspond to the public key at the same index in the `publicKeys` array.
+    /// - The number of commitment groups and public keys must be the same.
+    /// - Each commitment group must contain exactly `MUSIG2_PARAMETER_V = 2` commitments.
+    /// - The `data` parameter is the same data that will be signed using the aggregated commitment, e.g. the serialized content of a transaction.
+    ///
+    /// Returns the aggregated commitment.
     #[wasm_bindgen(js_name = sumMuSig2)]
     pub fn sum_musig2(
         public_keys: &PublicKeyAnyArrayType,
-        commitments: &CommitmentAnyArrayArrayType,
+        commitment_groups: &CommitmentAnyArrayArrayType,
         data: &[u8],
     ) -> Result<Commitment, JsError> {
         let public_keys = PublicKey::unpack_public_keys(public_keys)?;
 
-        let commitments = Commitment::unpack_commitments_list(commitments)?;
+        let commitment_groups = Commitment::unpack_commitments_list(commitment_groups)?;
 
-        assert_eq!(public_keys.len(), commitments.len());
+        assert_eq!(public_keys.len(), commitment_groups.len());
 
         // Pack commitments into compile-time-known groups of MUSIG2_PARAMETER_V
         let mut commitment_pairs: Vec<
             [nimiq_keys::multisig::commitment::Commitment; MUSIG2_PARAMETER_V],
         > = vec![];
 
-        for group in &commitments {
+        for group in &commitment_groups {
             let mut commitment_pair =
                 [nimiq_keys::multisig::commitment::Commitment::default(); MUSIG2_PARAMETER_V];
             commitment_pair.copy_from_slice(group);

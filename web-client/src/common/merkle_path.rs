@@ -3,6 +3,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
+/// A Merkle path consisting of a sequence of hashes that can be used to verify the inclusion of a leaf in a Merkle tree.
 #[wasm_bindgen]
 pub struct MerklePath {
     inner: nimiq_utils::merkle::Blake2bMerklePath,
@@ -10,6 +11,7 @@ pub struct MerklePath {
 
 #[wasm_bindgen]
 impl MerklePath {
+    /// Returns the hashes in the Merkle path.
     #[wasm_bindgen(getter)]
     pub fn hashes(&self) -> Vec<Uint8Array> {
         self.inner
@@ -19,11 +21,13 @@ impl MerklePath {
             .collect()
     }
 
+    /// Returns the length of the Merkle path.
     #[wasm_bindgen(getter)]
     pub fn length(&self) -> usize {
         self.inner.len()
     }
 
+    /// Computes the Merkle root of the path given a leaf hash.
     #[wasm_bindgen(js_name = computeRoot)]
     pub fn compute_root(&self, leaf: &[u8]) -> Result<Vec<u8>, JsError> {
         match Blake2bHash::deserialize_from_vec(leaf) {
@@ -34,10 +38,12 @@ impl MerklePath {
         }
     }
 
+    /// Serializes the Merkle path into a byte array.
     pub fn serialize(&self) -> Vec<u8> {
         self.inner.serialize_to_vec()
     }
 
+    /// Deserializes a Merkle path from a byte array.
     pub fn deserialize(data: &[u8]) -> Result<MerklePath, JsError> {
         match nimiq_utils::merkle::Blake2bMerklePath::deserialize_from_vec(data) {
             Ok(path) => Ok(path.into()),

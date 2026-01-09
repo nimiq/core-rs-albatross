@@ -73,6 +73,9 @@ impl PartialSignature {
         Self::deserialize(bytes)
     }
 
+    /// Sums an array of partial signatures into an aggregated partial signature.
+    ///
+    /// Afterwards, use `.toSignature(aggregatedCommitment)` on the result to get the final signature.
     pub fn sum(
         partial_signatures: &PartialSignatureAnyArrayType,
     ) -> Result<PartialSignature, JsError> {
@@ -83,12 +86,19 @@ impl PartialSignature {
         Ok(PartialSignature::from(aggregated_signature))
     }
 
+    /// Converts an (aggregated) partial signature into a final signature using the aggregated commitment.
     #[wasm_bindgen(js_name = toSignature)]
     pub fn to_signature(&self, aggregated_commitment: Commitment) -> Signature {
         let sig = self.inner.to_signature(aggregated_commitment.native_ref());
         sig.into()
     }
 
+    /// Creates a new partial signature for the MuSig2 scheme.
+    ///
+    /// - `ownCommitmentPairs` must be 2 pairs of random secret and commitments generated for this signing session.
+    /// - `otherCommitments` must contain 2 commitments each for all other signers.
+    ///
+    /// Returns the created partial signature.
     pub fn create(
         own_private_key: &PrivateKey,
         own_public_key: &PublicKey,
