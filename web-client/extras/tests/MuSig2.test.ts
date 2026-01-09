@@ -46,17 +46,40 @@ describe('MuSig2', async () => {
         );
         expect(walletAddress.toUserFriendlyAddress()).toEqual(_wallet_address);
 
+        // Create public key combinations for a 2-of-3 wallet
+        const combinedPublicKeys = PublicKey.combinations(
+            [keyPairA.publicKey, keyPairB.publicKey, keyPairC.publicKey],
+            2,
+        );
+
         // Create an unsigned transaction from the multi-signature wallet
         const tx = TransactionBuilder.newBasic(walletAddress, Address.NULL, BigInt(10), 0n, 0, 5);
         expect(tx.toHex()).toEqual(_unsigned_transaction);
 
+        // Signer A and B will be signing, aggregate their public keys
+        const aggregatedPublicKey = PublicKey.sum([keyPairA.publicKey, keyPairB.publicKey]);
+        expect(aggregatedPublicKey.toHex()).toEqual(_signing_public_key);
 
-        // Create commitment pairs
+        // Ensure the signing public key is part of the combinations
+        expect(combinedPublicKeys.map(key => key.toHex()).includes(aggregatedPublicKey.toHex())).toBe(true);
+
+        // Create commitment pairs for A and B
         const commitmentPairA1 = CommitmentPair.fromHex(_commitment_pair_a_1);
         const commitmentPairA2 = CommitmentPair.fromHex(_commitment_pair_a_2);
 
         const commitmentPairB1 = CommitmentPair.fromHex(_commitment_pair_b_1);
         const commitmentPairB2 = CommitmentPair.fromHex(_commitment_pair_b_2);
+
+        // Aggregate commitments for MuSig2
+        const aggregated_commitment = Commitment.sumMuSig2(
+            [keyPairA.publicKey, keyPairB.publicKey],
+            [
+                [commitmentPairA1.commitment, commitmentPairA2.commitment],
+                [commitmentPairB1.commitment, commitmentPairB2.commitment],
+            ],
+            tx.serializeContent()
+        );
+        expect(aggregated_commitment.toHex()).toEqual(_aggregate_commitment);
 
         // Create partial signatures
         const partialSigA = PartialSignature.create(
@@ -79,30 +102,10 @@ describe('MuSig2', async () => {
         );
         expect(partialSigB.toHex()).toEqual(_partial_signature_b);
 
-        // Aggregate commitments
-        const aggregated_commitment = Commitment.sumMuSig2(
-            [keyPairA.publicKey, keyPairB.publicKey],
-            [
-                [commitmentPairA1.commitment, commitmentPairA2.commitment],
-                [commitmentPairB1.commitment, commitmentPairB2.commitment],
-            ],
-            tx.serializeContent()
-        );
-        expect(aggregated_commitment.toHex()).toEqual(_aggregate_commitment);
-
-        // Aggregate partial signatures
+        // Aggregate partial signatures and convert to final signature
         const signature = PartialSignature
             .sum([partialSigA, partialSigB])
             .toSignature(aggregated_commitment);
-
-        // Combine public keys and aggregate signer public key
-        const combinedPublicKeys = PublicKey.combinations(
-            [keyPairA.publicKey, keyPairB.publicKey, keyPairC.publicKey],
-            2,
-        );
-        const aggregatedPublicKey = PublicKey.sum([keyPairA.publicKey, keyPairB.publicKey]);
-        expect(combinedPublicKeys.map(key => key.toHex()).includes(aggregatedPublicKey.toHex())).toBe(true);
-        expect(aggregatedPublicKey.toHex()).toEqual(_signing_public_key);
 
         // Create and attach the multi-signature proof to the transaction
         const proof = SignatureProof.multiSig(aggregatedPublicKey, combinedPublicKeys, signature);
