@@ -113,5 +113,6 @@ describe('MuSig2', async () => {
 
         // Verify that everything worked correctly
         expect(tx.toHex()).toEqual(_signed_transaction);
+        expect(() => tx.verify()).not.toThrow();
     });
 });
