@@ -65,10 +65,13 @@ impl Commitment {
         data: &[u8],
     ) -> Result<Commitment, JsError> {
         let public_keys = PublicKey::unpack_public_keys(public_keys)?;
-
         let commitment_groups = Commitment::unpack_commitments_list(commitment_groups)?;
 
-        assert_eq!(public_keys.len(), commitment_groups.len());
+        if public_keys.len() != commitment_groups.len() {
+            return Err(JsError::new(
+                "The number of public keys must match the number of commitment groups",
+            ));
+        }
 
         // Pack commitments into compile-time-known groups of MUSIG2_PARAMETER_V
         let mut commitment_pairs: Vec<
