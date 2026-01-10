@@ -30,12 +30,9 @@ impl MerklePath {
     /// Computes the Merkle root of the path given a leaf hash.
     #[wasm_bindgen(js_name = computeRoot)]
     pub fn compute_root(&self, leaf: &[u8]) -> Result<Vec<u8>, JsError> {
-        match Blake2bHash::deserialize_from_vec(leaf) {
-            Ok(leaf_hash) => Ok(self.inner.compute_root(&leaf_hash).serialize_to_vec()),
-            Err(_) => Err(JsError::new(
-                "Failed to deserialize leaf: not a Blake2b hash",
-            )),
-        }
+        let leaf_hash = Blake2bHash::deserialize_from_vec(leaf)
+            .map_err(|_| JsError::new("Failed to deserialize leaf: not a Blake2b hash"))?;
+        Ok(self.inner.compute_root(&leaf_hash).serialize_to_vec())
     }
 
     /// Serializes the Merkle path into a byte array.
@@ -45,13 +42,9 @@ impl MerklePath {
 
     /// Deserializes a Merkle path from a byte array.
     pub fn deserialize(data: &[u8]) -> Result<MerklePath, JsError> {
-        match nimiq_utils::merkle::Blake2bMerklePath::deserialize_from_vec(data) {
-            Ok(path) => Ok(path.into()),
-            Err(e) => Err(JsError::new(&format!(
-                "Failed to deserialize MerklePath: {}",
-                e
-            ))),
-        }
+        nimiq_utils::merkle::Blake2bMerklePath::deserialize_from_vec(data)
+            .map(|path| path.into())
+            .map_err(|err| JsError::new(&format!("Failed to deserialize MerklePath: {}", err)))
     }
 }
 
