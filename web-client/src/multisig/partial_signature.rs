@@ -86,7 +86,7 @@ impl PartialSignature {
         Ok(PartialSignature::from(aggregated_signature))
     }
 
-    /// Converts an (aggregated) partial signature into a final signature using the aggregated commitment.
+    /// Converts a (aggregated) partial signature into a final signature using the aggregated commitment.
     #[wasm_bindgen(js_name = toSignature)]
     pub fn to_signature(&self, aggregated_commitment: Commitment) -> Signature {
         let sig = self.inner.to_signature(aggregated_commitment.native_ref());
