@@ -33,6 +33,10 @@ path = "src/rpc-schema/main.rs"
 name = "nimiq-trim-genesis-config"
 path = "src/trim-genesis-config/main.rs"
 
+[[bin]]
+name = "nimiq-polygon-bridge-monitor"
+path = "src/polygon-bridge-monitor/main.rs"
+
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["cargo"] }
@@ -40,15 +44,21 @@ convert_case = "0.10"
 hex = "0.4"
 log = { workspace = true }
 quote = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
 schemars = "1.2"
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 syn = { version = "2.0", features = ["full"] }
 thiserror = "2.0"
+tokio = { version = "1.47", features = ["full"] }
 toml = "0.9"
+env_logger = "0.11"
+axum = { version = "0.7", features = ["json"] }
 
 nimiq-bls = { workspace = true }
 nimiq-database = { workspace = true }
+nimiq-database-value = { workspace = true }
+nimiq-database-value-derive = { workspace = true }
 nimiq-genesis-builder = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
@@ -56,3 +66,6 @@ nimiq-primitives = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

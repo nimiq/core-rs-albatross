@@ -1,0 +1,28 @@
+# Example configuration file for Polygon Bridge Monitor
+# Copy this file and update with your actual values
+
+# Polygon RPC endpoint (e.g., Infura, Alchemy, or public RPC)
+polygon_rpc_url = "https://polygon-rpc.com"
+
+# Bridge contract address on Polygon (the contract that emits Burn events)
+bridge_contract_address = "0x0000000000000000000000000000000000000000"
+
+# Nimiq RPC endpoint for submitting transactions (optional - if not provided, transactions will only be logged)
+nimiq_rpc_url = "http://localhost:8648"
+
+# Oracle contract address on Nimiq (the contract that will receive the updates)
+oracle_contract_address = "NQ00 0000 0000 0000 0000 0000 0000 0000 0000"
+
+# Private key for signing Oracle update transactions (hex encoded, without 0x prefix)
+# WARNING: Keep this secure! This key must be the owner of the Oracle contract.
+oracle_owner_private_key = "0000000000000000000000000000000000000000000000000000000000000000"
+
+# Network ID for Nimiq (options: "main", "test", "unit")
+nimiq_network_id = "test"
+
+# Starting block number to monitor from (optional, defaults to latest block)
+# start_block = 50000000
+
+# Polling interval in seconds (default: 12, which matches Polygon's block time)
+# polling_interval = 12
+
