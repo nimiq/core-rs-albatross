@@ -31,7 +31,7 @@ use crate::common::{
     utils::{from_network_id, to_network_id},
 };
 #[cfg(feature = "primitives")]
-use crate::primitives::key_pair::KeyPair;
+use crate::primitives::key_pair::{KeyPair, OptionalKeyPair};
 
 /// Transactions describe a transfer of value, usually from the sender to the recipient.
 /// However, transactions can also have no value, when they are used to _signal_ a change in the staking contract.
@@ -140,14 +140,25 @@ impl Transaction {
     /// Signs the transaction with the provided key pair. Automatically determines the format
     /// of the signature proof required for the transaction.
     ///
+    /// For transactions to the staking contract (in-staking transactions), you can optionally provide
+    /// an inner key pair that represents the staker or validator. This way the staker/validator and sender
+    /// of a transaction can be different key pairs (addresses). If no inner key pair is provided, the outer
+    /// key pair is used for both signatures.
+    ///
     /// ### Limitations
     /// - HTLC redemption is not supported and will throw.
-    /// - For transaction to the staking contract, both signatures are made with the same keypair,
-    ///   so it is not possible to interact with a staker that is different from the sender address
-    ///   or using a different cold or signing key for validator transactions.
     #[cfg(feature = "primitives")]
-    pub fn sign(&mut self, key_pair: &KeyPair) -> Result<(), JsError> {
-        self.do_sign(key_pair)
+    pub fn sign(
+        &mut self,
+        key_pair: &KeyPair,
+        // Due to wasm-bindgen limitations, we need to wrap the optional argument like this:
+        // https://docs.rs/wasm-bindgen-derive/latest/wasm_bindgen_derive/#optional-arguments.
+        inner_key_pair: &OptionalKeyPair,
+    ) -> Result<(), JsError> {
+        let inner_key_pair = wasm_bindgen_derive::try_from_js_option::<KeyPair>(inner_key_pair)
+            .map_err(|err| JsError::new(&err))?;
+
+        self.do_sign(key_pair, inner_key_pair.as_ref())
     }
 
     /// Computes the transaction's hash, which is used as its unique identifier on the blockchain.
@@ -369,7 +380,11 @@ impl From<nimiq_transaction::Transaction> for Transaction {
 
 impl Transaction {
     #[cfg(feature = "primitives")]
-    pub fn do_sign(&mut self, key_pair: &KeyPair) -> Result<(), JsError> {
+    pub fn do_sign(
+        &mut self,
+        key_pair: &KeyPair,
+        inner_key_pair: Option<&KeyPair>,
+    ) -> Result<(), JsError> {
         let proof_builder = TransactionProofBuilder::new(self.native_ref().clone());
         let proof = match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
@@ -408,13 +423,7 @@ impl Transaction {
                 builder.generate().unwrap().proof
             }
             TransactionProofBuilder::InStaking(mut builder) => {
-                // It is possible to add an additional argument `secondary_key_pair: Option<&KeyPair>` with
-                // https://docs.rs/wasm-bindgen-derive/latest/wasm_bindgen_derive/#optional-arguments.
-                // TODO: Support signing for differing staker and validator signing & cold keys.
-                // let secondary_key_pair: Option<&KeyPair> = None;
-                // builder.sign_with_key_pair(secondary_key_pair.unwrap_or(key_pair).native_ref());
-
-                builder.sign_with_key_pair(key_pair.native_ref());
+                builder.sign_with_key_pair(inner_key_pair.unwrap_or(key_pair).native_ref());
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair.native_ref());
                 let tx = builder.generate().unwrap();

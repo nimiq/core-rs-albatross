@@ -3,6 +3,7 @@ use std::str::FromStr;
 use nimiq_keys::SecureGenerate;
 use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_derive::TryFromJsValue;
 
 use crate::{
     common::{address::Address, transaction::Transaction},
@@ -11,7 +12,9 @@ use crate::{
 
 /// A keypair represents a private key and its respective public key.
 /// It is used for signing data, usually transactions.
+#[derive(TryFromJsValue)]
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct KeyPair {
     inner: nimiq_keys::KeyPair,
 }
@@ -80,7 +83,7 @@ impl KeyPair {
     /// Signs a transaction and sets the signature proof on the transaction object.
     #[wasm_bindgen(js_name = signTransaction)]
     pub fn sign_transaction(&self, transaction: &mut Transaction) -> Result<(), JsError> {
-        transaction.sign(self)
+        transaction.do_sign(self, None)
     }
 
     /// Gets the keypair's private key.
@@ -118,4 +121,10 @@ impl KeyPair {
     pub fn native_ref(&self) -> &nimiq_keys::KeyPair {
         &self.inner
     }
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "KeyPair | undefined")]
+    pub type OptionalKeyPair;
 }

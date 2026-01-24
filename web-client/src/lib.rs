@@ -42,7 +42,7 @@ mod tests {
         .map_err(JsValue::from)
         .unwrap();
 
-        tx.sign(&keypair).map_err(JsValue::from).unwrap();
+        tx.do_sign(&keypair, None).map_err(JsValue::from).unwrap();
         assert_eq!(tx.verify(None).map_err(JsValue::from), Ok(()))
     }
 
@@ -63,7 +63,7 @@ mod tests {
         .map_err(JsValue::from)
         .unwrap();
 
-        tx.sign(&keypair).map_err(JsValue::from).unwrap();
+        tx.do_sign(&keypair, None).map_err(JsValue::from).unwrap();
         assert_eq!(tx.verify(None).map_err(JsValue::from), Ok(()))
     }
 }
