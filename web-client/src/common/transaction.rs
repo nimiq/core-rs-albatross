@@ -147,63 +147,7 @@ impl Transaction {
     ///   or using a different cold or signing key for validator transactions.
     #[cfg(feature = "primitives")]
     pub fn sign(&mut self, key_pair: &KeyPair) -> Result<(), JsError> {
-        let proof_builder = TransactionProofBuilder::new(self.native_ref().clone());
-        let proof = match proof_builder {
-            TransactionProofBuilder::Basic(mut builder) => {
-                builder.sign_with_key_pair(key_pair.native_ref());
-                builder.generate().unwrap().proof
-            }
-            TransactionProofBuilder::Vesting(mut builder) => {
-                builder.sign_with_key_pair(key_pair.native_ref());
-                builder.generate().unwrap().proof
-            }
-            TransactionProofBuilder::Htlc(mut _builder) => {
-                // TODO: Create a separate HTLC signing method that takes the type of proof as an argument
-                return Err(JsError::new(
-                    "HTLC redemption transactions are not supported",
-                ));
-
-                // // Redeem
-                // let sig = builder.signature_with_key_pair(key_pair);
-                // builder.regular_transfer(hash_algorithm, pre_image, hash_count, hash_root, sig);
-
-                // // Refund
-                // let sig = builder.signature_with_key_pair(key_pair);
-                // builder.timeout_resolve(sig);
-
-                // // Early resolve
-                // builder.early_resolve(htlc_sender_signature, htlc_recipient_signature);
-
-                // // Sign early
-                // let sig = builder.signature_with_key_pair(key_pair);
-                // return Ok(sig);
-
-                // builder.generate().unwrap()
-            }
-            TransactionProofBuilder::OutStaking(mut builder) => {
-                builder.sign_with_key_pair(key_pair.native_ref());
-                builder.generate().unwrap().proof
-            }
-            TransactionProofBuilder::InStaking(mut builder) => {
-                // It is possible to add an additional argument `secondary_key_pair: Option<&KeyPair>` with
-                // https://docs.rs/wasm-bindgen-derive/latest/wasm_bindgen_derive/#optional-arguments.
-                // TODO: Support signing for differing staker and validator signing & cold keys.
-                // let secondary_key_pair: Option<&KeyPair> = None;
-                // builder.sign_with_key_pair(secondary_key_pair.unwrap_or(key_pair).native_ref());
-
-                builder.sign_with_key_pair(key_pair.native_ref());
-                let mut builder = builder.generate().unwrap().unwrap_basic();
-                builder.sign_with_key_pair(key_pair.native_ref());
-                let tx = builder.generate().unwrap();
-                // Set the recipient data to the data with the added signature
-                self.set_recipient_data(tx.recipient_data);
-                tx.proof
-            }
-        };
-
-        self.set_proof(proof);
-
-        Ok(())
+        self.do_sign(key_pair)
     }
 
     /// Computes the transaction's hash, which is used as its unique identifier on the blockchain.
@@ -424,6 +368,67 @@ impl From<nimiq_transaction::Transaction> for Transaction {
 }
 
 impl Transaction {
+    #[cfg(feature = "primitives")]
+    pub fn do_sign(&mut self, key_pair: &KeyPair) -> Result<(), JsError> {
+        let proof_builder = TransactionProofBuilder::new(self.native_ref().clone());
+        let proof = match proof_builder {
+            TransactionProofBuilder::Basic(mut builder) => {
+                builder.sign_with_key_pair(key_pair.native_ref());
+                builder.generate().unwrap().proof
+            }
+            TransactionProofBuilder::Vesting(mut builder) => {
+                builder.sign_with_key_pair(key_pair.native_ref());
+                builder.generate().unwrap().proof
+            }
+            TransactionProofBuilder::Htlc(mut _builder) => {
+                // TODO: Create a separate HTLC signing method that takes the type of proof as an argument
+                return Err(JsError::new(
+                    "HTLC redemption transactions are not supported",
+                ));
+
+                // // Redeem
+                // let sig = builder.signature_with_key_pair(key_pair);
+                // builder.regular_transfer(hash_algorithm, pre_image, hash_count, hash_root, sig);
+
+                // // Refund
+                // let sig = builder.signature_with_key_pair(key_pair);
+                // builder.timeout_resolve(sig);
+
+                // // Early resolve
+                // builder.early_resolve(htlc_sender_signature, htlc_recipient_signature);
+
+                // // Sign early
+                // let sig = builder.signature_with_key_pair(key_pair);
+                // return Ok(sig);
+
+                // builder.generate().unwrap()
+            }
+            TransactionProofBuilder::OutStaking(mut builder) => {
+                builder.sign_with_key_pair(key_pair.native_ref());
+                builder.generate().unwrap().proof
+            }
+            TransactionProofBuilder::InStaking(mut builder) => {
+                // It is possible to add an additional argument `secondary_key_pair: Option<&KeyPair>` with
+                // https://docs.rs/wasm-bindgen-derive/latest/wasm_bindgen_derive/#optional-arguments.
+                // TODO: Support signing for differing staker and validator signing & cold keys.
+                // let secondary_key_pair: Option<&KeyPair> = None;
+                // builder.sign_with_key_pair(secondary_key_pair.unwrap_or(key_pair).native_ref());
+
+                builder.sign_with_key_pair(key_pair.native_ref());
+                let mut builder = builder.generate().unwrap().unwrap_basic();
+                builder.sign_with_key_pair(key_pair.native_ref());
+                let tx = builder.generate().unwrap();
+                // Set the recipient data to the data with the added signature
+                self.set_recipient_data(tx.recipient_data);
+                tx.proof
+            }
+        };
+
+        self.set_proof(proof);
+
+        Ok(())
+    }
+
     pub fn native_ref(&self) -> &nimiq_transaction::Transaction {
         &self.inner
     }
