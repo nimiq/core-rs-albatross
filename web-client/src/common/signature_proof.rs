@@ -41,7 +41,7 @@ impl SignatureProof {
     pub fn single_sig(public_key: &PublicKey, signature: &Signature) -> SignatureProof {
         SignatureProof::from(nimiq_transaction::SignatureProof::from_ed25519(
             *public_key.native_ref(),
-            signature.native_ref().clone(),
+            signature.native_cloned(),
         ))
     }
 
@@ -58,7 +58,7 @@ impl SignatureProof {
 
         let merkle_path = SignatureProof::make_merkle_path(&public_keys, &signer_key);
 
-        let signature = nimiq_keys::Signature::Ed25519(signature.native_ref().clone());
+        let signature = nimiq_keys::Signature::Ed25519(signature.native_cloned());
 
         Ok(SignatureProof::from(nimiq_transaction::SignatureProof {
             public_key: signer_key,
@@ -220,7 +220,7 @@ impl SignatureProof {
         &self.inner
     }
 
-    pub fn native(&self) -> nimiq_transaction::SignatureProof {
+    pub fn native_cloned(&self) -> nimiq_transaction::SignatureProof {
         self.inner.clone()
     }
 
@@ -259,7 +259,7 @@ impl SignatureProof {
     fn unpack_signature(signature: &SignatureUnion) -> Result<nimiq_keys::Signature, JsError> {
         let js_value: &JsValue = signature.unchecked_ref();
         let signature = if let Ok(sig) = Signature::try_from(js_value) {
-            nimiq_keys::Signature::Ed25519(sig.native_ref().clone())
+            nimiq_keys::Signature::Ed25519(sig.native_cloned())
         } else if let Ok(sig) = ES256Signature::try_from(js_value) {
             nimiq_keys::Signature::ES256(sig.native_ref().clone())
         } else {

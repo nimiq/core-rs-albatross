@@ -624,11 +624,11 @@ impl Client {
         // If not subscribed, subscribe to the sender or recipient
         if !already_subscribed {
             // Subscribe to the recipient by default
-            let mut subscribed_address = tx.recipient().native();
+            let mut subscribed_address = tx.recipient().native_cloned();
             if subscribed_address == Policy::STAKING_CONTRACT_ADDRESS {
                 // If the recipient is the staking contract, subscribe to the sender instead
                 // to not get flooded with notifications.
-                subscribed_address = tx.sender().native();
+                subscribed_address = tx.sender().native_cloned();
             }
             address_subscription =
                 Some(AddressSubscription::subscribe(subscribed_address, consensus.clone()).await?);
@@ -643,7 +643,7 @@ impl Client {
             .insert(hash.clone(), sender);
 
         // Actually send the transaction
-        consensus.send_transaction(tx.native()).await?;
+        consensus.send_transaction(tx.native_cloned()).await?;
 
         // Wait for the transaction (will be Err(_) if the timeout is reached first)
         let res = timeout(Duration::from_millis(10_000), receiver).await;

@@ -38,8 +38,8 @@ impl TransactionBuilder {
     ) -> Result<Transaction, JsError> {
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
-            .with_recipient(Recipient::new_basic(recipient.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
+            .with_recipient(Recipient::new_basic(recipient.native_cloned()))
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
             .with_validity_start_height(validity_start_height)
@@ -68,9 +68,9 @@ impl TransactionBuilder {
     ) -> Result<Transaction, JsError> {
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
             .with_recipient(Recipient::new_basic_with_data(
-                recipient.native_ref().clone(),
+                recipient.native_cloned(),
                 data,
             ))
             .with_value(Coin::try_from(value)?)
@@ -120,7 +120,7 @@ impl TransactionBuilder {
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -148,11 +148,11 @@ impl TransactionBuilder {
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.stake(staker_address.native_ref().clone());
+        recipient.stake(staker_address.native_cloned());
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -190,7 +190,7 @@ impl TransactionBuilder {
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -221,7 +221,7 @@ impl TransactionBuilder {
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -252,7 +252,7 @@ impl TransactionBuilder {
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -282,7 +282,7 @@ impl TransactionBuilder {
             .remove_stake()
             .generate()
             .unwrap();
-        let recipient = Recipient::new_basic(recipient.native_ref().clone());
+        let recipient = Recipient::new_basic(recipient.native_cloned());
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
@@ -319,13 +319,13 @@ impl TransactionBuilder {
         recipient.create_validator(
             *signing_key.native_ref(),
             voting_key_pair.native_ref(),
-            reward_address.native_ref().clone(),
+            reward_address.native_cloned(),
             native_signal_data,
         );
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -357,7 +357,7 @@ impl TransactionBuilder {
         let mut recipient = Recipient::new_staking_builder();
         let native_signing_key = signing_key.map(|r| *r.native_ref());
         let native_voting_key_pair = voting_key_pair.map(|r| r.native_ref().clone());
-        let native_reward_address = reward_address.map(|r| r.native_ref().clone());
+        let native_reward_address = reward_address.map(|r| r.native_cloned());
 
         recipient.update_validator(
             native_signing_key,
@@ -368,7 +368,7 @@ impl TransactionBuilder {
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -394,11 +394,11 @@ impl TransactionBuilder {
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.deactivate_validator(validator.native_ref().clone());
+        recipient.deactivate_validator(validator.native_cloned());
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -424,7 +424,7 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
-        let recipient = Recipient::new_basic(sender.native_ref().clone());
+        let recipient = Recipient::new_basic(sender.native_cloned());
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
@@ -462,7 +462,7 @@ impl TransactionBuilder {
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_sender(Sender::new_basic(sender.native_cloned()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)

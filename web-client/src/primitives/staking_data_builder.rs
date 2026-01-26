@@ -19,7 +19,7 @@ impl StakingDataBuilder {
             .map_err(|err| JsError::new(&err))?;
 
         let data = IncomingStakingTransactionData::CreateStaker {
-            delegation: delegation.map(|addr| addr.native()),
+            delegation: delegation.map(|addr| addr.take_native()),
             proof: nimiq_transaction::SignatureProof::default(),
         }
         .serialize_to_vec();
@@ -30,7 +30,7 @@ impl StakingDataBuilder {
     #[wasm_bindgen(js_name = addStake)]
     pub fn add_stake(staker_address: &Address) -> Vec<u8> {
         IncomingStakingTransactionData::AddStake {
-            staker_address: staker_address.native(),
+            staker_address: staker_address.native_cloned(),
         }
         .serialize_to_vec()
     }
@@ -44,7 +44,7 @@ impl StakingDataBuilder {
             .map_err(|err| JsError::new(&err))?;
 
         let data = IncomingStakingTransactionData::UpdateStaker {
-            new_delegation: new_delegation.map(|addr| addr.native()),
+            new_delegation: new_delegation.map(|addr| addr.take_native()),
             reactivate_all_stake,
             proof: nimiq_transaction::SignatureProof::default(),
         }
@@ -73,7 +73,7 @@ impl StakingDataBuilder {
 
     #[wasm_bindgen(js_name = setProof)]
     pub fn set_proof(data: &[u8], proof: &SignatureProof) -> Result<Vec<u8>, JsError> {
-        IncomingStakingTransactionData::set_signature_on_data(data, proof.native())
+        IncomingStakingTransactionData::set_signature_on_data(data, proof.native_cloned())
             .map_err(|e| JsError::new(&e.to_string()))
     }
 }

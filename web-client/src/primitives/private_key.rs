@@ -87,4 +87,8 @@ impl PrivateKey {
     pub fn native_ref(&self) -> &nimiq_keys::PrivateKey {
         &self.inner
     }
+
+    pub fn native_cloned(&self) -> nimiq_keys::PrivateKey {
+        self.inner.clone()
+    }
 }

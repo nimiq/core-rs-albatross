@@ -35,7 +35,7 @@ impl Signature {
     pub fn create(private_key: &PrivateKey, public_key: &PublicKey, data: &[u8]) -> Signature {
         let key_pair = nimiq_keys::KeyPair {
             public: *public_key.native_ref(),
-            private: private_key.native_ref().clone(),
+            private: private_key.native_cloned(),
         };
         let signature = key_pair.sign(data);
         Signature::from(signature)
@@ -74,6 +74,10 @@ impl From<nimiq_keys::Ed25519Signature> for Signature {
 impl Signature {
     pub fn native_ref(&self) -> &nimiq_keys::Ed25519Signature {
         &self.inner
+    }
+
+    pub fn native_cloned(&self) -> nimiq_keys::Ed25519Signature {
+        self.inner.clone()
     }
 
     pub fn asn1_to_raw(bytes: &[u8]) -> Result<Vec<u8>, JsError> {

@@ -153,7 +153,7 @@ impl Address {
         &self.inner
     }
 
-    pub fn native(&self) -> nimiq_keys::Address {
+    pub fn native_cloned(&self) -> nimiq_keys::Address {
         self.inner.clone()
     }
 

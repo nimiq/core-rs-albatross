@@ -96,10 +96,10 @@ impl Transaction {
         let tx = if flags.is_empty() {
             // This also creates basic transactions
             nimiq_transaction::Transaction::new_extended(
-                sender.native_ref().clone(),
+                sender.native_cloned(),
                 AccountType::try_from(sender_type.unwrap_or(0))?,
                 sender_data.unwrap_or_default(),
-                recipient.native_ref().clone(),
+                recipient.native_cloned(),
                 AccountType::try_from(recipient_type.unwrap_or(0))?,
                 recipient_data.unwrap_or_default(),
                 Coin::try_from(value)?,
@@ -109,7 +109,7 @@ impl Transaction {
             )
         } else if flags.contains(nimiq_transaction::TransactionFlags::CONTRACT_CREATION) {
             nimiq_transaction::Transaction::new_contract_creation(
-                sender.native_ref().clone(),
+                sender.native_cloned(),
                 AccountType::try_from(sender_type.unwrap_or(0))?,
                 vec![],
                 AccountType::try_from(recipient_type.unwrap_throw())?,
@@ -121,9 +121,9 @@ impl Transaction {
             )
         } else if flags.contains(nimiq_transaction::TransactionFlags::SIGNALING) {
             nimiq_transaction::Transaction::new_signaling(
-                sender.native_ref().clone(),
+                sender.native_cloned(),
                 AccountType::try_from(sender_type.unwrap_or(0))?,
-                recipient.native_ref().clone(),
+                recipient.native_cloned(),
                 AccountType::try_from(recipient_type.unwrap_or(3))?,
                 Coin::try_from(fee)?,
                 recipient_data.unwrap_throw(),
@@ -385,7 +385,7 @@ impl Transaction {
         key_pair: &KeyPair,
         inner_key_pair: Option<&KeyPair>,
     ) -> Result<(), JsError> {
-        let proof_builder = TransactionProofBuilder::new(self.native_ref().clone());
+        let proof_builder = TransactionProofBuilder::new(self.native_cloned());
         let proof = match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(key_pair.native_ref());
@@ -442,8 +442,7 @@ impl Transaction {
         &self.inner
     }
 
-    #[cfg(feature = "client")]
-    pub fn native(&self) -> nimiq_transaction::Transaction {
+    pub fn native_cloned(&self) -> nimiq_transaction::Transaction {
         self.inner.clone()
     }
 

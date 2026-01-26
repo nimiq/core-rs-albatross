@@ -29,7 +29,7 @@ impl KeyPair {
 
     /// Derives a keypair from an existing private key.
     pub fn derive(private_key: &PrivateKey) -> KeyPair {
-        let key_pair = nimiq_keys::KeyPair::from(private_key.native_ref().clone());
+        let key_pair = nimiq_keys::KeyPair::from(private_key.native_cloned());
         KeyPair::from(key_pair)
     }
 
@@ -62,7 +62,7 @@ impl KeyPair {
     #[wasm_bindgen(constructor)]
     pub fn new(private_key: &PrivateKey, public_key: &PublicKey) -> KeyPair {
         let key_pair = nimiq_keys::KeyPair {
-            private: private_key.native_ref().clone(),
+            private: private_key.native_cloned(),
             public: *public_key.native_ref(),
         };
         KeyPair::from(key_pair)
