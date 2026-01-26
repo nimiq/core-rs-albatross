@@ -220,6 +220,10 @@ impl SignatureProof {
         &self.inner
     }
 
+    pub fn native(&self) -> nimiq_transaction::SignatureProof {
+        self.inner.clone()
+    }
+
     fn unpack_public_keys(
         public_keys: &PublicKeyUnionArray,
     ) -> Result<Vec<nimiq_keys::PublicKey>, JsError> {

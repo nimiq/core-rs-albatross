@@ -9,4 +9,5 @@ pub mod merkle_tree;
 pub mod private_key;
 pub mod public_key;
 pub mod signature;
+pub mod staking_data_builder;
 pub mod transaction_builder;

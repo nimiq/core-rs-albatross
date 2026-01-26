@@ -153,7 +153,6 @@ impl Address {
         &self.inner
     }
 
-    #[cfg(feature = "client")]
     pub fn native(&self) -> nimiq_keys::Address {
         self.inner.clone()
     }
@@ -172,6 +171,9 @@ extern "C" {
 
     #[wasm_bindgen(typescript_type = "(Address | string | Uint8Array)[]")]
     pub type AddressAnyArrayType;
+
+    #[wasm_bindgen(typescript_type = "Address | undefined")]
+    pub type OptionalAddress;
 }
 
 #[cfg(not(feature = "primitives"))]
