@@ -157,7 +157,6 @@ impl Address {
         self.inner.clone()
     }
 
-    #[cfg(feature = "client")]
     pub fn take_native(self) -> nimiq_keys::Address {
         self.inner
     }

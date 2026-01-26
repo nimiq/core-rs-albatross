@@ -6,7 +6,11 @@ use nimiq_transaction_builder::{Recipient, Sender};
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    common::{address::Address, transaction::Transaction, utils::to_network_id},
+    common::{
+        address::{Address, OptionalAddress},
+        transaction::Transaction,
+        utils::to_network_id,
+    },
     primitives::{bls_key_pair::BLSKeyPair, public_key::PublicKey},
 };
 
@@ -102,14 +106,17 @@ impl TransactionBuilder {
     #[wasm_bindgen(js_name = newCreateStaker)]
     pub fn new_create_staker(
         sender: &Address,
-        delegation: &Address,
+        delegation: &OptionalAddress,
         value: u64,
         fee: Option<u64>,
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
+        let delegation = wasm_bindgen_derive::try_from_js_option::<Address>(delegation)
+            .map_err(|err| JsError::new(&err))?;
+
         let mut recipient = Recipient::new_staking_builder();
-        recipient.create_staker(Some(delegation.native_ref().clone()));
+        recipient.create_staker(delegation.map(|addr| addr.take_native()));
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
@@ -166,15 +173,18 @@ impl TransactionBuilder {
     #[wasm_bindgen(js_name = newUpdateStaker)]
     pub fn new_update_staker(
         sender: &Address,
-        new_delegation: &Address,
+        new_delegation: &OptionalAddress,
         reactivate_all_stake: bool,
         fee: Option<u64>,
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
+        let new_delegation = wasm_bindgen_derive::try_from_js_option::<Address>(new_delegation)
+            .map_err(|err| JsError::new(&err))?;
+
         let mut recipient = Recipient::new_staking_builder();
         recipient.update_staker(
-            Some(new_delegation.native_ref().clone()),
+            new_delegation.map(|addr| addr.take_native()),
             reactivate_all_stake,
         );
 
