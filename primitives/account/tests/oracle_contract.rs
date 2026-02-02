@@ -33,6 +33,7 @@ fn init_tree() -> (TestCommitRevert, OracleContract, KeyPair, KeyPair) {
         owner: Address::from(&key_1.public),
         hash_count: 10,
         hashes: Vec::new(),
+        latest_index: 0,
     };
 
     let accounts = TestCommitRevert::with_initial_state(&[
@@ -86,6 +87,72 @@ fn make_hash_sha512(value: u8) -> AnyHash {
 fn make_hash_keccak256(value: u8) -> AnyHash {
     use nimiq_hash::{Hasher, Keccak256Hasher};
     AnyHash::from(Keccak256Hasher::default().digest(&[value; 32]))
+}
+
+// Helper to compute chained hashes as the contract does: data_i = H(data_{i-1} || state_i)
+fn compute_chained_hashes(hashes: &[AnyHash]) -> Vec<AnyHash> {
+    use nimiq_transaction::account::htlc_contract::{AnyHash32, AnyHash64};
+
+    if hashes.is_empty() {
+        return Vec::new();
+    }
+
+    // Determine hash type from first hash
+    let zero_hash = match &hashes[0] {
+        AnyHash::Blake2b(_) => AnyHash::Blake2b(AnyHash32::default()),
+        AnyHash::Sha256(_) => AnyHash::Sha256(AnyHash32::default()),
+        AnyHash::Sha512(_) => AnyHash::Sha512(AnyHash64::default()),
+        AnyHash::Keccak256(_) => AnyHash::Keccak256(AnyHash32::default()),
+    };
+
+    compute_chained_hashes_from_previous(hashes, &zero_hash)
+}
+
+// Helper to compute chained hashes starting from a previous hash
+fn compute_chained_hashes_from_previous(hashes: &[AnyHash], previous_hash: &AnyHash) -> Vec<AnyHash> {
+    use std::io::Write;
+    use nimiq_hash::{sha512::Sha512Hasher, Blake2bHasher, Hasher, Keccak256Hasher, Sha256Hasher};
+    use nimiq_transaction::account::htlc_contract::{AnyHash32, AnyHash64};
+
+    if hashes.is_empty() {
+        return Vec::new();
+    }
+
+    let mut result = Vec::new();
+    let mut current_hash = previous_hash.clone();
+
+    for new_hash in hashes {
+        // Chain: data_i = H(data_{i-1} || state_i)
+        current_hash = match new_hash {
+            AnyHash::Blake2b(_) => {
+                let mut hasher = Blake2bHasher::default();
+                hasher.write_all(current_hash.as_bytes()).unwrap();
+                hasher.write_all(new_hash.as_bytes()).unwrap();
+                AnyHash::Blake2b(AnyHash32(hasher.finish().into()))
+            }
+            AnyHash::Sha256(_) => {
+                let mut hasher = Sha256Hasher::default();
+                hasher.write_all(current_hash.as_bytes()).unwrap();
+                hasher.write_all(new_hash.as_bytes()).unwrap();
+                AnyHash::Sha256(AnyHash32(hasher.finish().into()))
+            }
+            AnyHash::Sha512(_) => {
+                let mut hasher = Sha512Hasher::default();
+                hasher.write_all(current_hash.as_bytes()).unwrap();
+                hasher.write_all(new_hash.as_bytes()).unwrap();
+                AnyHash::Sha512(AnyHash64(hasher.finish().into()))
+            }
+            AnyHash::Keccak256(_) => {
+                let mut hasher = Keccak256Hasher::default();
+                hasher.write_all(current_hash.as_bytes()).unwrap();
+                hasher.write_all(new_hash.as_bytes()).unwrap();
+                AnyHash::Keccak256(AnyHash32(hasher.finish().into()))
+            }
+        };
+        result.push(current_hash.clone());
+    }
+
+    result
 }
 
 fn make_update_transaction(
@@ -277,9 +344,10 @@ fn it_can_update_contract_with_hashes() {
 
     assert_eq!(receipt, None);
     assert_eq!(oracle_contract.hashes.len(), 3);
-    assert_eq!(oracle_contract.hashes[0], make_hash(1));
-    assert_eq!(oracle_contract.hashes[1], make_hash(2));
-    assert_eq!(oracle_contract.hashes[2], make_hash(3));
+    assert_eq!(oracle_contract.latest_index, 3);
+    // Hashes are stored as chained hashes, not the original input hashes
+    let expected_chained = compute_chained_hashes(&hashes);
+    assert_eq!(oracle_contract.hashes, expected_chained);
 
     assert_eq!(
         tx_logger.logs,
@@ -327,11 +395,35 @@ fn it_implements_ring_buffer() {
 
     // Should still have exactly hash_count hashes
     assert_eq!(oracle_contract.hashes.len(), 10);
-    // The first 3 should be removed (hashes 0, 1, 2)
-    // The last 3 should be the new ones (hashes 10, 11, 12)
-    assert_eq!(oracle_contract.hashes[0], make_hash(3)); // Oldest remaining
-    assert_eq!(oracle_contract.hashes[9], make_hash(12)); // Newest
-                                                          // Should have a receipt with the removed hashes
+    assert_eq!(oracle_contract.latest_index, 13);
+    // With ring buffer, after writing indices 0-9, then 10-12:
+    // - Positions 0-2 have indices 10-12 (newest, overwriting 0-2)
+    // - Positions 3-9 have indices 3-9 (oldest remaining)
+    // Check using chronological order helper
+    let expected_all = compute_chained_hashes(&initial_hashes);
+    // The new hashes are chained from the last hash in expected_all, not from zero
+    use nimiq_transaction::account::htlc_contract::{AnyHash32, AnyHash64};
+    let previous_hash = expected_all.last().cloned().unwrap_or_else(|| {
+        // If expected_all is empty, use zero hash of the same type as new_hashes
+        match &new_hashes[0] {
+            AnyHash::Blake2b(_) => AnyHash::Blake2b(AnyHash32::default()),
+            AnyHash::Sha256(_) => AnyHash::Sha256(AnyHash32::default()),
+            AnyHash::Sha512(_) => AnyHash::Sha512(AnyHash64::default()),
+            AnyHash::Keccak256(_) => AnyHash::Keccak256(AnyHash32::default()),
+        }
+    });
+    let expected_new = compute_chained_hashes_from_previous(&new_hashes, &previous_hash);
+    let expected_remaining: Vec<AnyHash> = expected_all[3..].to_vec();
+    let expected_final: Vec<AnyHash> = expected_remaining
+        .into_iter()
+        .chain(expected_new.into_iter())
+        .collect();
+    
+    // Get hashes in chronological order
+    let chronological = oracle_contract.get_hashes_chronological();
+    assert_eq!(chronological, expected_final);
+    
+    // Should have a receipt with the removed hashes
     assert!(receipt.is_some());
 
     // Test revert - should restore the removed hashes
@@ -349,7 +441,9 @@ fn it_implements_ring_buffer() {
         .expect("Failed to revert");
     // Should be back to the original 10 hashes
     assert_eq!(oracle_contract.hashes.len(), 10);
-    assert_eq!(oracle_contract.hashes, initial_hashes);
+    assert_eq!(oracle_contract.latest_index, 10);
+    let chronological_after_revert = oracle_contract.get_hashes_chronological();
+    assert_eq!(chronological_after_revert, expected_all);
 }
 
 #[test]
@@ -683,6 +777,7 @@ fn it_rejects_mixing_hash_types() {
     );
     assert!(result.is_ok(), "Should accept Blake2b hashes");
     assert_eq!(oracle_contract.hashes.len(), 2);
+    assert_eq!(oracle_contract.latest_index, 2);
 
     // Try to add Sha256 hashes - should fail
     let sha256_hashes = vec![make_hash_sha256(3)];
@@ -772,6 +867,7 @@ fn it_allows_different_hash_types_in_different_contracts() {
         owner: Address::from(&key_3.public),
         hash_count: 10,
         hashes: Vec::new(),
+        latest_index: 0,
     };
 
     let accounts2 = TestCommitRevert::with_initial_state(&[
@@ -818,8 +914,10 @@ fn it_allows_different_hash_types_in_different_contracts() {
 
     // Both contracts should have their respective hash types
     assert_eq!(oracle_contract1.hashes.len(), 1);
+    assert_eq!(oracle_contract1.latest_index, 1);
     assert_eq!(oracle_contract2_mut.hashes.len(), 1);
-    // Verify hash types are different
+    assert_eq!(oracle_contract2_mut.latest_index, 1);
+    // Verify hash types are different (check the chained hashes)
     match (&oracle_contract1.hashes[0], &oracle_contract2_mut.hashes[0]) {
         (AnyHash::Blake2b(_), AnyHash::Sha256(_)) => {
             // Correct - different hash types in different contracts
