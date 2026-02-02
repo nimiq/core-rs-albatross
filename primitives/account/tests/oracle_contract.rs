@@ -109,8 +109,12 @@ fn compute_chained_hashes(hashes: &[AnyHash]) -> Vec<AnyHash> {
 }
 
 // Helper to compute chained hashes starting from a previous hash
-fn compute_chained_hashes_from_previous(hashes: &[AnyHash], previous_hash: &AnyHash) -> Vec<AnyHash> {
+fn compute_chained_hashes_from_previous(
+    hashes: &[AnyHash],
+    previous_hash: &AnyHash,
+) -> Vec<AnyHash> {
     use std::io::Write;
+
     use nimiq_hash::{sha512::Sha512Hasher, Blake2bHasher, Hasher, Keccak256Hasher, Sha256Hasher};
     use nimiq_transaction::account::htlc_contract::{AnyHash32, AnyHash64};
 
@@ -418,11 +422,11 @@ fn it_implements_ring_buffer() {
         .into_iter()
         .chain(expected_new.into_iter())
         .collect();
-    
+
     // Get hashes in chronological order
     let chronological = oracle_contract.get_hashes_chronological();
     assert_eq!(chronological, expected_final);
-    
+
     // Should have a receipt with the removed hashes
     assert!(receipt.is_some());
 

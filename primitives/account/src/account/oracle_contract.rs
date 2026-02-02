@@ -1,10 +1,11 @@
+use std::io::Write;
+
+use nimiq_hash::{sha512::Sha512Hasher, Blake2bHasher, Hasher, Keccak256Hasher, Sha256Hasher};
 use nimiq_keys::Address;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::{account::AccountError, coin::Coin, transaction::TransactionError};
 use nimiq_serde::{Deserialize, Serialize};
-use std::io::Write;
-use nimiq_hash::{sha512::Sha512Hasher, Blake2bHasher, Hasher, Keccak256Hasher, Sha256Hasher};
 use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64};
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::account::oracle_contract::{
@@ -83,7 +84,6 @@ impl OracleContract {
 
         Ok(())
     }
-
 
     /// Gets the hash type from any hash in the contract, if any.
     /// Returns None if the contract has no hashes yet.
@@ -253,7 +253,8 @@ impl AccountTransactionInteraction for OracleContract {
                     // Ensure the ring buffer has at least hash_count capacity
                     // But only initialize entries as we write them (lazy initialization)
                     if self.hashes.capacity() < self.hash_count as usize {
-                        self.hashes.reserve_exact(self.hash_count as usize - self.hashes.capacity());
+                        self.hashes
+                            .reserve_exact(self.hash_count as usize - self.hashes.capacity());
                     }
 
                     // Get the previous hash for chaining (latestData in Solidity)
@@ -378,7 +379,7 @@ impl AccountTransactionInteraction for OracleContract {
                 IncomingOracleTransactionData::Update { hashes, .. } => {
                     // Revert by restoring overwritten hashes and moving latest_index back
                     let num_hashes = hashes.len() as u64;
-                    
+
                     // Determine zero hash type for padding (if needed)
                     let zero_hash = if let Some(first_hash) = self.hashes.first() {
                         match first_hash {
@@ -390,7 +391,7 @@ impl AccountTransactionInteraction for OracleContract {
                     } else {
                         AnyHash::default()
                     };
-                    
+
                     if let Some(receipt) = receipt {
                         let update_receipt = UpdateReceipt::try_from(receipt)?;
 
@@ -414,10 +415,10 @@ impl AccountTransactionInteraction for OracleContract {
                             self.hashes[pos] = old_hash.clone();
                         }
                     }
-                    
+
                     // Move latest_index back after restoring hashes
                     self.latest_index -= num_hashes;
-                    
+
                     // If latest_index is now 0, clear the ring buffer (no entries written yet)
                     if self.latest_index == 0 {
                         self.hashes.clear();

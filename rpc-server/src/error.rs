@@ -101,6 +101,12 @@ pub enum Error {
 
     #[error("Invalid Keccak256 parameters: {0}")]
     InvalidKeccak256Parameters(String),
+
+    #[error("Invalid address: {0}")]
+    InvalidAddress(String),
+
+    #[error("Invalid data: {0}")]
+    InvalidData(String),
 }
 
 impl From<Error> for RpcError {

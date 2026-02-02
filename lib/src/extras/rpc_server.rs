@@ -67,6 +67,8 @@ pub fn initialize_rpc_server(
 
     dispatcher.add(ZKPComponentDispatcher::new(client.zkp_component()));
 
+    dispatcher.add(OracleDispatcher::new(client.blockchain()));
+
     // Eth interface dispatchers
     dispatcher.add(GossipDispatcher::new(
         client.consensus_proxy(),
