@@ -187,6 +187,14 @@ pub trait BlockchainInterface {
         address: Address,
     ) -> RPCResult<Staker, BlockchainState, Self::Error>;
 
+    /// Gets the nonce for a given address in a bridge contract.
+    /// Returns the current nonce value, or 0 if no nonce has been set yet.
+    async fn get_bridge_nonce(
+        &self,
+        bridge_address: Address,
+        address: Address,
+    ) -> RPCResult<u64, BlockchainState, Self::Error>;
+
     /// Subscribes to new block events (retrieves the full block).
     #[stream]
     async fn subscribe_for_head_block(

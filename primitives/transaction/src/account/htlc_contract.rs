@@ -205,6 +205,41 @@ impl From<Keccak256Hash> for AnyHash {
     }
 }
 
+/// Helper enum to represent hash types for comparison and identification.
+///
+/// This enum provides a lightweight way to identify and compare hash algorithm
+/// types without carrying the actual hash data. It's used for validation and
+/// compatibility checks between contracts (e.g., bridge and oracle).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum HashType {
+    Blake2b,
+    Sha256,
+    Sha512,
+    Keccak256,
+}
+
+impl HashType {
+    /// Extracts the hash type from an AnyHash variant
+    pub fn from_any_hash(hash: &AnyHash) -> Self {
+        match hash {
+            AnyHash::Blake2b(_) => HashType::Blake2b,
+            AnyHash::Sha256(_) => HashType::Sha256,
+            AnyHash::Sha512(_) => HashType::Sha512,
+            AnyHash::Keccak256(_) => HashType::Keccak256,
+        }
+    }
+
+    /// Returns a human-readable name for the hash type
+    pub fn name(&self) -> &'static str {
+        match self {
+            HashType::Blake2b => "Blake2b",
+            HashType::Sha256 => "SHA256",
+            HashType::Sha512 => "SHA512",
+            HashType::Keccak256 => "Keccak256",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[repr(u8)]
 pub enum PreImage {
