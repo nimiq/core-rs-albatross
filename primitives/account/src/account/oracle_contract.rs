@@ -9,7 +9,7 @@ use nimiq_transaction::account::oracle_contract::{
     CreationTransactionData, IncomingOracleTransactionData,
 };
 #[cfg(feature = "interaction-traits")]
-use nimiq_transaction::{inherent::Inherent, SignatureProof, Transaction};
+use nimiq_transaction::{inherent::Inherent, HashType, SignatureProof, Transaction};
 
 use crate::{convert_receipt, AccountReceipt};
 #[cfg(feature = "interaction-traits")]
@@ -87,7 +87,7 @@ impl OracleContract {
     /// Gets the hash type from any hash in the contract, if any.
     /// Returns None if the contract has no hashes yet.
     fn get_hash_type(&self) -> Option<HashType> {
-        self.hashes.first().map(HashType::from)
+        self.hashes.first().map(HashType::from_any_hash)
     }
 
     /// Validates that all hashes in the provided vector are of the same type,
@@ -103,39 +103,19 @@ impl OracleContract {
             contract_type
         } else {
             // Contract is empty, use the type of the first new hash
-            HashType::from(&new_hashes[0])
+            HashType::from_any_hash(&new_hashes[0])
         };
 
         // Validate all new hashes match the expected type
         if new_hashes
             .iter()
-            .all(|hash| HashType::from(hash) == expected_type)
+            .all(|hash| HashType::from_any_hash(hash) == expected_type)
         {
             Ok(())
         } else {
             Err(AccountError::InvalidTransaction(
                 TransactionError::InvalidData,
             ))
-        }
-    }
-}
-
-/// Helper enum to represent the hash type without the actual hash value.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum HashType {
-    Blake2b,
-    Sha256,
-    Sha512,
-    Keccak256,
-}
-
-impl HashType {
-    fn from(hash: &AnyHash) -> Self {
-        match hash {
-            AnyHash::Blake2b(_) => HashType::Blake2b,
-            AnyHash::Sha256(_) => HashType::Sha256,
-            AnyHash::Sha512(_) => HashType::Sha512,
-            AnyHash::Keccak256(_) => HashType::Keccak256,
         }
     }
 }

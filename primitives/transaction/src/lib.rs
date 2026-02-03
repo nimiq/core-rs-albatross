@@ -42,7 +42,18 @@ pub mod inherent;
 pub mod reward;
 pub mod signature_proof;
 
+// Re-export bridge contract types for external use
+// Re-export bridge_contract module for backward compatibility with tests
+pub use account::bridge_contract;
+
 pub use self::{
+    account::{
+        bridge_contract::{
+            AddressFormat, AnyMerkleProof, BridgeError, ChainConfig, Endianness,
+            IncomingTransaction, MerkleProofValidator, OutgoingTransaction, RecipientData,
+        },
+        htlc_contract::{AnyHash, HashType},
+    },
     control_transaction::ControlTransaction,
     equivocation_locator::{
         DoubleProposalLocator, DoubleVoteLocator, EquivocationLocator, ForkLocator,
@@ -447,7 +458,7 @@ impl Transaction {
         }
 
         match self.sender_type {
-            AccountType::Basic | AccountType::Vesting => {}
+            AccountType::Basic | AccountType::Vesting | AccountType::Bridge => {}
             AccountType::HTLC => {
                 if let Ok(proof) = OutgoingHTLCTransactionProof::deserialize_all(&self.proof) {
                     match proof {
@@ -617,6 +628,10 @@ impl Transaction {
                         }
                     }
                 }
+            }
+            AccountType::Bridge => {
+                // Bridge contracts use basic account handling for now
+                // Future: Parse BridgeCreationData and add relevant addresses
             }
         }
 

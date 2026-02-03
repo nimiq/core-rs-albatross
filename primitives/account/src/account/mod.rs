@@ -6,9 +6,9 @@ use nimiq_transaction::{inherent::Inherent, Transaction, TransactionFlags};
 use serde::{Deserialize, Serialize};
 
 use crate::account::{
-    basic_account::BasicAccount, htlc_contract::HashedTimeLockedContract,
-    oracle_contract::OracleContract, staking_contract::StakingContract,
-    vesting_contract::VestingContract,
+    basic_account::BasicAccount, bridge_contract::BridgeContract,
+    htlc_contract::HashedTimeLockedContract, oracle_contract::OracleContract,
+    staking_contract::StakingContract, vesting_contract::VestingContract,
 };
 #[cfg(feature = "interaction-traits")]
 use crate::{
@@ -37,6 +37,7 @@ macro_rules! gen_account_match {
             Account::HTLC(account) => account.$f($( $arg ),*),
             Account::Staking(account) => account.$f($( $arg ),*),
             Account::Oracle(account) => account.$f($( $arg ),*),
+            Account::Bridge(account) => account.$f($( $arg ),*),
         }
     };
 }
@@ -50,6 +51,7 @@ macro_rules! gen_account_type_match {
             AccountType::HTLC => HashedTimeLockedContract::$f($( $arg ),*),
             AccountType::Staking => StakingContract::$f($( $arg ),*),
             AccountType::Oracle => OracleContract::$f($( $arg ),*),
+            AccountType::Bridge => BridgeContract::$f($( $arg ),*),
         }
     };
 }
@@ -62,6 +64,7 @@ pub enum Account {
     HTLC(HashedTimeLockedContract),
     Staking(StakingContract),
     Oracle(OracleContract),
+    Bridge(BridgeContract),
 }
 
 impl Account {
@@ -72,6 +75,7 @@ impl Account {
             Account::HTLC(_) => AccountType::HTLC,
             Account::Staking(_) => AccountType::Staking,
             Account::Oracle(_) => AccountType::Oracle,
+            Account::Bridge(_) => AccountType::Bridge,
         }
     }
 
@@ -82,6 +86,7 @@ impl Account {
             Account::HTLC(ref account) => account.balance,
             Account::Staking(ref account) => account.balance,
             Account::Oracle(ref account) => account.balance,
+            Account::Bridge(ref account) => account.balance,
         }
     }
 

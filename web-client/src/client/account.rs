@@ -51,6 +51,16 @@ pub struct PlainOracleContract {
 }
 
 #[derive(serde::Serialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainBridgeContract {
+    balance: u64,
+    owner: String,
+    oracle_address: String,
+    source_chain_id: u32,
+    transaction_count: u64,
+}
+
+#[derive(serde::Serialize, Tsify)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum PlainAccount {
     Basic(PlainBasicAccount),
@@ -58,6 +68,7 @@ pub enum PlainAccount {
     Htlc(PlainHtlcContract),
     Staking(PlainStakingContract),
     Oracle(PlainOracleContract),
+    Bridge(PlainBridgeContract),
 }
 
 impl From<&nimiq_account::Account> for PlainAccount {
@@ -158,6 +169,13 @@ impl From<&nimiq_account::Account> for PlainAccount {
                         }
                     })
                     .collect(),
+            }),
+            nimiq_account::Account::Bridge(acc) => PlainAccount::Bridge(PlainBridgeContract {
+                balance: acc.balance.into(),
+                owner: acc.owner.to_user_friendly_address(),
+                oracle_address: acc.oracle_address.to_user_friendly_address(),
+                source_chain_id: acc.source_chain_id,
+                transaction_count: acc.transaction_count,
             }),
         }
     }
