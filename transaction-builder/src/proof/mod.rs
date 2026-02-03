@@ -54,6 +54,10 @@ impl TransactionProofBuilder {
             AccountType::Oracle => {
                 TransactionProofBuilder::Basic(BasicProofBuilder::new(transaction))
             }
+            AccountType::Bridge => {
+                // Bridge contracts use basic proof builder for now
+                TransactionProofBuilder::Basic(BasicProofBuilder::new(transaction))
+            }
         }
     }
 

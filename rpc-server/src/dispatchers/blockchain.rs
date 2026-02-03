@@ -627,6 +627,39 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
+    async fn get_bridge_nonce(
+        &self,
+        bridge_address: Address,
+        address: Address,
+    ) -> RPCResult<u64, BlockchainState, Self::Error> {
+        let blockchain_proxy = self.blockchain.read();
+        if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
+            // Get the bridge contract account
+            let bridge_account = blockchain
+                .get_account_if_complete(&bridge_address)
+                .ok_or(Error::NoConsensus)?;
+
+            // Verify it's actually a bridge contract
+            let bridge_contract = match bridge_account {
+                nimiq_account::Account::Bridge(ref contract) => contract,
+                _ => {
+                    return Err(Error::AccountNotFound(bridge_address));
+                }
+            };
+
+            // Get the data store to query the nonce
+            let data_store = blockchain.state.accounts.data_store(&bridge_address);
+            let db_txn = blockchain.read_transaction();
+
+            // Query the nonce using the bridge contract's get_nonce method
+            let nonce = bridge_contract.get_nonce(&data_store.read(&db_txn), &address);
+
+            Ok(RPCData::with_blockchain(nonce, &blockchain_proxy))
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
+    }
+
     #[stream]
     async fn subscribe_for_head_block(
         &self,
