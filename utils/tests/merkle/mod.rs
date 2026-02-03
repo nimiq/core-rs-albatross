@@ -699,7 +699,6 @@ mod keccak256_tests {
 
         // Test with multiple values - sorted should differ from unsorted
         let values = vec!["1", "2", "3", "4"];
-        let unsorted_root = compute_root_from_content::<Keccak256Hasher, &str>(&values);
         let sorted_root = compute_root_from_content_sorted::<Keccak256Hasher, &str>(&values);
 
         // They should be different (unless by chance the hashes are already sorted)

@@ -2,14 +2,15 @@ use nimiq_primitives::account::AccountType;
 
 use crate::{
     account::{
-        basic_account::BasicAccountVerifier, htlc_contract::HashedTimeLockedContractVerifier,
-        oracle_contract::OracleContractVerifier, staking_contract::StakingContractVerifier,
-        vesting_contract::VestingContractVerifier,
+        basic_account::BasicAccountVerifier, bridge_contract::BridgeContractVerifier,
+        htlc_contract::HashedTimeLockedContractVerifier, oracle_contract::OracleContractVerifier,
+        staking_contract::StakingContractVerifier, vesting_contract::VestingContractVerifier,
     },
     Transaction, TransactionError,
 };
 
 pub mod basic_account;
+pub mod bridge_contract;
 pub mod htlc_contract;
 pub mod oracle_contract;
 pub mod staking_contract;
@@ -38,6 +39,7 @@ impl AccountTransactionVerification for AccountType {
                 StakingContractVerifier::verify_incoming_transaction(transaction)
             }
             AccountType::Oracle => OracleContractVerifier::verify_incoming_transaction(transaction),
+            AccountType::Bridge => BridgeContractVerifier::verify_incoming_transaction(transaction),
         }
     }
 
@@ -55,6 +57,7 @@ impl AccountTransactionVerification for AccountType {
                 StakingContractVerifier::verify_outgoing_transaction(transaction)
             }
             AccountType::Oracle => OracleContractVerifier::verify_outgoing_transaction(transaction),
+            AccountType::Bridge => BridgeContractVerifier::verify_outgoing_transaction(transaction),
         }
     }
 }
