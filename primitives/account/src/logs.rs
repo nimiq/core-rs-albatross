@@ -207,6 +207,29 @@ pub enum Log {
     },
 
     #[serde(rename_all = "camelCase")]
+    BridgeCreate {
+        contract_address: Address,
+        owner: Address,
+        oracle_address: Address,
+        source_chain_id: u32,
+        deposit: Coin,
+    },
+
+    #[serde(rename_all = "camelCase")]
+    BridgeIncoming {
+        contract_address: Address,
+        sender: Address,
+        value: Coin,
+    },
+
+    #[serde(rename_all = "camelCase")]
+    BridgeOutgoing {
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+    },
+
+    #[serde(rename_all = "camelCase")]
     RevertContract { contract_address: Address },
 
     #[serde(rename_all = "camelCase")]
@@ -371,6 +394,21 @@ impl Log {
             | Log::JailValidator {
                 validator_address, ..
             } => validator_address == address,
+            Log::BridgeCreate {
+                contract_address,
+                owner,
+                ..
+            } => contract_address == address || owner == address,
+            Log::BridgeIncoming {
+                contract_address,
+                sender,
+                ..
+            } => contract_address == address || sender == address,
+            Log::BridgeOutgoing {
+                contract_address,
+                recipient,
+                ..
+            } => contract_address == address || recipient == address,
             Log::RevertContract { contract_address } => contract_address == address,
             Log::FailedTransaction { from, to, .. } => from == address || to == address,
             Log::ValidatorFeeDeduction {

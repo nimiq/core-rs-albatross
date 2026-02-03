@@ -876,6 +876,18 @@ pub enum AccountAdditionalFields {
         /// The hashes currently stored in the contract.
         hashes: Vec<AnyHash>,
     },
+    /// Additional account information for bridge contracts.
+    #[serde(rename_all = "camelCase")]
+    Bridge {
+        /// User friendly address (NQ-address) of the owner of the bridge contract.
+        owner: Address,
+        /// The oracle contract address for state verification.
+        oracle_address: Address,
+        /// Source chain ID this bridge instance supports.
+        source_chain_id: u32,
+        /// Total number of cross-chain transactions processed.
+        transaction_count: u64,
+    },
 }
 
 impl Account {
@@ -922,6 +934,16 @@ impl Account {
                     owner: oracle.owner,
                     hash_count: oracle.hash_count,
                     hashes: oracle.hashes,
+                },
+            },
+            nimiq_account::Account::Bridge(bridge) => Account {
+                address,
+                balance: bridge.balance,
+                account_additional_fields: AccountAdditionalFields::Bridge {
+                    owner: bridge.owner,
+                    oracle_address: bridge.oracle_address,
+                    source_chain_id: bridge.source_chain_id,
+                    transaction_count: bridge.transaction_count,
                 },
             },
         }
@@ -1134,6 +1156,9 @@ pub enum LogType {
     OracleCreate,
     OracleUpdate,
     OracleChangeOwner,
+    BridgeCreate,
+    BridgeIncoming,
+    BridgeOutgoing,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1192,6 +1217,9 @@ impl LogType {
             Log::OracleCreate { .. } => Self::OracleCreate,
             Log::OracleUpdate { .. } => Self::OracleUpdate,
             Log::OracleChangeOwner { .. } => Self::OracleChangeOwner,
+            Log::BridgeCreate { .. } => Self::BridgeCreate,
+            Log::BridgeIncoming { .. } => Self::BridgeIncoming,
+            Log::BridgeOutgoing { .. } => Self::BridgeOutgoing,
         }
     }
 }

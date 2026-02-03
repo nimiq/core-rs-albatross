@@ -23,6 +23,7 @@ pub enum AccountType {
     HTLC = 2,
     Staking = 3,
     Oracle = 4,
+    Bridge = 5,
 }
 
 impl fmt::Display for AccountType {
@@ -45,6 +46,7 @@ impl TryFrom<u8> for AccountType {
             2 => Ok(AccountType::HTLC),
             3 => Ok(AccountType::Staking),
             4 => Ok(AccountType::Oracle),
+            5 => Ok(AccountType::Bridge),
             _ => Err(Error(value)),
         }
     }
@@ -59,6 +61,7 @@ impl From<AccountType> for u8 {
             AccountType::HTLC => 2,
             AccountType::Staking => 3,
             AccountType::Oracle => 4,
+            AccountType::Bridge => 5,
         }
     }
 }
