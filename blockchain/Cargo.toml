@@ -53,7 +53,7 @@ nimiq-zkp = { workspace = true }
 
 [dev-dependencies]
 rand_chacha = "0.9"
-tempfile = "3.24"
+tempfile = "3.25"
 
 nimiq-tendermint = { workspace = true }
 nimiq-test-log = { workspace = true }
