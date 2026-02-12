@@ -15,7 +15,7 @@ jobs:
       with:
         tool-cache: true
         large-packages: false
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: dtolnay/rust-toolchain@stable
       with:
         components: llvm-tools-preview

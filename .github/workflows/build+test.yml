@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: dtolnay/rust-toolchain@nightly
       with:
         components: rustfmt
@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: dtolnay/rust-toolchain@1.88.0 # Also test our Rust MSRV here.
     - uses: Swatinem/rust-cache@v2
     - run: cargo check --all-features --tests --benches
@@ -39,7 +39,7 @@ jobs:
       with:
         tool-cache: true
         large-packages: false
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: "Check for duplicate message IDs"
       run: "! grep -rEoh --exclude-dir tests --exclude-dir target 'TYPE_ID: u16 = [^;]+;' | sort | uniq -d | grep '^'"
     - uses: dtolnay/rust-toolchain@stable
@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: dtolnay/rust-toolchain@stable
       with:
         components: clippy
@@ -108,7 +108,7 @@ jobs:
         haskell: true
         large-packages: false
         swap-storage: true
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: dtolnay/rust-toolchain@stable
     - uses: Swatinem/rust-cache@v2
     - name: Install wasm-pack
@@ -126,7 +126,7 @@ jobs:
       with:
         tool-cache: true
         large-packages: false
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: dtolnay/rust-toolchain@stable
       with:
         targets: wasm32-unknown-unknown
@@ -148,7 +148,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: actions/setup-python@v6
       with:
         python-version: '3.8'
