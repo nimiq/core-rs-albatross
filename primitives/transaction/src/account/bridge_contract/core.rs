@@ -608,19 +608,11 @@ impl OutgoingTransaction {
         Ok(hash)
     }
 
-    /// Verifies the Merkle proof against a given root hash.
+    /// Computes the Merkle root given a leaf hash.
     ///
-    /// Computes the root hash from the proof and burn transaction,
-    /// then compares it to the provided root hash. Both the proof and
-    /// root hash use the chain's native hash algorithm.
-    ///
-    pub fn verify_merkle_proof(
-        &self,
-        root_hash: AnyHash,
-        leaf_hash: AnyHash,
-    ) -> Result<bool, BridgeError> {
-        let computed_root = self.merkle_proof.compute_root(leaf_hash)?;
-        Ok(computed_root == root_hash)
+    /// Computes the root hash from the proof and leaf hash.
+    pub fn compute_merkle_root(&self, leaf_hash: AnyHash) -> Result<AnyHash, BridgeError> {
+        self.merkle_proof.compute_root(leaf_hash)
     }
 
     /// Returns the transaction details as a tuple (for backward compatibility).

@@ -387,9 +387,6 @@ impl AccountTransactionInteraction for BridgeContract {
             ));
         }
 
-        // Get the oracle state hash at the specified index
-        let oracle_state_hash = &oracle.hashes[oracle_state_index];
-
         // Compute the leaf hash from burn transaction data
         let leaf_hash = outgoing_data
             .burn_proof
@@ -399,17 +396,41 @@ impl AccountTransactionInteraction for BridgeContract {
                 AccountError::InvalidTransaction(TransactionError::InvalidData)
             })?;
 
+        let zero_hash = leaf_hash.zero_of_same_type();
+
+        // Get the oracle state hash at the specified index and its predecessor
+        let (prev_oracle_state_hash, current_oracle_state_hash) = {
+            let prev_oracle_state_hash = if oracle_state_index > 0 {
+                oracle
+                    .get_hash_at_index(oracle_state_index.saturating_sub(1) as u64)
+                    .ok_or(AccountError::InvalidTransaction(
+                        TransactionError::InvalidData,
+                    ))?
+            } else {
+                &zero_hash
+            };
+            (
+                prev_oracle_state_hash,
+                oracle.get_hash_at_index(oracle_state_index as u64).ok_or(
+                    AccountError::InvalidTransaction(TransactionError::InvalidData),
+                )?,
+            )
+        };
+
         // Verify the merkle proof
-        let proof_valid = outgoing_data
+        let merkle_root = outgoing_data
             .burn_proof
-            .verify_merkle_proof(oracle_state_hash.clone(), leaf_hash)
+            .compute_merkle_root(leaf_hash)
             .map_err(|error| {
-                log::warn!(?error, "Merkle proof verification failed");
+                log::warn!(
+                    ?error,
+                    "Unable to compute root given the proof and transaction"
+                );
                 AccountError::InvalidTransaction(TransactionError::InvalidProof)
             })?;
 
-        if !proof_valid {
-            log::warn!("Merkle proof verification returned false");
+        if current_oracle_state_hash != &prev_oracle_state_hash.digest(&merkle_root) {
+            log::warn!("Proof and oracle state mismatch");
             return Err(AccountError::InvalidTransaction(
                 TransactionError::InvalidProof,
             ));
