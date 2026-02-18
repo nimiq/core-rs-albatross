@@ -28,7 +28,7 @@ use nimiq_test_utils::{
     transactions::{IncomingType, OutgoingType, TransactionsGenerator, ValidatorState},
 };
 use nimiq_transaction::{inherent::Inherent, SignatureProof, Transaction};
-use rand::Rng;
+use rand::RngExt;
 use tempfile::tempdir;
 
 const VOLATILE_ENV: bool = true;

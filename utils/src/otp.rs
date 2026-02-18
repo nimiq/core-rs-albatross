@@ -7,7 +7,8 @@ use clear_on_drop::clear::Clear;
 use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::argon2kdf::{compute_argon2_kdf, Argon2Error, Argon2Variant};
 use nimiq_serde::{Deserialize, Serialize};
-use rand::{rngs::OsRng, RngCore as _, TryRngCore as _};
+use rand::{rngs::SysRng, Rng as _};
+use rand_core::UnwrapErr;
 
 pub fn otp(
     secret: &[u8],
@@ -277,7 +278,7 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         algorithm: Algorithm,
     ) -> Result<Self, Argon2Error> {
         let mut salt = vec![0; salt_length];
-        OsRng.unwrap_err().fill_bytes(salt.as_mut_slice());
+        UnwrapErr(SysRng).fill_bytes(salt.as_mut_slice());
         Self::lock(secret, password, iterations, salt, algorithm)
     }
 

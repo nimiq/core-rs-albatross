@@ -241,7 +241,7 @@ impl Handler {
     ) -> Vec<SignedPeerContact> {
         peer_contact_book
             .query(self.services_filter)
-            .choose_multiple(&mut rand::rng(), limit)
+            .sample(&mut rand::rng(), limit)
             .into_iter()
             .map(|c| c.signed().clone())
             .collect()

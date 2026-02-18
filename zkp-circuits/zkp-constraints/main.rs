@@ -42,7 +42,7 @@ fn main() {
     // Print sizes for each circuit.
     info!("====== ZKP constraint estimation initiated ======");
     let start = Instant::now();
-    let mut rng = &mut rand_core_compat::Rng09(rand::rng());
+    let mut rng = &mut rand_core_compat::Rng010(rand::rng());
 
     let circuit: mnt6::PKTreeLeafCircuit = rng.r#gen();
     evaluate_circuit(circuit, "pk_tree_leaf mnt6");

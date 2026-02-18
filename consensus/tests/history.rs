@@ -32,7 +32,7 @@ use nimiq_test_utils::{
 };
 use nimiq_utils::time::OffsetTime;
 use parking_lot::{Mutex, RwLock};
-use rand::Rng;
+use rand::RngExt;
 use tokio::{sync::mpsc, task::yield_now};
 use tokio_stream::wrappers::ReceiverStream;
 

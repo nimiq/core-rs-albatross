@@ -49,7 +49,7 @@ pub fn setup<R: rand::Rng + rand::CryptoRng>(
         return Ok(());
     }
 
-    let rng = &mut rand_core_compat::Rng09(rng);
+    let rng = &mut rand_core_compat::Rng010(rng);
     setup_pk_tree_leaf(rng, path, "pk_tree_5")?;
     setup_pk_tree_node_mnt4(rng, path, "pk_tree_4", 4)?;
     setup_pk_tree_node_mnt6(rng, path, "pk_tree_3", 3)?;

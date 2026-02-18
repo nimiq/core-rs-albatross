@@ -7,7 +7,7 @@ use std::{
 use curve25519_dalek::scalar::Scalar;
 use hex::FromHex;
 use nimiq_utils::key_rng::SecureGenerate;
-use rand::{CryptoRng, RngCore};
+use rand::{CryptoRng, Rng};
 use sha2::{Digest as _, Sha512};
 
 use crate::errors::{KeysError, ParseError};
@@ -52,8 +52,10 @@ impl PrivateKey {
 }
 
 impl SecureGenerate for PrivateKey {
-    fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        PrivateKey(ed25519_zebra::SigningKey::new(rand_core_compat::Rng09(rng)))
+    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+        PrivateKey(ed25519_zebra::SigningKey::new(rand_core_compat::Rng010(
+            rng,
+        )))
     }
 }
 

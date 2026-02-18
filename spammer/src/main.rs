@@ -31,7 +31,7 @@ use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::spawn;
 use rand::{
     distr::{weighted::WeightedIndex, Distribution},
-    Rng,
+    RngExt,
 };
 use serde::Deserialize;
 

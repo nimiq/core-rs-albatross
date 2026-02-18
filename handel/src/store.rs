@@ -292,7 +292,7 @@ mod tests {
     use nimiq_collections::BitSet;
     use nimiq_test_log::test;
     use parking_lot::RwLock;
-    use rand::Rng;
+    use rand::RngExt;
     use serde::{Deserialize, Serialize};
 
     use super::*;

@@ -94,7 +94,7 @@ pub fn prove(
     // Make sure proofs cache is up-to-date.
     update_proof_cache(prover_keys_path, &final_block.hash_blake2s().0)?;
 
-    let rng = &mut rand_core_compat::Rng09(rand::rng());
+    let rng = &mut rand_core_compat::Rng010(rand::rng());
     let proofs = prover_keys_path.join("proofs");
 
     const NUM_PROOFS: usize = 4;

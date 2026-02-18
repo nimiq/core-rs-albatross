@@ -97,7 +97,7 @@ impl ConstraintSynthesizer<FqMNT6> for OuterCircuit {
 #[cfg_attr(not(feature = "expensive-tests"), ignore)]
 fn recursive_input_works() {
     // Create random number generator.
-    let rng = &mut rand_core_compat::Rng09(test_rng(false));
+    let rng = &mut rand_core_compat::Rng010(test_rng(false));
 
     // Create random bits and inputs for red.
     let mut bytes = [0u8; NUMBER_OF_BYTES];

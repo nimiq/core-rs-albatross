@@ -17,7 +17,7 @@ use nimiq_keys::{Ed25519PublicKey, KeyPair};
 #[cfg(feature = "serde-derive")]
 use nimiq_macros::add_serialization_fns_typed_arr;
 use nimiq_macros::create_typed_array;
-use rand::{CryptoRng, RngCore};
+use rand::CryptoRng;
 use sha2::{Digest, Sha256, Sha512};
 
 use crate::rng::Rng;
@@ -168,7 +168,7 @@ impl VrfSeed {
     /// Produces the next VRF Seed given the current VRF Seed (which is part of the message), a
     /// key pair and a nonce.
     #[must_use]
-    pub fn sign_next_with_rng<R: RngCore + CryptoRng>(
+    pub fn sign_next_with_rng<R: rand::Rng + CryptoRng>(
         &self,
         keypair: &KeyPair,
         nonce: u32,
@@ -327,6 +327,7 @@ mod tests {
     use nimiq_keys::SecureGenerate;
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng;
+    use rand::Rng;
 
     use super::*;
 

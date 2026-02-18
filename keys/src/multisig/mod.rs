@@ -7,7 +7,7 @@ use curve25519_dalek::{
 };
 use nimiq_hash::{sha512::Sha512Hasher, Hasher};
 use nimiq_utils::key_rng::SecureGenerate;
-use rand::{CryptoRng, Rng, RngCore};
+use rand::{CryptoRng, Rng};
 use sha2::{self, Digest, Sha512};
 
 use self::{
@@ -88,8 +88,8 @@ pub struct CommitmentsBuilder {
 }
 
 impl CommitmentsBuilder {
-    /// Creates new commitment pairs from an Rng.
-    pub fn new<R: Rng + RngCore + CryptoRng>(
+    /// Creates new commitment pairs from an RNG.
+    pub fn new<R: Rng + CryptoRng>(
         own_public_key: Ed25519PublicKey,
         rng: &mut R,
     ) -> CommitmentsBuilder {

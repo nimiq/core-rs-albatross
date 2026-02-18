@@ -22,7 +22,8 @@ workspace = true
 [dependencies]
 bitvec = "1.0"
 hex = "0.4"
-rand = "0.9"
+rand = "0.10"
+rand_core = "0.10"
 serde = "1.0"
 unicode-normalization = "0.1"
 

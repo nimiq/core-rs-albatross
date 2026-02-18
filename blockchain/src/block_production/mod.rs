@@ -12,7 +12,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, inherent::Inherent, Transaction,
 };
-use rand::{CryptoRng, Rng, RngCore};
+use rand::{CryptoRng, Rng};
 use thiserror::Error;
 
 use crate::{interface::HistoryInterface, Blockchain};
@@ -284,7 +284,7 @@ impl BlockProducer {
     /// NOT a complete block. It still needs to go through the Tendermint protocol in order to be
     /// finalized.
     // Note: Needs to be called with the Blockchain lock held.
-    pub fn next_macro_block_proposal_with_rng<R: RngCore + CryptoRng>(
+    pub fn next_macro_block_proposal_with_rng<R: Rng + CryptoRng>(
         &self,
         // The (upgradable) read locked guard to the blockchain.
         blockchain: &Blockchain,

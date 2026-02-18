@@ -25,7 +25,7 @@ hex = "0.4"
 log = { workspace = true }
 parking_lot = "0.12"
 prometheus-client = { version = "0.24.1", optional = true }
-rand = "0.9"
+rand = "0.10"
 serde = "1.0"
 thiserror = "2.0"
 tokio = { version = "1.52", features = ["sync"] }
@@ -52,7 +52,7 @@ nimiq-vrf = { workspace = true }
 nimiq-zkp = { workspace = true }
 
 [dev-dependencies]
-rand_chacha = "0.9"
+rand_chacha = "0.10"
 tempfile = "3.27"
 
 nimiq-tendermint = { workspace = true }

@@ -19,7 +19,7 @@ use nimiq_serde::Deserialize;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
 use parking_lot::RwLock;
-use rand::{rngs::StdRng, RngCore, SeedableRng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{blockchain_with_rng::*, test_rng};
 

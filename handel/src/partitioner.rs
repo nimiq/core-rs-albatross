@@ -130,7 +130,7 @@ impl Partitioner for BinomialPartitioner {
 #[cfg(test)]
 mod tests {
     use nimiq_test_log::test;
-    use rand::Rng;
+    use rand::RngExt;
 
     use super::*;
 

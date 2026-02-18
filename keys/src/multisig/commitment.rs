@@ -2,7 +2,7 @@ use curve25519_dalek::{
     constants, edwards::CompressedEdwardsY, traits::Identity, EdwardsPoint, Scalar,
 };
 use nimiq_utils::key_rng::SecureGenerate;
-use rand::{CryptoRng, Rng, RngCore};
+use rand::{CryptoRng, Rng, RngExt};
 use sha2::digest::Update;
 use zeroize::Zeroize;
 
@@ -91,9 +91,7 @@ impl CommitmentPair {
     }
 
     /// Returns as many commitments as required by the MuSig2 parameter v (`MUSIG2_PARAMETER_V`).
-    pub fn generate_all<R: Rng + RngCore + CryptoRng>(
-        rng: &mut R,
-    ) -> [CommitmentPair; MUSIG2_PARAMETER_V] {
+    pub fn generate_all<R: Rng + CryptoRng>(rng: &mut R) -> [CommitmentPair; MUSIG2_PARAMETER_V] {
         let mut commitments = Vec::with_capacity(MUSIG2_PARAMETER_V);
         for _ in 0..MUSIG2_PARAMETER_V {
             commitments.push(CommitmentPair::generate(rng));
@@ -101,7 +99,7 @@ impl CommitmentPair {
         commitments.try_into().unwrap()
     }
 
-    fn generate_internal<R: Rng + RngCore + CryptoRng>(
+    fn generate_internal<R: Rng + CryptoRng>(
         rng: &mut R,
     ) -> Result<CommitmentPair, InvalidScalarError> {
         // Create random 32 bytes.
@@ -151,7 +149,7 @@ impl CommitmentPair {
 }
 
 impl SecureGenerate for CommitmentPair {
-    fn generate<R: Rng + RngCore + CryptoRng>(rng: &mut R) -> Self {
+    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         CommitmentPair::generate_internal(rng).expect("Failed to generate CommitmentPair")
     }
 }

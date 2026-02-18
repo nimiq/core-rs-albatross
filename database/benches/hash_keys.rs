@@ -11,7 +11,7 @@ use nimiq_database_value::{AsDatabaseBytes, FromDatabaseBytes};
 use pprof::criterion::{Output, PProfProfiler};
 use rand::{
     distr::{Distribution, StandardUniform},
-    rng, Rng,
+    rng, Rng, RngExt,
 };
 
 const TABLE: &str = "bench";

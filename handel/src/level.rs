@@ -162,7 +162,7 @@ impl Level {
 mod test {
     use nimiq_collections::bitset::BitSet;
     use nimiq_test_log::test;
-    use rand::Rng;
+    use rand::RngExt;
     use serde::{Deserialize, Serialize};
 
     use super::*;

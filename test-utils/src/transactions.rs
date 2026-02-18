@@ -23,7 +23,7 @@ use nimiq_transaction::{
 };
 use nimiq_transaction_builder::TransactionProofBuilder;
 use nimiq_trie::WriteTransactionProxy;
-use rand::{CryptoRng, Rng};
+use rand::{CryptoRng, Rng, RngExt};
 
 pub enum ValidatorState {
     Active,

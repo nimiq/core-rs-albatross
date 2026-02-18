@@ -14,7 +14,7 @@ use futures::{
 use nimiq_collections::BitSet;
 use nimiq_time::{sleep, Sleep};
 use nimiq_utils::stream::{FuturesUnordered, SelectAll};
-use rand::{rng, Rng};
+use rand::{rng, RngExt};
 use tokio::{sync::mpsc, time::Duration};
 use tokio_stream::wrappers::ReceiverStream;
 

@@ -1,5 +1,5 @@
 use nimiq_hash::Hash;
-use nimiq_utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
+use nimiq_utils::key_rng::{CryptoRng, Rng, SecureGenerate};
 
 use crate::{PublicKey, SecretKey, SigHash, Signature};
 
@@ -38,7 +38,7 @@ impl KeyPair {
 }
 
 impl SecureGenerate for KeyPair {
-    fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         let secret = SecretKey::generate(rng);
         KeyPair::from(secret)
     }

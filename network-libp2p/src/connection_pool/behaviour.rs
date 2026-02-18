@@ -549,7 +549,7 @@ impl Behaviour {
                     None
                 }
             })
-            .choose_multiple(&mut rand::rng(), num_peers)
+            .sample(&mut rand::rng(), num_peers)
     }
 
     /// This function is used to select a list of peers, based on services flag, in order to dial them.
@@ -577,7 +577,7 @@ impl Behaviour {
                     None
                 }
             })
-            .choose_multiple(&mut rand::rng(), num_peers)
+            .sample(&mut rand::rng(), num_peers)
     }
 
     fn choose_seeds_to_dial(&self) -> Vec<Multiaddr> {
@@ -595,7 +595,7 @@ impl Behaviour {
             .iter()
             .filter(|address| !own_addresses.contains(address) && self.addresses.can_dial(*address))
             .cloned()
-            .choose_multiple(&mut rand::rng(), num_seeds)
+            .sample(&mut rand::rng(), num_seeds)
     }
 
     fn housekeeping(&mut self) {

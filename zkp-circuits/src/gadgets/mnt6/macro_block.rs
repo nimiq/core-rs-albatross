@@ -388,7 +388,7 @@ mod tests {
     use nimiq_test_log::test;
     use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng};
     use nimiq_transaction::reward::RewardTransaction;
-    use rand::Rng as _;
+    use rand::RngExt as _;
 
     use super::*;
 
@@ -510,7 +510,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut rand_core_compat::Rng09(test_rng(true));
+        let rng = &mut rand_core_compat::Rng010(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -550,7 +550,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut rand_core_compat::Rng09(test_rng(true));
+        let rng = &mut rand_core_compat::Rng010(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -592,7 +592,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut rand_core_compat::Rng09(test_rng(true));
+        let rng = &mut rand_core_compat::Rng010(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -634,7 +634,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut rand_core_compat::Rng09(test_rng(true));
+        let rng = &mut rand_core_compat::Rng010(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -676,7 +676,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut rand_core_compat::Rng09(test_rng(true));
+        let rng = &mut rand_core_compat::Rng010(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -724,7 +724,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut rand_core_compat::Rng09(test_rng(true));
+        let rng = &mut rand_core_compat::Rng010(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);

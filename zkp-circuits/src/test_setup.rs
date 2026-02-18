@@ -248,7 +248,7 @@ pub fn setup_merger_wrapper_simulation<R: rand::CryptoRng>(
     rng: &mut R,
     path: &Path,
 ) -> Result<ToxicWaste<MNT6_753>, NanoZKPError> {
-    let rng = &mut rand_core_compat::Rng09(rng);
+    let rng = &mut rand_core_compat::Rng010(rng);
 
     // Create parameters for our circuit
     let circuit = MergerWrapperCircuit::rand(rng);

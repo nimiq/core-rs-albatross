@@ -380,7 +380,7 @@ mod tests {
     use nimiq_primitives::networks::NetworkId;
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng;
-    use rand::{Rng, RngCore};
+    use rand::{Rng, RngExt};
 
     use super::*;
 

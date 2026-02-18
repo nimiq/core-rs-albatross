@@ -27,11 +27,8 @@ ark-std = "0.4"
 log = { workspace = true }
 once_cell = "1.21"
 parking_lot = "0.12"
-rand = "0.9"
-rand_core_compat = { version = "0.1", features = [
-    "rand_core_0_6",
-    "rand_core_0_9",
-] }
+rand = "0.10"
+rand_core_compat = { version = "0.1", features = ["rand_core_0_6", "rand_core_0_10"] }
 serde = "1.0"
 serde_json = "1.0"
 thiserror = "2.0"
@@ -47,7 +44,7 @@ nimiq-zkp-circuits = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
-rand_chacha = "0.9"
+rand_chacha = "0.10"
 tracing-subscriber = { version = "0.3" }
 
 nimiq-log = { workspace = true }

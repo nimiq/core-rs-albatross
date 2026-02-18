@@ -25,12 +25,14 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 ark-serialize = "0.4"
 futures = { workspace = true }
-getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom = { version = "0.4", features = ["wasm_js"] }
+# We need to enable the `wasm_js` feature of getrandom 0.3 while we still indirectly depend on it
+getrandom_0_3 = { package="getrandom", version = "0.3", features = ["wasm_js"] }
 hex = "0.4"
 idb = "0.6.5"
 js-sys = "0.3"
 log = { workspace = true }
-rand = "0.9"
+rand = "0.10"
 serde = "1.0"
 serde_bytes = "0.11"
 thiserror = "2.0"
