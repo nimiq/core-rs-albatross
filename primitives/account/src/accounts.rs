@@ -24,7 +24,7 @@ use nimiq_trie::{trie::MerkleRadixTrie, WriteTransactionProxy};
 use crate::{
     Account, AccountInherentInteraction, AccountPruningInteraction, AccountReceipt,
     AccountTransactionInteraction, AccountsError, BlockLogger, BlockState, DataStore,
-    InherentLogger, InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance,
+    InherentLogger, InherentOperationReceipt, Log, OperationReceipt, Receipts, ReservedBalance,
     RevertInfo, TransactionLog, TransactionOperationReceipt, TransactionReceipt,
 };
 
@@ -458,6 +458,7 @@ impl Accounts {
             sender_receipt,
             recipient_receipt: recipient_result.unwrap(),
             pruned_account,
+            fee_payer: None, // Normal transaction, sender paid the fee
         })
     }
 
@@ -535,11 +536,83 @@ impl Accounts {
 
         let pruned_account = self.put_or_prune(txn, sender_address, sender_account);
 
+        // If sender returned no-op (None receipt) and sender is a Bridge contract,
+        // deduct fee from the transaction signer instead
+        if sender_receipt.is_none() && transaction.sender_type == AccountType::Bridge {
+            return self.deduct_fee_from_signer(txn, transaction, tx_logger, pruned_account);
+        }
+
         Ok(TransactionReceipt {
             sender_receipt,
             recipient_receipt: None,
             pruned_account,
+            fee_payer: None, // Sender paid the fee (or no fee was paid)
         })
+    }
+
+    /// Deduct transaction fee from the signer's account (for bridge contracts that return no-op).
+    /// This is used when a bridge contract returns None from commit_failed_transaction,
+    /// indicating that the fee should be deducted from the actual transaction submitter
+    /// rather than the bridge contract balance.
+    fn deduct_fee_from_signer(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        transaction: &Transaction,
+        tx_logger: &mut TransactionLog,
+        sender_pruned_account: Option<AccountReceipt>,
+    ) -> Result<TransactionReceipt, AccountError> {
+        // Extract signer address from transaction proof
+        let signer_address = self.extract_signer_address(transaction)?;
+
+        // If signer is the same as sender, we already handled it (shouldn't happen for bridge)
+        if signer_address == transaction.sender {
+            return Ok(TransactionReceipt {
+                sender_receipt: None,
+                recipient_receipt: None,
+                pruned_account: sender_pruned_account,
+                fee_payer: None,
+            });
+        }
+
+        // Load signer's account (must be BasicAccount)
+        let mut signer_account = self.get_with_type(txn, &signer_address, AccountType::Basic)?;
+
+        // Deduct fee from signer's account
+        if let Account::Basic(ref mut basic_account) = signer_account {
+            // This will return InsufficientFunds error if balance < fee
+            basic_account.balance.safe_sub_assign(transaction.fee)?;
+            tx_logger.push_log(Log::pay_fee_log(transaction));
+        } else {
+            // Signer must be a basic account
+            log::error!(
+                signer_address = %signer_address,
+                "Bridge transaction signer is not a BasicAccount"
+            );
+            return Err(AccountError::InvalidForSender);
+        }
+
+        let signer_pruned = self.put_or_prune(txn, &signer_address, signer_account);
+
+        Ok(TransactionReceipt {
+            sender_receipt: None,
+            recipient_receipt: None,
+            pruned_account: signer_pruned,
+            fee_payer: Some(signer_address), // Track that signer paid the fee
+        })
+    }
+
+    /// Extract the signer address from a transaction's proof.
+    fn extract_signer_address(&self, transaction: &Transaction) -> Result<Address, AccountError> {
+        use nimiq_serde::Deserialize;
+        use nimiq_transaction::SignatureProof;
+
+        let signature_proof = SignatureProof::deserialize_all(&transaction.proof)
+            .map_err(|_| AccountError::InvalidSignature)?;
+
+        // Compute signer address from public key
+        let signer_address = signature_proof.compute_signer();
+
+        Ok(signer_address)
     }
 
     fn commit_inherent(
@@ -755,6 +828,18 @@ impl Accounts {
         receipt: TransactionReceipt,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
+        // If fee was paid by signer (not sender), restore fee to signer
+        if let Some(fee_payer_address) = receipt.fee_payer {
+            return self.restore_fee_to_signer(
+                txn,
+                transaction,
+                &fee_payer_address,
+                receipt.pruned_account.as_ref(),
+                tx_logger,
+            );
+        }
+
+        // Normal case: sender paid the fee (or no fee was paid)
         let sender_address = &transaction.sender;
         if self.mark_changed_if_missing(txn, sender_address) {
             return Ok(());
@@ -778,6 +863,41 @@ impl Accounts {
 
         // Reverting a zero-fee signaling transaction can create a prunable account.
         self.put_or_prune(txn, sender_address, sender_account);
+
+        Ok(())
+    }
+
+    /// Restore transaction fee to the signer's account (for bridge contract reverts).
+    /// This is used when reverting a failed transaction where the fee was deducted
+    /// from the signer rather than the sender.
+    fn restore_fee_to_signer(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        transaction: &Transaction,
+        fee_payer_address: &Address,
+        pruned_account: Option<&AccountReceipt>,
+        tx_logger: &mut TransactionLog,
+    ) -> Result<(), AccountError> {
+        if self.mark_changed_if_missing(txn, fee_payer_address) {
+            return Ok(());
+        }
+
+        let mut signer_account =
+            self.get_or_restore(txn, fee_payer_address, AccountType::Basic, pruned_account)?;
+
+        // Restore fee to signer's account
+        if let Account::Basic(ref mut basic_account) = signer_account {
+            basic_account.balance += transaction.fee;
+            tx_logger.push_log(Log::pay_fee_log(transaction));
+        } else {
+            log::error!(
+                fee_payer_address = %fee_payer_address,
+                "Fee payer is not a BasicAccount during revert"
+            );
+            return Err(AccountError::InvalidForSender);
+        }
+
+        self.put_or_prune(txn, fee_payer_address, signer_account);
 
         Ok(())
     }
