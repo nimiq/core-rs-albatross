@@ -120,6 +120,15 @@ impl TestCommitRevert {
                 .expect("Failed to put initial accounts");
         }
 
+        // `put` leaves freshly created branch nodes with un-recomputed child
+        // hashes; a real `Accounts::commit` always finishes with `update_root`.
+        // Without this, `get_root_hash_assert` can panic on an incomplete trie
+        // depending on the inserted addresses' nibble layout.
+        test.accounts
+            .tree
+            .update_root(&mut txn)
+            .expect("Failed to update root hash for initial accounts");
+
         raw_txn.commit();
 
         test
