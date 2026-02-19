@@ -1,8 +1,11 @@
-use nimiq_account::BridgeContract;
+use nimiq_account::{
+    Account, BasicAccount, BlockLogger, BlockState, BridgeContract, TransactionOperationReceipt,
+};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
 use nimiq_serde::Serialize;
+use nimiq_test_utils::accounts_revert::TestCommitRevert;
 use nimiq_transaction::{
     account::{
         bridge_contract::OutgoingBridgeTransactionData,
@@ -515,4 +518,119 @@ fn test_recipient_data_size_validation() {
         target_nonce: 1,
     };
     assert!(valid_no_data.validate(&chain_config).is_ok());
+}
+
+/// Regression test: the fee for a failed outgoing bridge transaction must be charged
+/// to the signer of the *verified* proof in `sender_data`, never to whatever key
+/// happens to sit in `transaction.proof`.
+///
+/// `transaction.proof` is never verified for `AccountType::Bridge` senders (the
+/// verified signature lives in `OutgoingBridgeTransactionData.proof`). Deriving the
+/// fee payer from `transaction.proof` would let a submitter charge the fee to an
+/// arbitrary victim by placing the victim's public key there. This test crafts
+/// exactly that divergence and asserts the fee lands on the real signer.
+#[test]
+fn fee_for_failed_outgoing_tx_is_charged_to_sender_data_signer() {
+    let signer = KeyPair::generate_default_csprng(); // signs sender_data (the verified proof)
+    let victim = KeyPair::generate_default_csprng(); // key placed in transaction.proof
+    let signer_address = Address::from(&signer.public);
+    let victim_address = Address::from(&victim.public);
+
+    let bridge_address = Address::from([3u8; 20]);
+    let recipient_address = Address::from([4u8; 20]);
+    let source_chain_id = 1;
+
+    let bridge_contract = BridgeContract {
+        owner: signer_address.clone(),
+        oracle_address: Address::from([2u8; 20]),
+        balance: Coin::from_u64_unchecked(1000),
+        source_chain_id,
+        // `ValidationProgram::empty()` extracts no fields, so `parse_burn_data` fails
+        // and the transaction lands in the failed-transaction path.
+        chain_config: create_test_chain_config(source_chain_id),
+        transaction_count: 0,
+    };
+
+    let initial_signer_balance = Coin::from_u64_unchecked(10_000);
+    let initial_victim_balance = Coin::from_u64_unchecked(5_000);
+
+    let accounts = TestCommitRevert::with_initial_state(&[
+        (bridge_address.clone(), Account::Bridge(bridge_contract)),
+        (
+            signer_address.clone(),
+            Account::Basic(BasicAccount {
+                balance: initial_signer_balance,
+            }),
+        ),
+        (
+            victim_address.clone(),
+            Account::Basic(BasicAccount {
+                balance: initial_victim_balance,
+            }),
+        ),
+    ]);
+
+    // Build an outgoing bridge transaction with a non-zero fee.
+    let outgoing_tx = OutgoingTransaction {
+        burn_transaction_data: vec![0u8; 32],
+        merkle_proof: AnyMerkleProof::Blake2b(MerkleProof::<Blake2bHash>::new(&[], &[])),
+        oracle_state_index: 0,
+    };
+    let mut bridge_data = OutgoingBridgeTransactionData {
+        burn_proof: outgoing_tx,
+        proof: SignatureProof::default(),
+    };
+
+    let value = Coin::from_u64_unchecked(100);
+    let fee = Coin::from_u64_unchecked(10);
+
+    let mut transaction = Transaction::new_extended(
+        bridge_address.clone(),
+        AccountType::Bridge,
+        bridge_data.serialize_to_vec(), // sender_data carries a default (empty) proof while signing
+        recipient_address,
+        AccountType::Basic,
+        vec![],
+        value,
+        fee,
+        1,
+        NetworkId::UnitAlbatross,
+    );
+
+    // The signer signs the transaction content; this is the proof bridge verification checks.
+    let signer_proof =
+        SignatureProof::from_ed25519(signer.public, signer.sign(&transaction.serialize_content()));
+    bridge_data.set_signature(signer_proof);
+    transaction.sender_data = bridge_data.serialize_to_vec();
+
+    // The attacker-controlled (never verified) field points at the victim's key.
+    let victim_proof = SignatureProof::from_ed25519(victim.public, victim.sign(b"unrelated"));
+    transaction.proof = victim_proof.serialize_to_vec();
+
+    let block_state = BlockState::new(1, 1);
+    let receipts = accounts
+        .commit_and_test(&[transaction], &[], &block_state, &mut BlockLogger::empty())
+        .expect("commit should succeed (transaction is committed as failed)");
+
+    // The transaction must have failed and recorded the signer (not the victim) as fee payer.
+    match &receipts.transactions[0] {
+        TransactionOperationReceipt::Err(receipt, _) => {
+            assert_eq!(
+                receipt.fee_payer,
+                Some(signer_address.clone()),
+                "fee payer must be the sender_data signer"
+            );
+        }
+        other => panic!("expected a failed transaction receipt, got {other:?}"),
+    }
+
+    // The fee is deducted from the signer; the victim is untouched.
+    assert_eq!(
+        accounts.get_complete(&signer_address, None).balance(),
+        initial_signer_balance - fee,
+    );
+    assert_eq!(
+        accounts.get_complete(&victim_address, None).balance(),
+        initial_victim_balance,
+    );
 }
