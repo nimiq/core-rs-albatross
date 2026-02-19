@@ -46,6 +46,10 @@ pub struct TransactionReceipt {
     pub sender_receipt: Option<AccountReceipt>,
     pub recipient_receipt: Option<AccountReceipt>,
     pub pruned_account: Option<AccountReceipt>,
+    /// Address of the account that paid the transaction fee.
+    /// This is typically the sender, but for bridge contracts that return no-op
+    /// from commit_failed_transaction, this will be the transaction signer.
+    pub fee_payer: Option<nimiq_keys::Address>,
 }
 
 pub type InherentReceipt = Option<AccountReceipt>;

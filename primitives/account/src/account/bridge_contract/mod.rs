@@ -288,10 +288,7 @@ impl AccountTransactionInteraction for BridgeContract {
         let outgoing_data = OutgoingBridgeTransactionData::parse(transaction)
             .map_err(AccountError::InvalidTransaction)?;
 
-        // Verify owner signature
-        if !outgoing_data.proof.is_signed_by(&self.owner) {
-            return Err(AccountError::InvalidSignature);
-        }
+        // Owner signature check is on purpose missing  to enable permissionless burn proof submission.
 
         // Verify the transaction signature
         outgoing_data
@@ -510,32 +507,24 @@ impl AccountTransactionInteraction for BridgeContract {
 
     fn commit_failed_transaction(
         &mut self,
-        transaction: &Transaction,
+        _transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
-        tx_logger: &mut TransactionLog,
+        _tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        let new_balance = self.balance.safe_sub(transaction.fee)?;
-        self.can_change_balance(transaction, new_balance, false)?;
-        self.balance = new_balance;
-
-        tx_logger.push_log(Log::pay_fee_log(transaction));
-
+        // Do nothing: Fee deduction handled by `Accounts`
         Ok(None)
     }
 
     fn revert_failed_transaction(
         &mut self,
-        transaction: &Transaction,
+        _transaction: &Transaction,
         _block_state: &BlockState,
         _receipt: Option<AccountReceipt>,
         _data_store: DataStoreWrite,
-        tx_logger: &mut TransactionLog,
+        _tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
-        self.balance += transaction.fee;
-
-        tx_logger.push_log(Log::pay_fee_log(transaction));
-
+        // Do nothing: Fee revert handled by `Accounts`
         Ok(())
     }
 
