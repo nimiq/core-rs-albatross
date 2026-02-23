@@ -584,7 +584,10 @@ impl Accounts {
         if let Account::Basic(ref mut basic_account) = signer_account {
             // This will return InsufficientFunds error if balance < fee
             basic_account.balance.safe_sub_assign(transaction.fee)?;
-            tx_logger.push_log(Log::pay_fee_log(transaction));
+            tx_logger.push_log(Log::PayFee {
+                from: signer_address.clone(),
+                fee: transaction.fee,
+            });
         } else {
             // Signer must be a basic account
             log::error!(
@@ -597,9 +600,9 @@ impl Accounts {
         let signer_pruned = self.put_or_prune(txn, &signer_address, signer_account);
 
         Ok(TransactionReceipt {
-            sender_receipt: None,
+            sender_receipt: sender_pruned_account, // Preserve sender's pruned data
             recipient_receipt: None,
-            pruned_account: signer_pruned,
+            pruned_account: signer_pruned, // Keep signer's pruned data
             fee_payer: Some(signer_address), // Track that signer paid the fee
         })
     }
@@ -837,30 +840,39 @@ impl Accounts {
         receipt: TransactionReceipt,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
-        // If fee was paid by signer (not sender), restore fee to signer
+        // Track whether fee was paid by a separate signer (before moving receipt.fee_payer)
+        let has_separate_fee_payer = receipt.fee_payer.is_some();
+
+        // If fee was paid by signer (not sender), restore fee to signer first
         if let Some(fee_payer_address) = receipt.fee_payer {
-            return self.restore_fee_to_signer(
+            self.restore_fee_to_signer(
                 txn,
                 transaction,
                 &fee_payer_address,
                 receipt.pruned_account.as_ref(),
                 tx_logger,
-            );
+            )?;
+            // Continue to revert sender side below
         }
 
-        // Normal case: sender paid the fee (or no fee was paid)
+        // Revert sender side (bridge contract or other sender)
         let sender_address = &transaction.sender;
         if self.mark_changed_if_missing(txn, sender_address) {
             return Ok(());
         }
 
         let sender_store = DataStore::new(&self.tree, sender_address);
-        let mut sender_account = self.get_or_restore(
-            txn,
-            sender_address,
-            transaction.sender_type,
-            receipt.pruned_account.as_ref(),
-        )?;
+
+        // Use sender_receipt if available (for bridge transactions with separate signer),
+        // otherwise use pruned_account (for normal transactions)
+        let sender_pruned = if has_separate_fee_payer {
+            receipt.sender_receipt.as_ref()
+        } else {
+            receipt.pruned_account.as_ref()
+        };
+
+        let mut sender_account =
+            self.get_or_restore(txn, sender_address, transaction.sender_type, sender_pruned)?;
 
         sender_account.revert_failed_transaction(
             transaction,
