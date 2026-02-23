@@ -480,22 +480,12 @@ impl OutgoingTransaction {
         &self,
         chain_config: &ChainConfig,
     ) -> Result<ParsedBurnData, BridgeError> {
-        // Create a dummy incoming transaction for validation context
-        // The validation program will extract values without comparing them
-        let dummy_recipient_data = RecipientData {
-            target_address: vec![],
-            target_nonce: 1,
-        };
-        let dummy_incoming_tx = IncomingTransaction {
-            recipient_data: dummy_recipient_data,
-            amount: Coin::from_u64_unchecked(1),
-            validity_start_height: 1,
-        };
-
-        // Execute validation program with extraction
+        // Execute validation program in extraction-only mode
+        // This will error if the program contains validation operations (Assert, PushExpected*)
+        // that require expected values from an IncomingTransaction.
         let result = chain_config
             .validation_program
-            .execute_with_extraction(&self.burn_transaction_data, &dummy_incoming_tx)?;
+            .extract_only(&self.burn_transaction_data)?;
 
         // Extract required fields from the result
         let amount_value = result
@@ -1427,7 +1417,7 @@ pub struct ParsedBurnData {
     pub target_nonce: u64,
     /// Block height where the burn occurred
     pub burn_block_height: u32,
-    /// Chain ID of the destination blockchain
+    /// Chain ID of the source (burn) blockchain; must match BridgeContract.source_chain_id
     pub target_chain_id: u32,
 }
 
@@ -1444,8 +1434,9 @@ impl ParsedBurnData {
         if amount == Coin::ZERO {
             return Err(BridgeError::InvalidAmount);
         }
+        // Zero nonce indicates malformed burn data, not a replay attack
         if target_nonce == 0 {
-            return Err(BridgeError::NonceAlreadyUsed);
+            return Err(BridgeError::InvalidRecipientData);
         }
         if burn_block_height == 0 {
             return Err(BridgeError::InvalidValidityHeight);
@@ -1509,6 +1500,268 @@ impl ValidationProgram {
         }
     }
 
+    /// Executes a single operation on the given context.
+    ///
+    /// This private helper method handles the common operation execution logic
+    /// shared between extract_only and execute_with_extraction methods.
+    fn execute_operation<C: ExecutionContext>(
+        ctx: &mut C,
+        op: &ValidationOp,
+        pc: &mut usize,
+    ) -> Result<(), BridgeError> {
+        match op {
+            // Data loading operations
+            ValidationOp::PushConst(value) => {
+                ctx.stack_mut().push(StackValue::U64(*value));
+            }
+
+            ValidationOp::LoadBytes => {
+                let length = ctx.pop_u64()? as usize;
+                let offset = ctx.pop_u64()? as usize;
+                let burn_tx_data = ctx.burn_tx_data();
+
+                if offset + length > burn_tx_data.len() {
+                    return Err(BridgeError::InvalidDataLength);
+                }
+
+                let bytes = burn_tx_data[offset..offset + length].to_vec();
+                ctx.stack_mut().push(StackValue::Bytes(bytes));
+            }
+
+            ValidationOp::LoadU64(endianness) => {
+                let offset = ctx.pop_u64()? as usize;
+                let burn_tx_data = ctx.burn_tx_data();
+
+                if offset + 8 > burn_tx_data.len() {
+                    return Err(BridgeError::InvalidDataLength);
+                }
+
+                let value = endianness_conversion::parse_u64(
+                    &burn_tx_data[offset..offset + 8],
+                    *endianness,
+                )?;
+                ctx.stack_mut().push(StackValue::U64(value));
+            }
+
+            ValidationOp::LoadU32(endianness) => {
+                let offset = ctx.pop_u64()? as usize;
+                let burn_tx_data = ctx.burn_tx_data();
+
+                if offset + 4 > burn_tx_data.len() {
+                    return Err(BridgeError::InvalidDataLength);
+                }
+
+                let value = endianness_conversion::parse_u32(
+                    &burn_tx_data[offset..offset + 4],
+                    *endianness,
+                )?;
+                ctx.stack_mut().push(StackValue::U32(value));
+            }
+
+            ValidationOp::LoadAddress => {
+                let offset = ctx.pop_u64()? as usize;
+                let burn_tx_data = ctx.burn_tx_data();
+
+                if offset + 20 > burn_tx_data.len() {
+                    return Err(BridgeError::InvalidDataLength);
+                }
+
+                let bytes = burn_tx_data[offset..offset + 20].to_vec();
+                ctx.stack_mut().push(StackValue::Bytes(bytes));
+            }
+
+            ValidationOp::LoadEvmU64 => {
+                let offset = ctx.pop_u64()? as usize;
+                let burn_tx_data = ctx.burn_tx_data();
+
+                if offset + 32 > burn_tx_data.len() {
+                    return Err(BridgeError::InvalidDataLength);
+                }
+
+                let mut evm_bytes = [0u8; 32];
+                evm_bytes.copy_from_slice(&burn_tx_data[offset..offset + 32]);
+                let value = crate::bridge_contract::decode_arithmetic::bytes32_to_u64(&evm_bytes)?;
+                ctx.stack_mut().push(StackValue::U64(value));
+            }
+
+            // Expected value operations (delegated to context)
+            ValidationOp::PushExpectedAmount
+            | ValidationOp::PushExpectedAddress
+            | ValidationOp::PushExpectedNonce
+            | ValidationOp::PushExpectedValidityHeight => {
+                ctx.handle_push_expected(op)?;
+            }
+
+            // Arithmetic operations
+            ValidationOp::Add => {
+                let b = ctx.pop_u64()?;
+                let a = ctx.pop_u64()?;
+                let result = crate::bridge_contract::decode_arithmetic::checked_add_u256(a, b)?;
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            ValidationOp::Sub => {
+                let b = ctx.pop_u64()?;
+                let a = ctx.pop_u64()?;
+                let result = crate::bridge_contract::decode_arithmetic::checked_sub_u256(a, b)?;
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            ValidationOp::Mul => {
+                let b = ctx.pop_u64()?;
+                let a = ctx.pop_u64()?;
+                let result = crate::bridge_contract::decode_arithmetic::checked_mul_u256(a, b)?;
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            ValidationOp::Div => {
+                let b = ctx.pop_u64()?;
+                let a = ctx.pop_u64()?;
+                if b == 0 {
+                    return Err(BridgeError::InvalidAmount);
+                }
+                let result = crate::bridge_contract::decode_arithmetic::checked_div_u256(a, b)?;
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            ValidationOp::Mod => {
+                let b = ctx.pop_u64()?;
+                let a = ctx.pop_u64()?;
+                if b == 0 {
+                    return Err(BridgeError::InvalidAmount);
+                }
+                let result = a % b;
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            // Comparison operations
+            ValidationOp::Eq => {
+                let b = ctx.pop()?;
+                let a = ctx.pop()?;
+                let result = if a == b { 1 } else { 0 };
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            ValidationOp::Lt => {
+                let b = ctx.pop_u64()?;
+                let a = ctx.pop_u64()?;
+                let result = if a < b { 1 } else { 0 };
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            ValidationOp::Gt => {
+                let b = ctx.pop_u64()?;
+                let a = ctx.pop_u64()?;
+                let result = if a > b { 1 } else { 0 };
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            ValidationOp::IsZero => {
+                let a = ctx.pop_u64()?;
+                let result = if a == 0 { 1 } else { 0 };
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            // Logical operations
+            ValidationOp::And => {
+                let b = ctx.pop_u64()?;
+                let a = ctx.pop_u64()?;
+                let result = if a != 0 && b != 0 { 1 } else { 0 };
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            ValidationOp::Or => {
+                let b = ctx.pop_u64()?;
+                let a = ctx.pop_u64()?;
+                let result = if a != 0 || b != 0 { 1 } else { 0 };
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            ValidationOp::Not => {
+                let a = ctx.pop_u64()?;
+                let result = if a == 0 { 1 } else { 0 };
+                ctx.stack_mut().push(StackValue::U64(result));
+            }
+
+            // Stack manipulation
+            ValidationOp::Dup => {
+                let value = ctx
+                    .stack_mut()
+                    .last()
+                    .ok_or(BridgeError::InvalidRecipientData)?
+                    .clone();
+                ctx.stack_mut().push(value);
+            }
+
+            ValidationOp::Swap => {
+                let len = ctx.stack_mut().len();
+                if len < 2 {
+                    return Err(BridgeError::InvalidRecipientData);
+                }
+                ctx.stack_mut().swap(len - 1, len - 2);
+            }
+
+            ValidationOp::Pop => {
+                ctx.pop()?;
+            }
+
+            // Assert operation (delegated to context)
+            ValidationOp::Assert => {
+                ctx.handle_assert()?;
+            }
+
+            // Control flow
+            ValidationOp::JumpIfZero(skip) => {
+                let condition = ctx.pop_u64()?;
+                if condition == 0 {
+                    *pc += skip;
+                }
+            }
+
+            // Storage operations
+            ValidationOp::Store(name) => {
+                let value = ctx.pop()?;
+                ctx.storage_mut().insert(name.clone(), value);
+            }
+
+            ValidationOp::Load(name) => {
+                let value = ctx
+                    .storage_mut()
+                    .get(name)
+                    .ok_or(BridgeError::InvalidRecipientData)?
+                    .clone();
+                ctx.stack_mut().push(value);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Executes the validation program in extraction-only mode.
+    ///
+    /// This method extracts values from burn transaction data without performing validation.
+    /// It will return an error if the program contains validation operations that require
+    /// expected values (PushExpected*, Assert, or comparison operations used for validation).
+    pub fn extract_only(&self, burn_tx_data: &[u8]) -> Result<ValidationResult, BridgeError> {
+        let mut ctx = ExtractionContext {
+            burn_tx_data,
+            stack: Vec::new(),
+            storage: std::collections::HashMap::new(),
+        };
+
+        let mut pc = 0; // Program counter
+
+        while pc < self.operations.len() {
+            let op = &self.operations[pc];
+            Self::execute_operation(&mut ctx, op, &mut pc)?;
+            pc += 1;
+        }
+
+        Ok(ValidationResult {
+            extracted_values: ctx.storage,
+        })
+    }
+
     /// Executes the validation program with value extraction.
     ///
     /// This method both validates the burn transaction data and extracts
@@ -1529,236 +1782,7 @@ impl ValidationProgram {
 
         while pc < self.operations.len() {
             let op = &self.operations[pc];
-
-            match op {
-                ValidationOp::PushConst(value) => {
-                    ctx.stack.push(StackValue::U64(*value));
-                }
-
-                ValidationOp::LoadBytes => {
-                    let length = ctx.pop_u64()? as usize;
-                    let offset = ctx.pop_u64()? as usize;
-
-                    if offset + length > burn_tx_data.len() {
-                        return Err(BridgeError::InvalidDataLength);
-                    }
-
-                    let bytes = burn_tx_data[offset..offset + length].to_vec();
-                    ctx.stack.push(StackValue::Bytes(bytes));
-                }
-
-                ValidationOp::LoadU64(endianness) => {
-                    let offset = ctx.pop_u64()? as usize;
-
-                    if offset + 8 > burn_tx_data.len() {
-                        return Err(BridgeError::InvalidDataLength);
-                    }
-
-                    let value = endianness_conversion::parse_u64(
-                        &burn_tx_data[offset..offset + 8],
-                        *endianness,
-                    )?;
-                    ctx.stack.push(StackValue::U64(value));
-                }
-
-                ValidationOp::LoadU32(endianness) => {
-                    let offset = ctx.pop_u64()? as usize;
-
-                    if offset + 4 > burn_tx_data.len() {
-                        return Err(BridgeError::InvalidDataLength);
-                    }
-
-                    let value = endianness_conversion::parse_u32(
-                        &burn_tx_data[offset..offset + 4],
-                        *endianness,
-                    )?;
-                    ctx.stack.push(StackValue::U32(value));
-                }
-
-                ValidationOp::LoadAddress => {
-                    let offset = ctx.pop_u64()? as usize;
-
-                    if offset + 20 > burn_tx_data.len() {
-                        return Err(BridgeError::InvalidDataLength);
-                    }
-
-                    let bytes = burn_tx_data[offset..offset + 20].to_vec();
-                    ctx.stack.push(StackValue::Bytes(bytes));
-                }
-
-                ValidationOp::LoadEvmU64 => {
-                    let offset = ctx.pop_u64()? as usize;
-
-                    if offset + 32 > burn_tx_data.len() {
-                        return Err(BridgeError::InvalidDataLength);
-                    }
-
-                    let mut evm_bytes = [0u8; 32];
-                    evm_bytes.copy_from_slice(&burn_tx_data[offset..offset + 32]);
-                    let value =
-                        crate::bridge_contract::decode_arithmetic::bytes32_to_u64(&evm_bytes)?;
-                    ctx.stack.push(StackValue::U64(value));
-                }
-
-                ValidationOp::PushExpectedAmount => {
-                    let amount: u64 = incoming_tx.amount.into();
-                    ctx.stack.push(StackValue::U64(amount));
-                }
-
-                ValidationOp::PushExpectedAddress => {
-                    let bytes = incoming_tx.recipient_data.target_address.clone();
-                    ctx.stack.push(StackValue::Bytes(bytes));
-                }
-
-                ValidationOp::PushExpectedNonce => {
-                    ctx.stack
-                        .push(StackValue::U64(incoming_tx.recipient_data.target_nonce));
-                }
-
-                ValidationOp::PushExpectedValidityHeight => {
-                    ctx.stack
-                        .push(StackValue::U32(incoming_tx.validity_start_height));
-                }
-
-                ValidationOp::Add => {
-                    let b = ctx.pop_u64()?;
-                    let a = ctx.pop_u64()?;
-                    let result = crate::bridge_contract::decode_arithmetic::checked_add_u256(a, b)?;
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::Sub => {
-                    let b = ctx.pop_u64()?;
-                    let a = ctx.pop_u64()?;
-                    let result = crate::bridge_contract::decode_arithmetic::checked_sub_u256(a, b)?;
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::Mul => {
-                    let b = ctx.pop_u64()?;
-                    let a = ctx.pop_u64()?;
-                    let result = crate::bridge_contract::decode_arithmetic::checked_mul_u256(a, b)?;
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::Div => {
-                    let b = ctx.pop_u64()?;
-                    let a = ctx.pop_u64()?;
-                    if b == 0 {
-                        return Err(BridgeError::InvalidAmount);
-                    }
-                    let result = crate::bridge_contract::decode_arithmetic::checked_div_u256(a, b)?;
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::Mod => {
-                    let b = ctx.pop_u64()?;
-                    let a = ctx.pop_u64()?;
-                    if b == 0 {
-                        return Err(BridgeError::InvalidAmount);
-                    }
-                    let result = a % b;
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::Eq => {
-                    let b = ctx.pop()?;
-                    let a = ctx.pop()?;
-                    let result = if a == b { 1 } else { 0 };
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::Lt => {
-                    let b = ctx.pop_u64()?;
-                    let a = ctx.pop_u64()?;
-                    let result = if a < b { 1 } else { 0 };
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::Gt => {
-                    let b = ctx.pop_u64()?;
-                    let a = ctx.pop_u64()?;
-                    let result = if a > b { 1 } else { 0 };
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::IsZero => {
-                    let a = ctx.pop_u64()?;
-                    let result = if a == 0 { 1 } else { 0 };
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::And => {
-                    let b = ctx.pop_u64()?;
-                    let a = ctx.pop_u64()?;
-                    let result = if a != 0 && b != 0 { 1 } else { 0 };
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::Or => {
-                    let b = ctx.pop_u64()?;
-                    let a = ctx.pop_u64()?;
-                    let result = if a != 0 || b != 0 { 1 } else { 0 };
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::Not => {
-                    let a = ctx.pop_u64()?;
-                    let result = if a == 0 { 1 } else { 0 };
-                    ctx.stack.push(StackValue::U64(result));
-                }
-
-                ValidationOp::Dup => {
-                    let value = ctx
-                        .stack
-                        .last()
-                        .ok_or(BridgeError::InvalidRecipientData)?
-                        .clone();
-                    ctx.stack.push(value);
-                }
-
-                ValidationOp::Swap => {
-                    let len = ctx.stack.len();
-                    if len < 2 {
-                        return Err(BridgeError::InvalidRecipientData);
-                    }
-                    ctx.stack.swap(len - 1, len - 2);
-                }
-
-                ValidationOp::Pop => {
-                    ctx.pop()?;
-                }
-
-                ValidationOp::Assert => {
-                    let condition = ctx.pop_u64()?;
-                    if condition == 0 {
-                        log::error!(pc, "Validation assertion failed");
-                        return Err(BridgeError::InvalidRecipientData);
-                    }
-                }
-
-                ValidationOp::JumpIfZero(skip) => {
-                    let condition = ctx.pop_u64()?;
-                    if condition == 0 {
-                        pc += skip;
-                    }
-                }
-
-                ValidationOp::Store(name) => {
-                    let value = ctx.pop()?;
-                    ctx.storage.insert(name.clone(), value);
-                }
-
-                ValidationOp::Load(name) => {
-                    let value = ctx
-                        .storage
-                        .get(name)
-                        .ok_or(BridgeError::InvalidRecipientData)?
-                        .clone();
-                    ctx.stack.push(value);
-                }
-            }
-
+            Self::execute_operation(&mut ctx, op, &mut pc)?;
             pc += 1;
         }
 
@@ -1778,15 +1802,93 @@ impl ValidationProgram {
     }
 }
 
+/// Trait for execution contexts that can handle validation operations.
+///
+/// This trait abstracts over the differences between ExtractionContext and ValidationContext,
+/// allowing shared operation handling logic to work with both.
+trait ExecutionContext {
+    /// Returns a reference to the burn transaction data
+    fn burn_tx_data(&self) -> &[u8];
+
+    /// Returns a mutable reference to the execution stack
+    fn stack_mut(&mut self) -> &mut Vec<StackValue>;
+
+    /// Returns a mutable reference to the storage
+    fn storage_mut(&mut self) -> &mut std::collections::HashMap<String, StackValue>;
+
+    /// Handles PushExpected* operations (returns error for extraction-only contexts)
+    fn handle_push_expected(&mut self, op: &ValidationOp) -> Result<(), BridgeError>;
+
+    /// Handles Assert operations (returns error for extraction-only contexts)
+    fn handle_assert(&mut self) -> Result<(), BridgeError>;
+
+    /// Pops a u64 value from the stack
+    fn pop_u64(&mut self) -> Result<u64, BridgeError> {
+        let value = self
+            .stack_mut()
+            .pop()
+            .ok_or(BridgeError::InvalidRecipientData)?;
+        value.as_u64()
+    }
+
+    /// Pops any value from the stack
+    fn pop(&mut self) -> Result<StackValue, BridgeError> {
+        self.stack_mut()
+            .pop()
+            .ok_or(BridgeError::InvalidRecipientData)
+    }
+}
+
 /// Execution context for validation.
+///
+/// Extraction context for extraction-only mode.
+///
+/// Maintains the state during extraction program execution without validation.
+/// This context does not include an IncomingTransaction since it's used for
+/// extracting values from burn data without validating against expected values.
+struct ExtractionContext<'a> {
+    /// Raw burn transaction data
+    burn_tx_data: &'a [u8],
+    /// Execution stack
+    stack: Vec<StackValue>,
+    /// Storage for extracted values
+    storage: std::collections::HashMap<String, StackValue>,
+}
+
+impl<'a> ExecutionContext for ExtractionContext<'a> {
+    fn burn_tx_data(&self) -> &[u8] {
+        self.burn_tx_data
+    }
+
+    fn stack_mut(&mut self) -> &mut Vec<StackValue> {
+        &mut self.stack
+    }
+
+    fn storage_mut(&mut self) -> &mut std::collections::HashMap<String, StackValue> {
+        &mut self.storage
+    }
+
+    fn handle_push_expected(&mut self, op: &ValidationOp) -> Result<(), BridgeError> {
+        log::error!(
+            ?op,
+            "Validation program contains PushExpected* operation in extraction-only context"
+        );
+        Err(BridgeError::InvalidRecipientData)
+    }
+
+    fn handle_assert(&mut self) -> Result<(), BridgeError> {
+        log::error!("Validation program contains Assert operation in extraction-only context");
+        Err(BridgeError::InvalidRecipientData)
+    }
+}
+
+/// Validation context for full validation mode.
 ///
 /// Maintains the state during validation program execution.
 struct ValidationContext<'a> {
     /// Raw burn transaction data
-    #[allow(dead_code)]
     burn_tx_data: &'a [u8],
     /// Incoming transaction to validate against
-    #[allow(dead_code)]
     incoming_tx: &'a IncomingTransaction,
     /// Execution stack
     stack: Vec<StackValue>,
@@ -1794,16 +1896,53 @@ struct ValidationContext<'a> {
     storage: std::collections::HashMap<String, StackValue>,
 }
 
-impl ValidationContext<'_> {
-    /// Pops a u64 value from the stack
-    fn pop_u64(&mut self) -> Result<u64, BridgeError> {
-        let value = self.stack.pop().ok_or(BridgeError::InvalidRecipientData)?;
-        value.as_u64()
+impl<'a> ExecutionContext for ValidationContext<'a> {
+    fn burn_tx_data(&self) -> &[u8] {
+        self.burn_tx_data
     }
 
-    /// Pops any value from the stack
-    fn pop(&mut self) -> Result<StackValue, BridgeError> {
-        self.stack.pop().ok_or(BridgeError::InvalidRecipientData)
+    fn stack_mut(&mut self) -> &mut Vec<StackValue> {
+        &mut self.stack
+    }
+
+    fn storage_mut(&mut self) -> &mut std::collections::HashMap<String, StackValue> {
+        &mut self.storage
+    }
+
+    fn handle_push_expected(&mut self, op: &ValidationOp) -> Result<(), BridgeError> {
+        match op {
+            ValidationOp::PushExpectedAmount => {
+                let amount: u64 = self.incoming_tx.amount.into();
+                self.stack.push(StackValue::U64(amount));
+                Ok(())
+            }
+            ValidationOp::PushExpectedAddress => {
+                let bytes = self.incoming_tx.recipient_data.target_address.clone();
+                self.stack.push(StackValue::Bytes(bytes));
+                Ok(())
+            }
+            ValidationOp::PushExpectedNonce => {
+                self.stack.push(StackValue::U64(
+                    self.incoming_tx.recipient_data.target_nonce,
+                ));
+                Ok(())
+            }
+            ValidationOp::PushExpectedValidityHeight => {
+                self.stack
+                    .push(StackValue::U32(self.incoming_tx.validity_start_height));
+                Ok(())
+            }
+            _ => Err(BridgeError::InvalidRecipientData),
+        }
+    }
+
+    fn handle_assert(&mut self) -> Result<(), BridgeError> {
+        let condition = self.pop_u64()?;
+        if condition == 0 {
+            log::error!("Validation assertion failed");
+            return Err(BridgeError::InvalidRecipientData);
+        }
+        Ok(())
     }
 }
 
