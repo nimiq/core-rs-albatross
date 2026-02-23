@@ -643,7 +643,10 @@ impl BlockchainInterface for BlockchainDispatcher {
             let bridge_contract = match bridge_account {
                 nimiq_account::Account::Bridge(ref contract) => contract,
                 _ => {
-                    return Err(Error::AccountNotFound(bridge_address));
+                    return Err(Error::InvalidArgument(format!(
+                        "Account {} exists but is not a bridge contract",
+                        bridge_address
+                    )));
                 }
             };
 
