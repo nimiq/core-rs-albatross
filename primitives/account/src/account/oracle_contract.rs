@@ -24,7 +24,7 @@ use crate::{
 
 /// The Oracle contract.
 /// This contract is essentially a hash storage.
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OracleContract {
     /// The owner of the contract, the only address that can interact with it.
     pub owner: Address,
@@ -37,8 +37,15 @@ pub struct OracleContract {
     /// The number of hashes that can be stored. This is set at creation and determines the required deposit.
     pub hash_count: u16,
 
-    /// The stored hashes. The number of hashes must not exceed hash_count.
+    /// Ring buffer storage for hashes.
+    /// Before the first write, this is empty. After that, it has exactly `hash_count` elements.
+    /// Access entry at global index `i` via `hashes[i % hash_count]`.
     pub hashes: Vec<AnyHash>,
+
+    /// The latest valid index in the hash chain.
+    /// `None` means no hashes have been written yet.
+    /// `Some(n)` means the latest valid index is `n`.
+    pub latest_index: Option<u64>,
 }
 
 #[cfg(feature = "interaction-traits")]
@@ -77,7 +84,7 @@ impl OracleContract {
         Ok(())
     }
 
-    /// Gets the hash type from the first hash in the contract, if any.
+    /// Gets the hash type from any hash in the contract, if any.
     /// Returns None if the contract has no hashes yet.
     fn get_hash_type(&self) -> Option<HashType> {
         self.hashes.first().map(HashType::from)
@@ -162,7 +169,8 @@ impl AccountTransactionInteraction for OracleContract {
             balance: initial_balance + deposit,
             owner: data.owner,
             hash_count: data.hash_count,
-            hashes: Vec::new(),
+            hashes: Vec::with_capacity(data.hash_count as usize),
+            latest_index: None,
         }))
     }
 
@@ -210,35 +218,51 @@ impl AccountTransactionInteraction for OracleContract {
                     // Validate that all new hashes match the contract's hash type
                     self.validate_hash_types(&hashes)?;
 
-                    // Implement ring buffer: remove oldest hashes if we would exceed hash_count
-                    let new_hash_count = self.hashes.len() + hashes.len();
-                    let removed_hashes = if new_hash_count > self.hash_count as usize {
-                        // Remove the oldest hashes to make room for new ones
-                        let hashes_to_remove = new_hash_count - self.hash_count as usize;
-                        let removed: Vec<AnyHash> =
-                            self.hashes.drain(0..hashes_to_remove).collect();
-                        removed
+                    // Empty update: no state change, no log
+                    if hashes.is_empty() {
+                        return Ok(None);
+                    }
+
+                    // Zero hash for chaining (same type as first new hash or existing)
+                    let zero_hash = hashes
+                        .first()
+                        .map(|h| h.zero_of_same_type())
+                        .or_else(|| self.hashes.first().map(|h| h.zero_of_same_type()))
+                        .unwrap_or_default();
+
+                    // First write: establish fixed-size ring buffer.
+                    if self.latest_index.is_none() {
+                        self.hashes
+                            .resize(self.hash_count as usize, zero_hash.clone());
+                    }
+
+                    let mut current_hash = if let Some(prev_index) = self.latest_index {
+                        let prev_pos = (prev_index % self.hash_count as u64) as usize;
+                        self.hashes[prev_pos].clone()
                     } else {
-                        Vec::new()
+                        zero_hash
                     };
 
-                    // Store the previous hash state for revert
-                    let previous_hash_state = self.hashes.last().cloned();
+                    let start_index = self.latest_index.map(|i| i + 1).unwrap_or(0);
+                    let mut removed_hashes = Vec::new();
+                    let mut first_removed_pos = None;
 
-                    // Add the new hashes with chaining: hash_i = hash((hash_{i-1}, hash_i))
-                    for new_hash in &hashes {
-                        // Get the previous hash (last in the list, or zero hash if empty)
-                        let previous_hash = self.hashes.last().cloned().unwrap_or_else(|| {
-                            // Use a zero hash of the same type as the new hash
-                            new_hash.zero()
-                        });
+                    for (offset, new_hash) in hashes.iter().enumerate() {
+                        let index = start_index + offset as u64;
+                        let pos = (index % self.hash_count as u64) as usize;
 
-                        // Hash the previous hash and new hash using the same algorithm as the new hash
-                        // Chain: data_i = H(data_{i-1} || state_i) = H(previous_hash || new_hash)
-                        let chained_hash = previous_hash.digest(new_hash);
+                        if index >= self.hash_count as u64 {
+                            first_removed_pos.get_or_insert(pos as u16);
+                            removed_hashes.push(self.hashes[pos].clone());
+                        }
 
-                        // Store the chained hash
-                        self.hashes.push(chained_hash);
+                        // data_i = H(data_{i-1} || state_i)
+                        current_hash = current_hash.digest(new_hash);
+                        self.hashes[pos] = current_hash.clone();
+                    }
+
+                    if !hashes.is_empty() {
+                        self.latest_index = Some(start_index + hashes.len() as u64 - 1);
                     }
 
                     tx_logger.push_log(Log::OracleUpdate {
@@ -246,15 +270,15 @@ impl AccountTransactionInteraction for OracleContract {
                         hashes,
                     });
 
-                    // Return receipt with removed hashes and previous hash state for proper revert
-                    // Only return a receipt if we removed hashes or if we need to track previous state
-                    if removed_hashes.is_empty() && previous_hash_state.is_none() {
+                    // Return receipt with removed hashes for proper revert (ring buffer)
+                    if removed_hashes.is_empty() {
                         Ok(None)
                     } else {
                         Ok(Some(
                             UpdateReceipt {
                                 removed_hashes,
-                                previous_hash_state,
+                                first_removed_pos: first_removed_pos
+                                    .expect("evictions must record their first position"),
                             }
                             .into(),
                         ))
@@ -303,18 +327,67 @@ impl AccountTransactionInteraction for OracleContract {
 
             match data {
                 IncomingOracleTransactionData::Update { hashes, .. } => {
-                    // Remove the chained hashes that were added (they're at the end)
-                    for _ in 0..hashes.len() {
-                        self.hashes.pop();
-                    }
+                    let num_hashes = hashes.len() as u64;
 
-                    // Restore the hashes that were removed (if any)
-                    if let Some(receipt) = receipt {
-                        let update_receipt = UpdateReceipt::try_from(receipt)?;
-                        // Prepend the removed hashes back to the beginning
-                        let mut restored_hashes = update_receipt.removed_hashes;
-                        restored_hashes.append(&mut self.hashes);
-                        self.hashes = restored_hashes;
+                    if let Some(current_latest) = self.latest_index {
+                        if num_hashes == 0 {
+                            // Empty update is a no-op.
+                            return Ok(());
+                        }
+                        if num_hashes > current_latest {
+                            self.latest_index = None;
+                            self.hashes.clear();
+                            tx_logger.push_log(Log::OracleUpdate {
+                                contract_address: transaction.recipient.clone(),
+                                hashes,
+                            });
+                            return Ok(());
+                        }
+
+                        let start_index = current_latest - (num_hashes - 1);
+                        let num_evicted = if start_index >= self.hash_count as u64 {
+                            num_hashes
+                        } else {
+                            start_index
+                                .saturating_add(num_hashes)
+                                .saturating_sub(self.hash_count as u64)
+                        };
+
+                        if num_evicted > 0 {
+                            let update_receipt = UpdateReceipt::try_from(
+                                receipt.ok_or(AccountError::InvalidReceipt)?,
+                            )?;
+
+                            if update_receipt.removed_hashes.len() != num_evicted as usize {
+                                return Err(AccountError::InvalidReceipt);
+                            }
+
+                            for (i, old_hash) in update_receipt.removed_hashes.iter().enumerate() {
+                                let pos = ((u64::from(update_receipt.first_removed_pos) + i as u64)
+                                    % self.hash_count as u64)
+                                    as usize;
+                                self.hashes[pos] = old_hash.clone();
+                            }
+                        }
+
+                        // Clear positions written by the reverted update without eviction (they overwrote the resize default)
+                        let num_without_eviction = (self.hash_count as u64)
+                            .saturating_sub(start_index)
+                            .min(num_hashes);
+                        if num_without_eviction > 0 {
+                            let zero_hash = self
+                                .hashes
+                                .first()
+                                .map(|h| h.zero_of_same_type())
+                                .unwrap_or_default();
+                            for offset in 0..num_without_eviction {
+                                let pos = (start_index + offset) % self.hash_count as u64;
+                                self.hashes[pos as usize] = zero_hash.clone();
+                            }
+                        }
+
+                        let new_latest = current_latest - num_hashes;
+                        self.latest_index = Some(new_latest);
                     }
 
                     tx_logger.push_log(Log::OracleUpdate {
@@ -384,7 +457,7 @@ impl AccountTransactionInteraction for OracleContract {
         tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         let new_balance = self.balance.safe_sub(transaction.fee)?;
-        // XXX This check should not be necessary since are also checking this in reserve_balance()
+
         self.can_change_balance(transaction, new_balance, false)?;
         self.balance = new_balance;
 
@@ -486,6 +559,7 @@ struct PrunedOracleContract {
     pub owner: Address,
     pub hash_count: u16,
     pub hashes: Vec<AnyHash>,
+    pub latest_index: Option<u64>,
 }
 
 impl From<OracleContract> for PrunedOracleContract {
@@ -494,6 +568,7 @@ impl From<OracleContract> for PrunedOracleContract {
             owner: contract.owner,
             hash_count: contract.hash_count,
             hashes: contract.hashes,
+            latest_index: contract.latest_index,
         }
     }
 }
@@ -505,6 +580,7 @@ impl From<PrunedOracleContract> for OracleContract {
             owner: receipt.owner,
             hash_count: receipt.hash_count,
             hashes: receipt.hashes,
+            latest_index: receipt.latest_index,
         }
     }
 }
@@ -517,8 +593,9 @@ convert_receipt!(PrunedOracleContract);
 struct UpdateReceipt {
     /// The hashes that were removed from the beginning when the ring buffer limit was reached
     pub removed_hashes: Vec<AnyHash>,
-    /// The previous hash state before this update (for proper revert of chained hashes)
-    pub previous_hash_state: Option<AnyHash>,
+
+    /// The ring-buffer position of `removed_hashes[0]`.
+    pub first_removed_pos: u16,
 }
 
 convert_receipt!(UpdateReceipt);
@@ -532,3 +609,84 @@ struct ChangeOwnerReceipt {
 }
 
 convert_receipt!(ChangeOwnerReceipt);
+
+// Helper methods for accessing ring buffer data
+impl OracleContract {
+    /// Returns the earliest index still retained in the ring buffer.
+    /// All indices < earliest_index have been overwritten.
+    pub fn earliest_index(&self) -> Option<u64> {
+        if let Some(latest) = self.latest_index {
+            if latest < self.hash_count as u64 {
+                Some(0)
+            } else {
+                Some(latest.saturating_sub(self.hash_count as u64 - 1))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Gets the hash at a given global index.
+    /// Returns None if the index is outside the retained window [earliest_index, latest_index] (inclusive).
+    pub fn get_hash_at_index(&self, index: u64) -> Option<&AnyHash> {
+        if let Some(latest) = self.latest_index {
+            let first = self.earliest_index().unwrap_or(0);
+            if index < first || index > latest {
+                return None;
+            }
+            let pos = (index % self.hash_count as u64) as usize;
+            if pos < self.hashes.len() {
+                Some(&self.hashes[pos])
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Returns all hashes in chronological order (oldest to newest).
+    pub fn get_hashes_chronological(&self) -> Vec<AnyHash> {
+        if let Some(latest) = self.latest_index {
+            let first = self.earliest_index().unwrap_or(0);
+            let mut result = Vec::new();
+            for i in first..=latest {
+                if let Some(hash) = self.get_hash_at_index(i) {
+                    result.push(hash.clone());
+                }
+            }
+            result
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+impl PartialEq for OracleContract {
+    fn eq(&self, other: &Self) -> bool {
+        self.owner == other.owner
+            && self.balance == other.balance
+            && self.hash_count == other.hash_count
+            && self.latest_index == other.latest_index
+            && self.hashes == other.hashes
+    }
+}
+
+impl Eq for OracleContract {}
+
+impl PartialOrd for OracleContract {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for OracleContract {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.owner
+            .cmp(&other.owner)
+            .then_with(|| self.balance.cmp(&other.balance))
+            .then_with(|| self.hash_count.cmp(&other.hash_count))
+            .then_with(|| self.latest_index.cmp(&other.latest_index))
+            .then_with(|| self.hashes.cmp(&other.hashes))
+    }
+}
