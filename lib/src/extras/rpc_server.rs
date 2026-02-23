@@ -65,6 +65,8 @@ pub fn initialize_rpc_server(
     }
     dispatcher.add(wallet_dispatcher);
 
+    dispatcher.add(OracleDispatcher::new(client.blockchain()));
+
     // Eth interface dispatchers
     dispatcher.add(GossipDispatcher::new(
         client.consensus_proxy(),
