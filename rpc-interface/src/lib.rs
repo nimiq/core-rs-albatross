@@ -4,6 +4,7 @@ pub mod error;
 pub mod eth_interface;
 pub mod mempool;
 pub mod network;
+pub mod oracle;
 pub mod policy;
 mod serde_helpers;
 pub mod types;

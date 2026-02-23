@@ -5,12 +5,13 @@ use nimiq_jsonrpc_client::{
 // Re-export the interfaces and types from the RPC interface subcrate
 pub use nimiq_rpc_interface::{
     blockchain::BlockchainInterface, consensus::ConsensusInterface, mempool::MempoolInterface,
-    network::NetworkInterface, policy::PolicyInterface, types, validator::ValidatorInterface,
-    wallet::WalletInterface,
+    network::NetworkInterface, oracle::OracleInterface, policy::PolicyInterface, types,
+    validator::ValidatorInterface, wallet::WalletInterface,
 };
 use nimiq_rpc_interface::{
     blockchain::BlockchainProxy, consensus::ConsensusProxy, mempool::MempoolProxy,
-    network::NetworkProxy, policy::PolicyProxy, validator::ValidatorProxy, wallet::WalletProxy,
+    network::NetworkProxy, oracle::OracleProxy, policy::PolicyProxy, validator::ValidatorProxy,
+    wallet::WalletProxy,
 };
 use url::Url;
 
@@ -34,6 +35,8 @@ pub struct Client {
     pub validator: ValidatorProxy<ArcClient<WebsocketClient>>,
     /// Network Proxy used to handle network requests
     pub network: NetworkProxy<ArcClient<WebsocketClient>>,
+    /// Oracle Proxy used to handle oracle contract requests
+    pub oracle: OracleProxy<ArcClient<WebsocketClient>>,
 }
 
 impl Client {
@@ -49,6 +52,7 @@ impl Client {
             wallet: WalletProxy::new(client.clone()),
             validator: ValidatorProxy::new(client.clone()),
             network: NetworkProxy::new(client.clone()),
+            oracle: OracleProxy::new(client.clone()),
             ws_client: client,
         })
     }
