@@ -128,8 +128,8 @@ impl AnyHash {
         }
     }
 
-    /// Returns a zero hash of the same type as this hash
-    pub fn zero(&self) -> Self {
+    /// Creates a zero hash of the same type as this hash
+    pub fn zero_of_same_type(&self) -> Self {
         match self {
             AnyHash::Blake2b(_) => AnyHash::Blake2b(AnyHash32::default()),
             AnyHash::Sha256(_) => AnyHash::Sha256(AnyHash32::default()),
@@ -142,34 +142,24 @@ impl AnyHash {
     /// Returns a new hash of the same type.
     /// Computes H(self || other).
     pub fn digest(&self, other: &Self) -> Self {
+        let combined: Vec<u8> = self
+            .as_bytes()
+            .iter()
+            .chain(other.as_bytes())
+            .copied()
+            .collect();
         match self {
-            AnyHash::Blake2b(_) => AnyHash::Blake2b(AnyHash32(
-                Blake2bHasher::default()
-                    .chain(self)
-                    .chain(other)
-                    .finish()
-                    .into(),
-            )),
-            AnyHash::Sha256(_) => AnyHash::Sha256(AnyHash32(
-                Sha256Hasher::default()
-                    .chain(self)
-                    .chain(other)
-                    .finish()
-                    .into(),
-            )),
-            AnyHash::Sha512(_) => AnyHash::Sha512(AnyHash64(
-                Sha512Hasher::default()
-                    .chain(self)
-                    .chain(other)
-                    .finish()
-                    .into(),
-            )),
+            AnyHash::Blake2b(_) => {
+                AnyHash::Blake2b(AnyHash32(Blake2bHasher::default().digest(&combined).into()))
+            }
+            AnyHash::Sha256(_) => {
+                AnyHash::Sha256(AnyHash32(Sha256Hasher::default().digest(&combined).into()))
+            }
+            AnyHash::Sha512(_) => {
+                AnyHash::Sha512(AnyHash64(Sha512Hasher::default().digest(&combined).into()))
+            }
             AnyHash::Keccak256(_) => AnyHash::Keccak256(AnyHash32(
-                Keccak256Hasher::default()
-                    .chain(self)
-                    .chain(other)
-                    .finish()
-                    .into(),
+                Keccak256Hasher::default().digest(&combined).into(),
             )),
         }
     }

@@ -57,6 +57,10 @@ enum Command {
     /// Shows the zkp information.
     #[clap(flatten)]
     Zkp(ZKPComponentCommand),
+
+    /// Query oracle contract state.
+    #[clap(flatten)]
+    Oracle(OracleCommand),
 }
 
 impl Command {
@@ -70,6 +74,7 @@ impl Command {
             Command::Mempool(command) => command.handle_subcommand(client).await,
             Command::Validator(command) => command.handle_subcommand(client).await,
             Command::Zkp(command) => command.handle_subcommand(client).await,
+            Command::Oracle(command) => command.handle_subcommand(client).await,
         }
     }
 }
