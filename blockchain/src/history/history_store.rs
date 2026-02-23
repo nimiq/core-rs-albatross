@@ -1257,7 +1257,7 @@ mod tests {
     fn prove_chunk_clamps_overflowing_chunk_indices() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
 
         // Create historic transactions.
         let ext_0 = create_transaction(3, 0);

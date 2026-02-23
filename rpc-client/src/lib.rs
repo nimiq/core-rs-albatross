@@ -5,13 +5,13 @@ use nimiq_jsonrpc_client::{
 // Re-export the interfaces and types from the RPC interface subcrate
 pub use nimiq_rpc_interface::{
     blockchain::BlockchainInterface, consensus::ConsensusInterface, mempool::MempoolInterface,
-    network::NetworkInterface, policy::PolicyInterface, types, validator::ValidatorInterface,
-    wallet::WalletInterface, zkp_component::ZKPComponentInterface,
+    network::NetworkInterface, oracle::OracleInterface, policy::PolicyInterface, types,
+    validator::ValidatorInterface, wallet::WalletInterface, zkp_component::ZKPComponentInterface,
 };
 use nimiq_rpc_interface::{
     blockchain::BlockchainProxy, consensus::ConsensusProxy, mempool::MempoolProxy,
-    network::NetworkProxy, policy::PolicyProxy, validator::ValidatorProxy, wallet::WalletProxy,
-    zkp_component::ZKPComponentProxy,
+    network::NetworkProxy, oracle::OracleProxy, policy::PolicyProxy, validator::ValidatorProxy,
+    wallet::WalletProxy, zkp_component::ZKPComponentProxy,
 };
 use url::Url;
 
@@ -37,6 +37,8 @@ pub struct Client {
     pub network: NetworkProxy<ArcClient<WebsocketClient>>,
     /// ZKP Proxy used to handle zkp requests
     pub zkp_component: ZKPComponentProxy<ArcClient<WebsocketClient>>,
+    /// Oracle Proxy used to handle oracle contract requests
+    pub oracle: OracleProxy<ArcClient<WebsocketClient>>,
 }
 
 impl Client {
@@ -53,6 +55,7 @@ impl Client {
             validator: ValidatorProxy::new(client.clone()),
             network: NetworkProxy::new(client.clone()),
             zkp_component: ZKPComponentProxy::new(client.clone()),
+            oracle: OracleProxy::new(client.clone()),
             ws_client: client,
         })
     }
