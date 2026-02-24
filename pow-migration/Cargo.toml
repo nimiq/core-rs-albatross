@@ -64,7 +64,7 @@ tokio = { version = "1.49", features = [
     "rt-multi-thread",
     "tracing",
 ] }
-toml = "0.9"
+toml = "1.0"
 url = "2.5"
 
 [build-dependencies]

@@ -19,7 +19,7 @@ log = { workspace = true }
 serde = "1.0"
 thiserror = "2.0"
 time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
-toml = "0.9"
+toml = "1.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 nimiq-account = { workspace = true, features = ["accounts", "interaction-traits"] }
