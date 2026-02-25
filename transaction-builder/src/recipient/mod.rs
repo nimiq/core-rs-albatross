@@ -2,17 +2,22 @@ use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountType, policy::Policy};
 use nimiq_serde::Serialize;
 use nimiq_transaction::account::{
+    bridge_contract::CreationTransactionData as BridgeCreationData,
     htlc_contract::CreationTransactionData as HtlcCreationData,
+    oracle_contract::CreationTransactionData as OracleCreationData,
     staking_contract::IncomingStakingTransactionData,
     vesting_contract::CreationTransactionData as VestingCreationData,
 };
 
 use crate::recipient::{
-    htlc_contract::HtlcRecipientBuilder, staking_contract::StakingRecipientBuilder,
+    bridge_contract::BridgeRecipientBuilder, htlc_contract::HtlcRecipientBuilder,
+    oracle_contract::OracleRecipientBuilder, staking_contract::StakingRecipientBuilder,
     vesting_contract::VestingRecipientBuilder,
 };
 
+pub mod bridge_contract;
 pub mod htlc_contract;
+pub mod oracle_contract;
 pub mod staking_contract;
 pub mod vesting_contract;
 
@@ -21,16 +26,20 @@ pub mod vesting_contract;
 ///
 /// New contracts can be created using dedicated builders as described below.
 ///
-/// There are four types of recipients:
+/// There are six types of recipients:
 /// - basic recipients that can be built with [`new_basic`]
 /// - HTLC contracts that can be set up with a builder using [`new_htlc_builder`]
 /// - vesting contracts that can be set up with a builder using [`new_vesting_builder`]
 /// - actions on the staking contract that built with [`new_staking_builder`]
+/// - bridge contracts that can be set up with a builder using [`new_bridge_builder`]
+/// - oracle contracts that can be set up with a builder using [`new_oracle_builder`]
 ///
 /// [`new_basic`]: enum.Recipient.html#method.new_basic
 /// [`new_htlc_builder`]: enum.Recipient.html#method.new_htlc_builder
 /// [`new_vesting_builder`]: enum.Recipient.html#method.new_vesting_builder
 /// [`new_staking_builder`]: enum.Recipient.html#method.new_staking_builder
+/// [`new_bridge_builder`]: enum.Recipient.html#method.new_bridge_builder
+/// [`new_oracle_builder`]: enum.Recipient.html#method.new_oracle_builder
 #[derive(Clone, Debug)]
 pub enum Recipient {
     Basic {
@@ -45,6 +54,12 @@ pub enum Recipient {
     },
     Staking {
         data: IncomingStakingTransactionData,
+    },
+    BridgeCreation {
+        data: BridgeCreationData,
+    },
+    OracleCreation {
+        data: OracleCreationData,
     },
 }
 
@@ -168,13 +183,35 @@ impl Recipient {
         StakingRecipientBuilder::new()
     }
 
+    /// Initiates a [`BridgeRecipientBuilder`] that can be used to create new bridge contracts.
+    /// The [`generate`] method of the builder will then return a `Recipient`.
+    ///
+    /// [`BridgeRecipientBuilder`]: bridge_contract/struct.BridgeRecipientBuilder.html
+    /// [`generate`]: bridge_contract/struct.BridgeRecipientBuilder.html#method.generate
+    pub fn new_bridge_builder() -> BridgeRecipientBuilder {
+        BridgeRecipientBuilder::new()
+    }
+
+    /// Initiates an [`OracleRecipientBuilder`] that can be used to create new oracle contracts
+    /// owned by the `owner` address.
+    /// The [`generate`] method of the builder will then return a `Recipient`.
+    ///
+    /// [`OracleRecipientBuilder`]: oracle_contract/struct.OracleRecipientBuilder.html
+    /// [`generate`]: oracle_contract/struct.OracleRecipientBuilder.html#method.generate
+    pub fn new_oracle_builder(owner: Address) -> OracleRecipientBuilder {
+        OracleRecipientBuilder::with_owner_init(owner)
+    }
+
     /// This method checks whether the transaction is a contract creation.
-    /// Vesting and HTLC recipients do create new contracts.
+    /// Vesting, HTLC, Bridge, and Oracle recipients do create new contracts.
     /// Basic recipients and the staking contract do not create new contracts.
     pub fn is_creation(&self) -> bool {
         matches!(
             self,
-            Recipient::HtlcCreation { .. } | Recipient::VestingCreation { .. }
+            Recipient::HtlcCreation { .. }
+                | Recipient::VestingCreation { .. }
+                | Recipient::BridgeCreation { .. }
+                | Recipient::OracleCreation { .. }
         )
     }
 
@@ -201,6 +238,8 @@ impl Recipient {
             Recipient::HtlcCreation { .. } => AccountType::HTLC,
             Recipient::VestingCreation { .. } => AccountType::Vesting,
             Recipient::Staking { .. } => AccountType::Staking,
+            Recipient::BridgeCreation { .. } => AccountType::Bridge,
+            Recipient::OracleCreation { .. } => AccountType::Oracle,
         }
     }
 
@@ -220,6 +259,8 @@ impl Recipient {
             Recipient::HtlcCreation { data } => data.serialize_to_vec(),
             Recipient::VestingCreation { data } => data.to_tx_data(),
             Recipient::Staking { data } => data.serialize_to_vec(),
+            Recipient::BridgeCreation { data } => data.serialize_to_vec(),
+            Recipient::OracleCreation { data } => data.serialize_to_vec(),
         }
     }
 }
