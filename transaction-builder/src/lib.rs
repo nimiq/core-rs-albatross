@@ -1545,4 +1545,106 @@ impl TransactionBuilder {
             _ => unreachable!(),
         }
     }
+
+    /// Creates a transaction that creates a new bridge contract.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction and pay the fee.
+    ///  - `owner`:                 The owner/operator of the bridge contract.
+    ///  - `oracle_address`:        The oracle contract address for state verification.
+    ///  - `source_chain_id`:       Source chain ID this bridge instance supports.
+    ///  - `chain_config`:          Chain-specific configuration.
+    ///  - `value`:                 Initial deposit for the bridge contract.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_create_bridge(
+        key_pair: &KeyPair,
+        owner: Address,
+        oracle_address: Address,
+        source_chain_id: u32,
+        chain_config: nimiq_transaction::account::bridge_contract::ChainConfig,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Result<Transaction, TransactionBuilderError> {
+        let mut recipient = Recipient::new_bridge_builder();
+        recipient
+            .with_owner(owner)
+            .with_oracle_address(oracle_address)
+            .with_source_chain_id(source_chain_id)
+            .with_chain_config(chain_config);
+
+        let mut builder = Self::new();
+        builder
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate()?;
+        match proof_builder {
+            TransactionProofBuilder::Basic(mut builder) => {
+                builder.sign_with_key_pair(key_pair);
+                Ok(builder.generate().unwrap())
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that creates a new oracle contract.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction and pay the fee.
+    ///  - `owner`:                 The owner of the oracle contract.
+    ///  - `hash_count`:            The number of hashes that can be stored (ring buffer size).
+    ///  - `value`:                 Required deposit for the oracle contract.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_create_oracle(
+        key_pair: &KeyPair,
+        owner: Address,
+        hash_count: u16,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Result<Transaction, TransactionBuilderError> {
+        let mut recipient = Recipient::new_oracle_builder(owner);
+        recipient.with_hash_count(hash_count);
+
+        let mut builder = Self::new();
+        builder
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate()?;
+        match proof_builder {
+            TransactionProofBuilder::Basic(mut builder) => {
+                builder.sign_with_key_pair(key_pair);
+                Ok(builder.generate().unwrap())
+            }
+            _ => unreachable!(),
+        }
+    }
 }
