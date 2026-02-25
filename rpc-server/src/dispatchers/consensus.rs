@@ -1276,4 +1276,108 @@ impl ConsensusInterface for ConsensusDispatcher {
             .data;
         self.send_raw_transaction(raw_tx).await
     }
+
+    async fn create_new_bridge_transaction(
+        &self,
+        wallet: Address,
+        owner: Address,
+        oracle_address: Address,
+        source_chain_id: u32,
+        chain_config: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        use nimiq_transaction::account::bridge_contract::ChainConfig;
+
+        // Deserialize the chain_config from hex string
+        let chain_config_bytes = hex::decode(chain_config)?;
+        let chain_config: ChainConfig = Deserialize::deserialize_from_vec(&chain_config_bytes)?;
+
+        let transaction = TransactionBuilder::new_create_bridge(
+            &self.get_wallet_keypair(&wallet)?,
+            owner,
+            oracle_address,
+            source_chain_id,
+            chain_config,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        )?;
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    async fn send_new_bridge_transaction(
+        &self,
+        wallet: Address,
+        owner: Address,
+        oracle_address: Address,
+        source_chain_id: u32,
+        chain_config: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        let raw_tx = self
+            .create_new_bridge_transaction(
+                wallet,
+                owner,
+                oracle_address,
+                source_chain_id,
+                chain_config,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    async fn create_new_oracle_transaction(
+        &self,
+        wallet: Address,
+        owner: Address,
+        hash_count: u16,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        let transaction = TransactionBuilder::new_create_oracle(
+            &self.get_wallet_keypair(&wallet)?,
+            owner,
+            hash_count,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        )?;
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    async fn send_new_oracle_transaction(
+        &self,
+        wallet: Address,
+        owner: Address,
+        hash_count: u16,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        let raw_tx = self
+            .create_new_oracle_transaction(
+                wallet,
+                owner,
+                hash_count,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
 }

@@ -11,7 +11,10 @@ use crate::{
 pub struct OracleContractVerifier {}
 
 impl AccountTransactionVerification for OracleContractVerifier {
-    fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_incoming_transaction(
+        transaction: &Transaction,
+        _protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         assert_eq!(transaction.recipient_type, AccountType::Oracle);
 
         if transaction
@@ -44,7 +47,10 @@ impl AccountTransactionVerification for OracleContractVerifier {
         Ok(())
     }
 
-    fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_outgoing_transaction(
+        transaction: &Transaction,
+        _protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::Oracle);
 
         if !transaction.sender_data.is_empty() {

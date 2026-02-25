@@ -51,8 +51,12 @@ impl AccountTransactionVerification for AccountType {
             AccountType::Staking => {
                 StakingContractVerifier::verify_incoming_transaction(transaction, protocol_version)
             }
-            AccountType::Oracle => OracleContractVerifier::verify_incoming_transaction(transaction),
-            AccountType::Bridge => BridgeContractVerifier::verify_incoming_transaction(transaction),
+            AccountType::Oracle => {
+                OracleContractVerifier::verify_incoming_transaction(transaction, protocol_version)
+            }
+            AccountType::Bridge => {
+                BridgeContractVerifier::verify_incoming_transaction(transaction, protocol_version)
+            }
         }
     }
 
@@ -75,8 +79,12 @@ impl AccountTransactionVerification for AccountType {
             AccountType::Staking => {
                 StakingContractVerifier::verify_outgoing_transaction(transaction, protocol_version)
             }
-            AccountType::Oracle => OracleContractVerifier::verify_outgoing_transaction(transaction),
-            AccountType::Bridge => BridgeContractVerifier::verify_outgoing_transaction(transaction),
+            AccountType::Oracle => {
+                OracleContractVerifier::verify_outgoing_transaction(transaction, protocol_version)
+            }
+            AccountType::Bridge => {
+                BridgeContractVerifier::verify_outgoing_transaction(transaction, protocol_version)
+            }
         }
     }
 }
