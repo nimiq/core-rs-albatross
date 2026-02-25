@@ -543,4 +543,52 @@ pub trait ConsensusInterface {
         value: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
+    /// Returns a serialized transaction creating a new bridge contract.
+    async fn create_new_bridge_transaction(
+        &self,
+        wallet: Address,
+        owner: Address,
+        oracle_address: Address,
+        source_chain_id: u32,
+        chain_config: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Sends a transaction creating a new bridge contract to the network.
+    async fn send_new_bridge_transaction(
+        &self,
+        wallet: Address,
+        owner: Address,
+        oracle_address: Address,
+        source_chain_id: u32,
+        chain_config: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
+    /// Returns a serialized transaction creating a new oracle contract.
+    async fn create_new_oracle_transaction(
+        &self,
+        wallet: Address,
+        owner: Address,
+        hash_count: u16,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Sends a transaction creating a new oracle contract to the network.
+    async fn send_new_oracle_transaction(
+        &self,
+        wallet: Address,
+        owner: Address,
+        hash_count: u16,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
 }
