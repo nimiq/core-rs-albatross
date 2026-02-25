@@ -21,7 +21,10 @@ pub use self::{core::*, structs::*};
 pub struct BridgeContractVerifier {}
 
 impl AccountTransactionVerification for BridgeContractVerifier {
-    fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_incoming_transaction(
+        transaction: &Transaction,
+        _protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         assert_eq!(transaction.recipient_type, AccountType::Bridge);
 
         if transaction
@@ -51,7 +54,10 @@ impl AccountTransactionVerification for BridgeContractVerifier {
         Ok(())
     }
 
-    fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_outgoing_transaction(
+        transaction: &Transaction,
+        _protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::Bridge);
 
         // Parse and verify the outgoing data from sender_data

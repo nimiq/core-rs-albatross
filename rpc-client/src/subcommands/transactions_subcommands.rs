@@ -362,6 +362,46 @@ pub enum TransactionCommand {
 
     /// Returns the status of the sync process.
     SyncStatus {},
+
+    /* Bridge contract transactions */
+    /// Sends a transaction creating a new bridge contract to the network.
+    CreateBridge {
+        /// The wallet used to sign the transaction and pay the fee.
+        /// The sender wallet must be unlocked prior to this action.
+        sender_wallet: Address,
+
+        /// The owner/operator of the bridge contract.
+        owner: Address,
+
+        /// The oracle contract address for state verification.
+        oracle_address: Address,
+
+        /// Source chain ID this bridge instance supports.
+        source_chain_id: u32,
+
+        /// Hex-encoded ChainConfig structure.
+        chain_config: String,
+
+        #[clap(flatten)]
+        tx_commons: TxCommonWithValue,
+    },
+
+    /* Oracle contract transactions */
+    /// Sends a transaction creating a new oracle contract to the network.
+    CreateOracle {
+        /// The wallet used to sign the transaction and pay the fee.
+        /// The sender wallet must be unlocked prior to this action.
+        sender_wallet: Address,
+
+        /// The owner of the oracle contract.
+        owner: Address,
+
+        /// The number of hashes that can be stored (ring buffer size).
+        hash_count: u16,
+
+        #[clap(flatten)]
+        tx_commons: TxCommonWithValue,
+    },
 }
 
 impl TransactionCommand {
@@ -909,6 +949,80 @@ impl HandleSubcommand for TransactionCommand {
             TransactionCommand::SendRawTransaction { raw_tx } => {
                 let tx = client.consensus.send_raw_transaction(raw_tx).await?;
                 println!("{tx:#?}");
+            }
+            TransactionCommand::CreateBridge {
+                sender_wallet,
+                owner,
+                oracle_address,
+                source_chain_id,
+                chain_config,
+                tx_commons,
+            } => {
+                if tx_commons.common_tx_fields.dry {
+                    let tx = client
+                        .consensus
+                        .create_new_bridge_transaction(
+                            sender_wallet,
+                            owner,
+                            oracle_address,
+                            source_chain_id,
+                            chain_config,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_new_bridge_transaction(
+                            sender_wallet,
+                            owner,
+                            oracle_address,
+                            source_chain_id,
+                            chain_config,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+            TransactionCommand::CreateOracle {
+                sender_wallet,
+                owner,
+                hash_count,
+                tx_commons,
+            } => {
+                if tx_commons.common_tx_fields.dry {
+                    let tx = client
+                        .consensus
+                        .create_new_oracle_transaction(
+                            sender_wallet,
+                            owner,
+                            hash_count,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_new_oracle_transaction(
+                            sender_wallet,
+                            owner,
+                            hash_count,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
             }
         }
         Ok(client)
