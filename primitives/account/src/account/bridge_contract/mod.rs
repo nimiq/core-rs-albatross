@@ -182,14 +182,62 @@ impl AccountTransactionInteraction for BridgeContract {
         data_store: DataStoreWrite,
         tx_logger: &mut TransactionLog,
     ) -> Result<Account, AccountError> {
-        let data = CreationTransactionData::parse(transaction)
-            .map_err(AccountError::InvalidTransaction)?;
+        log::debug!(
+            recipient = %transaction.recipient,
+            value = %transaction.value,
+            "Bridge contract creation started"
+        );
+
+        let data = match CreationTransactionData::parse(transaction) {
+            Ok(data) => {
+                log::debug!(
+                    owner = %data.owner,
+                    oracle_address = %data.oracle_address,
+                    source_chain_id = data.source_chain_id,
+                    "Bridge creation data parsed successfully"
+                );
+                data
+            }
+            Err(e) => {
+                log::warn!(
+                    recipient = %transaction.recipient,
+                    error = ?e,
+                    "Bridge creation failed: data parsing error"
+                );
+                return Err(AccountError::InvalidTransaction(e));
+            }
+        };
 
         // Verify the creation data
-        data.verify().map_err(AccountError::InvalidTransaction)?;
+        if let Err(e) = data.verify() {
+            log::warn!(
+                recipient = %transaction.recipient,
+                error = ?e,
+                "Bridge creation failed: data verification error"
+            );
+            return Err(AccountError::InvalidTransaction(e));
+        }
+        log::debug!(
+            recipient = %transaction.recipient,
+            "Bridge creation data verified successfully"
+        );
 
         // Validate oracle hash compatibility
-        validate_oracle_hash_compatibility(&data.oracle_address, &data.chain_config, data_store)?;
+        if let Err(e) =
+            validate_oracle_hash_compatibility(&data.oracle_address, &data.chain_config, data_store)
+        {
+            log::warn!(
+                recipient = %transaction.recipient,
+                oracle_address = %data.oracle_address,
+                error = ?e,
+                "Bridge creation failed: oracle hash compatibility check failed"
+            );
+            return Err(e);
+        }
+        log::debug!(
+            recipient = %transaction.recipient,
+            "Oracle hash compatibility validated"
+        );
 
         // The deposit is the transaction value
         let deposit = transaction.value;
@@ -201,6 +249,16 @@ impl AccountTransactionInteraction for BridgeContract {
             source_chain_id: data.source_chain_id,
             deposit,
         });
+
+        log::info!(
+            contract_address = %transaction.recipient,
+            owner = %data.owner,
+            oracle_address = %data.oracle_address,
+            source_chain_id = data.source_chain_id,
+            balance = %initial_balance,
+            deposit = %deposit,
+            "Bridge contract created successfully"
+        );
 
         Ok(Account::Bridge(BridgeContract {
             balance: initial_balance + deposit,

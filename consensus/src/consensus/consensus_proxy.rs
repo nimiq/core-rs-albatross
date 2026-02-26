@@ -16,6 +16,7 @@ use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
+use nimiq_hash::Hash;
 use nimiq_keys::Address;
 use nimiq_network_interface::{
     network::Network,
@@ -85,14 +86,41 @@ impl<N: Network> Clone for ConsensusProxy<N> {
 }
 impl<N: Network> ConsensusProxy<N> {
     pub async fn send_transaction(&self, tx: Transaction) -> Result<(), N::Error> {
-        match ControlTransaction::try_from(tx) {
-            Ok(ctx) => self.network.publish::<ControlTransactionTopic>(ctx).await,
+        let tx_hash = tx.hash::<nimiq_hash::Blake2bHash>();
+        let is_control = tx
+            .flags
+            .contains(nimiq_transaction::TransactionFlags::SIGNALING);
+        let recipient_type = tx.recipient_type;
+
+        log::debug!(
+            "Publishing transaction: hash={}, recipient_type={:?}, is_control={}, value={}, fee={}",
+            tx_hash,
+            recipient_type,
+            is_control,
+            tx.value,
+            tx.fee
+        );
+
+        let result = match ControlTransaction::try_from(tx) {
+            Ok(ctx) => {
+                log::debug!("Publishing as control transaction: {}", tx_hash);
+                self.network.publish::<ControlTransactionTopic>(ctx).await
+            }
             Err(err) => {
+                log::debug!("Publishing as regular transaction: {}", tx_hash);
                 self.network
                     .publish::<TransactionTopic>(err.into_inner())
                     .await
             }
+        };
+
+        if let Err(ref e) = result {
+            log::warn!("Failed to publish transaction {}: {:?}", tx_hash, e);
+        } else {
+            log::debug!("Successfully published transaction: {}", tx_hash);
         }
+
+        result
     }
 
     /// Returns the current sync status of the consensus.

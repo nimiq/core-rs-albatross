@@ -11,6 +11,7 @@ use std::{
 
 use futures::{ready, stream::BoxStream, StreamExt};
 use nimiq_blockchain::Blockchain;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
@@ -86,6 +87,15 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
         }
 
         while let Some((tx, pubsub_id)) = ready!(self.txn_stream.as_mut().poll_next_unpin(cx)) {
+            let tx_hash = tx.hash::<nimiq_hash::Blake2bHash>();
+            log::debug!(
+                "Received transaction from network: hash={}, recipient_type={:?}, value={}, fee={}",
+                tx_hash,
+                tx.recipient_type,
+                tx.value,
+                tx.fee
+            );
+
             let decrement = Decrementer(Arc::clone(&self.verification_tasks));
             if self
                 .verification_tasks
@@ -104,6 +114,7 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
 
             // Spawn the transaction verification task
             spawn(async move {
+                let tx_hash = tx.hash::<nimiq_hash::Blake2bHash>();
                 let verify_tx_ret = verify_tx(
                     tx,
                     blockchain,
@@ -114,12 +125,28 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
                 );
 
                 let acceptance = match verify_tx_ret {
-                    Ok(_) => MsgAcceptance::Accept,
+                    Ok(_) => {
+                        log::debug!("Transaction {} accepted into mempool", tx_hash);
+                        MsgAcceptance::Accept
+                    }
                     // Reject the message if signature verification fails or transaction is invalid
                     // for current validation window
-                    Err(VerifyErr::InvalidTransaction(_)) => MsgAcceptance::Reject,
-                    Err(VerifyErr::AlreadyIncluded) => MsgAcceptance::Reject,
-                    Err(_) => MsgAcceptance::Ignore,
+                    Err(VerifyErr::InvalidTransaction(ref e)) => {
+                        log::warn!(
+                            "Transaction {} rejected: InvalidTransaction({:?})",
+                            tx_hash,
+                            e
+                        );
+                        MsgAcceptance::Reject
+                    }
+                    Err(VerifyErr::AlreadyIncluded) => {
+                        log::debug!("Transaction {} already included in blockchain", tx_hash);
+                        MsgAcceptance::Reject
+                    }
+                    Err(ref e) => {
+                        log::debug!("Transaction {} ignored: {:?}", tx_hash, e);
+                        MsgAcceptance::Ignore
+                    }
                 };
 
                 network.validate_message::<T>(pubsub_id, acceptance);
