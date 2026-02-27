@@ -116,23 +116,59 @@ fn validate_oracle_hash_compatibility(
     // Convert address to KeyNibbles for data store query
     let oracle_key = KeyNibbles::from(oracle_address);
 
-    // Query the oracle contract from the data store
-    let oracle_account = data_store.get::<Account>(&oracle_key);
+    log::debug!(
+        %oracle_address,
+        oracle_key = ?oracle_key,
+        "Looking up oracle contract in accounts tree for bridge creation"
+    );
+
+    // Query the oracle contract directly from the global accounts tree
+    // (not the bridge's subtrie) using get_global
+    let oracle_account: Option<Account> = data_store.get_global(&oracle_key);
+
+    log::debug!(
+        %oracle_address,
+        found = oracle_account.is_some(),
+        account_type = ?oracle_account.as_ref().map(|acc| match acc {
+            Account::Basic(_) => "Basic",
+            Account::Vesting(_) => "Vesting",
+            Account::HTLC(_) => "HTLC",
+            Account::Staking(_) => "Staking",
+            Account::Oracle(_) => "Oracle",
+            Account::Bridge(_) => "Bridge",
+        }),
+        "Oracle account lookup result from accounts tree"
+    );
 
     // Extract oracle contract if it exists
     let oracle = match oracle_account {
-        Some(Account::Oracle(oracle)) => oracle,
-        Some(_) => {
+        Some(Account::Oracle(oracle)) => {
+            log::debug!(
+                %oracle_address,
+                hash_count = oracle.hashes.len(),
+                "Found oracle contract"
+            );
+            oracle
+        }
+        Some(other_account) => {
             log::warn!(
                 %oracle_address,
-                "Bridge creation failed: not an oracle contract"
+                account_type = ?match other_account {
+                    Account::Basic(_) => "Basic",
+                    Account::Vesting(_) => "Vesting",
+                    Account::HTLC(_) => "HTLC",
+                    Account::Staking(_) => "Staking",
+                    Account::Oracle(_) => "Oracle",
+                    Account::Bridge(_) => "Bridge",
+                },
+                "Bridge creation failed: address exists but is not an oracle contract"
             );
             return Err(AccountError::InvalidForRecipient);
         }
         None => {
             log::warn!(
                 %oracle_address,
-                "Bridge creation failed: oracle contract does not exist"
+                "Bridge creation failed: oracle contract does not exist in accounts tree"
             );
             return Err(AccountError::InvalidForRecipient);
         }
