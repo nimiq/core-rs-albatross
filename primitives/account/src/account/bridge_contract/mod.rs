@@ -116,8 +116,9 @@ fn validate_oracle_hash_compatibility(
     // Convert address to KeyNibbles for data store query
     let oracle_key = KeyNibbles::from(oracle_address);
 
-    // Query the oracle contract from the data store
-    let oracle_account = data_store.get::<Account>(&oracle_key);
+    // Query the oracle contract directly from the global accounts tree
+    // (not the bridge's subtrie).
+    let oracle_account: Option<Account> = data_store.get_global(&oracle_key);
 
     // Extract oracle contract if it exists
     let oracle = match oracle_account {
@@ -125,14 +126,14 @@ fn validate_oracle_hash_compatibility(
         Some(_) => {
             log::warn!(
                 %oracle_address,
-                "Bridge creation failed: not an oracle contract"
+                "Bridge creation failed: address exists but is not an oracle contract"
             );
             return Err(AccountError::InvalidForRecipient);
         }
         None => {
             log::warn!(
                 %oracle_address,
-                "Bridge creation failed: oracle contract does not exist"
+                "Bridge creation failed: oracle contract does not exist in accounts tree"
             );
             return Err(AccountError::InvalidForRecipient);
         }

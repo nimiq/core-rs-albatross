@@ -95,6 +95,15 @@ impl DataStoreWrite<'_, '_, '_, '_, '_> {
         self.store.remove(self.txn, key)
     }
 
+    /// Get a value from the global accounts tree (not scoped to this data store's prefix).
+    /// This is useful when a contract needs to query other accounts.
+    pub fn get_global<T: Deserialize>(&self, key: &KeyNibbles) -> Option<T> {
+        self.store
+            .tree
+            .get(self.txn, key)
+            .expect("Tree must be complete")
+    }
+
     /// Expensive iteration operation that a Data Store can implement
     /// for the Accounts Trie.
     pub fn filter_map<T: Deserialize, F: FnMut(T) -> Option<B>, B>(
