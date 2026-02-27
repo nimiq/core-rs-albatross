@@ -164,7 +164,7 @@ jobs:
           python3 scripts/devnet/devnet.py -t .github/devnet_topologies/four_validators.toml -r 1
     - name: Archive test results
       if: always()
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
           name: reconnect-test-logs
           path: |
