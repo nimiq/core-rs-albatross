@@ -426,6 +426,12 @@ impl Blockchain {
                 .clone()
         };
 
+        // Verify that the header's body_root matches the hash of the actual body.
+        if *block.body_root() != body.hash() {
+            debug!(%block, "Tendermint - await_proposal: body_root does not match body hash");
+            return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+        }
+
         // Verify macro block state before committing accounts.
         if let Err(error) = self.verify_block_state_pre_commit(block, txn) {
             debug!(%error, %block, "Tendermint - await_proposal: Invalid macro block state");
