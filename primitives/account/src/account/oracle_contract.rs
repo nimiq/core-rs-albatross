@@ -190,16 +190,20 @@ impl AccountTransactionInteraction for OracleContract {
 
             match data {
                 IncomingOracleTransactionData::Update { hashes, proof } => {
+                    log::info!("Verifying signature for update transaction");
+
                     // Verify signature
                     if !proof.is_signed_by(&self.owner) {
                         return Err(AccountError::InvalidSignature);
                     }
 
+                    log::info!("Validating hash types");
                     // Validate that all new hashes match the contract's hash type
                     self.validate_hash_types(&hashes)?;
 
                     // Empty update: no state change, no log
                     if hashes.is_empty() {
+                        log::info!("Empty update: no state change, no log");
                         return Ok(None);
                     }
 
@@ -245,6 +249,7 @@ impl AccountTransactionInteraction for OracleContract {
                         self.latest_index = Some(start_index + hashes.len() as u64 - 1);
                     }
 
+                    log::info!("Pushing log for OracleUpdate");
                     tx_logger.push_log(Log::OracleUpdate {
                         contract_address: transaction.recipient.clone(),
                         hashes,
@@ -252,8 +257,10 @@ impl AccountTransactionInteraction for OracleContract {
 
                     // Return receipt with removed hashes for proper revert (ring buffer)
                     if removed_hashes.is_empty() {
+                        log::info!("No removed hashes: returning None");
                         Ok(None)
                     } else {
+                        log::info!("Returning receipt with removed hashes");
                         Ok(Some(
                             UpdateReceipt {
                                 removed_hashes,
