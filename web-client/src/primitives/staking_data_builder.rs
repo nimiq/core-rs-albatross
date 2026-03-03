@@ -90,15 +90,15 @@ impl StakingDataBuilder {
         .serialize_to_vec()
     }
 
-    /// Creates staking transaction data for retiring a staker.
+    /// Creates staking transaction data for retiring stake.
     ///
     /// Note: The created data contains an empty signature proof. To add a valid proof:
     /// 1. Set the data on the transaction as `tx.data`
     /// 2. Create a signature proof over the transaction with the staker's keypair
     /// 3. Use `StakingDataBuilder.setProof(tx.data, proof)` to set the created proof on the staking data
     /// 4. Set the updated staking data back on the transaction as `tx.data`
-    #[wasm_bindgen(js_name = retireStaker)]
-    pub fn retire_staker(retire_stake: u64) -> Vec<u8> {
+    #[wasm_bindgen(js_name = retireStake)]
+    pub fn retire_stake(retire_stake: u64) -> Vec<u8> {
         IncomingStakingTransactionData::RetireStake {
             retire_stake: Coin::from_u64_unchecked(retire_stake),
             proof: nimiq_transaction::SignatureProof::default(),
