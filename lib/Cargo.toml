@@ -47,7 +47,7 @@ log = { workspace = true }
 log-panics = { version = "2.1", features = ["with-backtrace"], optional = true }
 parking_lot = "0.12"
 rand = "0.9"
-rand_chacha = "0.9"
+rand_chacha = "0.10"
 rustls = { version = "0.23.37", default-features = false, optional = true }
 rustls-pemfile = "2.2"
 serde = "1.0"

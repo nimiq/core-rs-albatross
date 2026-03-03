@@ -3896,7 +3896,7 @@ dependencies = [
  "parking_lot",
  "prometheus-client 0.24.0",
  "rand 0.9.2",
- "rand_chacha 0.9.0",
+ "rand_chacha 0.10.0",
  "serde",
  "tempfile",
  "thiserror 2.0.18",
@@ -4354,7 +4354,7 @@ dependencies = [
  "nimiq-zkp-primitives",
  "parking_lot",
  "rand 0.9.2",
- "rand_chacha 0.9.0",
+ "rand_chacha 0.10.0",
  "rustls",
  "rustls-pemfile",
  "serde",
@@ -4615,7 +4615,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-primitives",
  "rand 0.9.2",
- "rand_chacha 0.9.0",
+ "rand_chacha 0.10.0",
  "rand_core_compat",
 ]
 
@@ -4940,7 +4940,7 @@ dependencies = [
  "parking_lot",
  "paste",
  "rand 0.9.2",
- "rand_chacha 0.9.0",
+ "rand_chacha 0.10.0",
  "rand_core_compat",
  "serde",
  "tempfile",
@@ -5268,7 +5268,7 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "rand 0.9.2",
- "rand_chacha 0.9.0",
+ "rand_chacha 0.10.0",
  "rand_core_compat",
  "serde",
  "serde_json",
@@ -5310,7 +5310,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-zkp-primitives",
  "rand 0.9.2",
- "rand_chacha 0.9.0",
+ "rand_chacha 0.10.0",
  "rand_core_compat",
  "rayon",
  "serde",
@@ -6238,6 +6238,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_chacha"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e6af7f3e25ded52c41df4e0b1af2d047e45896c2f3281792ed68a1c243daedb"
+dependencies = [
+ "ppv-lite86",
+ "rand_core 0.10.0",
+]
+
+[[package]]
 name = "rand_core"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6263,6 +6273,12 @@ checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 dependencies = [
  "getrandom 0.3.4",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c8d0fd677905edcbeedbf2edb6494d676f0e98d54d5cf9bda0b061cb8fb8aba"
 
 [[package]]
 name = "rand_core_compat"

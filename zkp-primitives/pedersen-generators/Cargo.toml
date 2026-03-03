@@ -27,7 +27,7 @@ ark-mnt6-753 = "0.4"
 hex = "0.4"
 
 rand = "0.9"
-rand_chacha = "0.9"
+rand_chacha = "0.10"
 rand_core_compat = { version = "0.1", features = ["rand_core_0_6", "rand_core_0_9"] }
 
 nimiq-hash = { workspace = true }

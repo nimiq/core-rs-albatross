@@ -44,7 +44,7 @@ nimiq-zkp-circuits = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
-rand_chacha = "0.9"
+rand_chacha = "0.10"
 tracing-subscriber = { version = "0.3" }
 
 nimiq-log = { workspace = true }

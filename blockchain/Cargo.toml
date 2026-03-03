@@ -52,7 +52,7 @@ nimiq-vrf = { workspace = true }
 nimiq-zkp = { workspace = true }
 
 [dev-dependencies]
-rand_chacha = "0.9"
+rand_chacha = "0.10"
 tempfile = "3.26"
 
 nimiq-tendermint = { workspace = true }
