@@ -57,7 +57,7 @@ subtle = "2.6"
 thiserror = "2.0"
 time = { version = "0.3", optional = true }
 tokio = { version = "1.50", features = ["rt"], optional = true }
-toml = "0.9"
+toml = "1.0"
 tracing-loki = { version = "0.2.6", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = [
     "env-filter",
