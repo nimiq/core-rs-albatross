@@ -37,7 +37,7 @@ pprof = { version = "0.15", features = [
     "frame-pointer",
     "criterion",
 ] }
-rand = "0.9"
+rand = "0.10"
 
 [[bench]]
 name = "hash_keys"

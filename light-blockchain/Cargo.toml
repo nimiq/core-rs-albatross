@@ -32,7 +32,7 @@ nimiq-vrf = { workspace = true }
 nimiq-zkp = { workspace = true }
 
 [dev-dependencies]
-rand = "0.9"
+rand = "0.10"
 
 nimiq-blockchain = { workspace = true }
 nimiq-test-utils = { workspace = true }

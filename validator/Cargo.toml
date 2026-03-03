@@ -25,7 +25,7 @@ hashlink = "0.11"
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 log = { workspace = true }
 parking_lot = "0.12"
-rand = "0.9"
+rand = "0.10"
 rayon = "1.11"
 serde = "1.0"
 tokio = { version = "1.50", features = ["rt", "time", "tracing"] }

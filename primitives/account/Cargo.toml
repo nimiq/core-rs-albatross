@@ -17,7 +17,7 @@ workspace = true
 hex = "0.4"
 log = { workspace = true }
 parking_lot = "0.12"
-rand = "0.9"
+rand = "0.10"
 serde = "1.0"
 thiserror = "2.0"
 
