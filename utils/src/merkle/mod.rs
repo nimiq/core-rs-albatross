@@ -184,6 +184,26 @@ impl<H: HashOutput> MerklePath<H> {
         self.compute_root_internal::<T>(leaf_value, true)
     }
 
+    /// Compute the root from a leaf that is already hashed. Unlike
+    /// `compute_root`, this does not hash the leaf again — useful when callers
+    /// only have the leaf hash (not the original `T`), e.g. the bridge
+    /// contract's burn-proof verifier.
+    pub fn compute_root_from_hash(&self, leaf_hash: H) -> H {
+        let mut root = leaf_hash;
+        for node in self.nodes.iter() {
+            let mut h = H::Builder::default();
+            if node.left {
+                h.hash(&node.hash);
+            }
+            h.hash(&root);
+            if !node.left {
+                h.hash(&node.hash);
+            }
+            root = h.finish();
+        }
+        root
+    }
+
     fn compute_root_internal<T: SerializeContent>(&self, leaf_value: &T, sorted: bool) -> H {
         let mut root = H::Builder::default().chain(leaf_value).finish();
         for node in self.nodes.iter() {
@@ -224,6 +244,39 @@ impl<H: HashOutput> MerklePath<H> {
 
     pub fn hashes(&self) -> Vec<H> {
         self.nodes.iter().map(|node| node.hash.clone()).collect()
+    }
+
+    /// Create a MerklePath from sibling hashes and path bits.
+    ///
+    /// This is useful for constructing proofs from external sources (e.g., Polygon/Ethereum)
+    /// that provide traditional Merkle proofs as sibling hashes with left/right indicators.
+    ///
+    /// # Arguments
+    /// * `sibling_hashes` - List of sibling node hashes from leaf to root
+    /// * `path_bits` - List of booleans indicating position (false = left, true = right)
+    ///
+    /// # Example
+    /// ```ignore
+    /// let siblings = vec![hash1, hash2, hash3];
+    /// let path = vec![false, false, true]; // left, left, right
+    /// let merkle_path = MerklePath::from_sibling_hashes(siblings, path);
+    /// ```
+    pub fn from_sibling_hashes(sibling_hashes: Vec<H>, path_bits: Vec<bool>) -> Self {
+        if sibling_hashes.len() != path_bits.len() {
+            panic!(
+                "Sibling hashes ({}) and path bits ({}) must have the same length",
+                sibling_hashes.len(),
+                path_bits.len()
+            );
+        }
+
+        let nodes = sibling_hashes
+            .into_iter()
+            .zip(path_bits.into_iter())
+            .map(|(hash, left)| MerklePathNode { hash, left })
+            .collect();
+
+        MerklePath { nodes }
     }
 
     /// Compress "left" field of every node in the MerklePath to a bit vector.
