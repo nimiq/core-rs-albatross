@@ -5,7 +5,7 @@ use nimiq_hash::{
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_utils::merkle::MerkleProof;
+use nimiq_utils::merkle::{MerklePath, MerkleProof};
 
 use crate::account::htlc_contract::{AnyHash, AnyHash32};
 
@@ -16,18 +16,24 @@ use crate::account::htlc_contract::{AnyHash, AnyHash32};
 /// the proof verification process without conversion.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AnyMerkleProof {
-    /// Merkle proof using Blake2b hashing
+    /// Merkle proof using Blake2b hashing (stack-based format)
     Blake2b(MerkleProof<Blake2bHash>),
-    /// Merkle proof using SHA-256 hashing
+    /// Merkle proof using SHA-256 hashing (stack-based format)
     Sha256(MerkleProof<Sha256Hash>),
-    /// Merkle proof using Keccak-256 hashing (Ethereum)
+    /// Merkle proof using Keccak-256 hashing (Ethereum, stack-based format)
     Keccak256(MerkleProof<Keccak256Hash>),
+    /// Merkle path using Blake2b hashing (traditional sibling hash format)
+    Blake2bPath(MerklePath<Blake2bHash>),
+    /// Merkle path using SHA-256 hashing (traditional sibling hash format)
+    Sha256Path(MerklePath<Sha256Hash>),
+    /// Merkle path using Keccak-256 hashing (Ethereum, traditional sibling hash format)
+    Keccak256Path(MerklePath<Keccak256Hash>),
 }
 
 impl AnyMerkleProof {
     /// Computes the Merkle root from the proof and a leaf hash.
     ///
-    /// Delegates to the underlying typed MerkleProof based on the hash algorithm.
+    /// Delegates to the underlying typed MerkleProof/MerklePath based on the hash algorithm.
     pub fn compute_root(&self, leaf_hash: AnyHash) -> Result<AnyHash, BridgeError> {
         match (self, leaf_hash) {
             (AnyMerkleProof::Blake2b(proof), AnyHash::Blake2b(leaf)) => {
@@ -51,6 +57,22 @@ impl AnyMerkleProof {
                     .map_err(|_| BridgeError::InvalidMerkleProof)?;
                 Ok(AnyHash::Keccak256(AnyHash32::from(root.as_bytes())))
             }
+            // MerklePath variants - use the leaf hash directly
+            (AnyMerkleProof::Blake2bPath(path), AnyHash::Blake2b(leaf)) => {
+                let leaf_hash = Blake2bHash::from(leaf.0);
+                let root = path.compute_root(&leaf_hash);
+                Ok(AnyHash::Blake2b(AnyHash32::from(root.as_bytes())))
+            }
+            (AnyMerkleProof::Sha256Path(path), AnyHash::Sha256(leaf)) => {
+                let leaf_hash = Sha256Hash::from(leaf.0);
+                let root = path.compute_root(&leaf_hash);
+                Ok(AnyHash::Sha256(AnyHash32::from(root.as_bytes())))
+            }
+            (AnyMerkleProof::Keccak256Path(path), AnyHash::Keccak256(leaf)) => {
+                let leaf_hash = Keccak256Hash::from(leaf.0);
+                let root = path.compute_root(&leaf_hash);
+                Ok(AnyHash::Keccak256(AnyHash32::from(root.as_bytes())))
+            }
             _ => Err(BridgeError::InvalidMerkleProof),
         }
     }
@@ -61,6 +83,9 @@ impl AnyMerkleProof {
             AnyMerkleProof::Blake2b(proof) => proof.len(),
             AnyMerkleProof::Sha256(proof) => proof.len(),
             AnyMerkleProof::Keccak256(proof) => proof.len(),
+            AnyMerkleProof::Blake2bPath(path) => path.len(),
+            AnyMerkleProof::Sha256Path(path) => path.len(),
+            AnyMerkleProof::Keccak256Path(path) => path.len(),
         }
     }
 

@@ -226,6 +226,39 @@ impl<H: HashOutput> MerklePath<H> {
         self.nodes.iter().map(|node| node.hash.clone()).collect()
     }
 
+    /// Create a MerklePath from sibling hashes and path bits.
+    ///
+    /// This is useful for constructing proofs from external sources (e.g., Polygon/Ethereum)
+    /// that provide traditional Merkle proofs as sibling hashes with left/right indicators.
+    ///
+    /// # Arguments
+    /// * `sibling_hashes` - List of sibling node hashes from leaf to root
+    /// * `path_bits` - List of booleans indicating position (false = left, true = right)
+    ///
+    /// # Example
+    /// ```ignore
+    /// let siblings = vec![hash1, hash2, hash3];
+    /// let path = vec![false, false, true]; // left, left, right
+    /// let merkle_path = MerklePath::from_sibling_hashes(siblings, path);
+    /// ```
+    pub fn from_sibling_hashes(sibling_hashes: Vec<H>, path_bits: Vec<bool>) -> Self {
+        if sibling_hashes.len() != path_bits.len() {
+            panic!(
+                "Sibling hashes ({}) and path bits ({}) must have the same length",
+                sibling_hashes.len(),
+                path_bits.len()
+            );
+        }
+
+        let nodes = sibling_hashes
+            .into_iter()
+            .zip(path_bits.into_iter())
+            .map(|(hash, left)| MerklePathNode { hash, left })
+            .collect();
+
+        MerklePath { nodes }
+    }
+
     /// Compress "left" field of every node in the MerklePath to a bit vector.
     fn compress(&self) -> Vec<u8> {
         // There are 3 items in the MerkleProofOperation enum, so we need 2 bits to encode them.

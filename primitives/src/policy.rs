@@ -55,8 +55,10 @@ impl Policy {
 
     // Maximum lengths for transaction sender_data and recipient_data fields used during deserialization.
     /// Maximum size for the sender data field of the transactions.
-    /// The only transactions using this field are RemoveStake and Delete Validator.
-    pub const MAX_TX_SENDER_DATA_SIZE: usize = 1;
+    /// Used by RemoveStake, Delete Validator, and Bridge transactions.
+    /// Bridge transactions can have large sender data (burn proof + Merkle proof + oracle index + signature).
+    /// Typical bridge transaction: ~541 bytes. Maximum realistic: ~3,141 bytes (2KB burn tx + 32-level Merkle proof).
+    pub const MAX_TX_SENDER_DATA_SIZE: usize = 5_000;
     /// Maximum size for the recipient data field of the transactions.
     /// This is used by the HTLC, Vesting and staking contract transactions. Basic transactions are allowed to use it as well.
     /// The biggest transactions are the create validator and update validator with a web auth signature.
