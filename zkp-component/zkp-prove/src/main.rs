@@ -61,6 +61,7 @@ fn initialize(network_id: NetworkId) {
     };
     // The genesis block number must be set accordingly
     policy_config.genesis_block_number = genesis_block.block_number();
+    policy_config.max_supported_version = genesis_block.version();
 
     let _ = Policy::get_or_init(policy_config);
 }

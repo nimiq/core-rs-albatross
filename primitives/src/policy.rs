@@ -7,6 +7,8 @@ use once_cell::sync::OnceCell;
 #[cfg(feature = "ts-types")]
 use wasm_bindgen::prelude::*;
 
+use crate::networks::NetworkId;
+
 /// Global policy
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
 
@@ -184,6 +186,27 @@ impl Policy {
     #[inline]
     pub fn get_or_init(policy: Policy) -> Policy {
         *GLOBAL_POLICY.get_or_init(|| policy)
+    }
+
+    #[inline]
+    pub fn get_or_init_with_network_info(
+        network_id: NetworkId,
+        genesis_block_number: u32,
+        max_supported_version: u16,
+    ) -> Policy {
+        // Run tests with different policy values:
+        let mut policy_config = match network_id {
+            NetworkId::UnitAlbatross => TEST_POLICY,
+            NetworkId::TestAlbatross | NetworkId::DevAlbatross | NetworkId::MainAlbatross => {
+                Policy::default()
+            }
+            _ => panic!("Invalid network id"),
+        };
+        // The genesis block number must be set accordingly
+        policy_config.genesis_block_number = genesis_block_number;
+        policy_config.max_supported_version = max_supported_version;
+
+        *GLOBAL_POLICY.get_or_init(|| policy_config)
     }
 }
 

@@ -168,13 +168,11 @@ impl ClientInner {
         }
         let network_info = NetworkInfo::from_network_id(config.network_id);
 
-        let policy_config = Policy {
-            genesis_block_number: network_info.genesis_block().block_number(),
-            max_supported_version: network_info.max_supported_version(),
-            ..Default::default()
-        };
-
-        let _ = Policy::get_or_init(policy_config);
+        let _ = Policy::get_or_init_with_network_info(
+            config.network_id,
+            network_info.genesis_block().block_number(),
+            network_info.genesis_block().version(),
+        );
 
         // Verify Policy is configured with the genesis block number we expect
         if network_info.genesis_block().block_number() != Policy::genesis_block_number() {
