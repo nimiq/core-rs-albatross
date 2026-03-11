@@ -17,6 +17,9 @@ pub enum NetworkCommand {
         #[clap(short, long)]
         count: bool,
     },
+
+    /// Returns a list of known peers (peer ID and its stored information).
+    AddressBook {},
 }
 
 #[async_trait]
@@ -32,6 +35,9 @@ impl HandleSubcommand for NetworkCommand {
                 } else {
                     println!("{:#?}", client.network.get_peer_list().await?);
                 }
+            }
+            NetworkCommand::AddressBook {} => {
+                println!("{:#?}", client.network.get_address_book().await?);
             }
         }
         Ok(client)
