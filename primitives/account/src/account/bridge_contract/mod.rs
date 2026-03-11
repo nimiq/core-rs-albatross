@@ -80,8 +80,17 @@ impl BridgeContract {
         new_balance: Coin,
         is_reserve: bool,
     ) -> Result<(), AccountError> {
-        // Check transaction signer is contract owner.
-        let signature_proof = SignatureProof::deserialize_all(&transaction.proof)?;
+        // For outgoing transactions (bridge is sender), the signature is in sender_data
+        // For incoming transactions (bridge is recipient), the signature is in proof
+        let signature_proof = if transaction.sender_type == AccountType::Bridge {
+            // Outgoing transaction - signature is in sender_data
+            let outgoing_data =
+                OutgoingBridgeTransactionData::deserialize_all(&transaction.sender_data)?;
+            outgoing_data.proof
+        } else {
+            // Incoming transaction - signature is in proof field
+            SignatureProof::deserialize_all(&transaction.proof)?
+        };
 
         if !signature_proof.is_signed_by(&self.owner) {
             return Err(AccountError::InvalidSignature);
@@ -453,9 +462,9 @@ impl AccountTransactionInteraction for BridgeContract {
             ));
         }
 
-        // Query the oracle contract from the data store
+        // Query the oracle contract from the global accounts tree.
         let oracle_key = KeyNibbles::from(&self.oracle_address);
-        let oracle_account = store.data_store().get::<Account>(&oracle_key);
+        let oracle_account: Option<Account> = store.data_store().get_global(&oracle_key);
 
         let oracle = match oracle_account {
             Some(Account::Oracle(oracle)) => oracle,
