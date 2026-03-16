@@ -240,12 +240,10 @@ impl Blockchain {
                     equivocation_proof.locator(),
                 ));
             }
-            let validators = self
-                .get_validators_for_epoch(
-                    Policy::epoch_at(equivocation_proof.block_number()),
-                    Some(txn),
-                )
-                .expect("Couldn't calculate validators");
+            let validators = self.get_validators_for_epoch(
+                Policy::epoch_at(equivocation_proof.block_number()),
+                Some(txn),
+            )?;
             equivocation_proof.verify(block.network(), &validators)?;
         }
         Ok(())
