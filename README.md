@@ -144,8 +144,8 @@ This process is required **only for the first start** of the history node. For l
 
 ### Service Nodes Guides
 You can also choose to run a validator or a prover node. Check our guides with the full step-by-step description:
-- [Validators](https://www.nimiq.com/developers/build/set-up-your-own-node/becoming-a-validator)
-- [Prover nodes](https://www.nimiq.com/developers/build/set-up-your-own-node/prover-node-guide)
+- [Validators](https://www.nimiq.com/developers/nodes/validators/becoming-a-validator#become-a-validator)
+- [Prover nodes](https://www.nimiq.com/developers/nodes/prover-node-guide#prover-node)
 
 ## Docker
 
