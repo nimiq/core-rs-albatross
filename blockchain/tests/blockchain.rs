@@ -3,7 +3,7 @@ use std::sync::Arc;
 use nimiq_block::{Block, BlockError};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
-use nimiq_hash::Hash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy::Policy;
 use nimiq_tendermint::ProposalMessage;
 use nimiq_test_log::test;
@@ -11,6 +11,12 @@ use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     test_custom_block::{finalize_macro_block, next_macro_block_proposal},
 };
+
+fn produce_blocks(temp_producer: &TemporaryBlockProducer, count: u32) {
+    for _ in 0..count {
+        temp_producer.next_block(vec![], false);
+    }
+}
 
 #[test]
 fn prune_epoch_micro_blocks() {
@@ -167,5 +173,89 @@ fn can_detect_invalid_punished_set() {
     assert_eq!(
         temp_producer.push(block),
         Err(PushError::InvalidBlock(BlockError::InvalidValidators))
+    );
+}
+
+#[test]
+fn it_rejects_election_macro_block_proposals_with_wrong_interlink() {
+    let temp_producer = TemporaryBlockProducer::new();
+    produce_blocks(&temp_producer, Policy::blocks_per_epoch() - 1);
+
+    let blockchain = temp_producer.blockchain.upgradable_read();
+    assert!(Policy::is_election_block_at(blockchain.block_number() + 1));
+
+    let mut proposal = temp_producer
+        .producer
+        .next_macro_block_proposal(
+            &blockchain,
+            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            0,
+            vec![],
+            None,
+        )
+        .unwrap();
+    let mut wrong_interlink = proposal
+        .header
+        .interlink
+        .clone()
+        .expect("Election block proposals must contain an interlink");
+    wrong_interlink.push(Blake2bHash::default());
+    proposal.header.interlink = Some(wrong_interlink);
+
+    assert_eq!(
+        blockchain.verify_macro_block_proposal(proposal, 0, None),
+        Err(PushError::InvalidBlock(BlockError::InvalidInterlink))
+    );
+}
+
+#[test]
+fn it_rejects_election_macro_block_proposals_with_missing_interlink() {
+    let temp_producer = TemporaryBlockProducer::new();
+    produce_blocks(&temp_producer, Policy::blocks_per_epoch() - 1);
+
+    let blockchain = temp_producer.blockchain.upgradable_read();
+    assert!(Policy::is_election_block_at(blockchain.block_number() + 1));
+
+    let mut proposal = temp_producer
+        .producer
+        .next_macro_block_proposal(
+            &blockchain,
+            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            0,
+            vec![],
+            None,
+        )
+        .unwrap();
+    proposal.header.interlink = None;
+
+    assert_eq!(
+        blockchain.verify_macro_block_proposal(proposal, 0, None),
+        Err(PushError::InvalidBlock(BlockError::InvalidInterlink))
+    );
+}
+
+#[test]
+fn it_rejects_non_election_macro_block_proposals_with_superfluous_interlink() {
+    let temp_producer = TemporaryBlockProducer::new();
+    produce_blocks(&temp_producer, Policy::blocks_per_batch() - 1);
+
+    let blockchain = temp_producer.blockchain.upgradable_read();
+    assert!(!Policy::is_election_block_at(blockchain.block_number() + 1));
+
+    let mut proposal = temp_producer
+        .producer
+        .next_macro_block_proposal(
+            &blockchain,
+            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            0,
+            vec![],
+            None,
+        )
+        .unwrap();
+    proposal.header.interlink = Some(vec![Blake2bHash::default()]);
+
+    assert_eq!(
+        blockchain.verify_macro_block_proposal(proposal, 0, None),
+        Err(PushError::InvalidBlock(BlockError::InvalidInterlink))
     );
 }

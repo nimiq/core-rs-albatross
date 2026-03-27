@@ -12,6 +12,30 @@ use crate::{interface::HistoryInterface, BlockProducer, Blockchain};
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {
+    fn verify_macro_block_interlink(&self, macro_block: &MacroBlock) -> Result<(), BlockError> {
+        match (macro_block.is_election(), &macro_block.header.interlink) {
+            (true, Some(interlink)) => {
+                let expected_interlink = self.election_head().get_next_interlink();
+                if Some(interlink) != expected_interlink.ok().as_ref() {
+                    warn!(reason = "Bad Interlink", "Rejecting block");
+                    return Err(BlockError::InvalidInterlink);
+                }
+            }
+            (true, None) => {
+                warn!(reason = "Missing Interlink", "Rejecting block");
+                return Err(BlockError::InvalidInterlink);
+            }
+            (false, Some(_)) => {
+                warn!(reason = "Superfluous Interlink", "Rejecting block");
+                return Err(BlockError::InvalidInterlink);
+            }
+            // Non-election blocks don't contain interlinks.
+            (false, None) => {}
+        }
+
+        Ok(())
+    }
+
     /// Verifies a block for the current blockchain state.
     /// This method does a full verification on the block except for the block state checks.
     /// See `verify_block_state` for these type of checks.
@@ -46,25 +70,8 @@ impl Blockchain {
 
         // Verify the interlink (or its absence)
         if let Block::Macro(macro_block) = &block {
-            match (macro_block.is_election(), &macro_block.header.interlink) {
-                (true, Some(interlink)) => {
-                    let expected_interlink = self.election_head().get_next_interlink();
-                    if Some(interlink) != expected_interlink.ok().as_ref() {
-                        warn!(reason = "Bad Interlink", "Rejecting block");
-                        return Err(PushError::InvalidBlock(BlockError::InvalidInterlink));
-                    }
-                }
-                (true, None) => {
-                    warn!(reason = "Missing Interlink", "Rejecting block");
-                    return Err(PushError::InvalidBlock(BlockError::InvalidInterlink));
-                }
-                (false, Some(_)) => {
-                    warn!(reason = "Superfluous Interlink", "Rejecting block");
-                    return Err(PushError::InvalidBlock(BlockError::InvalidInterlink));
-                }
-                // Non-election blocks don't contain interlinks.
-                (false, None) => {}
-            }
+            self.verify_macro_block_interlink(macro_block)
+                .map_err(PushError::InvalidBlock)?;
         }
 
         // In trusted don't do slot related checks since they are mostly signature verifications
@@ -390,6 +397,11 @@ impl Blockchain {
         if let Err(error) = block.verify_macro_successor(self.macro_head()) {
             debug!(%error, %block, "Tendermint - await_proposal: Invalid block header for blockchain macro head");
             return Err(PushError::InvalidBlock(error));
+        }
+
+        if let Block::Macro(macro_block) = &block {
+            self.verify_macro_block_interlink(macro_block)
+                .map_err(PushError::InvalidBlock)?;
         }
 
         // Make sure the proposer is correct using the predecessor to determine slot ownership.
