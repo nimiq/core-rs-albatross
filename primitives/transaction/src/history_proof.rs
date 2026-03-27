@@ -16,7 +16,9 @@ pub struct HistoryTreeProof {
 impl HistoryTreeProof {
     /// Verifies the Merkle proof. It will return None if the verification encounters an error.
     pub fn verify(&self, expected_root: Blake2bHash) -> Option<bool> {
-        assert_eq!(self.history.len(), self.positions.len());
+        if self.history.len() != self.positions.len() {
+            return None;
+        }
         let zipped: Vec<_> = self
             .positions
             .iter()
