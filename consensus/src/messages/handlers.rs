@@ -451,6 +451,10 @@ impl RequestTransactionsProof {
         block_number: u32,
     ) -> Result<ResponseTransactionsProof, ResponseTransactionProofError> {
         let blockchain = blockchain.read();
+        let Some(history_index) = blockchain.history_store.history_index() else {
+            log::info!("Cannot create transaction proof without history index");
+            return Err(ResponseTransactionProofError::Other);
+        };
         let hashes: Vec<&Blake2bHash> = transactions.iter().collect();
 
         // There are three possible scenarios for creating a transaction inclusion proof:
@@ -553,7 +557,7 @@ impl RequestTransactionsProof {
             ));
         };
 
-        let proof = match blockchain.history_store.history_index().unwrap().prove(
+        let proof = match history_index.prove(
             Policy::epoch_at(proving_block_number),
             hashes,
             verifier_state,
@@ -576,6 +580,10 @@ impl RequestTransactionsProof {
         transaction: &Blake2bHash,
     ) -> Result<ResponseTransactionsProof, ResponseTransactionProofError> {
         let blockchain = blockchain.read();
+        let Some(history_index) = blockchain.history_store.history_index() else {
+            log::info!("Cannot create transaction proof without history index");
+            return Err(ResponseTransactionProofError::Other);
+        };
 
         let mut verifier_state = None;
         let election_head = blockchain.election_head().block_number();
@@ -583,11 +591,7 @@ impl RequestTransactionsProof {
         let current_head = blockchain.head().block_number();
 
         // Get the historic transaction from the history store
-        let historic_transaction = blockchain
-            .history_store
-            .history_index()
-            .unwrap()
-            .get_hist_tx_by_hash(transaction, None);
+        let historic_transaction = history_index.get_hist_tx_by_hash(transaction, None);
 
         if let Some(hist_txn) = historic_transaction {
             let block_number = hist_txn.block_number;
@@ -623,7 +627,7 @@ impl RequestTransactionsProof {
             }
 
             // Prove the transaction
-            let proof = match blockchain.history_store.history_index().unwrap().prove(
+            let proof = match history_index.prove(
                 Policy::epoch_at(proving_block_number),
                 vec![transaction],
                 verifier_state,
@@ -682,30 +686,27 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionReceip
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> ResponseTransactionReceiptsByAddress {
         let blockchain = blockchain.read();
+        let Some(history_index) = blockchain.history_store.history_index() else {
+            log::info!("Cannot fetch transaction receipts by address without history index");
+            return ResponseTransactionReceiptsByAddress { receipts: vec![] };
+        };
 
         // Get the transaction hashes for this address.
-        let raw_tx_hashes = blockchain
-            .history_store
-            .history_index()
-            .unwrap()
-            .get_tx_hashes_by_address(
-                &self.address,
-                self.max
-                    .unwrap_or(Self::MAX_RECEIPTS)
-                    .min(Self::MAX_RECEIPTS),
-                self.start_at.clone(),
-                None,
-            );
+        let raw_tx_hashes = history_index.get_tx_hashes_by_address(
+            &self.address,
+            self.max
+                .unwrap_or(Self::MAX_RECEIPTS)
+                .min(Self::MAX_RECEIPTS),
+            self.start_at.clone(),
+            None,
+        );
 
         let mut receipts = vec![];
 
         for hash in raw_tx_hashes {
             // Get all the historic transactions that correspond to this hash.
             receipts.extend(
-                blockchain
-                    .history_store
-                    .history_index()
-                    .unwrap()
+                history_index
                     .get_hist_tx_by_hash(&hash, None)
                     .iter()
                     .map(|hist_tx| (hist_tx.tx_hash().into(), hist_tx.block_number)),
