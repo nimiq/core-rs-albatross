@@ -159,6 +159,12 @@ impl CreationTransactionData {
                     step_amount,
                     total_amount,
                 } = CreationTransactionData32::deserialize_all(data)?;
+                if total_amount > tx_value {
+                    return Err(TransactionError::InvalidData);
+                }
+                if step_amount > total_amount {
+                    return Err(TransactionError::InvalidData);
+                }
                 CreationTransactionData {
                     owner,
                     start_time,

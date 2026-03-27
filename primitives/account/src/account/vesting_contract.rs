@@ -51,8 +51,8 @@ impl VestingContract {
 
         if new_balance < min_cap {
             return Err(AccountError::InsufficientFunds {
-                balance: self.balance - min_cap,
-                needed: self.balance - new_balance,
+                balance: self.balance.saturating_sub(min_cap),
+                needed: self.balance.saturating_sub(new_balance),
             });
         }
 

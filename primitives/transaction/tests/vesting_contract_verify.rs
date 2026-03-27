@@ -107,7 +107,7 @@ fn it_can_verify_creation_transaction() {
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
         AccountType::verify_incoming_transaction(&transaction),
-        Ok(())
+        Err(TransactionError::InvalidData)
     );
 }
 
