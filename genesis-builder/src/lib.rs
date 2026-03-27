@@ -663,7 +663,12 @@ impl GenesisBuilder {
         {
             let decompressed_path = directory.join("decompressed_keys.dat");
             let mut decompressed = Vec::new();
-            for key in block.validators().expect("must be election").voting_keys() {
+            for key in block
+                .validators()
+                .expect("must be election")
+                .voting_keys()
+                .expect("genesis validators must have valid keys")
+            {
                 decompressed.extend_from_slice(&key.trusted_serialize());
             }
             fs::write(decompressed_path, decompressed)?;

@@ -160,6 +160,16 @@ impl<N: Network> BlockQueue<N> {
 
         let blockchain = self.blockchain.read();
 
+        // Validate header before hashing to reject malformed blocks (e.g. invalid BLS keys)
+        // that would panic during hash computation.
+        if block
+            .verify_header(blockchain.network_id(), block.is_skip())
+            .is_err()
+        {
+            block_source.reject_block(&self.network);
+            return None;
+        }
+
         let block_hash = block.hash_cached();
         let block_number = block.block_number();
         let head_height = blockchain.block_number();

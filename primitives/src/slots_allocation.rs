@@ -14,7 +14,7 @@
 //!                      |             SlotBand                      |    SlotBand       |
 //!                      +-------------------------------------------+-------------------+
 //! ```
-use std::{cmp::Ordering, collections::BTreeMap, ops::Range, slice::Iter};
+use std::{cmp::Ordering, collections::BTreeMap, fmt, ops::Range, slice::Iter};
 
 use ark_ec::CurveGroup;
 use ark_serialize::CanonicalSerialize;
@@ -25,6 +25,18 @@ use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{merkle_tree::merkle_tree_construct, policy::Policy};
+
+/// Error returned when a validator has an invalid BLS voting key that cannot be decompressed.
+#[derive(Clone, Debug)]
+pub struct InvalidValidatorsError;
+
+impl fmt::Display for InvalidValidatorsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Invalid BLS voting key for validator")
+    }
+}
+
+impl std::error::Error for InvalidValidatorsError {}
 
 /// This is the depth of the PKTree circuit.
 pub const PK_TREE_DEPTH: usize = 5;
@@ -187,20 +199,52 @@ impl Validators {
     }
 
     /// Returns the G2 projective associated with each slot, in order.
-    pub fn voting_keys_g2(&self) -> Vec<G2Projective> {
-        self.voting_keys().iter().map(|pk| pk.public_key).collect()
+    pub fn voting_keys_g2(&self) -> Result<Vec<G2Projective>, InvalidValidatorsError> {
+        Ok(self.voting_keys()?.iter().map(|pk| pk.public_key).collect())
     }
 
     /// Returns the voting key associated with each slot, in order.
-    pub fn voting_keys(&self) -> Vec<BlsPublicKey> {
+    pub fn voting_keys(&self) -> Result<Vec<BlsPublicKey>, InvalidValidatorsError> {
         let mut pks = vec![];
 
         for validator in self.iter() {
-            let pk = *validator.voting_key.uncompress().unwrap();
+            let pk = *validator
+                .voting_key
+                .uncompress()
+                .ok_or(InvalidValidatorsError)?;
             pks.append(&mut vec![pk; validator.num_slots() as usize]);
         }
 
-        pks
+        Ok(pks)
+    }
+
+    /// Checks that all validator voting keys can be decompressed and that the
+    /// validator set structure is valid (correct number of slots, compatible with ZK circuit).
+    pub fn validate_keys(&self) -> Result<(), InvalidValidatorsError> {
+        let mut total_slots: u16 = 0;
+
+        // Check that all keys can be decompressed and count total slots in one pass
+        for validator in self.iter() {
+            validator
+                .voting_key
+                .uncompress()
+                .ok_or(InvalidValidatorsError)?;
+            total_slots += validator.num_slots();
+        }
+
+        // Check structural invariants that would cause panics in Hash implementation
+
+        // Must have exactly Policy::SLOTS total slots
+        if total_slots != Policy::SLOTS {
+            return Err(InvalidValidatorsError);
+        }
+
+        // Must be a multiple of PK_TREE_BREADTH for ZK circuit compatibility
+        if !(total_slots as usize).is_multiple_of(PK_TREE_BREADTH) {
+            return Err(InvalidValidatorsError);
+        }
+
+        Ok(())
     }
 
     /// Iterates over the validators.
@@ -213,7 +257,9 @@ impl Hash for Validators {
     /// This function is meant to calculate the public key tree "off-circuit". Generating the public key
     /// tree with this function guarantees that it is compatible with the ZK circuit.
     fn hash<H: HashOutput>(&self) -> H {
-        let public_keys = self.voting_keys_g2();
+        let public_keys = self.voting_keys_g2().expect(
+            "BLS voting keys must be valid — call validate_keys() before hashing untrusted data",
+        );
 
         // Checking that the number of public keys is equal to the number of validator slots.
         assert_eq!(public_keys.len(), Policy::SLOTS as usize);

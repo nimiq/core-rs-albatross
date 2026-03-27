@@ -68,12 +68,15 @@ impl TendermintProof {
         let mut agg_pk = AggregatePublicKey::new();
 
         for slot in signer_slots {
-            let pk = current_validators
+            if let Some(pk) = current_validators
                 .get_validator_by_slot_number(slot)
                 .voting_key
                 .uncompress()
-                .expect("Failed to uncompress CompressedPublicKey");
-            agg_pk.aggregate(pk);
+            {
+                agg_pk.aggregate(pk);
+            } else {
+                return false;
+            }
         }
 
         // Verify the aggregated signature against our aggregated public key.

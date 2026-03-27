@@ -668,7 +668,9 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     let prev_validators = prev_block
         .get_validators()
         .ok_or(NanoZKPError::InvalidBlock)?;
-    let prev_pks = prev_validators.voting_keys_g2();
+    let prev_pks = prev_validators
+        .voting_keys_g2()
+        .map_err(|_| NanoZKPError::InvalidBlock)?;
 
     // Calculate final public key tree root.
     let signer_bitmap: Vec<bool> = final_block

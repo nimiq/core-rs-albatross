@@ -244,6 +244,12 @@ impl MacroHeader {
         if self.is_election() != self.validators.is_some() {
             return Err(BlockError::InvalidValidators);
         }
+        // Validate that all BLS voting keys can be decompressed and structural invariants hold.
+        if let Some(ref validators) = self.validators {
+            validators
+                .validate_keys()
+                .map_err(|_| BlockError::InvalidValidators)?;
+        }
         Ok(())
     }
 
@@ -394,7 +400,14 @@ pub enum IntoSlotsError {
 
 #[cfg(test)]
 mod test {
-    use super::MacroBlock;
+    use nimiq_bls::CompressedPublicKey as BlsCompressedPublicKey;
+    use nimiq_keys::Ed25519PublicKey as SchnorrPublicKey;
+    use nimiq_primitives::{
+        policy::Policy,
+        slots_allocation::{Validator, Validators},
+    };
+
+    use super::{MacroBlock, MacroHeader};
 
     #[test]
     fn size_well_below_msg_limit() {
@@ -403,5 +416,40 @@ mod test {
             2 * dbg!(MacroBlock::MAX_SIZE) + 16384
                 <= dbg!(nimiq_network_interface::network::MIN_SUPPORTED_MSG_SIZE)
         );
+    }
+
+    /// Verifies that invalid BLS voting keys are caught by verify() and
+    /// voting_keys(), preventing the panic that would occur in hash_cached().
+    ///
+    /// Regression test for: untrusted peer announces an election macro block
+    /// with an invalid BLS voting key. Before the fix, `hash_cached()` would
+    /// panic via `voting_keys()` → `uncompress().unwrap()`.
+    #[test]
+    fn invalid_bls_voting_key_rejected_by_verify() {
+        let invalid_compressed = BlsCompressedPublicKey {
+            public_key: [0xFF; BlsCompressedPublicKey::SIZE],
+        };
+
+        let validator = Validator::new(
+            nimiq_keys::Address::default(),
+            invalid_compressed,
+            SchnorrPublicKey::default(),
+            0..Policy::SLOTS,
+        );
+
+        let validators = Validators::new(vec![validator]);
+
+        // validate_keys() catches the invalid key.
+        assert!(validators.validate_keys().is_err());
+
+        // voting_keys() returns an error instead of panicking.
+        assert!(validators.voting_keys().is_err());
+
+        // MacroHeader::verify() rejects the block.
+        let header = MacroHeader {
+            validators: Some(validators),
+            ..Default::default()
+        };
+        assert!(header.verify().is_err());
     }
 }

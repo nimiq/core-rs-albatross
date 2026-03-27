@@ -558,12 +558,15 @@ impl DoubleVoteProof {
                 // Verify the signatures.
                 let mut agg_pk = AggregatePublicKey::new();
                 for slot in signers {
-                    let pk = validators
+                    if let Some(pk) = validators
                         .get_validator_by_slot_number(*slot)
                         .voting_key
                         .uncompress()
-                        .expect("Failed to uncompress CompressedPublicKey");
-                    agg_pk.aggregate(pk);
+                    {
+                        agg_pk.aggregate(pk);
+                    } else {
+                        return Err(EquivocationProofError::InvalidJustification);
+                    }
                 }
                 if !agg_pk.verify(&message, signature) {
                     return Err(EquivocationProofError::InvalidJustification);
