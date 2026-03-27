@@ -275,7 +275,9 @@ impl PeerContactInfo {
     pub fn exceeds_age(&self, max_age: Duration, unix_time: Duration) -> bool {
         unix_time
             .checked_sub(Duration::from_secs(self.contact.inner.timestamp()))
-            .is_some_and(|age| age > max_age)
+            // Future timestamps (checked_sub returns None) are treated as exceeded
+            // to prevent immortal entries from untrusted peers.
+            .is_none_or(|age| age > max_age)
     }
 
     /// Returns true if the services provided are interesting to me
@@ -369,14 +371,16 @@ impl PeerContactBook {
         let info = PeerContactInfo::from(contact);
         let peer_id = info.peer_id;
 
+        // Reject contacts with timestamps in the future
+        if info.contact().timestamp > current_ts {
+            return;
+        }
+
         match self.peer_contacts.entry(peer_id) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 let entry_value = entry.get_mut();
-                // Only update the contact if the timestamp is greater than the entry we have for this peer
-                // and if the timestamp of the peer contact is not in the future
-                if entry_value.contact().timestamp < info.contact().timestamp
-                    && info.contact().timestamp <= current_ts
-                {
+                // Only update the contact if the timestamp is greater than the entry we have
+                if entry_value.contact().timestamp < info.contact().timestamp {
                     *entry_value = Arc::new(info);
                 }
             }
@@ -423,8 +427,14 @@ impl PeerContactBook {
             }
         }
 
-        // TODO Check peer contact timestamp
-        //  Call `insert()` here instead?
+        // Reject contacts with timestamps in the future
+        let current_ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        if info.contact().timestamp > current_ts {
+            return;
+        }
 
         let info = Arc::new(info);
         let is_new = self

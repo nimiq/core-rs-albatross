@@ -307,3 +307,73 @@ fn test_housekeeping() {
         .get(&old_contact.public_key().clone().to_peer_id())
         .is_none());
 }
+
+/// Verify that `exceeds_age` treats future timestamps as exceeded (defense-in-depth).
+/// Even if a future-timestamped contact somehow enters the book, housekeeping must evict it.
+#[test]
+fn test_future_timestamp_contact_evicted_by_housekeeping() {
+    use nimiq_network_libp2p::discovery::peer_contacts::PeerContactInfo;
+
+    let future_ts = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 10 * 365 * 24 * 3600; // ~10 years from now
+
+    let keypair = Keypair::generate_ed25519();
+    let peer_contact = PeerContact::new(
+        Some("/dns/future.evil.local/tcp/443/wss".parse().unwrap()),
+        keypair.public(),
+        Services::FULL_BLOCKS,
+        future_ts,
+    )
+    .expect("Peer contact must be creatable");
+    let signed = peer_contact.sign(&keypair);
+    let info = PeerContactInfo::from(signed);
+
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap();
+
+    assert!(
+        info.exceeds_age(Duration::from_secs(PeerContactBook::MAX_PEER_AGE), now),
+        "exceeds_age must return true for future-timestamped contacts"
+    );
+}
+
+/// Verifies that insert_filtered rejects contacts whose timestamp is far in the
+/// future, preventing them from entering the peer contact book in the first place.
+#[test]
+fn test_insert_filtered_rejects_future_timestamp() {
+    let own_contact = random_peer_contact(1, Services::FULL_BLOCKS);
+    let mut peer_contact_book = PeerContactBook::new(own_contact, false, true, true);
+
+    let future_contact = {
+        let keypair = Keypair::generate_ed25519();
+        let future_ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 10 * 365 * 24 * 3600;
+
+        let peer_contact = PeerContact::new(
+            Some("/dns/future.evil.local/tcp/443/wss".parse().unwrap()),
+            keypair.public(),
+            Services::FULL_BLOCKS,
+            future_ts,
+        )
+        .expect("Peer contact must be creatable");
+
+        peer_contact.sign(&keypair)
+    };
+
+    let future_peer_id = future_contact.public_key().clone().to_peer_id();
+
+    peer_contact_book.insert_filtered(future_contact, Services::FULL_BLOCKS, false);
+
+    assert!(
+        peer_contact_book.get(&future_peer_id).is_none(),
+        "insert_filtered must reject contacts with far-future timestamps, \
+         but the contact was accepted — no timestamp validation exists"
+    );
+}
