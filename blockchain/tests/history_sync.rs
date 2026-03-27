@@ -1,15 +1,18 @@
 use std::sync::Arc;
 
+use nimiq_block::BlockError;
 use nimiq_blockchain::{interface::HistoryInterface, BlockProducer, Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
+use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
 use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks_with_txns, produce_macro_blocks, produce_macro_blocks_with_txns, signing_key,
     voting_key,
 };
+use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 
@@ -522,4 +525,229 @@ fn history_sync_works_with_diverging_history() {
     );
 
     assert_eq!(blockchain.head(), blockchain2.read().head());
+}
+
+// Regression test: Peer-supplied history with invalid block_number values should be rejected
+// with a proper error. This test validates the fix for a DoS vulnerability where an
+// untrusted peer could crash a syncing node by providing HistoricTransaction objects with
+// block_number values that violate epoch/batch invariants.
+//
+// Vulnerability was introduced in PR#2692 (commit 1a829c647, June 2024) and fixed by
+// replacing assert! with proper error handling at history_store.rs.
+#[test]
+fn test_history_sync_panic_on_malformed_block_numbers() {
+    println!("[PROOF_MARKER] Testing push_history_sync properly rejects corrupted history");
+
+    let genesis_block_number = Policy::genesis_block_number();
+    let time1 = Arc::new(OffsetTime::new());
+    let env1 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+
+    let blockchain1 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env1,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time1,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    // Create first batch with transactions
+    produce_macro_blocks_with_txns(&producer, &blockchain1, 1, 1, 0);
+
+    let macro_block1 = blockchain1
+        .upgradable_read()
+        .chain_store
+        .get_block_at(
+            genesis_block_number + Policy::blocks_per_batch(),
+            false,
+            None,
+        )
+        .unwrap();
+
+    assert!(macro_block1.is_macro());
+
+    let batch1_txns = blockchain1
+        .upgradable_read()
+        .history_store
+        .get_epoch_transactions(Policy::epoch_at(macro_block1.block_number()), None);
+
+    // Create second batch
+    produce_macro_blocks(&producer, &blockchain1, 1);
+
+    let macro_block2 = blockchain1
+        .upgradable_read()
+        .chain_store
+        .get_block_at(
+            genesis_block_number + Policy::blocks_per_batch() * 2,
+            false,
+            None,
+        )
+        .unwrap();
+
+    assert!(macro_block2.is_macro());
+
+    // Create a second blockchain (victim node syncing)
+    let time2 = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time2,
+        )
+        .unwrap(),
+    ));
+
+    // Get block number before moving macro_block1
+    let block_number = macro_block1.block_number();
+
+    // Push first batch normally
+    println!("[CALLSITE_HIT] First sync succeeds with valid history");
+    assert_eq!(
+        Blockchain::push_history_sync(blockchain2.upgradable_read(), macro_block1, &batch1_txns,),
+        Ok(PushResult::Extended)
+    );
+
+    // Now craft malformed history: create transactions with block_number values
+    // that span multiple batches, violating the epoch invariant.
+    // This simulates a malicious peer sending corrupted history data.
+    let seed: HistoricTransaction = batch1_txns
+        .first()
+        .expect("need at least one historic transaction in the seed batch")
+        .clone();
+
+    // Create two transactions with block numbers in different batches
+    let mut corrupted = vec![seed.clone(), seed];
+
+    // First transaction: from previous batch
+    let from = block_number - 1;
+    corrupted[0].block_number = from;
+
+    // Second transaction: skip to a block in a future batch (different epoch)
+    // This violates: Policy::epoch_at(tx.block_number) == Policy::epoch_at(block_number)
+    let mut to = from + 1;
+    while Policy::batch_at(to) <= Policy::batch_at(from) + 1 {
+        to += Policy::blocks_per_batch();
+    }
+    corrupted[1].block_number = to;
+
+    // Serialize and deserialize to simulate network transmission
+    let corrupted_bytes = corrupted.serialize_to_vec();
+    let corrupted_decoded: Vec<HistoricTransaction> =
+        Vec::<HistoricTransaction>::deserialize_from_vec(&corrupted_bytes).unwrap();
+
+    println!("[CALLSITE_HIT] Calling Blockchain::push_history_sync with corrupted history");
+    println!(
+        "  Block numbers: {} (batch {}) and {} (batch {})",
+        corrupted_decoded[0].block_number,
+        Policy::batch_at(corrupted_decoded[0].block_number),
+        corrupted_decoded[1].block_number,
+        Policy::batch_at(corrupted_decoded[1].block_number)
+    );
+
+    // After the fix, this should return an error instead of panicking
+    let result = Blockchain::push_history_sync(
+        blockchain2.upgradable_read(),
+        macro_block2,
+        &corrupted_decoded,
+    );
+
+    // Verify that malformed history is properly rejected with an error
+    assert_eq!(
+        result,
+        Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot)),
+        "Expected error when pushing corrupted history",
+    );
+}
+
+// Control test: Verify that valid history sync works correctly and does not panic
+#[test]
+fn test_history_sync_valid_block_numbers_no_panic() {
+    let genesis_block_number = Policy::genesis_block_number();
+    let time1 = Arc::new(OffsetTime::new());
+    let env1 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+
+    let blockchain1 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env1,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time1,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 1);
+    produce_macro_blocks(&producer, &blockchain1, 1);
+
+    let macro_block1 = blockchain1
+        .upgradable_read()
+        .chain_store
+        .get_block_at(
+            genesis_block_number + Policy::blocks_per_batch(),
+            false,
+            None,
+        )
+        .unwrap();
+
+    assert!(macro_block1.is_macro());
+
+    let batch1_txns = blockchain1
+        .upgradable_read()
+        .history_store
+        .get_epoch_transactions(Policy::epoch_at(macro_block1.block_number()), None);
+
+    produce_macro_blocks(&producer, &blockchain1, 1);
+
+    let macro_block2 = blockchain1
+        .upgradable_read()
+        .chain_store
+        .get_block_at(
+            genesis_block_number + Policy::blocks_per_batch() * 2,
+            false,
+            None,
+        )
+        .unwrap();
+
+    assert!(macro_block2.is_macro());
+
+    let batch2_txns = blockchain1
+        .upgradable_read()
+        .history_store
+        .get_epoch_transactions_after(macro_block1.block_number(), None);
+
+    let time2 = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time2,
+        )
+        .unwrap(),
+    ));
+
+    // Push first batch
+    assert_eq!(
+        Blockchain::push_history_sync(blockchain2.upgradable_read(), macro_block1, &batch1_txns,),
+        Ok(PushResult::Extended)
+    );
+
+    // Serialize and deserialize to match the same flow as the panic test
+    let batch2_bytes = batch2_txns.serialize_to_vec();
+    let batch2_decoded: Vec<HistoricTransaction> =
+        Vec::<HistoricTransaction>::deserialize_from_vec(&batch2_bytes).unwrap();
+
+    // Push second batch - should succeed without panic
+    assert_eq!(
+        Blockchain::push_history_sync(blockchain2.upgradable_read(), macro_block2, &batch2_decoded,),
+        Ok(PushResult::Extended)
+    );
 }

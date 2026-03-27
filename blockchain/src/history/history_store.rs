@@ -389,13 +389,19 @@ impl HistoryStore {
         // We need to do this separately due to the borrowing rules of Rust.
         let mut cursor = WriteTransaction::dup_cursor(txn, &self.hist_tx_table);
         for (hist_tx, &leaf_index) in hist_txs.iter().zip(leaf_idx.iter()) {
-            assert!(
-                hist_tx.block_number <= block_number
-                    && Policy::epoch_at(hist_tx.block_number) == Policy::epoch_at(block_number),
-                "Inconsistent transactions when adding to history store (block #{}, tx block #{}).",
-                block_number,
-                hist_tx.block_number
-            );
+            // Reject transactions that violate the invariant: transactions must be in the same
+            // epoch and the transaction's block number must not exceed the target block number
+            if hist_tx.block_number > block_number
+                || Policy::epoch_at(hist_tx.block_number) != Policy::epoch_at(block_number)
+            {
+                // Invalid transaction detected from untrusted peer.
+                // We verify later the history root and emit the appropriate error.
+                warn!("Inconsistent transactions when adding to history store (block #{}, tx block #{}).",
+                        block_number,
+                        hist_tx.block_number
+                    );
+                return None;
+            }
 
             let value = IndexedTransaction {
                 index: leaf_index,
