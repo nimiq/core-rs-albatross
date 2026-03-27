@@ -57,9 +57,16 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
             if let Ok(chain_info) = chain_info
                 && chain_info.on_main_chain
             {
-                // We found a block, ignore remaining block locator hashes.
-                start_block_hash = Some(locator.clone());
-                break;
+                // Validate that the locator is a macro block before using it.
+                // This prevents panics when get_macro_blocks() is called with a micro block hash.
+                if let Ok(block) = blockchain.get_block(locator, false)
+                    && block.is_macro()
+                {
+                    // We found a macro block on the main chain, use it.
+                    start_block_hash = Some(locator.clone());
+                    break;
+                }
+                // Skip micro blocks and continue searching for a macro block.
             }
         }
         let Some(start_block_hash) = start_block_hash else {
@@ -75,7 +82,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
                 Direction::Forward,
                 true,
             )
-            .unwrap(); // We made sure that start_block_hash is on our chain.
+            .unwrap(); // Safe: We validated that start_block_hash is a macro block on our chain.
         let epochs: Vec<_> = election_blocks.iter().map(|block| block.hash()).collect();
 
         // Add latest checkpoint block if all of the following conditions are met:
