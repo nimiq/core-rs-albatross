@@ -18,7 +18,7 @@ use nimiq_transaction::{
 };
 use thiserror::Error;
 
-use crate::{MacroHeader, MicroHeader};
+use crate::{multisig::checked_signer_slots, MacroHeader, MicroHeader};
 
 /// An equivocation proof proves that a validator misbehaved.
 ///
@@ -527,6 +527,11 @@ impl DoubleVoteProof {
         validators: &Validators,
         validator_slots: Range<u16>,
     ) -> Result<(), EquivocationProofError> {
+        let checked_signers1 = checked_signer_slots(&self.signers1)
+            .ok_or(EquivocationProofError::InvalidJustification)?;
+        let checked_signers2 = checked_signer_slots(&self.signers2)
+            .ok_or(EquivocationProofError::InvalidJustification)?;
+
         // Check that the proposals are not equal and in the right order:
         match self.proposal_hash1.cmp(&self.proposal_hash2) {
             Ordering::Less => {}
@@ -538,13 +543,13 @@ impl DoubleVoteProof {
         #[allow(clippy::redundant_clone)]
         if !validator_slots
             .clone()
-            .any(|s| self.signers1.contains(s as usize) && self.signers2.contains(s as usize))
+            .any(|s| checked_signers1.contains(&s) && checked_signers2.contains(&s))
         {
             return Err(EquivocationProofError::NoOverlap);
         }
 
         let verify =
-            |proposal_hash, signers: &BitSet, signature| -> Result<(), EquivocationProofError> {
+            |proposal_hash, signers: &[u16], signature| -> Result<(), EquivocationProofError> {
                 // Calculate the message that was actually signed by the validators.
                 let message = TendermintVote {
                     proposal_hash,
@@ -552,10 +557,13 @@ impl DoubleVoteProof {
                 };
                 // Verify the signatures.
                 let mut agg_pk = AggregatePublicKey::new();
-                for (i, pk) in validators.voting_keys().iter().enumerate() {
-                    if signers.contains(i) {
-                        agg_pk.aggregate(pk);
-                    }
+                for slot in signers {
+                    let pk = validators
+                        .get_validator_by_slot_number(*slot)
+                        .voting_key
+                        .uncompress()
+                        .expect("Failed to uncompress CompressedPublicKey");
+                    agg_pk.aggregate(pk);
                 }
                 if !agg_pk.verify(&message, signature) {
                     return Err(EquivocationProofError::InvalidJustification);
@@ -565,12 +573,12 @@ impl DoubleVoteProof {
 
         verify(
             self.proposal_hash1.clone(),
-            &self.signers1,
+            &checked_signers1,
             &self.signature1,
         )?;
         verify(
             self.proposal_hash2.clone(),
-            &self.signers2,
+            &checked_signers2,
             &self.signature2,
         )?;
         Ok(())

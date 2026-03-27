@@ -6,7 +6,7 @@ use nimiq_primitives::{
 };
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 
-use crate::{MacroBlock, MultiSignature};
+use crate::{multisig::checked_signer_slots, MacroBlock, MultiSignature};
 
 /// The proof for a block produced by Tendermint.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
@@ -35,8 +35,16 @@ impl TendermintProof {
             Some(x) => x,
         };
 
+        let signer_slots = match checked_signer_slots(&justification.sig.signers) {
+            Some(slots) => slots,
+            None => {
+                error!("Invalid justification - signer set contains out-of-range slots!");
+                return false;
+            }
+        };
+
         // Check if there are enough votes.
-        if justification.votes() < Policy::TWO_F_PLUS_ONE {
+        if signer_slots.len() < Policy::TWO_F_PLUS_ONE as usize {
             error!("Invalid justification - not enough votes!");
             return false;
         }
@@ -59,10 +67,13 @@ impl TendermintProof {
         // (if they are part of the Multisignature Bitset).
         let mut agg_pk = AggregatePublicKey::new();
 
-        for (i, pk) in current_validators.voting_keys().iter().enumerate() {
-            if justification.sig.signers.contains(i) {
-                agg_pk.aggregate(pk);
-            }
+        for slot in signer_slots {
+            let pk = current_validators
+                .get_validator_by_slot_number(slot)
+                .voting_key
+                .uncompress()
+                .expect("Failed to uncompress CompressedPublicKey");
+            agg_pk.aggregate(pk);
         }
 
         // Verify the aggregated signature against our aggregated public key.

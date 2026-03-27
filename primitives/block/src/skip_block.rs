@@ -9,7 +9,7 @@ use nimiq_primitives::{
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_vrf::VrfEntropy;
 
-use crate::{MicroBlock, MultiSignature};
+use crate::{multisig::checked_signer_slots, MicroBlock, MultiSignature};
 
 pub type SignedSkipBlockInfo = SignedMessage<SkipBlockInfo>;
 
@@ -59,8 +59,18 @@ impl SkipBlockProof {
     /// Verifies the proof. This only checks that the proof is valid for this skip block, not that
     /// the skip block itself is valid.
     pub fn verify(&self, skip_block: &SkipBlockInfo, validators: &Validators) -> bool {
+        let signer_slots = match checked_signer_slots(&self.sig.signers) {
+            Some(slots) => slots,
+            None => {
+                error!(
+                    "SkipBlockProof verification failed: signer set contains out-of-range slots."
+                );
+                return false;
+            }
+        };
+
         // Check if there are enough votes.
-        if self.sig.signers.len() < Policy::TWO_F_PLUS_ONE as usize {
+        if signer_slots.len() < Policy::TWO_F_PLUS_ONE as usize {
             error!(
                 "SkipBlockProof verification failed: Not enough slots signed the skip block message."
             );
@@ -70,12 +80,11 @@ impl SkipBlockProof {
         // Get the public key for each SLOT present in the signature and add them together to get
         // the aggregated public key.
         let agg_pk =
-            self.sig
-                .signers
-                .iter()
+            signer_slots
+                .into_iter()
                 .fold(AggregatePublicKey::new(), |mut aggregate, slot| {
                     let pk = validators
-                        .get_validator_by_slot_number(slot as u16)
+                        .get_validator_by_slot_number(slot)
                         .voting_key
                         .uncompress()
                         .expect("Failed to uncompress CompressedPublicKey");

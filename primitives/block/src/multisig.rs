@@ -37,3 +37,14 @@ impl MultiSignature {
         }
     }
 }
+
+pub(crate) fn checked_signer_slots(signers: &BitSet) -> Option<Vec<u16>> {
+    let mut slots = Vec::with_capacity(signers.len());
+    for slot in signers.iter() {
+        if slot >= Policy::SLOTS as usize || slot > u16::MAX as usize {
+            return None;
+        }
+        slots.push(slot as u16);
+    }
+    Some(slots)
+}
