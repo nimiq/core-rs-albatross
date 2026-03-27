@@ -594,3 +594,98 @@ async fn test_duplicate_discovery_substream_closes_without_panic() {
         "Attacker failed to negotiate two discovery substreams"
     );
 }
+
+#[test]
+fn test_insert_filtered_rejects_stale_timestamp() {
+    let own_contact = random_peer_contact(1, Services::FULL_BLOCKS);
+    let mut peer_contact_book = PeerContactBook::new(own_contact, false, true, true);
+
+    let stale_contact = {
+        let keypair = Keypair::generate_ed25519();
+        let stale_ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .saturating_sub(PeerContactBook::MAX_PEER_AGE + 1);
+
+        let peer_contact = PeerContact::new(
+            Some("/dns/stale.evil.local/tcp/443/wss".parse().unwrap()),
+            keypair.public(),
+            Services::FULL_BLOCKS,
+            stale_ts,
+        )
+        .expect("Peer contact must be creatable");
+
+        peer_contact.sign(&keypair)
+    };
+
+    let stale_peer_id = stale_contact.public_key().clone().to_peer_id();
+
+    peer_contact_book.insert_filtered(stale_contact, Services::FULL_BLOCKS, false);
+
+    assert!(
+        peer_contact_book.get(&stale_peer_id).is_none(),
+        "insert_filtered must reject contacts older than MAX_PEER_AGE"
+    );
+}
+
+#[test]
+fn test_insert_filtered_only_replaces_with_newer_timestamp() {
+    let own_contact = random_peer_contact(1, Services::FULL_BLOCKS);
+    let mut peer_contact_book = PeerContactBook::new(own_contact, false, true, true);
+
+    let keypair = Keypair::generate_ed25519();
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let base_ts = now.saturating_sub(60);
+
+    let original_contact = PeerContact::new(
+        Some("/dns/peer.old.local/tcp/443/wss".parse().unwrap()),
+        keypair.public(),
+        Services::FULL_BLOCKS,
+        base_ts,
+    )
+    .expect("Peer contact must be creatable")
+    .sign(&keypair);
+    let same_timestamp_contact = PeerContact::new(
+        Some("/dns/peer.same.local/tcp/443/wss".parse().unwrap()),
+        keypair.public(),
+        Services::FULL_BLOCKS,
+        base_ts,
+    )
+    .expect("Peer contact must be creatable")
+    .sign(&keypair);
+    let newer_contact = PeerContact::new(
+        Some("/dns/peer.new.local/tcp/443/wss".parse().unwrap()),
+        keypair.public(),
+        Services::FULL_BLOCKS,
+        base_ts + 1,
+    )
+    .expect("Peer contact must be creatable")
+    .sign(&keypair);
+
+    let peer_id = original_contact.public_key().clone().to_peer_id();
+
+    peer_contact_book.insert_filtered(original_contact.clone(), Services::FULL_BLOCKS, false);
+    assert_eq!(
+        peer_contact_book.get(&peer_id).unwrap().signed(),
+        &original_contact,
+        "fresh contact should be inserted"
+    );
+
+    peer_contact_book.insert_filtered(same_timestamp_contact, Services::FULL_BLOCKS, false);
+    assert_eq!(
+        peer_contact_book.get(&peer_id).unwrap().signed(),
+        &original_contact,
+        "same timestamp must not overwrite the existing contact"
+    );
+
+    peer_contact_book.insert_filtered(newer_contact.clone(), Services::FULL_BLOCKS, false);
+    assert_eq!(
+        peer_contact_book.get(&peer_id).unwrap().signed(),
+        &newer_contact,
+        "newer timestamp must replace the existing contact"
+    );
+}

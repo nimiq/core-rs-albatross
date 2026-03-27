@@ -427,27 +427,40 @@ impl PeerContactBook {
             }
         }
 
-        // Reject contacts with timestamps in the future
         let current_ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
+
+        // Reject contacts with timestamps in the future
         if info.contact().timestamp > current_ts {
             return;
         }
 
+        // Rejects contacts that are older than the allowed age
+        if info.exceeds_age(
+            Duration::from_secs(PeerContactBook::MAX_PEER_AGE),
+            Duration::from_secs(current_ts),
+        ) {
+            return;
+        }
+
         let info = Arc::new(info);
-        let is_new = self
-            .peer_contacts
-            .insert(info.peer_id, Arc::clone(&info))
-            .is_none();
-        if is_new {
-            log::trace!(
-                peer_id = %info.peer_id,
-                services = ?info.services(),
-                addresses = ?info.contact.inner.addresses,
-                "Adding peer contact",
-            );
+        match self.peer_contacts.entry(info.peer_id) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                if entry.get().contact().timestamp < info.contact().timestamp {
+                    entry.insert(info);
+                }
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                log::trace!(
+                    peer_id = %info.peer_id,
+                    services = ?info.services(),
+                    addresses = ?info.contact.inner.addresses,
+                    "Adding peer contact",
+                );
+                entry.insert(info);
+            }
         }
     }
 
