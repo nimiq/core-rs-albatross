@@ -466,8 +466,9 @@ impl ConnectionHandler for Handler {
                                     let response_signature =
                                         self.keypair.tagged_sign(&challenge_nonce);
 
-                                    // Remember peer's filter
-                                    self.peer_list_limit = Some(limit);
+                                    // Remember peer's filter, clamping to our own update limit
+                                    self.peer_list_limit =
+                                        Some(limit.min(self.config.update_limit));
                                     self.services_filter = services;
 
                                     let peer_contact_book = self.peer_contact_book.read();
@@ -758,7 +759,7 @@ impl ConnectionHandler for Handler {
                                     let peer_contact_book = &self.peer_contact_book.read();
                                     let mut peer_contacts = self.get_peer_contacts(
                                         peer_contact_book,
-                                        self.peer_list_limit.unwrap() as usize - 1,
+                                        (self.peer_list_limit.unwrap() as usize).saturating_sub(1),
                                     );
                                     // Always include our own contact for updates
                                     peer_contacts
