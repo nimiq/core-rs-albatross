@@ -91,6 +91,15 @@ pub enum Error {
 
     #[error("Received update with too many peer contacts: {num_peer_contacts}")]
     UpdateLimitExceeded { num_peer_contacts: usize },
+
+    #[error("Received duplicate inbound discovery substream on the same connection")]
+    DuplicateInboundSubstream,
+
+    #[error("Received duplicate outbound discovery substream on the same connection")]
+    DuplicateOutboundSubstream,
+
+    #[error("Received outbound discovery substream in unexpected state: {state:?}")]
+    UnexpectedOutboundSubstream { state: HandlerState },
 }
 
 impl Error {
@@ -266,6 +275,17 @@ impl Handler {
                 ProtocolSupport::Added(stream_protocols),
             ));
     }
+
+    fn fail_closed(&mut self, error: Error) {
+        warn!(peer_id = %self.peer_id, %error, "Closing discovery connection");
+        self.events
+            .push_back(ConnectionHandlerEvent::NotifyBehaviour(
+                HandlerOutEvent::Error(error),
+            ));
+        if let Some(waker) = self.waker.take() {
+            waker.wake();
+        }
+    }
 }
 
 /// Extract the `/ip4/`,`/ip6/`, `/dns4/` or `/dns6/` protocol part from a `Multiaddr`
@@ -306,7 +326,8 @@ impl ConnectionHandler for Handler {
                 protocol, ..
             }) => {
                 if self.inbound.is_some() {
-                    panic!("Inbound already connected");
+                    self.fail_closed(Error::DuplicateInboundSubstream);
+                    return;
                 }
                 self.inbound = Some(protocol);
                 self.check_initialized();
@@ -316,10 +337,12 @@ impl ConnectionHandler for Handler {
                 protocol, ..
             }) => {
                 if self.outbound.is_some() {
-                    panic!("Outbound already connected");
+                    self.fail_closed(Error::DuplicateOutboundSubstream);
+                    return;
                 }
                 if self.state != HandlerState::OpenSubstream {
-                    panic!("Unexpected outbound");
+                    self.fail_closed(Error::UnexpectedOutboundSubstream { state: self.state });
+                    return;
                 }
                 self.outbound = Some(protocol);
                 self.check_initialized();

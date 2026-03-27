@@ -1,18 +1,29 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    task::{Context, Poll},
+    time::Duration,
+};
 
 use futures::StreamExt;
 use instant::SystemTime;
 use libp2p::{
     core::{
         multiaddr::{multiaddr, Multiaddr},
-        transport::MemoryTransport,
-        upgrade::Version,
+        transport::{MemoryTransport, PortUse},
+        upgrade::{DeniedUpgrade, Version},
+        Endpoint,
     },
     identity::Keypair,
     noise,
     swarm::{
+        behaviour::FromSwarm,
         dial_opts::{DialOpts, PeerCondition},
-        Swarm, SwarmEvent,
+        handler::{ConnectionEvent, FullyNegotiatedOutbound},
+        ConnectionDenied, ConnectionHandler, ConnectionHandlerEvent, ConnectionId,
+        NetworkBehaviour, SubstreamProtocol, Swarm, SwarmEvent, ToSwarm,
     },
     yamux, PeerId, SwarmBuilder, Transport,
 };
@@ -21,10 +32,137 @@ use nimiq_network_interface::peer_info::Services;
 use nimiq_network_libp2p::discovery::{
     self,
     peer_contacts::{PeerContact, PeerContactBook, SignedPeerContact},
+    protocol::DiscoveryProtocol,
 };
 use nimiq_test_log::test;
+use nimiq_time::timeout;
 use nimiq_utils::spawn;
 use parking_lot::RwLock;
+
+#[derive(Clone, Debug)]
+struct DuplicateDiscoverySubstreamAttackBehaviour {
+    negotiated_outbound_streams: Arc<AtomicUsize>,
+}
+
+impl DuplicateDiscoverySubstreamAttackBehaviour {
+    fn new(negotiated_outbound_streams: Arc<AtomicUsize>) -> Self {
+        Self {
+            negotiated_outbound_streams,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct DuplicateDiscoverySubstreamAttackHandler {
+    negotiated_outbound_streams: Arc<AtomicUsize>,
+    pending_outbound_requests: u8,
+}
+
+impl DuplicateDiscoverySubstreamAttackHandler {
+    fn new(negotiated_outbound_streams: Arc<AtomicUsize>, pending_outbound_requests: u8) -> Self {
+        Self {
+            negotiated_outbound_streams,
+            pending_outbound_requests,
+        }
+    }
+}
+
+impl ConnectionHandler for DuplicateDiscoverySubstreamAttackHandler {
+    type FromBehaviour = ();
+    type ToBehaviour = ();
+    type InboundProtocol = DeniedUpgrade;
+    type OutboundProtocol = DiscoveryProtocol;
+    type InboundOpenInfo = ();
+    type OutboundOpenInfo = ();
+
+    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
+        SubstreamProtocol::new(DeniedUpgrade, ())
+    }
+
+    fn on_connection_event(
+        &mut self,
+        event: ConnectionEvent<Self::InboundProtocol, Self::OutboundProtocol, (), ()>,
+    ) {
+        if let ConnectionEvent::FullyNegotiatedOutbound(FullyNegotiatedOutbound {
+            protocol, ..
+        }) = event
+        {
+            self.negotiated_outbound_streams
+                .fetch_add(1, Ordering::Relaxed);
+            drop(protocol);
+        }
+    }
+
+    fn on_behaviour_event(&mut self, _event: ()) {}
+
+    fn connection_keep_alive(&self) -> bool {
+        true
+    }
+
+    fn poll(
+        &mut self,
+        _cx: &mut Context<'_>,
+    ) -> Poll<ConnectionHandlerEvent<Self::OutboundProtocol, (), Self::ToBehaviour>> {
+        if self.pending_outbound_requests > 0 {
+            self.pending_outbound_requests -= 1;
+            return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
+                protocol: SubstreamProtocol::new(DiscoveryProtocol, ()),
+            });
+        }
+
+        Poll::Pending
+    }
+}
+
+impl NetworkBehaviour for DuplicateDiscoverySubstreamAttackBehaviour {
+    type ConnectionHandler = DuplicateDiscoverySubstreamAttackHandler;
+    type ToSwarm = ();
+
+    fn handle_established_inbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        _peer: PeerId,
+        _local_addr: &Multiaddr,
+        _remote_addr: &Multiaddr,
+    ) -> Result<Self::ConnectionHandler, ConnectionDenied> {
+        Ok(DuplicateDiscoverySubstreamAttackHandler::new(
+            Arc::clone(&self.negotiated_outbound_streams),
+            0,
+        ))
+    }
+
+    fn handle_established_outbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        _peer: PeerId,
+        _addr: &Multiaddr,
+        _role_override: Endpoint,
+        _port_use: PortUse,
+    ) -> Result<Self::ConnectionHandler, ConnectionDenied> {
+        Ok(DuplicateDiscoverySubstreamAttackHandler::new(
+            Arc::clone(&self.negotiated_outbound_streams),
+            2,
+        ))
+    }
+
+    fn on_swarm_event(&mut self, _event: FromSwarm) {}
+
+    fn on_connection_handler_event(
+        &mut self,
+        _peer_id: PeerId,
+        _connection_id: ConnectionId,
+        _event: (),
+    ) {
+    }
+
+    fn poll(
+        &mut self,
+        _cx: &mut Context<'_>,
+    ) -> Poll<ToSwarm<Self::ToSwarm, <Self::ConnectionHandler as ConnectionHandler>::FromBehaviour>>
+    {
+        Poll::Pending
+    }
+}
 
 struct TestNode {
     peer_id: PeerId,
@@ -375,5 +513,84 @@ fn test_insert_filtered_rejects_future_timestamp() {
         peer_contact_book.get(&future_peer_id).is_none(),
         "insert_filtered must reject contacts with far-future timestamps, \
          but the contact was accepted — no timestamp validation exists"
+    );
+}
+
+#[test(tokio::test)]
+async fn test_duplicate_discovery_substream_closes_without_panic() {
+    let mut victim = TestNode::new();
+    let negotiated_outbound_streams = Arc::new(AtomicUsize::new(0));
+
+    let attacker_keypair = Keypair::generate_ed25519();
+    let attacker_peer_id = PeerId::from(attacker_keypair.public());
+
+    let transport = MemoryTransport::default()
+        .upgrade(Version::V1)
+        .authenticate(noise::Config::new(&attacker_keypair).unwrap())
+        .multiplex(yamux::Config::default())
+        .timeout(Duration::from_secs(20))
+        .boxed();
+
+    let mut attacker_swarm = SwarmBuilder::with_existing_identity(attacker_keypair)
+        .with_tokio()
+        .with_other_transport(|_| transport)
+        .unwrap()
+        .with_behaviour(|_| {
+            DuplicateDiscoverySubstreamAttackBehaviour::new(Arc::clone(
+                &negotiated_outbound_streams,
+            ))
+        })
+        .unwrap()
+        .build();
+
+    let attacker_address = multiaddr![Memory(rand::random::<u64>())];
+    Swarm::listen_on(&mut attacker_swarm, attacker_address).unwrap();
+
+    Swarm::dial(
+        &mut attacker_swarm,
+        DialOpts::unknown_peer_id()
+            .address(victim.address.clone())
+            .build(),
+    )
+    .unwrap();
+
+    let attack = async {
+        let mut victim_closed = false;
+        let mut attacker_closed = false;
+
+        loop {
+            let negotiated = negotiated_outbound_streams.load(Ordering::Relaxed);
+            if negotiated >= 2 && victim_closed {
+                break;
+            }
+            assert!(
+                !(attacker_closed && negotiated < 2),
+                "Attacker connection closed before negotiating duplicate discovery substreams"
+            );
+
+            tokio::select! {
+                event = victim.swarm.select_next_some() => {
+                    if let SwarmEvent::ConnectionClosed { peer_id, .. } = event
+                        && peer_id == attacker_peer_id
+                    {
+                        victim_closed = true;
+                    }
+                }
+                event = attacker_swarm.select_next_some() => {
+                    if matches!(event, SwarmEvent::ConnectionClosed { .. }) {
+                        attacker_closed = true;
+                    }
+                }
+            }
+        }
+    };
+
+    if timeout(Duration::from_secs(10), attack).await.is_err() {
+        panic!("Timeout while waiting for duplicate discovery attack and victim-side close");
+    }
+
+    assert!(
+        negotiated_outbound_streams.load(Ordering::Relaxed) >= 2,
+        "Attacker failed to negotiate two discovery substreams"
     );
 }
