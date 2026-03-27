@@ -1029,9 +1029,10 @@ fn handle_request_response_inbound_failure(
     connection_id: ConnectionId,
     request_id: InboundRequestId,
     error: InboundFailure,
-    _event_info: EventInfo,
+    event_info: EventInfo,
 ) {
     error!(%request_id, %peer_id, %connection_id, %error, "Inbound request failed");
+    event_info.state.response_channels.remove(&request_id);
 }
 
 fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
