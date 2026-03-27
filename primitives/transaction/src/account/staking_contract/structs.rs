@@ -144,10 +144,11 @@ impl IncomingStakingTransactionData {
                 }
 
                 // Check proof of knowledge, if necessary.
-                if let (Some(new_voting_key), Some(new_proof_of_knowledge)) =
-                    (new_voting_key, new_proof_of_knowledge)
-                {
-                    verify_proof_of_knowledge(new_voting_key, new_proof_of_knowledge)?;
+                match (new_voting_key, new_proof_of_knowledge) {
+                    (Some(key), Some(pok)) => verify_proof_of_knowledge(key, pok)?,
+                    (Some(_), None) => return Err(TransactionError::InvalidData),
+                    (None, Some(_)) => return Err(TransactionError::InvalidData),
+                    (None, None) => {} // no key change, nothing to verify
                 }
 
                 // Check that the signature is correct.
