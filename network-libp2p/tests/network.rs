@@ -16,7 +16,7 @@ use nimiq_network_interface::{
 use nimiq_network_libp2p::{
     dht,
     discovery::{self, peer_contacts::PeerContact},
-    Config, Network,
+    Config, Network, NetworkError,
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
@@ -242,6 +242,17 @@ impl dht::Verifier for Verifier {
                 )
             })
             .ok_or(dht::DhtVerifierError::InvalidSignature)
+    }
+}
+
+struct RejectingVerifier;
+
+impl dht::Verifier for RejectingVerifier {
+    fn verify(
+        &self,
+        _record: &libp2p::kad::Record,
+    ) -> Result<dht::DhtRecord, dht::DhtVerifierError> {
+        Err(dht::DhtVerifierError::InvalidSignature)
     }
 }
 
@@ -513,6 +524,58 @@ async fn dht_put_and_get() {
         .unwrap();
 
     assert_eq!(fetched_record, Some(put_record));
+}
+
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn dht_get_with_verifier_failure_returns_error() {
+    let addr1 = multiaddr![Memory(rand::random::<u64>())];
+    let addr2 = multiaddr![Memory(rand::random::<u64>())];
+    let keys = Arc::new(RwLock::new(BTreeMap::default()));
+
+    let net1 = Network::new(network_config(addr1.clone()), Verifier::new(&keys)).await;
+    net1.listen_on(vec![addr1.clone()]).await;
+
+    let net2 = Network::new(network_config(addr2.clone()), RejectingVerifier).await;
+    net2.listen_on(vec![addr2.clone()]).await;
+
+    let mut events1 = net1.subscribe_events();
+    let mut events2 = net2.subscribe_events();
+
+    net2.dial_address(addr1).await.unwrap();
+
+    let event1 = helper::get_next_peer_event(&mut events1).await;
+    helper::assert_peer_joined(&event1, &net2.get_local_peer_id());
+
+    let event2 = helper::get_next_peer_event(&mut events2).await;
+    helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
+
+    sleep(Duration::from_secs(10)).await;
+
+    let mut rng = test_rng(false);
+    let keypair = KeyPair::generate(&mut rng);
+    let key: Address = (&keypair.public).into();
+
+    let put_record = ValidatorRecord {
+        peer_id: net1.get_local_peer_id(),
+        validator_address: key.clone(),
+        timestamp: 0x42u64,
+    };
+
+    assert!(keys.write().insert(key.clone(), keypair.public).is_none());
+    net1.dht_put(&key, &put_record, &keypair).await.unwrap();
+
+    let result = timeout(
+        Duration::from_secs(2),
+        net2.dht_get::<_, ValidatorRecord<PeerId>, KeyPair>(&key),
+    )
+    .await;
+
+    assert!(result.is_ok(), "dht_get future hung");
+    assert!(matches!(
+        result.unwrap(),
+        Err(NetworkError::DhtGetVerificationFailed)
+    ));
 }
 
 #[test(tokio::test)]

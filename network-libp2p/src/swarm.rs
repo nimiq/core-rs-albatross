@@ -540,13 +540,43 @@ fn handle_dht_event(event: kad::Event, event_info: EventInfo) {
 }
 
 #[cfg(feature = "kad")]
+fn abort_dht_get(
+    id: QueryId,
+    step: ProgressStep,
+    error: NetworkError,
+    reason: &'static str,
+    event_info: &mut EventInfo,
+) {
+    if let Some(mut query) = event_info.swarm.behaviour_mut().dht.query_mut(&id) {
+        query.finish();
+    }
+
+    event_info.state.dht_get_results.remove(&id);
+
+    if let Some(output) = event_info.state.dht_gets.remove(&id) {
+        if output.send(Err(error)).is_err() {
+            error!(query_id = ?id, ?step, "could not send aborted get record query result to channel");
+        }
+    } else {
+        warn!(query_id = ?id, ?step, %reason, "GetRecord query abort for unknown query ID");
+    }
+}
+
+#[cfg(feature = "kad")]
 fn handle_dht_get(
     id: QueryId,
     result: Result<GetRecordOk, GetRecordError>,
     _stats: QueryStats,
     step: ProgressStep,
-    event_info: EventInfo,
+    mut event_info: EventInfo,
 ) {
+    if !event_info.state.dht_gets.contains_key(&id)
+        && !event_info.state.dht_get_results.contains_key(&id)
+    {
+        debug!(query_id = ?id, ?step, "Ignoring stale GetRecord query progress");
+        return;
+    }
+
     match result {
         Ok(GetRecordOk::FoundRecord(record)) => {
             // Verify incoming record
@@ -554,12 +584,18 @@ fn handle_dht_get(
                 Ok(record) => record,
                 Err(error) => {
                     warn!(?error, "DHT record verification failed");
+                    abort_dht_get(
+                        id,
+                        step,
+                        NetworkError::DhtGetVerificationFailed,
+                        "DHT get record verification failed",
+                        &mut event_info,
+                    );
                     return;
                 }
             };
 
             let count = store_dht_record(&mut event_info.state.dht_get_results, id, dht_record);
-
             // Check if we already have a quorum
             if count == event_info.state.dht_quorum {
                 event_info

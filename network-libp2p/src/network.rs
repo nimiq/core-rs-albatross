@@ -644,7 +644,10 @@ impl NetworkInterface for Network {
             })
             .await?;
 
-        let data = output_rx.await??;
+        let Ok(data) = timeout(REQUEST_TIMEOUT, output_rx).await else {
+            return Err(NetworkError::DhtGetTimeout);
+        };
+        let data = data??;
         // Now decode the signed record and returned the tagged signable record
         let signed_record: TaggedSigned<V, T> = Deserialize::deserialize_from_vec(&data)?;
         Ok(Some(signed_record.record))

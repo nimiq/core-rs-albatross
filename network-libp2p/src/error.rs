@@ -28,6 +28,15 @@ pub enum NetworkError {
     #[error("DHT query finished without a verified record")]
     DhtNoValidRecord,
 
+    #[error("DHT get query entered an inconsistent state")]
+    DhtGetInconsistentState,
+
+    #[error("DHT get record verification failed")]
+    DhtGetVerificationFailed,
+
+    #[error("DHT get query timed out")]
+    DhtGetTimeout,
+
     #[error("DHT PutRecord error: {0:?}")]
     DhtPutRecord(libp2p::kad::PutRecordError),
 
