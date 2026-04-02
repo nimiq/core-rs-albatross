@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 futures = { workspace = true }
-gloo-timers = { version = "0.3", features = ["futures"] }
+gloo-timers = { version = "0.4", features = ["futures"] }
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 pin-project-lite = "0.2.17"
 send_wrapper = { version = "0.6", features = ["futures"] }
