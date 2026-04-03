@@ -23,7 +23,7 @@ workspace = true
 [dependencies]
 futures = { workspace = true }
 log = { workspace = true }
-tokio = { version = "1.50", features = ["macros", "rt-multi-thread", "time", "tracing"] }
+tokio = { version = "1.51", features = ["macros", "rt-multi-thread", "time", "tracing"] }
 tokio-metrics = "0.4"
 
 nimiq-time = { workspace = true }

@@ -56,7 +56,7 @@ signal-hook = { version = "0.4", optional = true }
 subtle = "2.6"
 thiserror = "2.0"
 time = { version = "0.3", optional = true }
-tokio = { version = "1.50", features = ["rt"], optional = true }
+tokio = { version = "1.51", features = ["rt"], optional = true }
 toml = "1.1"
 tracing-loki = { version = "0.2.6", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = [
@@ -102,7 +102,7 @@ nimiq-zkp-component = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
-tokio = { version = "1.50", features = ["macros"] }
+tokio = { version = "1.51", features = ["macros"] }
 nimiq-test-log = { workspace = true }
 
 [features]
