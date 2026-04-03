@@ -30,7 +30,7 @@ pin-project = "1.1"
 rand = "0.9"
 serde = "1.0"
 thiserror = "2.0"
-tokio = { version = "1.50", features = ["rt", "sync", "time"] }
+tokio = { version = "1.51", features = ["rt", "sync", "time"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 nimiq-account = { workspace = true, default-features = false }
