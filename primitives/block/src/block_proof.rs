@@ -79,9 +79,9 @@ impl BlockInclusionProof {
             election_head.block_number(),
         );
 
-        // The election head might already have an interlink or prev_election_head link to the target
+        // An empty proof is only valid if the election head already references the target directly.
         if hops.is_empty() {
-            return true;
+            return Self::references_block(election_head, target);
         }
 
         // Check that the proof contains all needed hops
@@ -128,5 +128,16 @@ impl BlockInclusionProof {
             return false;
         }
         true
+    }
+
+    fn references_block(block: &MacroBlock, target: &MacroBlock) -> bool {
+        let target_hash = target.hash();
+
+        block.header.parent_election_hash == target_hash
+            || block
+                .header
+                .interlink
+                .as_ref()
+                .is_some_and(|interlink| interlink.contains(&target_hash))
     }
 }

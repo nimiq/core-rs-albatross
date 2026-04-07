@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use nimiq_block::{BlockInclusionProof, MacroBlock, MacroHeader};
+use nimiq_hash::Hash;
 use nimiq_primitives::policy::Policy;
 
 #[test]
@@ -84,6 +85,18 @@ fn test_is_block_proven() {
     // Current election head: 10, target: 9. Claimed proof []
     let block_proof = BlockInclusionProof { proof: vec![] };
     assert!(block_proof.is_block_proven(&blocks[&10], &blocks[&9]));
+
+    // Current election head: 10, target: forged 9. Claimed proof []
+    let mut forged_parent_target = blocks[&9].clone();
+    forged_parent_target.header.history_root = "forged-parent-target".hash();
+    let block_proof = BlockInclusionProof { proof: vec![] };
+    assert!(!block_proof.is_block_proven(&blocks[&10], &forged_parent_target));
+
+    // Current election head: 10, target: forged 8. Claimed proof []
+    let mut forged_interlink_target = blocks[&8].clone();
+    forged_interlink_target.header.history_root = "forged-interlink-target".hash();
+    let block_proof = BlockInclusionProof { proof: vec![] };
+    assert!(!block_proof.is_block_proven(&blocks[&10], &forged_interlink_target));
 
     // Current election head: 22, target: 1. Claimed proof [17 (wrong), 8, 4, 2]
     let block_proof = BlockInclusionProof {
