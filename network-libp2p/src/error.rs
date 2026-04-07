@@ -25,6 +25,9 @@ pub enum NetworkError {
     #[error("DHT GetRecord error: {0:?}")]
     DhtGetRecord(libp2p::kad::GetRecordError),
 
+    #[error("DHT query finished without a verified record")]
+    DhtNoValidRecord,
+
     #[error("DHT PutRecord error: {0:?}")]
     DhtPutRecord(libp2p::kad::PutRecordError),
 

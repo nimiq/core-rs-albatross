@@ -68,6 +68,33 @@ struct EventInfo<'a> {
     metrics: &'a Arc<NetworkMetrics>,
 }
 
+#[cfg(feature = "kad")]
+fn store_dht_record<K>(
+    dht_get_results: &mut HashMap<K, DhtResults>,
+    id: K,
+    dht_record: DhtRecord,
+) -> u8
+where
+    K: Eq + std::hash::Hash,
+{
+    let results = dht_get_results.entry(id).or_insert_with(|| DhtResults {
+        count: 0,
+        best_value: dht_record.clone(),
+        outdated_values: vec![],
+    });
+
+    results.count += 1;
+
+    if dht_record > results.best_value {
+        results.outdated_values.push(results.best_value.clone());
+        results.best_value = dht_record;
+    } else if dht_record < results.best_value {
+        results.outdated_values.push(dht_record);
+    }
+
+    results.count
+}
+
 pub(crate) fn new_swarm(
     config: Config,
     contacts: Arc<RwLock<PeerContactBook>>,
@@ -531,32 +558,10 @@ fn handle_dht_get(
                 }
             };
 
-            if step.count.get() == 1_usize {
-                // This is our first record
-                let results = DhtResults {
-                    count: 0, // Will be increased in the next step
-                    best_value: dht_record.clone(),
-                    outdated_values: vec![],
-                };
-                event_info.state.dht_get_results.insert(id, results);
-            }
+            let count = store_dht_record(&mut event_info.state.dht_get_results, id, dht_record);
 
-            // We should always have a stored result
-            let Some(results) = event_info.state.dht_get_results.get_mut(&id) else {
-                log::error!(query_id = ?id, "DHT inconsistent state");
-                return;
-            };
-
-            results.count += 1;
-            // Replace best value if needed and update the outdated values
-            if dht_record > results.best_value {
-                results.outdated_values.push(results.best_value.clone());
-                results.best_value = dht_record;
-            } else if dht_record < results.best_value {
-                results.outdated_values.push(dht_record)
-            }
             // Check if we already have a quorum
-            if results.count == event_info.state.dht_quorum {
+            if count == event_info.state.dht_quorum {
                 event_info
                     .swarm
                     .behaviour_mut()
@@ -571,7 +576,18 @@ fn handle_dht_get(
             // and push the best result to the cache candidates
 
             let Some(results) = event_info.state.dht_get_results.remove(&id) else {
-                log::error!(query_id = ?id, "DHT inconsistent state");
+                warn!(
+                    query_id = ?id,
+                    "DHT query finished without any verified record"
+                );
+
+                if let Some(output) = event_info.state.dht_gets.remove(&id) {
+                    if output.send(Err(NetworkError::DhtNoValidRecord)).is_err() {
+                        error!(query_id = ?id, error = "receiver hung up", "could not send get record query result to channel");
+                    }
+                } else {
+                    warn!(query_id = ?id, ?step, "GetRecord query result for unknown query ID");
+                }
                 return;
             };
 
@@ -618,6 +634,62 @@ fn handle_dht_get(
             }
             event_info.state.dht_get_results.remove(&id);
         }
+    }
+}
+
+#[cfg(all(test, feature = "kad"))]
+mod tests {
+    use std::collections::HashMap;
+
+    use libp2p::kad::{Record, RecordKey};
+    use nimiq_keys::Address;
+    use nimiq_validator_network::validator_record::ValidatorRecord;
+
+    use super::{store_dht_record, DhtRecord, DhtResults};
+
+    fn test_dht_record(timestamp: u64, key_suffix: u8) -> DhtRecord {
+        let peer_id = libp2p::PeerId::random();
+        let validator_record = ValidatorRecord::new(peer_id, Address::default(), timestamp);
+        let record = Record {
+            key: RecordKey::new(&[key_suffix]),
+            value: vec![key_suffix],
+            publisher: Some(peer_id),
+            expires: None,
+        };
+
+        DhtRecord::Validator(peer_id, validator_record, record)
+    }
+
+    #[test]
+    fn stores_first_verified_record_even_if_query_already_progressed() {
+        let mut results = HashMap::<u8, DhtResults>::new();
+        let record = test_dht_record(10, 1);
+
+        let count = store_dht_record(&mut results, 7, record.clone());
+
+        assert_eq!(count, 1);
+
+        let stored = results.get(&7).expect("record should initialize results");
+        assert_eq!(stored.count, 1);
+        assert!(stored.best_value == record);
+        assert!(stored.outdated_values.is_empty());
+    }
+
+    #[test]
+    fn keeps_newest_record_and_tracks_outdated_ones() {
+        let mut results = HashMap::<u8, DhtResults>::new();
+        let older = test_dht_record(10, 1);
+        let newer = test_dht_record(20, 2);
+
+        store_dht_record(&mut results, 3, older.clone());
+        let count = store_dht_record(&mut results, 3, newer.clone());
+
+        assert_eq!(count, 2);
+
+        let stored = results.get(&3).expect("query results should exist");
+        assert_eq!(stored.count, 2);
+        assert!(stored.best_value == newer);
+        assert!(stored.outdated_values == vec![older]);
     }
 }
 
