@@ -326,6 +326,22 @@ impl LightBlockchain {
 
         this.head = new_head_info.head.clone();
 
+        // If the new head is a macro block, update the macro-related state as well.
+        if let Block::Macro(ref macro_block) = new_head_info.head {
+            this.macro_head = macro_block.clone();
+
+            this.chain_store
+                .clear_old_blocks(new_head_info.head.block_number());
+
+            if macro_block.is_election() {
+                this.election_head = macro_block.clone();
+                this.current_validators = macro_block.get_validators();
+
+                // Store the election block header.
+                this.chain_store.put_election(macro_block.header.clone());
+            }
+        }
+
         let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
         for (hash, chain_info) in revert_chain.into_iter().rev() {
             log::debug!(

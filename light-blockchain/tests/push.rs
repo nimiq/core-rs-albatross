@@ -674,6 +674,91 @@ fn it_can_rebranch_to_inferior_macro_block() {
 }
 
 #[test]
+fn rebranch_to_macro_updates_macro_head() {
+    let producer1 = TemporaryLightBlockProducer::new();
+    let producer2 = TemporaryLightBlockProducer::new();
+
+    let inferior = producer1.next_block(vec![], false);
+    producer2.next_block(vec![], true);
+    assert_eq!(producer2.push(inferior), Ok(PushResult::Ignored));
+
+    for _ in 1..Policy::blocks_per_batch() - 1 {
+        let inferior = producer1.next_block(vec![], false);
+        producer2.next_block(vec![], false);
+        assert_eq!(producer2.push(inferior), Ok(PushResult::Ignored));
+    }
+
+    let macro_block = producer1.next_block(vec![], false);
+    assert!(macro_block.is_macro());
+
+    assert_eq!(
+        producer2.push(macro_block.clone()),
+        Ok(PushResult::Rebranched)
+    );
+
+    let light_blockchain = producer2.light_blockchain.read();
+    assert_eq!(light_blockchain.head.hash(), macro_block.hash());
+    assert_eq!(light_blockchain.macro_head.hash(), macro_block.hash());
+}
+
+#[test]
+fn rebranch_to_election_macro_updates_light_state() {
+    let producer1 = TemporaryLightBlockProducer::new();
+    let producer2 = TemporaryLightBlockProducer::new();
+
+    for _ in 0..Policy::blocks_per_epoch() - Policy::blocks_per_batch() {
+        let block = producer1.next_block(vec![], false);
+        assert_eq!(producer2.push(block), Ok(PushResult::Extended));
+    }
+
+    let inferior = producer1.next_block(vec![], false);
+    producer2.next_block(vec![], true);
+    assert_eq!(producer2.push(inferior), Ok(PushResult::Ignored));
+
+    for _ in 1..Policy::blocks_per_batch() - 1 {
+        let inferior = producer1.next_block(vec![], false);
+        producer2.next_block(vec![], false);
+        assert_eq!(producer2.push(inferior), Ok(PushResult::Ignored));
+    }
+
+    let election_block = producer1.next_block(vec![], false);
+    assert!(election_block.is_election());
+
+    assert_eq!(
+        producer2.push(election_block.clone()),
+        Ok(PushResult::Rebranched)
+    );
+
+    {
+        let light_blockchain = producer2.light_blockchain.read();
+        let election_hash = election_block.hash();
+        let election_epoch = Policy::epoch_at(election_block.block_number());
+
+        assert_eq!(light_blockchain.head.hash(), election_hash);
+        assert_eq!(light_blockchain.macro_head.hash(), election_hash);
+        assert_eq!(light_blockchain.election_head.hash(), election_hash);
+        assert_eq!(
+            light_blockchain.current_validators,
+            election_block.validators()
+        );
+        assert_eq!(
+            light_blockchain.chain_store.get_election(election_epoch),
+            Some(&election_block.unwrap_macro_ref().header)
+        );
+    }
+
+    let next_block = producer1.next_block(vec![], false);
+    let full_result = producer2.temp_producer.push(next_block.clone());
+    let light_result = LightBlockchain::push(
+        producer2.light_blockchain.upgradable_read(),
+        remove_micro_body(next_block),
+    );
+
+    assert_eq!(full_result, Ok(PushResult::Extended));
+    assert_eq!(light_result, full_result);
+}
+
+#[test]
 fn can_push_zkps() {
     let temp_producer1 = TemporaryBlockProducer::new();
     let temp_producer2 = TemporaryLightBlockProducer::new();
