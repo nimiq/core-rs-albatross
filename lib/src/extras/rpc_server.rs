@@ -81,7 +81,7 @@ pub fn initialize_rpc_server(
         Config {
             bind_to: (config.bind_to.unwrap_or_else(default_bind), config.port).into(),
             enable_websocket: false,
-            ip_whitelist: None,
+            ip_whitelist: config.allow_ips.map(|ips| ips.into_iter().collect()),
             basic_auth,
             cors: Some(cors_config),
         },
