@@ -12,6 +12,42 @@ impl TaggedKeyPair for KeyPair {
 
 impl TaggedPublicKey for Ed25519PublicKey {
     fn verify(&self, msg: &[u8], sig: &[u8]) -> bool {
-        self.verify(&Ed25519Signature::from_bytes(sig).unwrap(), msg)
+        let Ok(signature) = Ed25519Signature::from_bytes(sig) else {
+            return false;
+        };
+
+        self.verify(&signature, msg)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_test_log::test;
+    use nimiq_test_utils::test_rng;
+
+    use super::*;
+    use crate::SecureGenerate;
+
+    #[test]
+    fn tagged_verify_rejects_invalid_signature_lengths() {
+        let keypair = KeyPair::generate(&mut test_rng(false));
+        let message = b"test message";
+        let signature = keypair.sign(message);
+
+        assert!(TaggedPublicKey::verify(
+            &keypair.public,
+            message,
+            &signature.to_bytes(),
+        ));
+        assert!(!TaggedPublicKey::verify(
+            &keypair.public,
+            message,
+            &[0u8; Ed25519Signature::SIZE - 1],
+        ));
+        assert!(!TaggedPublicKey::verify(
+            &keypair.public,
+            message,
+            &[0u8; Ed25519Signature::SIZE + 1],
+        ));
     }
 }
