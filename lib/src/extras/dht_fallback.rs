@@ -1,7 +1,7 @@
 use std::io;
 
 use http::Uri;
-use http_body_util::{BodyExt, Empty};
+use http_body_util::{BodyExt, Empty, Limited};
 use hyper::body::Bytes;
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector};
 use hyper_util::{
@@ -65,8 +65,9 @@ impl DhtFallback {
             return Err(format!("bad http response: {}", response.status()));
         }
 
-        let response = response
-            .into_body()
+        // Limit response body to 1 MB to prevent OOM from a compromised server.
+        const MAX_RESPONSE_SIZE: usize = 1_048_576;
+        let response = Limited::new(response.into_body(), MAX_RESPONSE_SIZE)
             .collect()
             .await
             .map_err(|error| error.to_string())?
