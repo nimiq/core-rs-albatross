@@ -78,7 +78,8 @@ impl Blockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(this.network_id)?;
+        let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
+        block.verify(this.network_id, max_timestamp)?;
 
         // Verify that the block is a valid successor to the current macro head.
         block.verify_macro_successor(this.state.macro_info.head.unwrap_macro_ref())?;

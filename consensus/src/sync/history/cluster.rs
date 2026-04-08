@@ -120,6 +120,7 @@ pub struct BatchSetVerifyState {
     network: NetworkId,
     predecessor: Block,
     validators: Validators,
+    max_timestamp: u64,
 }
 
 /// Represents a request for a specific chunk of the history for a macro block.
@@ -234,6 +235,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 network: blockchain.network_id,
                 predecessor: Block::Macro(blockchain.election_head().clone()),
                 validators: blockchain.election_head().get_validators().unwrap(),
+                max_timestamp: blockchain.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT),
             }
         };
         // Prepare the queue of epoch IDs.
@@ -256,6 +258,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                     batch_set_info,
                     &verify_state.predecessor,
                     &verify_state.validators,
+                    verify_state.max_timestamp,
                 ) {
                     warn!(error = ?e, "Received invalid batch set");
                     return false;
@@ -315,8 +318,9 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         network: NetworkId,
         macro_predecessor: &Block,
         validators: &Validators,
+        max_timestamp: u64,
     ) -> Result<(), HistoryRequestError> {
-        if let Err(error) = block.verify(network) {
+        if let Err(error) = block.verify(network, max_timestamp) {
             warn!(%block, %error, reason = "Block intrinsic checks failed", "Invalid macro block");
             return Err(HistoryRequestError::InvalidMacroBlock);
         }
@@ -340,6 +344,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         batch_set_info: &BatchSetInfo,
         predecessor_macro_block: &Block,
         validators: &Validators,
+        max_timestamp: u64,
     ) -> Result<(), HistoryRequestError> {
         // Check and verify the election macro block if it exists and get the parent election_hash of this epoch
         if let Some(election_macro_block) = &batch_set_info.election_macro_block {
@@ -349,7 +354,13 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 return Err(HistoryRequestError::InvalidBatchSetInfo);
             }
 
-            Self::verify_macro_block(&block, network, predecessor_macro_block, validators)?;
+            Self::verify_macro_block(
+                &block,
+                network,
+                predecessor_macro_block,
+                validators,
+                max_timestamp,
+            )?;
         }
 
         let mut last_seen_macro_block = predecessor_macro_block.clone();
@@ -366,7 +377,13 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             }
 
             // Check the macro block of the batch set.
-            Self::verify_macro_block(&block, network, &last_seen_macro_block, validators)?;
+            Self::verify_macro_block(
+                &block,
+                network,
+                &last_seen_macro_block,
+                validators,
+                max_timestamp,
+            )?;
 
             // Check the history size proof.
             if !batch_set.history_len.verify(block.history_root()) {
@@ -619,6 +636,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             network: blockchain.network_id,
             predecessor: Block::Macro(blockchain.election_head().clone()),
             validators: blockchain.election_head().get_validators().unwrap(),
+            max_timestamp: blockchain.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT),
         };
         self.batch_set_queue.set_verify_state(verify_state);
     }

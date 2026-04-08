@@ -51,7 +51,8 @@ impl Blockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(self.network_id)?;
+        let max_timestamp = self.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
+        block.verify(self.network_id, max_timestamp)?;
 
         // Fetch predecessor block. Fail if it doesn't exist.
         let predecessor = self
@@ -380,7 +381,8 @@ impl Blockchain {
         let mut block = Block::Macro(proposed_block);
 
         // Make sure the header verifies
-        if let Err(error) = block.verify_header(self.network_id, false) {
+        let max_timestamp = self.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
+        if let Err(error) = block.verify_header(self.network_id, false, max_timestamp) {
             debug!(%error, %block, "Tendermint - await_proposal: Invalid block header");
             return Err(PushError::InvalidBlock(error));
         }

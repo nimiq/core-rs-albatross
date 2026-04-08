@@ -47,7 +47,8 @@ impl Blockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(this.network_id)?;
+        let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
+        block.verify(this.network_id, max_timestamp)?;
 
         // Prepare the inputs to verify the proof.
         let genesis_block = this
@@ -181,7 +182,8 @@ impl Blockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(this.network_id)?;
+        let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
+        block.verify(this.network_id, max_timestamp)?;
 
         // Check if we have this block's successor.
         let prev_block = &this.state.election_head;
@@ -237,7 +239,8 @@ impl Blockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(this.network_id)?;
+        let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
+        block.verify(this.network_id, max_timestamp)?;
 
         // Verify that the block is a valid macro successor to our current macro head.
         block.verify_macro_successor(this.state.macro_info.head.unwrap_macro_ref())?;

@@ -16,6 +16,9 @@ use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{generate_transactions, validator_address};
 use nimiq_transaction::ExecutedTransaction;
 
+/// Test blocks use timestamp 0; this allows up to 1 second into the future.
+const TEST_MAX_TIMESTAMP: u64 = 1000;
+
 #[test]
 fn test_verify_header_network() {
     let mut block = Block::Micro(MicroBlock {
@@ -32,19 +35,22 @@ fn test_verify_header_network() {
 
     // Check version at header level
     assert_eq!(
-        block.verify_header(NetworkId::UnitAlbatross, false),
+        block.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Err(BlockError::NetworkMismatch)
     );
 
     // Error should remain at block level
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::NetworkMismatch)
     );
 
     // Fix the version and check that it passes
     block.unwrap_micro_ref_mut().header.network = NetworkId::UnitAlbatross;
-    assert_eq!(block.verify_header(NetworkId::UnitAlbatross, false), Ok(()));
+    assert_eq!(
+        block.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
 }
 
 #[test]
@@ -63,19 +69,22 @@ fn test_verify_header_version() {
 
     // Check version at header level
     assert_eq!(
-        block.verify_header(NetworkId::UnitAlbatross, false),
+        block.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Err(BlockError::UnsupportedVersion)
     );
 
     // Error should remain at block level
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::UnsupportedVersion)
     );
 
     // Fix the version and check that it passes
     block.unwrap_micro_ref_mut().header.version = Policy::max_supported_version();
-    assert_eq!(block.verify_header(NetworkId::UnitAlbatross, false), Ok(()));
+    assert_eq!(
+        block.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
 }
 
 #[test]
@@ -107,12 +116,12 @@ fn test_verify_version_upgrades_micro_blocks() {
 
     // Should not allow version changes in micro blocks
     assert_eq!(
-        block1.verify_header(NetworkId::UnitAlbatross, false),
+        block1.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Ok(()),
         "Should accept lower versions"
     );
     assert_eq!(
-        block2.verify_header(NetworkId::UnitAlbatross, false),
+        block2.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Ok(()),
         "Should accept max version"
     );
@@ -125,7 +134,7 @@ fn test_verify_version_upgrades_micro_blocks() {
     // Fix the version and check that it passes
     block2.unwrap_micro_ref_mut().header.version = Policy::max_supported_version() - 1;
     assert_eq!(
-        block2.verify_header(NetworkId::UnitAlbatross, false),
+        block2.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Ok(()),
         "Should accept lower versions"
     );
@@ -187,12 +196,12 @@ fn test_verify_version_upgrades_macro_blocks() {
 
     // Should not allow version changes in non-election blocks
     assert_eq!(
-        macro_block1.verify_header(NetworkId::UnitAlbatross, false),
+        macro_block1.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Ok(()),
         "Should accept lower versions"
     );
     assert_eq!(
-        macro_block2.verify_header(NetworkId::UnitAlbatross, false),
+        macro_block2.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Ok(()),
         "Should accept max version"
     );
@@ -205,7 +214,7 @@ fn test_verify_version_upgrades_macro_blocks() {
     // Fix the version and check that it passes
     macro_block2.unwrap_macro_ref_mut().header.version = Policy::max_supported_version() - 2;
     assert_eq!(
-        macro_block2.verify_header(NetworkId::UnitAlbatross, false),
+        macro_block2.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Ok(()),
         "Should accept lower versions"
     );
@@ -218,7 +227,7 @@ fn test_verify_version_upgrades_macro_blocks() {
     // Scenario 2: Version upgrades above one in election blocks are not allowed
     // Should not allow version changes > 1
     assert_eq!(
-        election_block.verify_header(NetworkId::UnitAlbatross, false),
+        election_block.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Ok(()),
         "Should accept max versions"
     );
@@ -232,7 +241,7 @@ fn test_verify_version_upgrades_macro_blocks() {
     // Fix the version and check that it passes
     election_block.unwrap_macro_ref_mut().header.version = Policy::max_supported_version() - 1;
     assert_eq!(
-        election_block.verify_header(NetworkId::UnitAlbatross, false),
+        election_block.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Ok(()),
         "Should accept lower versions"
     );
@@ -260,33 +269,39 @@ fn test_verify_header_extra_data() {
 
     // Check extra data field at header level
     assert_eq!(
-        block.verify_header(NetworkId::UnitAlbatross, false),
+        block.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
         Err(BlockError::ExtraDataTooLarge)
     );
     // Error should remain for a skip block
     assert_eq!(
-        block.verify_header(NetworkId::UnitAlbatross, true),
+        block.verify_header(NetworkId::UnitAlbatross, true, TEST_MAX_TIMESTAMP),
         Err(BlockError::ExtraDataTooLarge)
     );
 
     // Error should remain at block level
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::ExtraDataTooLarge)
     );
 
     // Fix the extra data field and check that it passes
     block.unwrap_micro_ref_mut().header.extra_data = vec![0; 32];
-    assert_eq!(block.verify_header(NetworkId::UnitAlbatross, false), Ok(()));
+    assert_eq!(
+        block.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
     // Error should remain for a skip block
     assert_eq!(
-        block.verify_header(NetworkId::UnitAlbatross, true),
+        block.verify_header(NetworkId::UnitAlbatross, true, TEST_MAX_TIMESTAMP),
         Err(BlockError::ExtraDataTooLarge)
     );
 
     // Fix the extra data field for a skip block and check that it passes
     block.unwrap_micro_ref_mut().header.extra_data = [].to_vec();
-    assert_eq!(block.verify_header(NetworkId::UnitAlbatross, true), Ok(()));
+    assert_eq!(
+        block.verify_header(NetworkId::UnitAlbatross, true, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
 }
 
 #[test]
@@ -316,7 +331,7 @@ fn test_verify_body_root() {
 
     // The body root check must fail
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::BodyHashMismatch)
     );
 
@@ -328,7 +343,10 @@ fn test_verify_body_root() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
 }
 
 #[test]
@@ -369,7 +387,7 @@ fn test_verify_skip_block() {
 
     // The skip block body should fail
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::InvalidSkipBlockBody)
     );
 
@@ -382,7 +400,10 @@ fn test_verify_skip_block() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
 }
 
 #[test]
@@ -422,7 +443,7 @@ fn test_verify_micro_block_body_txns() {
 
     // The body check should fail
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::DuplicateTransaction)
     );
 
@@ -436,7 +457,10 @@ fn test_verify_micro_block_body_txns() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
 
     // Now modify the validity start height
     let txns: Vec<ExecutedTransaction> = generate_transactions(
@@ -465,7 +489,7 @@ fn test_verify_micro_block_body_txns() {
 
     // The body check should fail
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::ExpiredTransaction)
     );
 }
@@ -535,7 +559,7 @@ fn test_verify_micro_block_body_fork_proofs() {
 
     // The body check should fail
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::ForkProofsNotOrdered)
     );
 
@@ -553,7 +577,10 @@ fn test_verify_micro_block_body_fork_proofs() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
 
     // Lets have a duplicate fork proof
     fork_proofs.push(fork_proofs.last().unwrap().clone());
@@ -570,7 +597,7 @@ fn test_verify_micro_block_body_fork_proofs() {
     });
 
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::DuplicateForkProof)
     );
 
@@ -604,7 +631,7 @@ fn test_verify_micro_block_body_fork_proofs() {
 
     // The first fork proof should no longer be valid
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::InvalidForkProof)
     );
 }
@@ -636,7 +663,7 @@ fn test_verify_election_macro_body() {
 
     // The validators check should fail
     assert_eq!(
-        block.verify(NetworkId::UnitAlbatross),
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::InvalidValidators)
     );
 
@@ -659,5 +686,8 @@ fn test_verify_election_macro_body() {
     });
 
     // Skipping the verification of the PK tree root should make the verify function to pass
-    assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
 }

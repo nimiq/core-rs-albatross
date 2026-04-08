@@ -338,14 +338,14 @@ impl Block {
     /// Verifies the block.
     /// Note that only intrinsic verifications are performed and further checks
     /// are needed when completely verifying a block.
-    pub fn verify(&self, network: NetworkId) -> Result<(), BlockError> {
+    pub fn verify(&self, network: NetworkId, max_timestamp: u64) -> Result<(), BlockError> {
         // Check the block type.
         if self.ty() != BlockType::of(self.block_number()) {
             return Err(BlockError::InvalidBlockType);
         }
 
         // Perform header intrinsic verification.
-        self.verify_header(network, self.is_skip())?;
+        self.verify_header(network, self.is_skip(), max_timestamp)?;
 
         // Verify body if it exists.
         if self.has_body() {
@@ -378,10 +378,27 @@ impl Block {
     /// Verifies the header.
     /// Note that only header intrinsic verifications are performed and further checks
     /// are needed when completely verifying a block header.
-    pub fn verify_header(&self, network: NetworkId, is_skip: bool) -> Result<(), BlockError> {
+    pub fn verify_header(
+        &self,
+        network: NetworkId,
+        is_skip: bool,
+        max_timestamp: u64,
+    ) -> Result<(), BlockError> {
         // Check whether the block is from the correct network.
         if self.network() != network {
             return Err(BlockError::NetworkMismatch);
+        }
+
+        // Check that the block timestamp does not exceed the permitted future drift.
+        if self.timestamp() > max_timestamp {
+            warn!(
+                header = %self,
+                timestamp = self.timestamp(),
+                max_timestamp,
+                reason = "timestamp too far in the future",
+                "Invalid block header"
+            );
+            return Err(BlockError::InvalidTimestamp);
         }
 
         // Check that the version is supported.

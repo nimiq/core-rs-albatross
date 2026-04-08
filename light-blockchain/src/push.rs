@@ -69,7 +69,8 @@ impl LightBlockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(this.network_id)?;
+        let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
+        block.verify(this.network_id, max_timestamp)?;
 
         // Verify that the block is a valid immediate successor to its predecessor.
         let predecessor = &prev_info.head;

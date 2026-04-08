@@ -162,8 +162,9 @@ impl<N: Network> BlockQueue<N> {
 
         // Validate header before hashing to reject malformed blocks (e.g. invalid BLS keys)
         // that would panic during hash computation.
+        let max_timestamp = blockchain.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
         if block
-            .verify_header(blockchain.network_id(), block.is_skip())
+            .verify_header(blockchain.network_id(), block.is_skip(), max_timestamp)
             .is_err()
         {
             block_source.reject_block(&self.network);

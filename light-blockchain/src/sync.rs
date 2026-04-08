@@ -54,7 +54,8 @@ impl LightBlockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(this.network_id)?;
+        let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
+        block.verify(this.network_id, max_timestamp)?;
 
         // Verify the zk proof.
         if !trusted_proof {
@@ -141,7 +142,8 @@ impl LightBlockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(this.network_id)?;
+        let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
+        block.verify(this.network_id, max_timestamp)?;
 
         // Verify that the block is a valid macro successor to our current macro head.
         block.verify_macro_successor(&this.macro_head)?;
@@ -224,7 +226,8 @@ impl LightBlockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify(this.network_id)?;
+        let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
+        block.verify(this.network_id, max_timestamp)?;
 
         // Upgrade the blockchain lock
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
