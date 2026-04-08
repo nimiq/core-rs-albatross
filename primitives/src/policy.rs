@@ -326,8 +326,9 @@ impl Policy {
         } else {
             let blocks_per_epoch = Self::blocks_per_epoch();
             let block_number = block_number - Self::genesis_block_number();
-            ((block_number / blocks_per_epoch + 1) * blocks_per_epoch)
-                + Self::genesis_block_number()
+            (block_number / blocks_per_epoch + 1)
+                .saturating_mul(blocks_per_epoch)
+                .saturating_add(Self::genesis_block_number())
         }
     }
 
@@ -386,8 +387,9 @@ impl Policy {
         } else {
             let block_number = block_number - Self::genesis_block_number();
             let blocks_per_batch = Self::blocks_per_batch();
-            ((block_number / blocks_per_batch + 1) * blocks_per_batch)
-                + Self::genesis_block_number()
+            (block_number / blocks_per_batch + 1)
+                .saturating_mul(blocks_per_batch)
+                .saturating_add(Self::genesis_block_number())
         }
     }
 
@@ -499,21 +501,23 @@ impl Policy {
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = lastBlockOfReportingWindow))]
     pub fn last_block_of_reporting_window(block_number: u32) -> u32 {
-        block_number + Self::blocks_per_epoch()
+        block_number.saturating_add(Self::blocks_per_epoch())
     }
 
     /// Returns the first block after the reporting window of a given block number has ended.
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = blockAfterReportingWindow))]
     pub fn block_after_reporting_window(block_number: u32) -> u32 {
-        Self::last_block_of_reporting_window(block_number) + 1
+        Self::last_block_of_reporting_window(block_number).saturating_add(1)
     }
 
     /// Returns the first block after the jail period of a given block number has ended.
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = blockAfterJail))]
     pub fn block_after_jail(block_number: u32) -> u32 {
-        block_number + Self::blocks_per_epoch() * Self::JAIL_EPOCHS + 1
+        block_number
+            .saturating_add(Self::blocks_per_epoch().saturating_mul(Self::JAIL_EPOCHS))
+            .saturating_add(1)
     }
 
     /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is
