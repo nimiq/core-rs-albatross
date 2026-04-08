@@ -154,6 +154,14 @@ impl PolicyInterface for PolicyDispatcher {
         genesis_time: u64,
         current_time: u64,
     ) -> RPCResult<u64, (), Self::Error> {
+        if genesis_supply > Policy::TOTAL_SUPPLY {
+            log::error!(
+                genesis_supply,
+                "The supplied genesis_supply must not exceed Policy::TOTAL_SUPPLY"
+            );
+            return Err(Error::InvalidArgument(genesis_supply.to_string()));
+        }
+
         if current_time < genesis_time {
             log::error!(
                 current_time,
