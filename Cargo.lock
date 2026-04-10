@@ -3924,6 +3924,7 @@ dependencies = [
  "nimiq-database-value",
  "nimiq-database-value-derive",
  "nimiq-hash",
+ "nimiq-keys",
  "nimiq-primitives",
  "nimiq-serde",
  "nimiq-transaction",

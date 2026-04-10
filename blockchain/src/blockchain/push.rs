@@ -122,7 +122,7 @@ impl Blockchain {
 
         read_txn.close();
 
-        let chain_info = ChainInfo::from_block(block, &prev_info, prev_missing_range);
+        let chain_info = ChainInfo::from_block(block, &prev_info, prev_missing_range)?;
 
         // Extend, rebranch or just store the block depending on the chain ordering.
         let result = match chain_order {

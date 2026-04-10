@@ -1,8 +1,8 @@
 use std::{fmt::Formatter, ops::RangeFrom};
 
 use nimiq_block::{
-    Block, BlockType, MacroBlock, MacroHeader, MicroBlock, MicroHeader, MicroJustification,
-    TendermintProof,
+    Block, BlockError, BlockType, MacroBlock, MacroHeader, MicroBlock, MicroHeader,
+    MicroJustification, TendermintProof,
 };
 use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::Blake2bHash;
@@ -58,24 +58,30 @@ impl ChainInfo {
     }
 
     /// Creates a new ChainInfo for a block given its predecessor.
+    ///
+    /// Returns an error if the transaction fee sum overflows.
     pub fn from_block(
         block: Block,
         prev_info: &ChainInfo,
         prev_missing_range: Option<RangeFrom<KeyNibbles>>,
-    ) -> Self {
+    ) -> Result<Self, BlockError> {
         assert_eq!(prev_info.head.block_number(), block.block_number() - 1);
 
         // Reset the transaction fee accumulator if this is the first block of a batch. Otherwise,
         // just add the transactions fees of this block to the accumulator.
+        let block_fees = block.sum_transaction_fees()?;
         let cum_tx_fees = if Policy::is_macro_block_at(prev_info.head.block_number()) {
-            block.sum_transaction_fees()
+            block_fees
         } else {
-            prev_info.cum_tx_fees + block.sum_transaction_fees()
+            prev_info
+                .cum_tx_fees
+                .checked_add(block_fees)
+                .ok_or(BlockError::TransactionFeeOverflow)?
         };
 
         let prunable = !block.is_election();
 
-        ChainInfo {
+        Ok(ChainInfo {
             on_main_chain: false,
             main_chain_successor: None,
             head: block,
@@ -84,7 +90,7 @@ impl ChainInfo {
             history_tree_len: 0,
             prunable,
             prev_missing_range,
-        }
+        })
     }
 
     /// Sets the value for the cumulative historic transaction size and the prunable flag
@@ -186,5 +192,72 @@ impl<'de> Visitor<'de> for ChainHeadVisitor {
         };
 
         Ok(block)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_block::{BlockError, MicroBlock, MicroBody, MicroHeader};
+    use nimiq_keys::Address;
+    use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
+    use nimiq_transaction::ExecutedTransaction;
+
+    use super::*;
+
+    fn tx_with_fee(fee: Coin) -> ExecutedTransaction {
+        ExecutedTransaction::Ok(nimiq_transaction::Transaction::new_basic(
+            Address::default(),
+            Address::from([1u8; 20]),
+            Coin::ZERO,
+            fee,
+            1,
+            NetworkId::UnitAlbatross,
+        ))
+    }
+
+    #[test]
+    fn test_chain_info_cumulative_fee_overflow() {
+        // Use block_number 2 so it's NOT a macro block predecessor, triggering the
+        // cumulative addition path.
+        let prev_block = Block::Micro(MicroBlock {
+            header: MicroHeader {
+                network: NetworkId::UnitAlbatross,
+                version: Policy::max_supported_version(),
+                block_number: 2,
+                timestamp: 0,
+                ..Default::default()
+            },
+            justification: None,
+            body: None,
+        });
+
+        let mut prev_info = ChainInfo::new(prev_block, true);
+        prev_info.cum_tx_fees = Coin::MAX;
+
+        // Create a block with fee = 1. Adding to MAX should overflow.
+        let transactions = vec![tx_with_fee(Coin::from_u64_unchecked(1))];
+        let micro_body = MicroBody {
+            equivocation_proofs: vec![],
+            transactions,
+        };
+        let block = Block::Micro(MicroBlock {
+            header: MicroHeader {
+                network: NetworkId::UnitAlbatross,
+                version: Policy::max_supported_version(),
+                block_number: 3,
+                timestamp: 1,
+                ..Default::default()
+            },
+            justification: None,
+            body: Some(micro_body),
+        });
+
+        assert!(
+            matches!(
+                ChainInfo::from_block(block, &prev_info, None),
+                Err(BlockError::TransactionFeeOverflow)
+            ),
+            "Expected TransactionFeeOverflow for cumulative fee overflow",
+        );
     }
 }

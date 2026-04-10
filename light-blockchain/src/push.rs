@@ -114,7 +114,7 @@ impl LightBlockchain {
         }
 
         // Create the chain info for the new block.
-        let chain_info = ChainInfo::from_block(block, &prev_info, None);
+        let chain_info = ChainInfo::from_block(block, &prev_info, None)?;
 
         // More chain ordering.
         let result = match chain_order {

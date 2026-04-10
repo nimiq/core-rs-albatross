@@ -37,3 +37,6 @@ nimiq-primitives = { workspace = true, features = ["coin", "key-nibbles", "polic
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-vrf = { workspace = true }
+
+[dev-dependencies]
+nimiq-keys = { workspace = true }

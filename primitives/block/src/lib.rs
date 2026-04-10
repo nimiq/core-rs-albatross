@@ -89,4 +89,7 @@ pub enum BlockError {
 
     #[error("Skip block contains a non empty body")]
     InvalidSkipBlockBody,
+
+    #[error("Transaction fee sum overflow")]
+    TransactionFeeOverflow,
 }

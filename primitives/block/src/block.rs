@@ -234,9 +234,11 @@ impl Block {
 
     /// Returns the sum of the fees of all of the transactions in the block. If the block is a Macro
     /// block it just returns zero, since Macro blocks don't contain any transactions.
-    pub fn sum_transaction_fees(&self) -> Coin {
+    ///
+    /// Returns an error if the sum of fees would overflow `Coin::MAX`.
+    pub fn sum_transaction_fees(&self) -> Result<Coin, BlockError> {
         match self {
-            Block::Macro(_) => Coin::ZERO,
+            Block::Macro(_) => Ok(Coin::ZERO),
             Block::Micro(block) => block
                 .body
                 .as_ref()
@@ -244,9 +246,12 @@ impl Block {
                     ex.transactions
                         .iter()
                         .map(|tx| tx.get_raw_transaction().fee)
-                        .sum()
+                        .try_fold(Coin::ZERO, |acc, fee| {
+                            acc.checked_add(fee)
+                                .ok_or(BlockError::TransactionFeeOverflow)
+                        })
                 })
-                .unwrap_or(Coin::ZERO),
+                .unwrap_or(Ok(Coin::ZERO)),
         }
     }
 

@@ -495,7 +495,7 @@ impl Blockchain {
         }
 
         // Create a ChainInfo for the proposed block.
-        let chain_info = ChainInfo::from_block(block.clone(), &prev_info, prev_missing_range);
+        let chain_info = ChainInfo::from_block(block.clone(), &prev_info, prev_missing_range)?;
 
         let read_txn = self.read_transaction();
         // First the common ancestor of the two chains needs to be found.

@@ -8,13 +8,14 @@ use nimiq_collections::BitSet;
 use nimiq_hash::Hash;
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey, Ed25519Signature, KeyPair};
 use nimiq_primitives::{
+    coin::Coin,
     networks::NetworkId,
     policy::Policy,
     slots_allocation::{Validator, Validators, ValidatorsBuilder},
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{generate_transactions, validator_address};
-use nimiq_transaction::ExecutedTransaction;
+use nimiq_transaction::{ExecutedTransaction, Transaction};
 
 /// Test blocks use timestamp 0; this allows up to 1 second into the future.
 const TEST_MAX_TIMESTAMP: u64 = 1000;
@@ -633,6 +634,72 @@ fn test_verify_micro_block_body_fork_proofs() {
     assert_eq!(
         block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Err(BlockError::InvalidForkProof)
+    );
+}
+
+/// Helper to create a transaction with a specific fee and a unique recipient.
+/// The transaction is not signed and won't pass signature verification, but is
+/// sufficient for fee sum tests.
+fn tx_with_fee(fee: Coin, unique_byte: u8) -> ExecutedTransaction {
+    ExecutedTransaction::Ok(Transaction::new_basic(
+        Address::default(),
+        Address::from([unique_byte; 20]),
+        Coin::from_u64_unchecked(1),
+        fee,
+        1,
+        NetworkId::UnitAlbatross,
+    ))
+}
+
+#[test]
+fn test_sum_transaction_fees_overflow() {
+    let high_fee = Coin::from_u64_unchecked(Policy::TOTAL_SUPPLY);
+
+    // 5 transactions each with fee = TOTAL_SUPPLY should overflow Coin::MAX
+    let transactions: Vec<ExecutedTransaction> =
+        (0..5).map(|i| tx_with_fee(high_fee, i + 1)).collect();
+
+    let micro_body = MicroBody {
+        equivocation_proofs: vec![],
+        transactions,
+    };
+
+    let block = Block::Micro(MicroBlock {
+        header: MicroHeader {
+            network: NetworkId::UnitAlbatross,
+            version: Policy::max_supported_version(),
+            block_number: 1,
+            timestamp: 0,
+            body_root: micro_body.hash(),
+            ..Default::default()
+        },
+        justification: Some(MicroJustification::Micro(Ed25519Signature::default())),
+        body: Some(micro_body),
+    });
+
+    assert_eq!(
+        block.sum_transaction_fees(),
+        Err(BlockError::TransactionFeeOverflow),
+    );
+}
+
+#[test]
+fn test_sum_transaction_fees_normal() {
+    let fee = Coin::from_u64_unchecked(1000);
+    let transactions: Vec<ExecutedTransaction> = (0..3).map(|i| tx_with_fee(fee, i + 1)).collect();
+
+    let block = Block::Micro(MicroBlock {
+        header: MicroHeader::default(),
+        justification: None,
+        body: Some(MicroBody {
+            equivocation_proofs: vec![],
+            transactions,
+        }),
+    });
+
+    assert_eq!(
+        block.sum_transaction_fees(),
+        Ok(Coin::from_u64_unchecked(3000)),
     );
 }
 
