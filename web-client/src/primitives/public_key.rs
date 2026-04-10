@@ -101,7 +101,7 @@ impl PublicKey {
         num_signers: usize,
     ) -> Result<Vec<PublicKey>, JsError> {
         let keys = PublicKey::unpack_public_keys(keys)?;
-        let combined_keys = combine_public_keys(keys, num_signers);
+        let combined_keys = combine_public_keys(keys, num_signers)?;
         Ok(combined_keys.into_iter().map(PublicKey::from).collect())
     }
 
@@ -109,7 +109,7 @@ impl PublicKey {
     pub fn sum(keys: &PublicKeyAnyArrayType) -> Result<PublicKey, JsError> {
         let keys = PublicKey::unpack_public_keys(keys)?;
         let combined_key =
-            nimiq_keys::multisig::public_key::DelinearizedPublicKey::sum_delinearized(&keys);
+            nimiq_keys::multisig::public_key::DelinearizedPublicKey::sum_delinearized(&keys)?;
         Ok(PublicKey::from(combined_key))
     }
 

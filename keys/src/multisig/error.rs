@@ -27,4 +27,6 @@ impl std::error::Error for InvalidScalarError {
 pub enum PartialSignatureError {
     #[error("Missing nonces")]
     MissingNonces,
+    #[error("Invalid curve point in public key")]
+    InvalidCurvePoint,
 }

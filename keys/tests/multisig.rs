@@ -5,7 +5,9 @@ use nimiq_keys::{
     multisig::{
         address::{combine_public_keys, compute_address},
         commitment::{Commitment, CommitmentPair, Nonce},
+        error::PartialSignatureError,
         partial_signature::PartialSignature,
+        public_key::DelinearizedPublicKey,
         CommitmentsBuilder,
     },
     Address, Ed25519PublicKey, KeyPair, PrivateKey,
@@ -93,6 +95,13 @@ const VECTORS: [StrTestVector; 4] = [
     },
 ];
 
+/// Bytes that are NOT a valid compressed Edwards Y coordinate on Ed25519.
+/// CompressedEdwardsY(INVALID_CURVE_POINT_BYTES).decompress() returns None.
+const INVALID_CURVE_POINT_BYTES: [u8; 32] = [
+    0xab, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x37,
+];
+
 #[test]
 fn it_can_construct_public_keys() {
     for vector in VECTORS.iter() {
@@ -165,7 +174,7 @@ fn it_can_create_signatures() {
                     builder = builder.with_signer(pks[j], commitments[j]);
                 }
             }
-            let data = builder.build(&test.message);
+            let data = builder.build(&test.message).unwrap();
             let partial_sig = key_pair.partial_sign(&data, &test.message).unwrap();
 
             assert!(
@@ -237,7 +246,8 @@ fn it_can_create_a_valid_multisignature() {
     let combined_public_keys = combine_public_keys(
         vec![keypair_a.public, keypair_b.public, keypair_c.public],
         2,
-    );
+    )
+    .unwrap();
     assert_eq!(compute_address(&combined_public_keys), wallet_address);
 
     let mut tx = "01f4e305f34ea1ccf00c0f7fcbc030d1347dc5eafe000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000500".to_string();
@@ -255,7 +265,8 @@ fn it_can_create_a_valid_multisignature() {
             commitment_pair_b_2.commitment(),
         ],
     )
-    .build(&tx_content);
+    .build(&tx_content)
+    .unwrap();
 
     assert_eq!(commitments_data_a.aggregate_public_key, signing_public_key);
     assert_eq!(
@@ -281,7 +292,8 @@ fn it_can_create_a_valid_multisignature() {
             commitment_pair_a_2.commitment(),
         ],
     )
-    .build(&tx_content);
+    .build(&tx_content)
+    .unwrap();
 
     assert_eq!(commitments_data_b.aggregate_public_key, signing_public_key);
     assert_eq!(
@@ -317,4 +329,97 @@ fn it_can_create_a_valid_multisignature() {
     tx.push_str(&hex::encode(proof));
 
     assert_eq!(&tx, signed_transaction);
+}
+
+fn invalid_curve_point_key() -> Ed25519PublicKey {
+    Ed25519PublicKey::from(INVALID_CURVE_POINT_BYTES)
+}
+
+#[test]
+fn delinearize_rejects_invalid_curve_point() {
+    let valid_kp: KeyPair = from_hex!(
+        "f80793b4cb1e165d1a65b5cbc9e7b2efa583de01bc13dd23f7a1d78af4349904",
+        PrivateKey::SIZE,
+        PrivateKey::from
+    )
+    .into();
+    let invalid_key = invalid_curve_point_key();
+
+    let result = DelinearizedPublicKey::sum_delinearized(&[valid_kp.public, invalid_key]);
+    assert!(
+        matches!(result, Err(PartialSignatureError::InvalidCurvePoint)),
+        "expected InvalidCurvePoint error, got {result:?}"
+    );
+}
+
+#[test]
+fn build_rejects_invalid_public_key() {
+    let mut rng = test_rng(true);
+    let valid_kp: KeyPair = from_hex!(
+        "f80793b4cb1e165d1a65b5cbc9e7b2efa583de01bc13dd23f7a1d78af4349904",
+        PrivateKey::SIZE,
+        PrivateKey::from
+    )
+    .into();
+    let invalid_key = invalid_curve_point_key();
+    let pairs = CommitmentPair::generate_all(&mut rng);
+
+    let builder = CommitmentsBuilder::with_private_commitments(valid_kp.public, pairs)
+        .with_signer(invalid_key, [Commitment::default(); 2]);
+
+    let result = builder.build(b"test message");
+    assert!(
+        matches!(result, Err(PartialSignatureError::InvalidCurvePoint)),
+        "expected InvalidCurvePoint error"
+    );
+}
+
+#[test]
+fn verify_partial_with_invalid_key_returns_false() {
+    let mut rng = test_rng(true);
+    let valid_kp: KeyPair = from_hex!(
+        "f80793b4cb1e165d1a65b5cbc9e7b2efa583de01bc13dd23f7a1d78af4349904",
+        PrivateKey::SIZE,
+        PrivateKey::from
+    )
+    .into();
+    let pairs = CommitmentPair::generate_all(&mut rng);
+    let commitments = CommitmentPair::to_commitments(&pairs);
+
+    // Build valid commitments data first.
+    let data = CommitmentsBuilder::with_private_commitments(valid_kp.public, pairs)
+        .with_signer(valid_kp.public, commitments)
+        .build(b"test")
+        .unwrap();
+    let partial_sig = valid_kp.partial_sign(&data, b"test").unwrap();
+
+    // Verifying with an invalid key should return false, not panic.
+    let invalid_key = invalid_curve_point_key();
+    assert!(!invalid_key.verify_partial(&data, &partial_sig, b"test"));
+}
+
+#[test]
+fn commitment_try_from_rejects_invalid_bytes() {
+    let result = Commitment::try_from(INVALID_CURVE_POINT_BYTES);
+    assert!(
+        result.is_err(),
+        "expected error for invalid curve point bytes"
+    );
+}
+
+#[test]
+fn combine_public_keys_rejects_invalid_key() {
+    let valid_kp: KeyPair = from_hex!(
+        "f80793b4cb1e165d1a65b5cbc9e7b2efa583de01bc13dd23f7a1d78af4349904",
+        PrivateKey::SIZE,
+        PrivateKey::from
+    )
+    .into();
+    let invalid_key = invalid_curve_point_key();
+
+    let result = combine_public_keys(vec![valid_kp.public, invalid_key], 2);
+    assert!(
+        matches!(result, Err(PartialSignatureError::InvalidCurvePoint)),
+        "expected InvalidCurvePoint error, got {result:?}"
+    );
 }

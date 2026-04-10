@@ -4,7 +4,7 @@ use nimiq_hash::Blake2bHasher;
 #[cfg(feature = "serde-derive")]
 use nimiq_utils::merkle::compute_root_from_content;
 
-use super::public_key::DelinearizedPublicKey;
+use super::{error::PartialSignatureError, public_key::DelinearizedPublicKey};
 #[cfg(feature = "serde-derive")]
 use crate::Address;
 use crate::Ed25519PublicKey;
@@ -13,14 +13,14 @@ use crate::Ed25519PublicKey;
 pub fn combine_public_keys(
     public_keys: Vec<Ed25519PublicKey>,
     num_signers: usize,
-) -> Vec<Ed25519PublicKey> {
+) -> Result<Vec<Ed25519PublicKey>, PartialSignatureError> {
     // Calculate combinations.
     let combinations = public_keys.into_iter().combinations(num_signers);
     let mut multisig_keys: Vec<Ed25519PublicKey> = combinations
         .map(|combination| DelinearizedPublicKey::sum_delinearized(&combination))
-        .collect();
+        .collect::<Result<_, _>>()?;
     multisig_keys.sort();
-    multisig_keys
+    Ok(multisig_keys)
 }
 
 /// Given a list of possible public keys, generates an address for which each of the public keys is a possible signer.

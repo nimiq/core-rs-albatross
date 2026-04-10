@@ -151,7 +151,7 @@ impl PartialSignature {
             commitments_data.push_signer(other_public_keys[i], commitments);
         }
 
-        let signature = own_keypair.partial_sign(&commitments_data.build(data), data)?;
+        let signature = own_keypair.partial_sign(&commitments_data.build(data)?, data)?;
 
         Ok(PartialSignature::from(signature))
     }

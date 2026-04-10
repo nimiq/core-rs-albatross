@@ -156,9 +156,9 @@ impl CommitmentsBuilder {
     }
 
     /// Creates the aggregate commitment and additional data for the content to be signed.
-    pub fn build(mut self, content: &[u8]) -> CommitmentsData {
+    pub fn build(mut self, content: &[u8]) -> Result<CommitmentsData, PartialSignatureError> {
         self.all_public_keys.sort();
-        let aggregate_public_key = DelinearizedPublicKey::sum_delinearized(&self.all_public_keys);
+        let aggregate_public_key = DelinearizedPublicKey::sum_delinearized(&self.all_public_keys)?;
 
         let mut partial_agg_commitments = Vec::with_capacity(MUSIG2_PARAMETER_V);
 
@@ -193,14 +193,14 @@ impl CommitmentsBuilder {
             agg_commitment_edwards += partial_agg_commitment.0 * scale;
         }
 
-        CommitmentsData {
+        Ok(CommitmentsData {
             nonces: self.nonces,
             commitments: self.all_commitments[0],
             aggregate_public_key,
             aggregate_commitment: Commitment(agg_commitment_edwards),
             all_public_keys: self.all_public_keys,
             b,
-        }
+        })
     }
 }
 
@@ -279,7 +279,10 @@ impl Ed25519PublicKey {
 
     /// Delinearizes a public key by multiplying it with a scalar derived from the hash and the public key itself.
     /// Effective delinearization for multisigs should use the hash over all public keys as an input.
-    pub(crate) fn delinearize(&self, public_keys_hash: &[u8; 64]) -> EdwardsPoint {
+    pub(crate) fn delinearize(
+        &self,
+        public_keys_hash: &[u8; 64],
+    ) -> Result<EdwardsPoint, PartialSignatureError> {
         // Compute H(C||P).
         let mut h: Sha512 = Sha512::default();
 
@@ -287,10 +290,11 @@ impl Ed25519PublicKey {
         h.update(self.as_bytes());
         let s = Scalar::from_hash::<Sha512>(h);
 
-        // Should always work, since we come from a valid public key.
-        let p = self.to_edwards_point().unwrap();
+        let p = self
+            .to_edwards_point()
+            .ok_or(PartialSignatureError::InvalidCurvePoint)?;
         // Compute H(C||P)*P.
-        s * p
+        Ok(s * p)
     }
 
     pub fn verify_partial(
@@ -303,7 +307,10 @@ impl Ed25519PublicKey {
         let public_keys_hash = hash_public_keys(&commitments_data.all_public_keys);
         // And delinearize them.
         // Note that here we delinearize as p^{H(H(pks), p)}, e.g., with an additional hash due to the function delinearize_private_key
-        let delinearized_public_key = self.delinearize(&public_keys_hash);
+        let delinearized_public_key = match self.delinearize(&public_keys_hash) {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
 
         // Compute c = H(R, apk, m)
         let mut hasher = Sha512Hasher::new();

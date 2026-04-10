@@ -95,7 +95,7 @@ impl Commitment {
                 builder.push_signer(public_key, commitments);
             });
 
-        let commitment_data = builder.build(data);
+        let commitment_data = builder.build(data)?;
 
         Ok(Commitment::from(commitment_data.aggregate_commitment))
     }

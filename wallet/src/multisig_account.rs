@@ -53,7 +53,8 @@ impl MultiSigAccount {
         let mut sorted_public_keys = public_keys.to_vec();
         sorted_public_keys.sort();
 
-        let multi_sig_keys = combine_public_keys(sorted_public_keys, min_signatures.get() as usize);
+        let multi_sig_keys =
+            combine_public_keys(sorted_public_keys, min_signatures.get() as usize)?;
 
         Ok(Self::new(key_pair, min_signatures, &multi_sig_keys))
     }
@@ -109,7 +110,9 @@ impl MultiSigAccount {
     }
 
     /// Utility method that delinearizes and aggregates the provided slice of public keys.
-    pub fn aggregate_public_keys(public_keys: &[Ed25519PublicKey]) -> Ed25519PublicKey {
+    pub fn aggregate_public_keys(
+        public_keys: &[Ed25519PublicKey],
+    ) -> Result<Ed25519PublicKey, PartialSignatureError> {
         DelinearizedPublicKey::sum_delinearized(public_keys)
     }
 
@@ -178,6 +181,8 @@ pub enum MultiSigAccountError {
     InvalidSignatureFromBytes(#[from] nimiq_keys::SignatureError),
     #[error("Number of signatures must be the same as the minimal signatures")]
     InvalidSignaturesLength,
+    #[error("Invalid curve point in public key")]
+    InvalidCurvePoint(#[from] PartialSignatureError),
     #[error("The public key of keypair must be part of provided public keys")]
     KeyPairNotPartOfList,
     #[error("The provided public keys must not be empty")]

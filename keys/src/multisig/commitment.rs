@@ -57,15 +57,19 @@ impl Commitment {
     }
 }
 
-impl From<[u8; Commitment::SIZE]> for Commitment {
-    fn from(bytes: [u8; Commitment::SIZE]) -> Self {
-        Commitment::from_bytes(bytes).unwrap()
+impl TryFrom<[u8; Commitment::SIZE]> for Commitment {
+    type Error = ();
+
+    fn try_from(bytes: [u8; Commitment::SIZE]) -> Result<Self, Self::Error> {
+        Commitment::from_bytes(bytes).ok_or(())
     }
 }
 
-impl<'a> From<&'a [u8; Commitment::SIZE]> for Commitment {
-    fn from(bytes: &'a [u8; Commitment::SIZE]) -> Self {
-        Commitment::from(*bytes)
+impl<'a> TryFrom<&'a [u8; Commitment::SIZE]> for Commitment {
+    type Error = ();
+
+    fn try_from(bytes: &'a [u8; Commitment::SIZE]) -> Result<Self, Self::Error> {
+        Commitment::try_from(*bytes)
     }
 }
 

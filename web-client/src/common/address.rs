@@ -96,7 +96,7 @@ impl Address {
             return Err(JsError::new("No public keys provided"));
         }
 
-        let combined_public_keys = combine_public_keys(public_keys, num_signers);
+        let combined_public_keys = combine_public_keys(public_keys, num_signers)?;
         Ok(Address::from(compute_address(&combined_public_keys)))
     }
 
