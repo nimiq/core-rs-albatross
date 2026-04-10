@@ -748,7 +748,10 @@ impl ConnectionHandler for Handler {
                                 HandlerOutEvent::Error(e.into()),
                             ))
                         }
-                        Poll::Pending => {}
+                        Poll::Pending => {
+                            // Is okay here not to break as after this the timer must also be checked.
+                            // Special care needs to be taken in case the timer does not exist.
+                        }
                     }
 
                     // Periodically send out updates.
@@ -782,6 +785,16 @@ impl ConnectionHandler for Handler {
                             Poll::Ready(None) => unreachable!("Interval terminated"),
                             Poll::Pending => break,
                         }
+                    } else {
+                        // All other paths but Poll::Pending in the previous .receive() have returned,
+                        // meaning that receive has returned Pending.
+                        // Since there is nothing new to poll here, this must break.
+                        debug!(
+                            %self.peer_id,
+                            %self.peer_address,
+                            "Timer does not exist for this peer",
+                        );
+                        break;
                     }
                 }
             }
