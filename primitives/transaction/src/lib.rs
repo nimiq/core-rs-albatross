@@ -383,7 +383,7 @@ impl Transaction {
             >= self
                 .validity_start_height
                 .saturating_sub(Policy::blocks_per_batch())
-            && block_height < self.validity_start_height + window
+            && block_height < self.validity_start_height.saturating_add(window)
     }
 
     pub fn contract_creation_address(&self) -> Address {

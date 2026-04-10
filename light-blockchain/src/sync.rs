@@ -24,7 +24,11 @@ impl LightBlockchain {
         trusted_proof: bool,
     ) -> Result<PushResult, PushError> {
         // Must be an election block.
-        assert!(block.is_election());
+        if !block.is_election() {
+            return Err(PushError::InvalidBlock(
+                nimiq_block::BlockError::InvalidBlockType,
+            ));
+        }
 
         let block_hash_blake2b = block.hash_cached();
         let block_hash_blake2s = block.unwrap_macro_ref().hash_blake2s();

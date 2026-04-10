@@ -723,3 +723,29 @@ fn can_push_zkps() {
         assert_eq!(blockchain2_rg.block_number(), block_number);
     }
 }
+
+#[test]
+fn push_zkp_rejects_non_election_blocks() {
+    let temp_producer = TemporaryLightBlockProducer::new();
+
+    let micro_block = {
+        let blockchain = temp_producer.blockchain.read();
+        next_micro_block(
+            &temp_producer.producer.signing_key,
+            &blockchain,
+            &BlockConfig::default(),
+        )
+    };
+    let block = Block::Micro(micro_block);
+
+    assert!(!block.is_election());
+
+    let result = LightBlockchain::push_zkp(
+        temp_producer.light_blockchain.upgradable_read(),
+        block,
+        Default::default(),
+        true,
+    );
+
+    assert_eq!(result, Err(InvalidBlock(BlockError::InvalidBlockType)));
+}
