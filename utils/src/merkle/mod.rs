@@ -211,7 +211,7 @@ impl<'de, H: HashOutput> Visitor<'de> for MerklePathVisitor<H> {
         let node_hashes: Vec<H> = seq
             .next_element()?
             .ok_or_else(|| A::Error::invalid_length(2, &self))?;
-        if left_bits_size > left_bits.len() {
+        if left_bits_size != left_bits.len() {
             return Err(A::Error::invalid_length(left_bits.len(), &self));
         }
         if node_hashes.len() != count {
@@ -655,7 +655,7 @@ impl<'de, H: HashOutput> Visitor<'de> for MerkleProofVisitor<H> {
         let operation_bits: Vec<u8> = seq
             .next_element()?
             .ok_or_else(|| A::Error::invalid_length(1, &self))?;
-        if operation_bits.len() > operations_size {
+        if operation_bits.len() != operations_size {
             return Err(A::Error::invalid_length(operations_size, &self));
         }
         let nodes: Vec<H> = seq
