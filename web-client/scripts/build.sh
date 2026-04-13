@@ -74,7 +74,7 @@ then
 fi
 if ! command -v wasm-opt &> /dev/null
 then
-    BINARYEN_VERSION=124
+    BINARYEN_VERSION=129
     BINARYEN_FOLDER="binaryen-version_$BINARYEN_VERSION"
 
     # Test if correct wasm-opt is already downloaded
