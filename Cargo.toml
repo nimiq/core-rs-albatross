@@ -118,6 +118,7 @@ strip = "debuginfo"
 [profile.release-with-debug]
 debug = true
 inherits = "release"
+split-debuginfo = "packed"  # .dwp on Linux, .dSYM on macOS
 
 # Force arkworks to be built with optimization level 2.
 [profile.dev.package.ark-ff]
