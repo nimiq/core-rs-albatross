@@ -258,18 +258,23 @@ impl ForkProof {
             return Err(EquivocationProofError::NetworkMismatch);
         }
 
-        // Check that the headers have equal block numbers and seeds.
-        if self.header1.block_number != self.header2.block_number
-            || self.header1.seed.entropy() != self.header2.seed.entropy()
-        {
-            return Err(EquivocationProofError::SlotMismatch);
-        }
-
         // Check that the justifications are valid.
         if !signing_key.verify(&self.justification1, hash1.as_slice())
             || !signing_key.verify(&self.justification2, hash2.as_slice())
         {
             return Err(EquivocationProofError::InvalidJustification);
+        }
+
+        // Check that the headers have equal block numbers and seeds.
+        if self.header1.block_number != self.header2.block_number
+            || self
+                .header1
+                .seed
+                .try_entropy()
+                .zip(self.header2.seed.try_entropy())
+                .is_none_or(|(entropy1, entropy2)| entropy1 != entropy2)
+        {
+            return Err(EquivocationProofError::SlotMismatch);
         }
 
         Ok(())
@@ -610,7 +615,7 @@ mod test {
         networks::NetworkId, policy::Policy, TendermintIdentifier, TendermintProposal,
         TendermintStep, TendermintVote,
     };
-    use nimiq_serde::Deserialize;
+    use nimiq_serde::{Deserialize, Serialize};
     use nimiq_vrf::VrfSeed;
 
     use crate::{
@@ -722,6 +727,86 @@ mod test {
         assert_eq!(proof1.sort_key(), proof2.sort_key());
         assert_eq!(proof1.sort_key(), proof3.sort_key());
         assert_ne!(proof1.sort_key(), proof4.sort_key());
+    }
+
+    #[test]
+    fn fork_proof_invalid_seed_returns_slot_mismatch() {
+        let key = KeyPair::from(
+            PrivateKey::from_bytes(
+                &hex::decode("8a535c4be49186007503231c8569f873eb512eae308d9be7e7de20af1ddc1663")
+                    .unwrap(),
+            )
+            .unwrap(),
+        );
+
+        let valid_seed = VrfSeed::default().sign_next(&key, Policy::genesis_block_number());
+        let mut invalid_seed = None;
+
+        for i in 0..32 {
+            for byte in u8::MIN..=u8::MAX {
+                let mut invalid_seed_bytes = valid_seed.serialize_to_vec();
+                if invalid_seed_bytes[i] == byte {
+                    continue;
+                }
+                invalid_seed_bytes[i] = byte;
+
+                let candidate = VrfSeed::deserialize_all(&invalid_seed_bytes).unwrap();
+                if candidate.try_entropy().is_none() {
+                    invalid_seed = Some(candidate);
+                    break;
+                }
+            }
+
+            if invalid_seed.is_some() {
+                break;
+            }
+        }
+
+        let invalid_seed = invalid_seed.expect("could not construct invalid VRF seed");
+
+        let header1 = MicroHeader {
+            network: NetworkId::UnitAlbatross,
+            version: Policy::max_supported_version(),
+            block_number: Policy::genesis_block_number(),
+            timestamp: 0,
+            parent_hash: Blake2bHash::default(),
+            seed: invalid_seed,
+            extra_data: vec![],
+            state_root: Blake2bHash::default(),
+            body_root: Blake2sHash::default(),
+            diff_root: Blake2bHash::default(),
+            history_root: Blake2bHash::default(),
+            ..Default::default()
+        };
+        let header2 = MicroHeader {
+            network: NetworkId::UnitAlbatross,
+            version: Policy::max_supported_version(),
+            block_number: Policy::genesis_block_number(),
+            timestamp: 1,
+            parent_hash: "".hash(),
+            seed: valid_seed,
+            extra_data: vec![],
+            state_root: "".hash(),
+            body_root: Blake2sHash::default(),
+            diff_root: "".hash(),
+            history_root: "".hash(),
+            ..Default::default()
+        };
+
+        let justification1 = key.sign(header1.hash().as_bytes());
+        let justification2 = key.sign(header2.hash().as_bytes());
+        let proof = ForkProof::new(
+            Address::burn_address(),
+            header1,
+            justification1,
+            header2,
+            justification2,
+        );
+
+        assert_eq!(
+            proof.verify_excluding_address_and_network(&key.public),
+            Err(crate::EquivocationProofError::SlotMismatch)
+        );
     }
 
     #[test]

@@ -220,17 +220,15 @@ impl VrfSeed {
     // Extracts the entropy, which is 256 verifiably random bits, from the current VRF Seed. This
     // entropy can then be used for any purpose for which we need randomness. Note that this entropy
     // is what is unique for a given message and public key, not the signature (which can be
-    // different for the same message and public key). We assume that the VRF Seed is valid, if it
-    // is not then this function might panic.
-    pub fn entropy(&self) -> VrfEntropy {
+    // different for the same message and public key).
+    pub fn try_entropy(&self) -> Option<VrfEntropy> {
         // We follow the specifications for VXEdDSA.
         // https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
 
         // Calculate the point V and serialized it.
         let V = CompressedEdwardsY::from_slice(&self.signature[..32])
             .unwrap() // Fails if the slice is not length 32.
-            .decompress()
-            .expect("Tried to use an invalid signature for the VRF RNG!");
+            .decompress()?;
         let V_bytes = V.mul_by_cofactor().compress().to_bytes();
 
         // Hash V to get the entropy.
@@ -240,7 +238,17 @@ impl VrfSeed {
         let mut res = [0u8; 32];
         res.copy_from_slice(&h[..32]);
 
-        VrfEntropy(res)
+        Some(VrfEntropy(res))
+    }
+
+    // Extracts the entropy, which is 256 verifiably random bits, from the current VRF Seed. This
+    // entropy can then be used for any purpose for which we need randomness. Note that this entropy
+    // is what is unique for a given message and public key, not the signature (which can be
+    // different for the same message and public key). We assume that the VRF Seed is valid, if it
+    // is not then this function might panic.
+    pub fn entropy(&self) -> VrfEntropy {
+        self.try_entropy()
+            .expect("Tried to use an invalid signature for the VRF RNG!")
     }
 
     // Initializes a VRF RNG, for a given use case, from the current VRF Seed. We assume that the
@@ -390,6 +398,38 @@ mod tests {
 
             assert!(fake_seed.verify(&prev_seed, &key_pair.public, 0).is_err());
         }
+    }
+
+    #[test]
+    fn invalid_seed_has_no_entropy() {
+        let mut rng = test_rng(false);
+        let key_pair = KeyPair::generate(&mut rng);
+        let valid_seed = VrfSeed::default().sign_next(&key_pair, 0);
+        let mut invalid_seed = None;
+
+        for i in 0..32 {
+            for byte in u8::MIN..=u8::MAX {
+                let mut signature = valid_seed.signature;
+                if signature[i] == byte {
+                    continue;
+                }
+                signature[i] = byte;
+
+                let candidate = VrfSeed { signature };
+                if candidate.try_entropy().is_none() {
+                    invalid_seed = Some(candidate);
+                    break;
+                }
+            }
+
+            if invalid_seed.is_some() {
+                break;
+            }
+        }
+
+        let invalid_seed = invalid_seed.expect("could not construct invalid VRF seed");
+
+        assert_eq!(invalid_seed.try_entropy(), None);
     }
 
     #[test]
