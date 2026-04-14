@@ -512,20 +512,12 @@ impl PeerContactBook {
     pub fn known_peers(&self) -> Vec<(PeerId, PeerInfo)> {
         self.peer_contacts
             .iter()
-            .map(|(peer_id, contact)| {
-                (
+            .filter_map(|(peer_id, contact)| {
+                let address = contact.contact.inner.addresses.first()?.clone();
+                Some((
                     *peer_id,
-                    PeerInfo::new(
-                        contact
-                            .contact
-                            .inner
-                            .addresses
-                            .first()
-                            .expect("every peer should have at least one address")
-                            .clone(),
-                        contact.contact.inner.services,
-                    ),
-                )
+                    PeerInfo::new(address, contact.contact.inner.services),
+                ))
             })
             .collect()
     }
