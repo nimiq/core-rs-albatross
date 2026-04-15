@@ -40,6 +40,14 @@ pub struct BlockAssembler<N: Network> {
 
 impl<N: Network> BlockAssembler<N> {
     const CACHE_TTL: Duration = Duration::from_secs(10);
+    /// Maximum number of unmatched headers held in [`Self::cached_headers`]. Honest
+    /// traffic stays well below this even in bursts; the cap exists so a malicious
+    /// peer flooding unique unmatched headers cannot drive unbounded memory growth.
+    const MAX_CACHED_HEADERS: usize = 2048;
+    /// Maximum number of unmatched bodies held in [`Self::cached_bodies`]. Bodies can
+    /// be large, so this is capped tighter than
+    /// the header cache.
+    const MAX_CACHED_BODIES: usize = 512;
 
     pub fn new(
         network: Arc<N>,
@@ -50,8 +58,8 @@ impl<N: Network> BlockAssembler<N> {
             network,
             header_stream,
             body_stream,
-            cached_headers: TimeLimitedCache::new(Self::CACHE_TTL),
-            cached_bodies: TimeLimitedCache::new(Self::CACHE_TTL),
+            cached_headers: TimeLimitedCache::new(Self::CACHE_TTL, Self::MAX_CACHED_HEADERS),
+            cached_bodies: TimeLimitedCache::new(Self::CACHE_TTL, Self::MAX_CACHED_BODIES),
         }
     }
 
@@ -137,8 +145,16 @@ impl<N: Network> Stream for BlockAssembler<N> {
                 )));
             }
 
-            self.cached_headers
+            let outcome = self
+                .cached_headers
                 .insert(hash, (header_message, header_id));
+            if let Some((_, (_, evicted_id))) = outcome.capacity_evicted {
+                // Oldest entry was dropped to respect the cache capacity. Tell
+                // gossipsub to ignore (not reject) it — honest peers may legitimately
+                // race a malicious flood, so we must not disconnect them.
+                self.network
+                    .validate_message::<BlockHeaderTopic>(evicted_id, MsgAcceptance::Ignore);
+            }
         }
 
         while let Poll::Ready(item) = self.body_stream.poll_next_unpin(cx) {
@@ -181,8 +197,13 @@ impl<N: Network> Stream for BlockAssembler<N> {
                 body_root: hash,
                 header_message_hash: body_message.header_message_hash,
             };
-            self.cached_bodies
+            let outcome = self
+                .cached_bodies
                 .insert(body_key, (body_message.body, body_id));
+            if let Some((_, (_, evicted_id))) = outcome.capacity_evicted {
+                self.network
+                    .validate_message::<BlockBodyTopic>(evicted_id, MsgAcceptance::Ignore);
+            }
         }
 
         // The cache stream never returns None, so it's ok to ignore that case here.
@@ -210,14 +231,31 @@ impl<N: Network> Stream for BlockAssembler<N> {
 struct TimeLimitedCache<K, V> {
     map: HashMap<K, (V, Instant)>,
     ttl: Duration,
+    max_entries: usize,
     interval: Interval,
 }
 
+/// Outcome of a [`TimeLimitedCache::insert`] call. `replaced` is the prior value
+/// displaced because the same key was already present. `capacity_evicted` is the
+/// oldest entry dropped to respect the cache's capacity bound — it exists so the
+/// caller (the [`BlockAssembler`]) can ack the dropped gossipsub message back to
+/// the network layer.
+struct InsertOutcome<K, V> {
+    #[cfg_attr(not(test), allow(dead_code))]
+    replaced: Option<V>,
+    capacity_evicted: Option<(K, V)>,
+}
+
 impl<K: Eq + std::hash::Hash + Clone, V> TimeLimitedCache<K, V> {
-    fn new(ttl: Duration) -> Self {
+    fn new(ttl: Duration, max_entries: usize) -> Self {
+        assert!(
+            max_entries > 0,
+            "TimeLimitedCache capacity must be non-zero"
+        );
         Self {
             map: HashMap::default(),
             ttl,
+            max_entries,
             interval: interval(ttl),
         }
     }
@@ -246,9 +284,30 @@ impl<K: Eq + std::hash::Hash + Clone, V> TimeLimitedCache<K, V> {
         self.map.get(k).map(|v| &v.0)
     }
 
-    /// Inserts a key-value pair into the cache
-    fn insert(&mut self, k: K, v: V) -> Option<V> {
-        self.map.insert(k, (v, Instant::now())).map(|v| v.0)
+    /// Inserts a key-value pair into the cache, evicting the oldest entry if the
+    /// cache is already at capacity and the key is not already present.
+    fn insert(&mut self, k: K, v: V) -> InsertOutcome<K, V> {
+        let capacity_evicted = if !self.map.contains_key(&k) && self.map.len() >= self.max_entries {
+            self.remove_oldest()
+        } else {
+            None
+        };
+        let replaced = self.map.insert(k, (v, Instant::now())).map(|v| v.0);
+        InsertOutcome {
+            replaced,
+            capacity_evicted,
+        }
+    }
+
+    /// Removes and returns the entry with the smallest `Instant` (i.e. the oldest).
+    fn remove_oldest(&mut self) -> Option<(K, V)> {
+        let oldest_key = self
+            .map
+            .iter()
+            .min_by_key(|(_, (_, ts))| *ts)
+            .map(|(k, _)| k.clone())?;
+        let (value, _) = self.map.remove(&oldest_key)?;
+        Some((oldest_key, value))
     }
 
     /// Removes the entry associated with the given key and returns it
@@ -377,7 +436,7 @@ mod tests {
     #[test(tokio::test)]
     async fn it_evicts_expired_items() {
         let ttl = Duration::from_secs(1);
-        let mut cache = TimeLimitedCache::new(ttl);
+        let mut cache = TimeLimitedCache::new(ttl, 128);
 
         cache.insert(1, 1);
 
@@ -411,5 +470,89 @@ mod tests {
         ));
 
         assert!(cache.is_empty());
+    }
+
+    #[test(tokio::test)]
+    async fn time_limited_cache_enforces_capacity() {
+        let mut cache = TimeLimitedCache::new(Duration::from_secs(60), 3);
+
+        assert!(cache.insert(1, 10).capacity_evicted.is_none());
+        assert!(cache.insert(2, 20).capacity_evicted.is_none());
+        assert!(cache.insert(3, 30).capacity_evicted.is_none());
+        assert_eq!(cache.len(), 3);
+
+        let outcome = cache.insert(4, 40);
+        assert_eq!(outcome.capacity_evicted, Some((1, 10)));
+        assert!(outcome.replaced.is_none());
+
+        let outcome = cache.insert(5, 50);
+        assert_eq!(outcome.capacity_evicted, Some((2, 20)));
+
+        assert_eq!(cache.len(), 3);
+        assert!(cache.get(&1).is_none());
+        assert!(cache.get(&2).is_none());
+        assert!(matches!(cache.get(&3), Some(30)));
+        assert!(matches!(cache.get(&4), Some(40)));
+        assert!(matches!(cache.get(&5), Some(50)));
+    }
+
+    #[test(tokio::test)]
+    async fn time_limited_cache_insert_same_key_does_not_evict() {
+        let mut cache = TimeLimitedCache::new(Duration::from_secs(60), 2);
+
+        cache.insert(1, 10);
+        cache.insert(2, 20);
+        assert_eq!(cache.len(), 2);
+
+        // Re-inserting an existing key must only replace, never trigger a
+        // capacity eviction.
+        let outcome = cache.insert(1, 11);
+        assert_eq!(outcome.replaced, Some(10));
+        assert!(outcome.capacity_evicted.is_none());
+        assert_eq!(cache.len(), 2);
+        assert!(matches!(cache.get(&1), Some(11)));
+        assert!(matches!(cache.get(&2), Some(20)));
+    }
+
+    #[test(tokio::test)]
+    async fn block_assembler_caps_unmatched_headers() {
+        let cap = BlockAssembler::<MockNetwork>::MAX_CACHED_HEADERS;
+        let total = cap + 32;
+
+        let (header_tx, header_rx) = mpsc::channel(total + 16);
+        let (_body_tx, body_rx) =
+            mpsc::channel::<(crate::messages::BlockBodyMessage, MockId<MockPeerId>)>(16);
+
+        let network = Arc::new(MockHub::new().new_network());
+        let mut assembler = BlockAssembler::<MockNetwork>::new(
+            network,
+            ReceiverStream::new(header_rx).boxed(),
+            ReceiverStream::new(body_rx).boxed(),
+        );
+
+        // Feed more unique unmatched headers than the cap. Each header is
+        // perturbed so its hash is unique. We yield between batches because
+        // tokio's cooperative scheduling budget (128) would otherwise force
+        // the stream poll to return Pending mid-drain and hide items from the
+        // assembler.
+        for i in 0..total {
+            let mut block = MacroBlock::non_empty_default();
+            block.header.block_number = i as u32 + 1;
+            let (header, _body) = BlockHeaderMessage::split_block(Block::Macro(block));
+            let sender = MockId::new(MockPeerId::from(0));
+            header_tx.try_send((header, sender)).unwrap();
+            if i % 64 == 0 {
+                tokio::task::yield_now().await;
+                let _ = poll!(assembler.next());
+            }
+        }
+        // Drain whatever is left, yielding between polls to refill the coop
+        // budget.
+        for _ in 0..((total / 64) + 2) {
+            tokio::task::yield_now().await;
+            let _ = poll!(assembler.next());
+        }
+
+        assert_eq!(assembler.cached_headers.len(), cap);
     }
 }
