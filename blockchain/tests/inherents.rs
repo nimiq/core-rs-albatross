@@ -784,3 +784,93 @@ fn it_can_create_version_upgrade_inherents() {
     }
     assert!(got_reward && got_finalize_batch && got_finalize_epoch);
 }
+
+#[test]
+fn it_burns_all_rewards_when_all_slots_penalized() {
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    );
+
+    let block_number = Policy::macro_block_of(2).unwrap();
+
+    let staking_contract = blockchain.get_staking_contract();
+    let active_validators = staking_contract.active_validators.clone();
+    let (validator_address, _) = active_validators.iter().next().unwrap();
+
+    // Penalize ALL slots so every slot has zero eligible count.
+    for slot in 0..Policy::SLOTS {
+        let penalize_inherent = Inherent::Penalize {
+            slot: PenalizedSlot {
+                slot,
+                validator_address: validator_address.clone(),
+                offense_event_block: 1 + Policy::genesis_block_number(),
+            },
+        };
+
+        let mut txn = blockchain.write_transaction();
+        assert!(blockchain
+            .state
+            .accounts
+            .commit(
+                &mut (&mut txn).into(),
+                &[],
+                &[penalize_inherent],
+                &BlockState::new(
+                    Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+                    1
+                ),
+                &mut BlockLogger::empty()
+            )
+            .is_ok());
+        txn.commit();
+    }
+
+    let staking_contract = blockchain.get_staking_contract();
+    let next_batch_initial_punished_set = staking_contract
+        .punished_slots
+        .next_batch_initial_punished_set(block_number, &active_validators);
+
+    let macro_header = MacroHeader {
+        network: NetworkId::UnitAlbatross,
+        version: 1,
+        block_number,
+        round: 0,
+        timestamp: blockchain.state.election_head.header.timestamp + 20000,
+        next_batch_initial_punished_set,
+        ..Default::default()
+    };
+
+    // This must not panic — previously it would trigger
+    // "Must have positive total probability" in DiscreteDistribution::new().
+    let reward_transactions =
+        blockchain.create_reward_transactions(&macro_header, &staking_contract);
+
+    // All rewards should be burned: expect exactly one burn transaction.
+    assert_eq!(
+        reward_transactions.len(),
+        1,
+        "Expected exactly one burn transaction"
+    );
+    assert_eq!(
+        reward_transactions[0].recipient,
+        Address::burn_address(),
+        "The only transaction should burn rewards"
+    );
+    assert_eq!(
+        reward_transactions[0].validator_address,
+        Address::burn_address(),
+    );
+    // The burn amount should equal the full reward pot (slot rewards + remainder).
+    assert!(
+        !reward_transactions[0].value.is_zero(),
+        "Burned reward should be non-zero"
+    );
+}

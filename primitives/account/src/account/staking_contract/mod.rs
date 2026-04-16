@@ -162,6 +162,10 @@ impl StakingContract {
 
         let mut rng = seed.rng(VrfUseCase::ValidatorSlotSelection);
 
+        assert!(
+            !validator_stakes.is_empty(),
+            "Cannot select validators: no active validators exist"
+        );
         let lookup = DiscreteDistribution::new(&validator_stakes);
 
         let mut slots_builder = ValidatorsBuilder::default();

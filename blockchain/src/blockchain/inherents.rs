@@ -297,14 +297,18 @@ impl Blockchain {
         // validators that will receive rewards).
         assert_eq!(transactions.len(), num_eligible_slots_for_accepted_tx.len());
 
-        // Get RNG from last block's seed and build lookup table based on number of eligible slots.
-        let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution);
-        let lookup = DiscreteDistribution::new(&num_eligible_slots_for_accepted_tx);
-
         // Randomly give remainder to one accepting slot. We don't bother to distribute it over all
         // accepting slots because the remainder is always at most SLOTS - 1 Lunas.
-        let index = lookup.sample(&mut rng);
-        transactions[index].value += remainder;
+        // If there are no eligible slots (e.g. all rewards burned due to non-BasicAccount reward
+        // addresses or all slots penalized), burn the remainder too.
+        if !transactions.is_empty() && num_eligible_slots_for_accepted_tx.iter().any(|&s| s > 0) {
+            let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution);
+            let lookup = DiscreteDistribution::new(&num_eligible_slots_for_accepted_tx);
+            let index = lookup.sample(&mut rng);
+            transactions[index].value += remainder;
+        } else {
+            burned_reward += remainder;
+        }
 
         // Do not create reward transactions for zero rewards
         transactions.retain(|transaction| !transaction.value.is_zero());

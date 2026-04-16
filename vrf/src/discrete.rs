@@ -117,3 +117,34 @@ impl DiscreteDistribution {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "Must have positive total probability")]
+    fn it_panics_on_empty_input() {
+        DiscreteDistribution::new(&[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Must have positive total probability")]
+    fn it_panics_on_all_zero_input() {
+        DiscreteDistribution::new(&[0, 0, 0]);
+    }
+
+    #[test]
+    fn it_creates_distribution_from_valid_input() {
+        let dist = DiscreteDistribution::new(&[1, 2, 3]);
+        assert_eq!(dist.n, 3);
+        assert_eq!(dist.T, 6);
+    }
+
+    #[test]
+    fn it_creates_distribution_from_single_entry() {
+        let dist = DiscreteDistribution::new(&[5]);
+        assert_eq!(dist.n, 1);
+        assert_eq!(dist.T, 5);
+    }
+}
