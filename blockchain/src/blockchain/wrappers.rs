@@ -73,8 +73,11 @@ impl Blockchain {
         offset: u32,
         txn_option: Option<&DBTransaction>,
     ) -> Result<Slot, BlockchainError> {
+        let predecessor = block_number
+            .checked_sub(1)
+            .ok_or(BlockchainError::BlockNotFound(block_number))?;
         let vrf_entropy = self
-            .get_block_at(block_number - 1, false, txn_option)?
+            .get_block_at(predecessor, false, txn_option)?
             .seed()
             .entropy();
 
