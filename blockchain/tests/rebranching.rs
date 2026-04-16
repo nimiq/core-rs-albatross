@@ -1,7 +1,18 @@
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
+use nimiq_genesis::NetworkId;
+use nimiq_keys::{KeyPair, PrivateKey};
 use nimiq_primitives::policy::Policy;
+use nimiq_serde::Deserialize;
 use nimiq_test_log::test;
-use nimiq_test_utils::block_production::TemporaryBlockProducer;
+use nimiq_test_utils::{
+    block_production::TemporaryBlockProducer,
+    blockchain::{generate_transactions, REWARD_KEY},
+};
+
+fn key_pair_with_funds() -> KeyPair {
+    let priv_key = PrivateKey::deserialize_from_vec(&hex::decode(REWARD_KEY).unwrap()).unwrap();
+    priv_key.into()
+}
 
 #[test]
 fn it_can_rebranch_skip_block() {
@@ -150,6 +161,93 @@ fn it_can_rebranch_forks() {
 
     assert_eq!(temp_producer1.push(fork2d), Ok(PushResult::Extended));
     assert_eq!(temp_producer2.push(fork1d), Ok(PushResult::Ignored));
+}
+
+#[test]
+fn rebranched_blocks_preserve_history_chain_info() {
+    let temp_producer1 = TemporaryBlockProducer::new();
+    let temp_producer2 = TemporaryBlockProducer::new();
+    let funded_key_pair = key_pair_with_funds();
+
+    let shared = temp_producer1.next_block(vec![], false);
+    assert_eq!(temp_producer2.push(shared), Ok(PushResult::Extended));
+
+    let fork1_txs = generate_transactions(
+        &funded_key_pair,
+        temp_producer2.blockchain.read().block_number() + 1,
+        NetworkId::UnitAlbatross,
+        1,
+        1,
+    );
+    let fork1 = temp_producer2.next_block_with_txs(vec![0x48], false, fork1_txs);
+    let inferior = temp_producer1.next_block(vec![], false);
+
+    assert_eq!(temp_producer1.push(fork1.clone()), Ok(PushResult::Forked));
+    assert_eq!(temp_producer2.push(inferior), Ok(PushResult::Forked));
+
+    let fork2_txs = generate_transactions(
+        &funded_key_pair,
+        temp_producer2.blockchain.read().block_number() + 1,
+        NetworkId::UnitAlbatross,
+        1,
+        2,
+    );
+    let fork2 = temp_producer2.next_block_with_txs(vec![], false, fork2_txs);
+
+    assert_eq!(
+        temp_producer1.push(fork2.clone()),
+        Ok(PushResult::Rebranched)
+    );
+
+    let source_chain = temp_producer2.blockchain.read();
+    let source_fork1 = source_chain
+        .chain_store
+        .get_chain_info(&fork1.hash(), false, None)
+        .unwrap();
+    let source_fork2 = source_chain
+        .chain_store
+        .get_chain_info(&fork2.hash(), false, None)
+        .unwrap();
+
+    assert!(source_fork1.history_tree_len > 0);
+    assert!(source_fork1.cum_hist_tx_size > 0);
+    assert!(source_fork2.history_tree_len > 0);
+    assert!(source_fork2.cum_hist_tx_size > 0);
+
+    let rebranched_chain = temp_producer1.blockchain.read();
+    let adopted_fork1 = rebranched_chain
+        .chain_store
+        .get_chain_info(&fork1.hash(), false, None)
+        .unwrap();
+    let adopted_fork2 = rebranched_chain
+        .chain_store
+        .get_chain_info(&fork2.hash(), false, None)
+        .unwrap();
+
+    assert_eq!(
+        adopted_fork1.history_tree_len,
+        source_fork1.history_tree_len
+    );
+    assert_eq!(
+        adopted_fork1.cum_hist_tx_size,
+        source_fork1.cum_hist_tx_size
+    );
+    assert_eq!(
+        adopted_fork2.history_tree_len,
+        source_fork2.history_tree_len
+    );
+    assert_eq!(
+        adopted_fork2.cum_hist_tx_size,
+        source_fork2.cum_hist_tx_size
+    );
+    assert_eq!(
+        rebranched_chain.state.main_chain.history_tree_len,
+        source_fork2.history_tree_len
+    );
+    assert_eq!(
+        rebranched_chain.state.main_chain.cum_hist_tx_size,
+        source_fork2.cum_hist_tx_size
+    );
 }
 
 #[test]
