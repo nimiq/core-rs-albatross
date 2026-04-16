@@ -152,7 +152,9 @@ impl Blockchain {
                 break;
             }
             if let HistoricTransactionData::Basic(tx) = &history[i].data {
-                cum_tx_fees += tx.get_raw_transaction().fee;
+                cum_tx_fees = cum_tx_fees
+                    .checked_add(tx.get_raw_transaction().fee)
+                    .ok_or(PushError::InvalidBlock(BlockError::TransactionFeeOverflow))?;
             }
             cum_hist_tx_size += history[i].data.serialized_size() as u64;
         }
