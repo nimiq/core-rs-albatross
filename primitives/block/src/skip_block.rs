@@ -79,18 +79,17 @@ impl SkipBlockProof {
 
         // Get the public key for each SLOT present in the signature and add them together to get
         // the aggregated public key.
-        let agg_pk =
-            signer_slots
-                .into_iter()
-                .fold(AggregatePublicKey::new(), |mut aggregate, slot| {
-                    let pk = validators
-                        .get_validator_by_slot_number(slot)
-                        .voting_key
-                        .uncompress()
-                        .expect("Failed to uncompress CompressedPublicKey");
-                    aggregate.aggregate(pk);
-                    aggregate
-                });
+        let mut agg_pk = AggregatePublicKey::new();
+        for slot in signer_slots {
+            let Some(pk) = validators
+                .get_validator_by_slot_number(slot)
+                .voting_key
+                .uncompress()
+            else {
+                return false;
+            };
+            agg_pk.aggregate(pk);
+        }
 
         // Verify the aggregated signature against our aggregated public key.
         agg_pk.verify_hash(skip_block.hash_with_prefix(), &self.sig.signature)

@@ -16,8 +16,6 @@
 //! ```
 use std::{cmp::Ordering, collections::BTreeMap, fmt, ops::Range, slice::Iter};
 
-use ark_ec::CurveGroup;
-use ark_serialize::CanonicalSerialize;
 use nimiq_bls::{G2Projective, LazyPublicKey as LazyBlsPublicKey, PublicKey as BlsPublicKey};
 use nimiq_hash::{Hash, HashOutput};
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
@@ -254,27 +252,27 @@ impl Hash for Validators {
     /// This function is meant to calculate the public key tree "off-circuit". Generating the public key
     /// tree with this function guarantees that it is compatible with the ZK circuit.
     fn hash<H: HashOutput>(&self) -> H {
-        let public_keys = self.voting_keys_g2().expect(
-            "BLS voting keys must be valid — call validate_keys() before hashing untrusted data",
-        );
+        let total_slots: usize = self.iter().map(|v| v.num_slots() as usize).sum();
 
-        // Checking that the number of public keys is equal to the number of validator slots.
-        assert_eq!(public_keys.len(), Policy::SLOTS as usize);
+        // Checking that the number of slots is equal to the expected number of validator slots.
+        assert_eq!(total_slots, Policy::SLOTS as usize);
 
-        // Checking that the number of public keys is a multiple of the number of leaves.
-        assert_eq!(public_keys.len() % PK_TREE_BREADTH, 0);
+        // Checking that the number of slots is a multiple of the number of leaves.
+        assert_eq!(total_slots % PK_TREE_BREADTH, 0);
 
-        // Serialize the public keys into bits.
+        // Use the raw compressed key bytes directly instead of decompressing to
+        // G2Projective and re-serializing. For valid keys, the canonical compressed
+        // serialization is a fixed-point of the uncompress -> serialize_compressed
+        // round-trip, so this produces identical output. For invalid keys, this
+        // avoids the panic that would occur during decompression.
         #[cfg(not(feature = "parallel"))]
-        let iter = public_keys.iter();
+        let iter = self.validators.iter();
         #[cfg(feature = "parallel")]
-        let iter = public_keys.par_iter();
+        let iter = self.validators.par_iter();
         let bytes: Vec<u8> = iter
-            .flat_map(|pk| {
-                let mut buffer = [0u8; 285];
-                CanonicalSerialize::serialize_compressed(&pk.into_affine(), &mut buffer[..])
-                    .unwrap();
-                buffer.to_vec()
+            .flat_map(|validator| {
+                let key_bytes = validator.voting_key.compressed().as_ref();
+                key_bytes.repeat(validator.num_slots() as usize)
             })
             .collect();
 

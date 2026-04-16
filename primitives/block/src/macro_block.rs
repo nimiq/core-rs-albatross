@@ -452,4 +452,79 @@ mod test {
         };
         assert!(header.verify().is_err());
     }
+
+    /// Verifies that Validators::hash() does not panic when called with invalid
+    /// BLS voting keys. This is the root cause fix for the sync-path crash:
+    /// hash() now uses raw compressed bytes directly instead of decompressing.
+    #[test]
+    fn hash_with_invalid_bls_key_does_not_panic() {
+        use nimiq_hash::{Blake2sHash, Hash};
+
+        let invalid_compressed = BlsCompressedPublicKey {
+            public_key: [0xFF; BlsCompressedPublicKey::SIZE],
+        };
+
+        let validator = Validator::new(
+            nimiq_keys::Address::default(),
+            invalid_compressed,
+            SchnorrPublicKey::default(),
+            0..Policy::SLOTS,
+        );
+
+        let validators = Validators::new(vec![validator]);
+
+        // This must not panic. Previously it would via voting_keys_g2().expect().
+        let _hash: Blake2sHash = validators.hash();
+    }
+
+    /// Verifies that the raw-bytes hash produces the same output as the old
+    /// decompress-reserialize path for valid keys. This ensures ZKP circuit
+    /// compatibility is maintained.
+    #[test]
+    fn hash_output_unchanged_for_valid_keys() {
+        use ark_ec::CurveGroup;
+        use ark_serialize::CanonicalSerialize;
+        use nimiq_hash::{Blake2sHash, Hash};
+        use nimiq_keys::SecureGenerate;
+        use nimiq_primitives::{
+            merkle_tree::merkle_tree_construct, slots_allocation::PK_TREE_BREADTH,
+        };
+
+        let key_pair = nimiq_bls::KeyPair::generate_default_csprng();
+        let compressed = key_pair.public_key.compress();
+
+        let validator = Validator::new(
+            nimiq_keys::Address::default(),
+            compressed,
+            SchnorrPublicKey::default(),
+            0..Policy::SLOTS,
+        );
+
+        let validators = Validators::new(vec![validator]);
+
+        // Compute hash via the new code path (raw bytes).
+        let new_hash: Blake2sHash = validators.hash();
+
+        // Compute hash via the old code path (decompress + reserialize).
+        let public_keys = validators.voting_keys_g2().unwrap();
+        let bytes: Vec<u8> = public_keys
+            .iter()
+            .flat_map(|pk| {
+                let mut buffer = [0u8; 285];
+                CanonicalSerialize::serialize_compressed(&pk.into_affine(), &mut buffer[..])
+                    .unwrap();
+                buffer.to_vec()
+            })
+            .collect();
+        let mut inputs = Vec::new();
+        for i in 0..PK_TREE_BREADTH {
+            inputs.push(
+                bytes[i * bytes.len() / PK_TREE_BREADTH..(i + 1) * bytes.len() / PK_TREE_BREADTH]
+                    .to_vec(),
+            );
+        }
+        let old_hash: Blake2sHash = merkle_tree_construct(inputs);
+
+        assert_eq!(new_hash, old_hash);
+    }
 }

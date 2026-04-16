@@ -43,5 +43,6 @@ nimiq-utils = { workspace = true, features = ["merkle"] }
 nimiq-vrf = { workspace = true, features = ["serde-derive"] }
 
 [dev-dependencies]
+ark-serialize = "0.4"
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }

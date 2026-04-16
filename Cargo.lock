@@ -3846,6 +3846,7 @@ name = "nimiq-block"
 version = "1.4.0"
 dependencies = [
  "ark-ec",
+ "ark-serialize",
  "bitflags 2.11.1",
  "byteorder",
  "hex",
