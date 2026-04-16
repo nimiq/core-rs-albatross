@@ -5,6 +5,8 @@
 //! These handlers are registered to process incoming network requests during consensus and syncing operations.
 
 #[cfg(feature = "full")]
+use std::convert::TryFrom;
+#[cfg(feature = "full")]
 use std::sync::Arc;
 use std::{cmp, collections::HashSet};
 
@@ -189,12 +191,16 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
         _peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> Result<HistoryChunk, HistoryChunkError> {
+        let Ok(chunk_index) = usize::try_from(self.chunk_index) else {
+            return Err(HistoryChunkError::CouldntProduceProof);
+        };
+
         // Attempt to retrieve a proof for the requested history chunk.
         if let Some(chunk) = blockchain.read().history_store.prove_chunk(
             self.epoch_number,
             self.block_number,
             CHUNK_SIZE,
-            self.chunk_index as usize,
+            chunk_index,
             None,
         ) {
             // Return the chunk if the proof was successfully generated.

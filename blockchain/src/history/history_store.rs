@@ -712,9 +712,13 @@ impl HistoryInterface for HistoryStore {
         let number_of_nodes = leaf_number_to_index(leaf_count);
 
         // Calculate chunk boundaries.
-        let start = cmp::min(chunk_size * chunk_index, leaf_count);
+        // Treat overflowing chunk offsets like out-of-range requests.
+        let start = chunk_size
+            .checked_mul(chunk_index)
+            .map(|start| cmp::min(start, leaf_count))
+            .unwrap_or(leaf_count);
         // Do not go beyond the verifier's block.
-        let end = cmp::min(start + chunk_size, leaf_count);
+        let end = cmp::min(start.saturating_add(chunk_size), leaf_count);
 
         // TODO: Setting `assume_previous` to false allows the proofs to be verified independently.
         //  This, however, increases the size of the proof. We might change this in the future.
@@ -1021,6 +1025,40 @@ mod tests {
             .expect("Should be able to prove number of leaves");
         assert!(size_proof.verify(&history_root3));
         assert_eq!(size_proof.size(), 4);
+    }
+
+    #[test]
+    fn prove_chunk_clamps_overflowing_chunk_indices() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions.
+        let ext_0 = create_transaction(3, 0);
+        let ext_1 = create_transaction(4, 1);
+        let ext_2 = create_transaction(5, 2);
+        let ext_3 = create_transaction(8, 3);
+        let hist_txs = vec![ext_0, ext_1, ext_2, ext_3];
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        let (history_root, _) = history_store
+            .add_to_history(&mut txn, 8, &hist_txs)
+            .unwrap();
+
+        let expected = history_store.prove_chunk(0, 8, 2, 2, Some(&txn));
+        let overflow = history_store.prove_chunk(0, 8, 2, usize::MAX / 2 + 1, Some(&txn));
+
+        assert_eq!(overflow.is_some(), expected.is_some());
+
+        if let (Some(expected), Some(overflow)) = (expected, overflow) {
+            assert!(expected.history.is_empty());
+            assert!(overflow.history.is_empty());
+            assert_eq!(
+                overflow.verify(&history_root, 4),
+                expected.verify(&history_root, 4)
+            );
+        }
     }
 
     #[test]
