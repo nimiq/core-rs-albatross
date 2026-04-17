@@ -68,6 +68,9 @@ pub enum TransactionBuilderError {
     /// [`signaling transaction`]: struct.TransactionBuilder.html#method.with_value
     #[error("The value must be zero for signaling transactions and cannot be zero for others.")]
     InvalidValue,
+    /// The `num_steps` argument passed to a vesting-contract helper was zero.
+    #[error("The number of vesting steps must be greater than zero.")]
+    InvalidNumSteps,
 }
 
 /// A helper to build arbitrary transactions.
@@ -543,6 +546,9 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
+        if num_steps == 0 {
+            return Err(TransactionBuilderError::InvalidNumSteps);
+        }
         let mut recipient = Recipient::new_vesting_builder(owner);
         recipient.with_steps(value, start_time, time_step, num_steps);
 

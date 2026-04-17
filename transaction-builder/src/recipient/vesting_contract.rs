@@ -110,6 +110,12 @@ impl VestingRecipientBuilder {
 
     /// This convenience function allows to quickly create a release schedule of `num_steps`
     /// payouts starting at `start_time + time_step`.
+    ///
+    /// If `num_steps` is zero, the step amount cannot be derived and is left unset;
+    /// a subsequent call to [`generate`] will then return
+    /// [`VestingRecipientBuilderError::NoStepAmount`].
+    ///
+    /// [`generate`]: struct.VestingRecipientBuilder.html#method.generate
     pub fn with_steps(
         &mut self,
         total_amount: Coin,
@@ -117,11 +123,13 @@ impl VestingRecipientBuilder {
         time_step: u64,
         num_steps: u32,
     ) -> &mut Self {
-        let step_amount = total_amount.div(u64::from(num_steps));
         self.with_total_amount(total_amount)
             .with_start_time(start_time)
-            .with_time_step(time_step)
-            .with_step_amount(step_amount);
+            .with_time_step(time_step);
+        if num_steps > 0 {
+            let step_amount = total_amount.div(u64::from(num_steps));
+            self.with_step_amount(step_amount);
+        }
         self
     }
 

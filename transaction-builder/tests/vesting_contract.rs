@@ -5,7 +5,10 @@ use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_transaction::{SignatureProof, Transaction};
-use nimiq_transaction_builder::{Recipient, Sender, TransactionBuilder};
+use nimiq_transaction_builder::{
+    recipient::vesting_contract::VestingRecipientBuilderError, Recipient, Sender,
+    TransactionBuilder, TransactionBuilderError,
+};
 
 #[test]
 #[allow(unused_must_use)]
@@ -104,6 +107,45 @@ fn it_can_create_creation_transaction() {
         .expect("Builder should be able to create transaction");
     let proof_builder = proof_builder.unwrap_basic();
     assert_eq!(proof_builder.transaction, transaction);
+}
+
+#[test]
+fn vesting_builder_rejects_zero_num_steps() {
+    let owner = Address::from([0u8; 20]);
+
+    // Direct builder use: `with_steps(_, _, _, 0)` must not panic, and `generate()`
+    // should then surface the missing step amount.
+    let mut recipient = Recipient::new_vesting_builder(owner.clone());
+    recipient.with_steps(Coin::from_u64_unchecked(10_000), 0, 100, 0);
+    assert!(matches!(
+        recipient.generate(),
+        Err(VestingRecipientBuilderError::NoStepAmount)
+    ));
+
+    // RPC entry point: `new_create_vesting` must reject `num_steps == 0`
+    // with a specific error instead of panicking.
+    let key_pair = KeyPair::from(
+        PrivateKey::deserialize_from_vec(
+            &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0")
+                .unwrap(),
+        )
+        .unwrap(),
+    );
+    let result = TransactionBuilder::new_create_vesting(
+        &key_pair,
+        owner,
+        0,
+        100,
+        0,
+        Coin::from_u64_unchecked(10_000),
+        Coin::ZERO,
+        0,
+        NetworkId::UnitAlbatross,
+    );
+    assert!(matches!(
+        result,
+        Err(TransactionBuilderError::InvalidNumSteps)
+    ));
 }
 
 #[test]
