@@ -8,6 +8,13 @@ use nimiq_network_libp2p::{
 use nimiq_serde::Deserialize;
 use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSigned};
 use nimiq_validator_network::validator_record::ValidatorRecord;
+use time::OffsetDateTime;
+
+/// Maximum allowed future drift for `ValidatorRecord::timestamp` (milliseconds).
+/// Records timestamped beyond `now + MAX_TIMESTAMP_DRIFT_MS` are rejected to
+/// prevent an attacker with signing-key access from publishing a record with
+/// an absurdly high timestamp that permanently wins `DhtRecord` ordering.
+const MAX_TIMESTAMP_DRIFT_MS: u64 = 5 * 60 * 1000;
 
 pub struct Verifier {
     blockchain: BlockchainProxy,
@@ -47,6 +54,15 @@ impl Verifier {
                 validator_address,
                 validator_record.record.validator_address,
             ));
+        }
+
+        // Reject records whose timestamp is too far in the future. Without this
+        // bound, a signer could publish `timestamp = u64::MAX` and pin their
+        // record against any future update, since `DhtRecord` ordering is by
+        // timestamp alone.
+        let now_ms = (OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000) as u64;
+        if validator_record.record.timestamp > now_ms.saturating_add(MAX_TIMESTAMP_DRIFT_MS) {
+            return Err(DhtVerifierError::InvalidTimestamp);
         }
 
         // Acquire blockchain read access. For now exclude Light clients.

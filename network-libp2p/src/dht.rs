@@ -22,6 +22,7 @@ pub enum DhtVerifierError {
     ),
     StateIncomplete,
     InvalidSignature,
+    InvalidTimestamp,
 }
 
 pub trait Verifier: Send + Sync {

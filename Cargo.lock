@@ -4088,6 +4088,7 @@ dependencies = [
  "nimiq-serde",
  "nimiq-utils",
  "nimiq-validator-network",
+ "time",
  "tracing",
 ]
 

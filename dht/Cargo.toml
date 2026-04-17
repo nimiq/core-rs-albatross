@@ -21,6 +21,7 @@ workspace = true
 
 [dependencies]
 log = { workspace = true }
+time = { version = "0.3" }
 
 nimiq-blockchain-interface = { workspace = true }
 nimiq-blockchain-proxy = { workspace = true, features = ["full"] }
