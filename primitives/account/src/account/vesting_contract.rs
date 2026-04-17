@@ -68,11 +68,13 @@ impl VestingContract {
 
     fn min_cap(&self, time: u64) -> Coin {
         if self.time_step > 0 && self.step_amount > Coin::ZERO {
+            let total = u64::from(self.total_amount) as i128;
             let steps = (time as i128 - self.start_time as i128) / self.time_step as i128;
-            let min_cap =
-                u64::from(self.total_amount) as i128 - steps * u64::from(self.step_amount) as i128;
-            // Since all parameters have been validated, this will be safe as well.
-            Coin::from_u64_unchecked(min_cap.max(0) as u64)
+            let min_cap = total - steps * u64::from(self.step_amount) as i128;
+            // Clamp to [0, total_amount]: remaining locked funds can never exceed
+            // the initially locked total, and `total_amount` is already bounded by
+            // `Coin::MAX_SAFE_VALUE`, so the unchecked cast is safe.
+            Coin::from_u64_unchecked(min_cap.clamp(0, total) as u64)
         } else {
             Coin::ZERO
         }

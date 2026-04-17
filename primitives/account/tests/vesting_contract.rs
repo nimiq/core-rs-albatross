@@ -660,6 +660,73 @@ fn total_amount_exceeds_balance_panics_on_commit_outgoing() {
 }
 
 #[test]
+fn max_start_time_does_not_panic_on_outgoing() {
+    // `min_cap` must not panic for contracts with extreme `start_time`
+    // values. Returns `InsufficientFunds` in both mempool and block paths.
+
+    let mut rng = test_rng(true);
+    let key_owner = KeyPair::generate(&mut rng);
+    let key_recipient = KeyPair::generate(&mut rng);
+
+    let mut vesting_contract = VestingContract {
+        balance: Coin::from_u64_unchecked(1000),
+        owner: Address::from(&key_owner.public),
+        start_time: u64::MAX,
+        time_step: 1,
+        step_amount: Coin::from_u64_unchecked(1),
+        total_amount: Coin::from_u64_unchecked(1000),
+    };
+
+    let accounts = TestCommitRevert::with_initial_state(&[
+        (
+            Address::from(&key_owner.public),
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(1000),
+            }),
+        ),
+        (
+            Address([1u8; 20]),
+            Account::Vesting(vesting_contract.clone()),
+        ),
+    ]);
+
+    let block_state = BlockState::new(1, 1_700_000_000_000);
+    let tx = make_signed_transaction(key_owner.clone(), key_recipient.clone(), 1);
+
+    let sender_address = Address::from(&key_owner);
+    let data_store = accounts.data_store(&sender_address);
+    let mut reserved_balance = ReservedBalance::new(sender_address.clone());
+    {
+        let mut db_txn = accounts.env().write_transaction();
+        let result = vesting_contract.reserve_balance(
+            &tx,
+            &mut reserved_balance,
+            &block_state,
+            data_store.read(&mut db_txn),
+        );
+        assert!(
+            matches!(result, Err(AccountError::InsufficientFunds { .. })),
+            "Expected InsufficientFunds, got: {:?}",
+            result
+        );
+    }
+
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_outgoing_transaction(
+        &mut vesting_contract,
+        &tx,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+    assert!(
+        matches!(result, Err(AccountError::InsufficientFunds { .. })),
+        "Expected InsufficientFunds, got: {:?}",
+        result
+    );
+}
+
+#[test]
 fn can_reserve_balance_after_time_step() {
     // -----------------------------------
     // Test setup:

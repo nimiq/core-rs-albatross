@@ -4,7 +4,10 @@ use nimiq_primitives::{
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_transaction::{
-    account::{vesting_contract::CreationTransactionData, AccountTransactionVerification},
+    account::{
+        vesting_contract::{CreationTransactionData, MAX_TIME_VALUE},
+        AccountTransactionVerification,
+    },
     SignatureProof, Transaction, TransactionFlags,
 };
 
@@ -109,6 +112,79 @@ fn it_can_verify_creation_transaction() {
         AccountType::verify_incoming_transaction(&transaction),
         Err(TransactionError::InvalidData)
     );
+}
+
+#[test]
+fn it_rejects_out_of_bounds_time_values() {
+    // `start_time` and `time_step` must be bounded to `MAX_TIME_VALUE` to avoid
+    // arithmetic blow-ups in `VestingContract::min_cap`.
+
+    let tx_value = Coin::try_from(100).unwrap();
+    let owner = Address::from([0u8; 20]);
+
+    let parse = |data: &CreationTransactionData| {
+        CreationTransactionData::parse_data(&data.to_tx_data(), tx_value)
+    };
+
+    // 8-byte variant: only `time_step` is serialized (step_amount == total_amount, start_time == 0).
+    let data = CreationTransactionData {
+        owner: owner.clone(),
+        start_time: 0,
+        time_step: MAX_TIME_VALUE + 1,
+        step_amount: tx_value,
+        total_amount: tx_value,
+    };
+    assert!(matches!(parse(&data), Err(TransactionError::InvalidData)));
+
+    // 24-byte variant: reject out-of-bound `start_time` (step_amount == total_amount).
+    let data = CreationTransactionData {
+        owner: owner.clone(),
+        start_time: MAX_TIME_VALUE + 1,
+        time_step: 100,
+        step_amount: tx_value,
+        total_amount: tx_value,
+    };
+    assert!(matches!(parse(&data), Err(TransactionError::InvalidData)));
+
+    // 24-byte variant: reject out-of-bound `time_step`.
+    let data = CreationTransactionData {
+        owner: owner.clone(),
+        start_time: 100,
+        time_step: MAX_TIME_VALUE + 1,
+        step_amount: tx_value,
+        total_amount: tx_value,
+    };
+    assert!(matches!(parse(&data), Err(TransactionError::InvalidData)));
+
+    // 32-byte variant: reject out-of-bound `start_time` (step_amount != total_amount).
+    let data = CreationTransactionData {
+        owner: owner.clone(),
+        start_time: MAX_TIME_VALUE + 1,
+        time_step: 100,
+        step_amount: Coin::try_from(50).unwrap(),
+        total_amount: tx_value,
+    };
+    assert!(matches!(parse(&data), Err(TransactionError::InvalidData)));
+
+    // 32-byte variant: reject out-of-bound `time_step`.
+    let data = CreationTransactionData {
+        owner: owner.clone(),
+        start_time: 100,
+        time_step: MAX_TIME_VALUE + 1,
+        step_amount: Coin::try_from(50).unwrap(),
+        total_amount: tx_value,
+    };
+    assert!(matches!(parse(&data), Err(TransactionError::InvalidData)));
+
+    // Boundary: `MAX_TIME_VALUE` itself is accepted.
+    let data = CreationTransactionData {
+        owner,
+        start_time: MAX_TIME_VALUE,
+        time_step: MAX_TIME_VALUE,
+        step_amount: tx_value,
+        total_amount: tx_value,
+    };
+    assert!(parse(&data).is_ok());
 }
 
 #[test]
