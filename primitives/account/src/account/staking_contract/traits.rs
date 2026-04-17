@@ -479,7 +479,7 @@ impl AccountTransactionInteraction for StakingContract {
                 } else {
                     // Update the balances of the validator and staking contract.
                     validator.deposit = new_deposit;
-                    validator.total_stake -= transaction.fee;
+                    validator.total_stake = validator.total_stake.safe_sub(transaction.fee)?;
                     self.balance -= transaction.fee;
 
                     // Update the validator entry.
