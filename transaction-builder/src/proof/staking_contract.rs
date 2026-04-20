@@ -30,10 +30,12 @@ impl StakingDataBuilder {
     /// This method sets the required `signature` proof by signing the transaction
     /// using a key pair.
     pub fn sign_with_key_pair(&mut self, key_pair: &KeyPair) -> &mut Self {
-        // Deserialize the data.
-        let mut data =
+        // On malformed recipient_data, leave `self.data` as `None` so `generate()` returns `None`.
+        let Ok(mut data) =
             IncomingStakingTransactionData::deserialize_from_vec(&self.transaction.recipient_data)
-                .unwrap();
+        else {
+            return self;
+        };
 
         // If this is a stake transaction, we don't need to sign it.
         match data {

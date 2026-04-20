@@ -10,7 +10,9 @@ use nimiq_transaction::{
     account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
     SignatureProof, Transaction,
 };
-use nimiq_transaction_builder::{TransactionBuilder, TransactionBuilderError};
+use nimiq_transaction_builder::{
+    proof::staking_contract::StakingDataBuilder, TransactionBuilder, TransactionBuilderError,
+};
 
 const ADDRESS: &str = "9cd82948650d902d95d52ea2ec91eae6deb0c9fe";
 const PRIVATE_KEY: &str = "b410a7a583cbc13ef4f1cbddace30928bcb4f9c13722414bc4a2faaba3f4e187";
@@ -262,6 +264,29 @@ fn it_can_create_validator_transactions() {
     .unwrap();
 
     assert_eq!(tx, tx2);
+}
+
+#[test]
+fn it_rejects_malformed_staking_recipient_data() {
+    let key_pair = ed25519_key_pair();
+
+    // Empty buffer, truncated buffer, and unknown discriminant exercise different
+    // deserializer branches.
+    for bad in [vec![], vec![0xff, 0xff, 0xff, 0xff], vec![0xaa]] {
+        let mut tx = make_incoming_transaction(
+            IncomingStakingTransactionData::CreateStaker {
+                delegation: Some(Address::from_any_str(ADDRESS).unwrap()),
+                proof: Default::default(),
+            },
+            100_000_000,
+        );
+        tx.recipient_data = bad;
+
+        let mut builder = StakingDataBuilder::new(tx);
+        builder.sign_with_key_pair(&key_pair);
+
+        assert!(builder.generate().is_none());
+    }
 }
 
 fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -> Transaction {
