@@ -794,27 +794,27 @@ impl Behaviour {
     }
 
     fn on_listen_failure(&mut self, send_back_addr: &Multiaddr) {
-        // Get IP from multiaddress if it exists.
-        let ip_info = self.get_ip_info_from_multiaddr(send_back_addr);
-
-        // Decrement IP counters if needed
-        if let Some(ip_info) = ip_info {
+        // Only undo the `ip_count` increment performed by
+        // `handle_pending_inbound_connection`. `peer_count` is deliberately
+        // not touched here: it is only incremented after a successful
+        // upgrade in `handle_established_{inbound,outbound}_connection` and
+        // paired with the decrement in `on_connection_closed`.
+        if let Some(ip_info) = self.get_ip_info_from_multiaddr(send_back_addr) {
             self.decrement_ip_counters(&ip_info);
         }
-        self.limits.peer_count = self.limits.peer_count.saturating_sub(1);
     }
 
     fn increment_and_check_peer_limit(&mut self) -> Result<(), ConnectionDenied> {
-        self.limits.peer_count = self.limits.peer_count.saturating_add(1);
-
-        // Check for the maximum peer count limit
-        if self.limits.peer_count > self.config.peer_count_max {
+        // Check before incrementing so a rejection at the cap does not leave
+        // `peer_count` bumped (which would erode the cap over time).
+        if self.limits.peer_count >= self.config.peer_count_max {
             debug!(
                 connections = self.limits.peer_count,
                 "Max peer connections limit reached"
             );
             return Err(ConnectionDenied::new(Error::MaxPeerConnectionsReached));
         }
+        self.limits.peer_count = self.limits.peer_count.saturating_add(1);
 
         Ok(())
     }
@@ -1084,5 +1084,91 @@ mod tests {
 
         // p2 and p3 should both be unbanned
         assert!(cs.banned.is_empty());
+    }
+
+    // Regression test for the `peer_count` under-decrement drift: on unpatched
+    // code, repeated pending-inbound failures drove `peer_count` to zero
+    // while established connections remained, bypassing `peer_count_max`.
+    #[test(tokio::test)]
+    async fn peer_count_drift_does_not_bypass_cap() {
+        use std::sync::Arc;
+
+        use libp2p::{
+            identity::Keypair,
+            multiaddr::Multiaddr,
+            swarm::{ConnectionId, FromSwarm, ListenError, ListenFailure, NetworkBehaviour},
+        };
+        use parking_lot::RwLock;
+
+        use crate::{
+            connection_pool::behaviour::{Behaviour, Config},
+            discovery::peer_contacts::{PeerContact, PeerContactBook},
+        };
+
+        let cfg = Config {
+            peer_count_max: 2,
+            peer_count_per_ip_max: 20,
+            peer_count_per_subnet_max: 20,
+            desired_peer_count: 1,
+            num_initial_connections: 1,
+            ..Config::default()
+        };
+
+        let keypair = Keypair::generate_ed25519();
+        let peer_id = keypair.public().to_peer_id();
+        let peer_contact = PeerContact::new(
+            std::iter::empty::<Multiaddr>(),
+            keypair.public(),
+            Services::empty(),
+            0,
+        )
+        .expect("PeerContact must be creatable");
+        let signed = peer_contact.sign(&keypair);
+        let contact_book = Arc::new(RwLock::new(PeerContactBook::new(signed, false, true, true)));
+
+        let mut behaviour = Behaviour::new(contact_book, peer_id, vec![], Services::empty(), cfg);
+
+        // Admit two connections up to the cap.
+        behaviour
+            .increment_and_check_peer_limit()
+            .expect("1st connection admitted");
+        behaviour
+            .increment_and_check_peer_limit()
+            .expect("2nd connection admitted");
+
+        // 3rd must be rejected and must NOT mutate peer_count.
+        assert!(behaviour.increment_and_check_peer_limit().is_err());
+        assert_eq!(behaviour.limits.peer_count, 2);
+
+        // Simulate pending-inbound failures — the drift vector.
+        let local: Multiaddr = "/ip4/127.0.0.1/tcp/0".parse().unwrap();
+        let remote: Multiaddr = "/ip4/9.9.9.9/tcp/12345".parse().unwrap();
+        let listen_error = ListenError::Aborted;
+
+        for _ in 0..5 {
+            let _ = behaviour.handle_pending_inbound_connection(
+                ConnectionId::new_unchecked(99),
+                &local,
+                &remote,
+            );
+            behaviour.on_swarm_event(FromSwarm::ListenFailure(ListenFailure {
+                local_addr: &local,
+                send_back_addr: &remote,
+                error: &listen_error,
+                connection_id: ConnectionId::new_unchecked(99),
+                peer_id: None,
+            }));
+        }
+
+        // peer_count must still reflect the two established connections.
+        assert_eq!(
+            behaviour.limits.peer_count, 2,
+            "peer_count drifted on pending-inbound failures"
+        );
+        // Cap must still be enforced after the failures.
+        assert!(
+            behaviour.increment_and_check_peer_limit().is_err(),
+            "peer_count_max must be enforced after pending-inbound failures"
+        );
     }
 }
