@@ -749,6 +749,10 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTrieProof {
         if self.keys.len() > Self::MAX_KEYS {
             return Err(ResponseTrieProofError::TooManyKeys);
         }
+        let unique_keys: std::collections::BTreeSet<_> = self.keys.iter().collect();
+        if unique_keys.len() != self.keys.len() {
+            return Err(ResponseTrieProofError::DuplicateKeys);
+        }
 
         // We only prove accounts that exist in our current state
         let blockchain = blockchain.read();

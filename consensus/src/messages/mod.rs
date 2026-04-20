@@ -608,6 +608,8 @@ pub enum ResponseTrieProofError {
     IncompleteTrie,
     #[error("too many keys")]
     TooManyKeys,
+    #[error("duplicate keys")]
+    DuplicateKeys,
     #[error("unknown error")]
     #[serde(other)]
     Other,
