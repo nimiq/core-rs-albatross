@@ -3,10 +3,17 @@ use std::{collections::HashMap, num::NonZeroU8, sync::Arc, time::Duration};
 use futures::StreamExt;
 #[cfg(feature = "metrics")]
 use instant::Instant;
+#[cfg(feature = "autonat")]
+use libp2p::autonat::{self, InboundFailure, OutboundFailure};
+#[cfg(feature = "kad")]
+use libp2p::kad::{
+    self, store::RecordStore, BootstrapError, BootstrapOk, GetRecordError, GetRecordOk,
+    InboundRequest, Mode, ProgressStep, PutRecordError, PutRecordOk, QueryId, QueryResult,
+    QueryStats, Quorum, Record,
+};
 #[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
 use libp2p::websocket_websys;
 use libp2p::{
-    autonat::{self, InboundFailure, OutboundFailure},
     core::{
         self,
         muxing::StreamMuxerBox,
@@ -14,11 +21,6 @@ use libp2p::{
     },
     gossipsub,
     identity::Keypair,
-    kad::{
-        self, store::RecordStore, BootstrapError, BootstrapOk, GetRecordError, GetRecordOk,
-        InboundRequest, Mode, ProgressStep, PutRecordError, PutRecordOk, QueryId, QueryResult,
-        QueryStats, Quorum, Record,
-    },
     noise, ping,
     request_response::{self, InboundRequestId, OutboundRequestId, ResponseChannel},
     swarm::{
@@ -40,18 +42,21 @@ use nimiq_time::Interval;
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, mpsc};
 
+#[cfg(feature = "autonat")]
+use crate::autonat::NatStatus;
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
 use crate::{
-    autonat::NatStatus,
-    behaviour, dht,
+    behaviour,
     discovery::{self, peer_contacts::PeerContactBook},
-    network_types::{
-        DhtBootStrapState, DhtRecord, DhtResults, GossipsubTopicInfo, NetworkAction, TaskState,
-        ValidateMessage,
-    },
+    network_types::{GossipsubTopicInfo, NetworkAction, TaskState, ValidateMessage},
     rate_limiting::{RateLimitId, RateLimits},
     Config, NetworkError, TlsConfig,
+};
+#[cfg(feature = "kad")]
+use crate::{
+    dht,
+    network_types::{DhtBootStrapState, DhtRecord, DhtResults},
 };
 
 type NimiqSwarm = Swarm<behaviour::Behaviour>;
@@ -120,6 +125,7 @@ pub(crate) async fn swarm_task(
     #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
 ) {
     let mut task_state = TaskState {
+        #[cfg(feature = "kad")]
         dht_server_mode: force_dht_server_mode,
         dht_quorum: dht_quorum.into(),
         ..Default::default()
@@ -400,11 +406,13 @@ fn handle_event(event: SwarmEvent<behaviour::BehaviourEvent>, event_info: EventI
                 .behaviour_mut()
                 .discovery
                 .add_own_addresses([address.clone()].to_vec());
+            #[cfg(feature = "autonat")]
             if event_info.swarm.behaviour().is_address_dialable(&address) {
                 event_info.state.nat_status.add_address(address);
             }
         }
 
+        #[cfg(feature = "autonat")]
         SwarmEvent::ListenerClosed {
             listener_id: _,
             addresses,
@@ -415,11 +423,13 @@ fn handle_event(event: SwarmEvent<behaviour::BehaviourEvent>, event_info: EventI
             });
         }
 
+        #[cfg(feature = "autonat")]
         SwarmEvent::ExternalAddrConfirmed { address } => {
             log::trace!(%address, "Address is confirmed and externally reachable");
             event_info.state.nat_status.add_confirmed_address(address);
         }
 
+        #[cfg(feature = "autonat")]
         SwarmEvent::ExternalAddrExpired { address } => {
             log::trace!(%address, "External address is expired and no longer externally reachable");
             event_info
@@ -436,9 +446,11 @@ fn handle_event(event: SwarmEvent<behaviour::BehaviourEvent>, event_info: EventI
 
 fn handle_behaviour_event(event: behaviour::BehaviourEvent, event_info: EventInfo) {
     match event {
+        #[cfg(feature = "autonat")]
         behaviour::BehaviourEvent::AutonatClient(event) => {
             handle_autonat_client_event(event, event_info)
         }
+        #[cfg(feature = "autonat")]
         behaviour::BehaviourEvent::AutonatServer(event) => {
             handle_autonat_server_event(event, event_info)
         }
@@ -455,6 +467,7 @@ fn handle_behaviour_event(event: behaviour::BehaviourEvent, event_info: EventInf
     }
 }
 
+#[cfg(feature = "autonat")]
 fn handle_autonat_client_event(event: autonat::v2::client::Event, event_info: EventInfo) {
     log::trace!(?event, "AutoNAT outbound probe");
     match event.result {
@@ -469,6 +482,7 @@ fn handle_autonat_client_event(event: autonat::v2::client::Event, event_info: Ev
     }
 }
 
+#[cfg(feature = "autonat")]
 fn handle_autonat_server_event(event: autonat::v2::server::Event, _event_info: EventInfo) {
     log::trace!(?event, "AutoNAT inbound probe");
 }
@@ -855,6 +869,7 @@ fn handle_request_response_event(
                 event_info,
             ),
         },
+        #[cfg(feature = "autonat")]
         request_response::Event::OutboundFailure {
             peer: peer_id,
             connection_id,
@@ -867,6 +882,9 @@ fn handle_request_response_event(
             error,
             event_info,
         ),
+        #[cfg(not(feature = "autonat"))]
+        request_response::Event::OutboundFailure { .. } => {}
+        #[cfg(feature = "autonat")]
         request_response::Event::InboundFailure {
             peer: peer_id,
             connection_id,
@@ -879,6 +897,8 @@ fn handle_request_response_event(
             error,
             event_info,
         ),
+        #[cfg(not(feature = "autonat"))]
+        request_response::Event::InboundFailure { .. } => {}
         request_response::Event::ResponseSent { .. } => {}
     }
 }
@@ -1005,6 +1025,7 @@ fn handle_request_response_response(
     }
 }
 
+#[cfg(feature = "autonat")]
 fn handle_request_response_outbound_failure(
     peer_id: PeerId,
     connection_id: ConnectionId,
@@ -1024,6 +1045,7 @@ fn handle_request_response_outbound_failure(
     channel.send(Err(to_response_error(error))).ok();
 }
 
+#[cfg(feature = "autonat")]
 fn handle_request_response_inbound_failure(
     peer_id: PeerId,
     connection_id: ConnectionId,
@@ -1051,12 +1073,14 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
             let result = swarm.dial(dial_opts).map_err(Into::into);
             output.send(result).ok();
         }
+        #[cfg(feature = "kad")]
         NetworkAction::DhtGet { key, output } => {
-            #[cfg(feature = "kad")]
             let query_id = swarm.behaviour_mut().dht.get_record(key.into());
-            #[cfg(feature = "kad")]
             state.dht_gets.insert(query_id, output);
         }
+        #[cfg(not(feature = "kad"))]
+        NetworkAction::DhtGet { .. } => {}
+        #[cfg(feature = "kad")]
         NetworkAction::DhtPut { key, value, output } => {
             let local_peer_id = Swarm::local_peer_id(swarm);
 
@@ -1067,7 +1091,6 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                 expires: None, // This only affects local storage. Records are replicated with configured TTL.
             };
 
-            #[cfg(feature = "kad")]
             match swarm.behaviour_mut().dht.put_record(record, Quorum::One) {
                 Ok(query_id) => {
                     // Remember put operation to resolve when we receive a `QueryResult::PutRecord`
@@ -1078,6 +1101,8 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                 }
             }
         }
+        #[cfg(not(feature = "kad"))]
+        NetworkAction::DhtPut { .. } => {}
         NetworkAction::Subscribe {
             topic_name,
             buffer_size,
@@ -1264,6 +1289,7 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
     }
 }
 
+#[cfg(feature = "autonat")]
 fn to_response_error(error: OutboundFailure) -> RequestError {
     match error {
         OutboundFailure::ConnectionClosed => {

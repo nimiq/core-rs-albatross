@@ -1,12 +1,12 @@
 use std::{iter, sync::Arc};
 
+#[cfg(feature = "autonat")]
+use libp2p::autonat::v2::{self as autonat, client::Config as AutonatConfig};
+#[cfg(feature = "kad")]
+use libp2p::kad::{self, store::MemoryStore};
 use libp2p::{
-    autonat::v2::{self as autonat, client::Config as AutonatConfig},
-    connection_limits, gossipsub,
-    kad::{self, store::MemoryStore},
-    ping, request_response,
-    swarm::NetworkBehaviour,
-    Multiaddr, PeerId, StreamProtocol,
+    connection_limits, gossipsub, ping, request_response, swarm::NetworkBehaviour, Multiaddr,
+    PeerId, StreamProtocol,
 };
 use parking_lot::RwLock;
 
@@ -34,7 +34,9 @@ pub struct Behaviour {
     pub connection_limits: connection_limits::Behaviour,
     pub pool: connection_pool::Behaviour,
     pub discovery: discovery::Behaviour,
+    #[cfg(feature = "autonat")]
     pub autonat_server: autonat::server::Behaviour,
+    #[cfg(feature = "autonat")]
     pub autonat_client: autonat::client::Behaviour,
     #[cfg(feature = "kad")]
     pub dht: kad::Behaviour<MemoryStore>,
@@ -53,6 +55,7 @@ impl Behaviour {
         let public_key = config.keypair.public();
         let peer_id = public_key.to_peer_id();
 
+        #[cfg(feature = "kad")]
         // DHT behaviour
         let store = MemoryStore::new(peer_id);
         #[cfg(feature = "kad")]
@@ -113,9 +116,11 @@ impl Behaviour {
         );
 
         // AutoNAT server behaviour
+        #[cfg(feature = "autonat")]
         let autonat_server = autonat::server::Behaviour::new(Default::default());
 
         // AutoNAT client behaviour
+        #[cfg(feature = "autonat")]
         let autonat_client =
             autonat::client::Behaviour::new(Default::default(), AutonatConfig::default());
 
@@ -136,7 +141,9 @@ impl Behaviour {
             ping,
             pool,
             request_response,
+            #[cfg(feature = "autonat")]
             autonat_client,
+            #[cfg(feature = "autonat")]
             autonat_server,
             connection_limits,
         }

@@ -1,6 +1,8 @@
 use std::{num::NonZeroU8, time::Duration};
 
-use libp2p::{gossipsub, identity::Keypair, kad, Multiaddr, StreamProtocol};
+#[cfg(feature = "kad")]
+use libp2p::kad;
+use libp2p::{gossipsub, identity::Keypair, Multiaddr, StreamProtocol};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::MIN_SUPPORTED_MSG_SIZE, peer_info::Services};
 use sha2::{Digest, Sha256};
@@ -25,6 +27,7 @@ pub struct Config {
     pub peer_contact: PeerContact,
     pub seeds: Vec<Multiaddr>,
     pub discovery: discovery::Config,
+    #[cfg(feature = "kad")]
     pub kademlia: kad::Config,
     pub gossipsub: gossipsub::Config,
     pub memory_transport: bool,
@@ -84,14 +87,23 @@ impl Config {
             .build()
             .expect("Invalid Gossipsub config");
 
+        #[cfg(feature = "kad")]
         let mut kademlia = kad::Config::new(StreamProtocol::new(DHT_PROTOCOL));
+        #[cfg(feature = "kad")]
         kademlia.set_kbucket_inserts(kad::BucketInserts::OnConnected);
+        #[cfg(feature = "kad")]
         kademlia.set_record_ttl(Some(Duration::from_secs(2 * 60 * 60))); // 2h
+        #[cfg(feature = "kad")]
         kademlia.set_publication_interval(Some(Duration::from_secs(10 * 60))); // 10 min
+        #[cfg(feature = "kad")]
         kademlia.set_replication_interval(Some(Duration::from_secs(60))); // 1 min
+        #[cfg(feature = "kad")]
         kademlia.set_provider_record_ttl(Some(Duration::from_secs(60 * 60))); // 1h
+        #[cfg(feature = "kad")]
         kademlia.set_provider_publication_interval(Some(Duration::from_secs(5 * 60))); // 5 min
+        #[cfg(feature = "kad")]
         kademlia.set_query_timeout(Duration::from_secs(10));
+        #[cfg(feature = "kad")]
         kademlia.set_record_filtering(kad::StoreInserts::FilterBoth);
 
         Self {
@@ -103,6 +115,7 @@ impl Config {
                 required_services,
                 only_secure_ws_connections,
             ),
+            #[cfg(feature = "kad")]
             kademlia,
             gossipsub,
             memory_transport,

@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate log;
 
+#[cfg(feature = "autonat")]
 mod autonat;
 mod behaviour;
 mod config;
@@ -20,7 +21,9 @@ mod utils;
 
 pub const DISCOVERY_PROTOCOL: &str = "/nimiq/discovery/0.0.1";
 pub const DHT_PROTOCOL: &str = "/nimiq/kad/0.0.1";
+#[cfg(feature = "autonat")]
 pub const AUTONAT_DIAL_REQUEST_PROTOCOL: &str = "/libp2p/autonat/2/dial-request";
+#[cfg(feature = "autonat")]
 pub const AUTONAT_DIAL_BACK_PROTOCOL: &str = "/libp2p/autonat/2/dial-back";
 
 pub use config::{Config, TlsConfig};

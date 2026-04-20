@@ -36,6 +36,7 @@ use super::{
     peer_contacts::{PeerContactBook, SignedPeerContact},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
+#[cfg(feature = "autonat")]
 use crate::{AUTONAT_DIAL_BACK_PROTOCOL, AUTONAT_DIAL_REQUEST_PROTOCOL};
 
 #[derive(Debug)]
@@ -265,6 +266,7 @@ impl Handler {
     }
 
     /// Report to all the ConnectionHandlers that the remote peer supports the AutoNAT V2 client and server protocols
+    #[cfg(feature = "autonat")]
     fn report_remote_autonat_support(&mut self) {
         let mut stream_protocols = HashSet::new();
         stream_protocols.insert(StreamProtocol::new(AUTONAT_DIAL_REQUEST_PROTOCOL));
@@ -331,6 +333,7 @@ impl ConnectionHandler for Handler {
                 }
                 self.inbound = Some(protocol);
                 self.check_initialized();
+                #[cfg(feature = "autonat")]
                 self.report_remote_autonat_support();
             }
             ConnectionEvent::FullyNegotiatedOutbound(FullyNegotiatedOutbound {
@@ -346,6 +349,7 @@ impl ConnectionHandler for Handler {
                 }
                 self.outbound = Some(protocol);
                 self.check_initialized();
+                #[cfg(feature = "autonat")]
                 self.report_remote_autonat_support();
             }
             ConnectionEvent::DialUpgradeError(DialUpgradeError { error, .. }) => {
