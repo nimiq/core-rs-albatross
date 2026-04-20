@@ -270,9 +270,11 @@ impl Transaction {
     }
 
     /// The transaction's flags: `0b1` = contract creation, `0b10` = signaling.
+    /// Bit patterns outside the known variants collapse to `None`.
+    /// Inspect `toPlain().flags` for the raw value.
     #[wasm_bindgen(getter)]
     pub fn flags(&self) -> TransactionFlag {
-        u8::from(self.inner.flags).try_into().unwrap()
+        u8::from(self.inner.flags).into()
     }
 
     /// The transaction's data as a byte array.
@@ -475,7 +477,7 @@ impl Transaction {
                 .unwrap()
                 .to_string()
                 .to_lowercase(),
-            flags: self.flags() as u8,
+            flags: u8::from(self.inner.flags),
             sender_data: {
                 let raw_data = PlainRawData {
                     raw: hex::encode(self.sender_data()),
@@ -600,20 +602,18 @@ impl Transaction {
 #[repr(u8)]
 #[wasm_bindgen]
 pub enum TransactionFlag {
-    None,
-    ContractCreation,
-    Signaling,
+    None = 0,
+    ContractCreation = 1,
+    Signaling = 2,
 }
 
-impl TryFrom<u8> for TransactionFlag {
-    type Error = JsError;
-
-    fn try_from(value: u8) -> Result<Self, JsError> {
+impl From<u8> for TransactionFlag {
+    fn from(value: u8) -> Self {
         match value {
-            0 => Ok(TransactionFlag::None),
-            1 => Ok(TransactionFlag::ContractCreation),
-            2 => Ok(TransactionFlag::Signaling),
-            _ => Err(JsError::new("Invalid transaction flag")),
+            0 => TransactionFlag::None,
+            1 => TransactionFlag::ContractCreation,
+            2 => TransactionFlag::Signaling,
+            _ => TransactionFlag::None,
         }
     }
 }
@@ -1274,17 +1274,18 @@ extern "C" {
 
 #[cfg(all(test, feature = "client"))]
 mod tests {
-    use nimiq_keys::Address as NativeAddress;
-    use nimiq_primitives::{networks::NetworkId, policy::Policy};
+    use nimiq_keys::Address;
+    use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
     use nimiq_transaction::{
         historic_transaction::{
             EquivocationEvent, HistoricTransaction, HistoricTransactionData, JailEvent,
             PenalizeEvent,
         },
-        EquivocationLocator, ForkLocator,
+        EquivocationLocator, ForkLocator, TransactionFlags,
     };
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    use super::PlainTransactionDetails;
+    use super::{PlainTransactionDetails, Transaction, TransactionFlag};
 
     fn make_penalize_historic_tx() -> HistoricTransaction {
         HistoricTransaction {
@@ -1292,7 +1293,7 @@ mod tests {
             block_number: 100,
             block_time: 1000,
             data: HistoricTransactionData::Penalize(PenalizeEvent {
-                validator_address: NativeAddress::default(),
+                validator_address: Address::default(),
                 slot: 0,
                 offense_event_block: 50,
             }),
@@ -1305,7 +1306,7 @@ mod tests {
             block_number: 100,
             block_time: 1000,
             data: HistoricTransactionData::Jail(JailEvent {
-                validator_address: NativeAddress::default(),
+                validator_address: Address::default(),
                 slots: 0..10,
                 offense_event_block: 50,
                 new_epoch_slot_range: None,
@@ -1320,11 +1321,24 @@ mod tests {
             block_time: 1000,
             data: HistoricTransactionData::Equivocation(EquivocationEvent {
                 locator: EquivocationLocator::Fork(ForkLocator {
-                    validator_address: NativeAddress::default(),
+                    validator_address: Address::default(),
                     block_number: 50,
                 }),
             }),
         }
+    }
+
+    fn tx_with_flags(flags: TransactionFlags) -> Transaction {
+        let mut inner = nimiq_transaction::Transaction::new_basic(
+            Address::from([1u8; Address::SIZE]),
+            Address::from([2u8; Address::SIZE]),
+            Coin::from_u64_unchecked(100),
+            Coin::from_u64_unchecked(0),
+            1,
+            NetworkId::UnitAlbatross,
+        );
+        inner.flags = flags;
+        Transaction::from(inner)
     }
 
     #[test]
@@ -1391,5 +1405,30 @@ mod tests {
             "Equivocation inherent should be convertible to PlainTransactionDetails, \
              not cause a panic via .expect() on None",
         );
+    }
+
+    #[wasm_bindgen_test]
+    fn flags_getter_maps_every_bit_combination() {
+        let none = tx_with_flags(TransactionFlags::empty());
+        assert!(matches!(none.flags(), TransactionFlag::None));
+
+        let creation = tx_with_flags(TransactionFlags::CONTRACT_CREATION);
+        assert!(matches!(
+            creation.flags(),
+            TransactionFlag::ContractCreation
+        ));
+
+        let signaling = tx_with_flags(TransactionFlags::SIGNALING);
+        assert!(matches!(signaling.flags(), TransactionFlag::Signaling));
+
+        let invalid_bits = tx_with_flags(TransactionFlags::from_bits(0b11).unwrap());
+        assert!(matches!(invalid_bits.flags(), TransactionFlag::None));
+    }
+
+    #[wasm_bindgen_test]
+    fn to_plain_transaction_does_not_panic_for_combined_flags() {
+        let tx = tx_with_flags(TransactionFlags::from_bits(0b11).unwrap());
+        let plain = tx.to_plain_transaction(None, None);
+        assert_eq!(plain.flags, 0b11);
     }
 }
