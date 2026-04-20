@@ -53,7 +53,6 @@ rustls-pemfile = "2.2"
 serde = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
 signal-hook = { version = "0.4", optional = true }
-subtle = "2.6"
 thiserror = "2.0"
 time = { version = "0.3", optional = true }
 tokio = { version = "1.51", features = ["rt"], optional = true }
@@ -75,7 +74,6 @@ nimiq-consensus = { workspace = true, default-features = false }
 nimiq-database = { workspace = true, optional = true }
 nimiq-dht = { workspace = true, optional = true }
 nimiq-genesis = { workspace = true, default-features = false }
-nimiq-hash = { workspace = true }
 nimiq-jsonrpc-core = { workspace = true, optional = true }
 nimiq-jsonrpc-server = { workspace = true, optional = true }
 nimiq-keys = { workspace = true }
@@ -90,7 +88,7 @@ nimiq-primitives = { workspace = true, features = ["networks"] }
 nimiq-rpc-server = { workspace = true, optional = true }
 nimiq-serde = { workspace = true }
 nimiq-time = { workspace = true }
-nimiq-utils = { workspace = true, features = ["time", "key-store"] }
+nimiq-utils = { workspace = true, features = ["credentials", "time", "key-store"] }
 nimiq-validator = { workspace = true, optional = true, features = [
     "trusted_push",
 ] }

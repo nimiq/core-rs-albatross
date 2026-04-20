@@ -30,6 +30,7 @@ pin-project = "1.1"
 rand = { version = "0.9", optional = true }
 rand_core = { version = "0.9", optional = true }
 serde = "1.0"
+subtle = { version = "2.6", optional = true }
 thiserror = { version = "2.0", optional = true }
 
 nimiq-collections = { workspace = true, optional = true }
@@ -51,6 +52,7 @@ nimiq-test-utils = { workspace = true }
 
 [features]
 crc = []
+credentials = ["nimiq-hash", "subtle"]
 futures = ["dep:futures"]
 key-rng = ["rand", "rand_core"]
 key-store = ["log", "thiserror"]

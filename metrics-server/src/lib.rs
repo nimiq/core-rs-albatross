@@ -4,7 +4,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusProxy;
 use nimiq_mempool::mempool::Mempool;
 use nimiq_network_interface::network::Network;
-use nimiq_utils::spawn;
+use nimiq_utils::{spawn, Credentials};
 use parking_lot::RwLock;
 use prometheus_client::{
     encoding::{EncodeGaugeValue, EncodeMetric, MetricEncoder},
@@ -94,6 +94,7 @@ impl<T: EncodeGaugeValue + Sized + Debug> Debug for NumericClosureMetric<T> {
 
 pub fn start_metrics_server<TNetwork: Network>(
     addr: SocketAddr,
+    credentials: Option<Credentials>,
     blockchain_proxy: BlockchainProxy,
     mempool: Option<Arc<Mempool>>,
     consensus_proxy: ConsensusProxy<TNetwork>,
@@ -138,7 +139,7 @@ pub fn start_metrics_server<TNetwork: Network>(
     }
 
     // Spawn the metrics server
-    spawn(async move { metrics_server(addr, registry).await.unwrap() });
+    spawn(async move { metrics_server(addr, registry, credentials).await.unwrap() });
 
     // Spawn Tokio task monitor updaters
     for task_monitor in task_monitors {

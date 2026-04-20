@@ -2,24 +2,30 @@ use std::{net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
 use futures::future::BoxFuture;
+use headers::{authorization::Basic, Authorization, HeaderMapExt};
 use http_body_util::Full;
 use hyper::{
-    body::Incoming as IncomingBody, http::StatusCode, service::Service, Method, Request, Response,
+    body::Incoming as IncomingBody, header, http::StatusCode, service::Service, Method, Request,
+    Response,
 };
 use hyper_util::{
     rt::tokio::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
 };
 use log::{error, info};
-use nimiq_utils::spawn;
+use nimiq_utils::{spawn, Credentials};
 use parking_lot::RwLock;
 use prometheus_client::{encoding::text::encode, registry::Registry};
 use tokio::net::TcpListener;
 
-pub async fn metrics_server(addr: SocketAddr, registry: Registry) -> Result<(), std::io::Error> {
+pub async fn metrics_server(
+    addr: SocketAddr,
+    registry: Registry,
+    credentials: Option<Credentials>,
+) -> Result<(), std::io::Error> {
     let listener = TcpListener::bind(&addr).await?;
     info!("Metrics server on http://{}/metrics", addr);
-    let metrics_service = MetricService::new(registry);
+    let metrics_service = MetricService::new(registry, credentials);
     loop {
         let (stream, _) = listener.accept().await?;
         let io = TokioIo::new(stream);
@@ -38,14 +44,16 @@ pub async fn metrics_server(addr: SocketAddr, registry: Registry) -> Result<(), 
 #[derive(Debug, Clone)]
 pub struct MetricService {
     reg: Arc<RwLock<Registry>>,
+    credentials: Option<Arc<Credentials>>,
 }
 
 type SharedRegistry = Arc<RwLock<Registry>>;
 
 impl MetricService {
-    pub fn new(registry: Registry) -> Self {
+    pub fn new(registry: Registry, credentials: Option<Credentials>) -> Self {
         Self {
             reg: Arc::new(RwLock::new(registry)),
+            credentials: credentials.map(Arc::new),
         }
     }
     fn get_reg(&self) -> SharedRegistry {
@@ -58,7 +66,7 @@ impl MetricService {
         let metrics_content_type = "application/openmetrics-text;charset=utf-8;version=1.0.0";
         Response::builder()
             .status(StatusCode::OK)
-            .header(hyper::header::CONTENT_TYPE, metrics_content_type)
+            .header(header::CONTENT_TYPE, metrics_content_type)
             .body(Full::new(Bytes::from(encoded)))
             .unwrap()
     }
@@ -69,6 +77,23 @@ impl MetricService {
                 "Not found try localhost:[port]/metrics",
             )))
             .unwrap()
+    }
+    fn respond_with_401_unauthorized(&self) -> Response<Full<Bytes>> {
+        Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .header(header::WWW_AUTHENTICATE, "Basic realm=\"metrics\"")
+            .body(Full::new(Bytes::from("Unauthorized")))
+            .unwrap()
+    }
+
+    fn is_authorized(&self, req: &Request<IncomingBody>) -> bool {
+        let Some(expected) = self.credentials.as_ref() else {
+            return true;
+        };
+        let Some(Authorization(basic)) = req.headers().typed_get::<Authorization<Basic>>() else {
+            return false;
+        };
+        expected.check(basic.username(), basic.password())
     }
 }
 
@@ -81,8 +106,11 @@ impl Service<Request<IncomingBody>> for MetricService {
         let req_path = req.uri().path();
         let req_method = req.method();
         let resp = if (req_method == Method::GET) && (req_path == "/metrics") {
-            // Encode and serve metrics from registry.
-            self.respond_with_metrics()
+            if !self.is_authorized(&req) {
+                self.respond_with_401_unauthorized()
+            } else {
+                self.respond_with_metrics()
+            }
         } else {
             self.respond_with_404_not_found()
         };

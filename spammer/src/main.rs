@@ -243,6 +243,7 @@ async fn main_inner() -> Result<(), Error> {
         use nimiq::extras::metrics_server::start_metrics_server;
         start_metrics_server(
             metrics_config.addr,
+            metrics_config.credentials,
             client.blockchain(),
             client.mempool(),
             client.consensus_proxy(),

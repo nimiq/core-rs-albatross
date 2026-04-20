@@ -147,6 +147,7 @@ async fn main_inner() -> Result<(), Error> {
     if let Some(metrics_config) = metrics_config {
         nimiq::extras::metrics_server::start_metrics_server(
             metrics_config.addr,
+            metrics_config.credentials,
             client.blockchain(),
             mempool,
             client.consensus_proxy(),

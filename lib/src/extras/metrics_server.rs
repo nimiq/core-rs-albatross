@@ -6,9 +6,11 @@ use nimiq_consensus::ConsensusProxy;
 use nimiq_mempool::mempool::Mempool;
 pub use nimiq_metrics_server::NimiqTaskMonitor;
 use nimiq_network_interface::network::Network;
+use nimiq_utils::Credentials;
 
 pub fn start_metrics_server<TNetwork: Network>(
     addr: SocketAddr,
+    credentials: Option<Credentials>,
     blockchain_proxy: BlockchainProxy,
     #[cfg(feature = "nimiq-mempool")] mempool: Option<Arc<Mempool>>,
     consensus_proxy: ConsensusProxy<TNetwork>,
@@ -19,6 +21,7 @@ pub fn start_metrics_server<TNetwork: Network>(
     let mempool = None;
     nimiq_metrics_server::start_metrics_server(
         addr,
+        credentials,
         blockchain_proxy,
         mempool,
         consensus_proxy,
