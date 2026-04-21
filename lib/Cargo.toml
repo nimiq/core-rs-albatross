@@ -48,14 +48,14 @@ log-panics = { version = "2.1", features = ["with-backtrace"], optional = true }
 parking_lot = "0.12"
 rand = "0.9"
 rand_chacha = "0.9"
-rustls = { version = "0.23.37", default-features = false, optional = true }
+rustls = { version = "0.23.38", default-features = false, optional = true }
 rustls-pemfile = "2.2"
 serde = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
 signal-hook = { version = "0.4", optional = true }
 thiserror = "2.0"
 time = { version = "0.3", optional = true }
-tokio = { version = "1.51", features = ["rt"], optional = true }
+tokio = { version = "1.52", features = ["rt"], optional = true }
 toml = "1.1"
 tracing-loki = { version = "0.2.6", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = [
@@ -100,7 +100,7 @@ nimiq-zkp-component = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
-tokio = { version = "1.51", features = ["macros"] }
+tokio = { version = "1.52", features = ["macros"] }
 nimiq-test-log = { workspace = true }
 
 [features]

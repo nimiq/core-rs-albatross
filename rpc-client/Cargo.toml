@@ -29,7 +29,7 @@ anyhow = "1.0"
 clap = { version = "4.6", features = ["derive"] }
 dotenvy = "0.15"
 futures = { workspace = true }
-tokio = { version = "1.51", features = [
+tokio = { version = "1.52", features = [
     "macros",
     "rt-multi-thread",
     "tracing",

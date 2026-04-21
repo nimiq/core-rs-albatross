@@ -28,7 +28,7 @@ parking_lot = "0.12"
 serde = "1.0"
 serde_json = "1.0"
 thiserror = "2.0"
-tokio = "1.51"
+tokio = "1.52"
 tokio-stream = "0.1"
 
 nimiq-account = { workspace = true }
