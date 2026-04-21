@@ -219,14 +219,16 @@ impl RateLimits {
     /// Mark all rate limits of a given peer as pending for deletion.
     /// Every time this is called the expired rate limits will get delete pruned.
     pub(crate) fn remove_rate_limits(&mut self, peer_id: PeerId) {
+        // Get a single timestamp as reference time.
+        let current_time = Instant::now();
         // Every time a peer disconnects, we delete all expired pending limits.
-        self.clean_up();
+        self.clean_up(current_time);
 
         // Go through all existing request types of the given peer and deletes the limit counters if possible or marks it for deletion.
         if let Some(rate_limits) = self.rate_limits.get_mut(&peer_id) {
             rate_limits.retain(|rate_limit_id, rate_limit| {
                 // Gets the requests limit and deletes it if no counter info would be lost, otherwise places it as pending deletion.
-                if !rate_limit.can_delete(Instant::now()) {
+                if !rate_limit.can_delete(current_time) {
                     self.rate_limits_pending_deletion.insert(
                         peer_id,
                         rate_limit_id.clone(),
@@ -245,13 +247,12 @@ impl RateLimits {
     }
 
     /// Deletes the rate limits that were previously marked as pending if its expiration time has passed.
-    fn clean_up(&mut self) {
+    fn clean_up(&mut self, current_time: Instant) {
         // Iterates from the oldest to the most recent expiration date and deletes the entries that have expired.
         // The pending to deletion is ordered from the oldest to the most recent expiration date, thus we break early
         // from the loop once we find a non expired rate limit.
         while let Some(expiration) = self.rate_limits_pending_deletion.first() {
-            let current_timestamp = Instant::now();
-            if expiration.expiration_time <= current_timestamp {
+            if expiration.expiration_time <= current_time {
                 if let Some(rate_limits) =
                     self.rate_limits
                         .get_mut(&expiration.peer_id)
@@ -259,7 +260,7 @@ impl RateLimits {
                             if let Some(rate_limit) = rate_limits.get(&expiration.rate_limit_id) {
                                 // If the peer has reconnected the rate limit may be enforcing a new limit. In this case we only remove
                                 // the pending deletion.
-                                if rate_limit.can_delete(current_timestamp) {
+                                if rate_limit.can_delete(current_time) {
                                     rate_limits.remove(&expiration.rate_limit_id);
                                 }
                                 return Some(rate_limits);
