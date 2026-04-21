@@ -92,6 +92,13 @@ impl Blockchain {
         (Vec<(Blake2bHash, ChainInfo)>, Vec<BlockLog>),
         Vec<(Blake2bHash, ChainInfo, Option<TrieDiff>)>,
     > {
+        // Rebranching to an empty target chain is not meaningful: there is nothing
+        // to apply and the ancestor would become the new head, which the callers
+        // do not handle. Reject so the proposal/push is treated as an invalid fork.
+        if target_chain.is_empty() {
+            return Err(vec![]);
+        }
+
         // Keeps track of the currently investigated block
         let mut current = (self.state.head_hash.clone(), self.state.main_chain.clone());
         // Collects the reverted blocks
