@@ -54,9 +54,9 @@ dependencies = [
 
 [[package]]
 name = "afl"
-version = "0.17.1"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62656735672273d859b4e3dcd2d3c6dbe2f4decee62e3c206aad2363b1a2f9e2"
+checksum = "25f85f013c45496fbafc0f85c4bb2451f5c0a1aded6187a3dc7e11bd14d199e5"
 dependencies = [
  "home",
  "libc",
@@ -1463,7 +1463,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d162beedaa69905488a8da94f5ac3edb4dd4788b732fadb7bd120b2625c1976"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.117",
 ]
 
 [[package]]
