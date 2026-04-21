@@ -30,7 +30,7 @@ log = { workspace = true }
 rand = "0.9"
 rand_chacha = "0.9"
 rand_core_compat = { version = "0.1", features = ["rand_core_0_6", "rand_core_0_9"] }
-rayon = { version = "^1.11", optional = true }
+rayon = { version = "^1.12", optional = true }
 serde = "1.0"
 serde_json = "1.0"
 tracing-subscriber = { version = "0.3", optional = true }
