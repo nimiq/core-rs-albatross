@@ -259,18 +259,38 @@ impl RateLimits {
             let Entry::Occupied(mut rate_limit_for_peer) =
                 self.rate_limits.entry(expiration.peer_id)
             else {
-                unreachable!(
+                log::error!(
+                    ?expiration,
                     "Tried to retrieve a non existing rate limit for a peer, which should exist"
                 );
+                // fail in debug builds, so the broken invariant surfaces
+                debug_assert!(
+                    false,
+                    "Tried to retrieve a non existing rate limit for a peer, which should exist: {:?}",
+                    expiration,
+                );
+                // Something broke the invariant here, but there is good reason to believe
+                // this will self correct after the pop of the while loop above.
+                continue;
             };
             //
             let Entry::Occupied(rate_limit) = rate_limit_for_peer
                 .get_mut()
-                .entry(expiration.rate_limit_id)
+                .entry(expiration.rate_limit_id.clone())
             else {
-                unreachable!(
+                log::error!(
+                    ?expiration,
                     "Tried to retrieve a non existing rate limit for an id, which should exist"
                 );
+                // fail in debug builds, so the broken invariant surfaces
+                debug_assert!(
+                    false,
+                    "Tried to retrieve a non existing rate limit for an id, which should exist: {:?}",
+                    expiration,
+                );
+                // Something broke the invariant here, but there is good reason to believe
+                // this will self correct after the pop of the while loop above.
+                continue;
             };
 
             if rate_limit.get().can_delete(current_time) {
