@@ -287,3 +287,121 @@ impl RateLimits {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::spin_loop;
+
+    use super::*;
+
+    fn rate_limit_with_expiration(expiration_time: Instant) -> RateLimit {
+        let time_window = Duration::from_millis(10);
+        let mut rate_limit = RateLimit::new(1, time_window, expiration_time - time_window);
+        rate_limit.occurrences_counter = 1;
+        rate_limit
+    }
+
+    fn rate_limits_with_pending_entry(
+        peer_id: PeerId,
+        rate_limit_id: RateLimitId,
+        rate_limit: RateLimit,
+        capacity: usize,
+    ) -> RateLimits {
+        let mut rate_limits = RateLimits::default();
+        let mut peer_rate_limits = HashMap::with_capacity(capacity);
+        peer_rate_limits.insert(rate_limit_id.clone(), rate_limit.clone());
+        rate_limits.rate_limits.insert(peer_id, peer_rate_limits);
+        rate_limits
+            .rate_limits_pending_deletion
+            .insert(peer_id, rate_limit_id, &rate_limit);
+        rate_limits
+    }
+
+    fn wait_until(target: Instant) {
+        while Instant::now() < target {
+            spin_loop();
+        }
+    }
+
+    #[test]
+    fn remove_rate_limits_keeps_pending_deletions_consistent_at_expiry_boundary() {
+        const INNER_CAPACITY: usize = 1 << 17;
+        const START_OFFSETS: [Duration; 6] = [
+            Duration::from_micros(2),
+            Duration::from_micros(4),
+            Duration::from_micros(8),
+            Duration::from_micros(16),
+            Duration::from_micros(32),
+            Duration::from_micros(64),
+        ];
+
+        let peer_id = PeerId::random();
+        let cleanup_peer_id = PeerId::random();
+        let rate_limit_id = RateLimitId::Request(RequestType::request(42));
+        let mut observed_pre_expiry_disconnect = false;
+
+        for start_offset in START_OFFSETS {
+            let expiration_time = Instant::now() + start_offset + Duration::from_millis(1);
+            let rate_limit = rate_limit_with_expiration(expiration_time);
+            let mut rate_limits = rate_limits_with_pending_entry(
+                peer_id,
+                rate_limit_id.clone(),
+                rate_limit,
+                INNER_CAPACITY,
+            );
+
+            wait_until(expiration_time - start_offset);
+            rate_limits.remove_rate_limits(peer_id);
+
+            let has_active_rate_limit = rate_limits
+                .rate_limits
+                .get(&peer_id)
+                .and_then(|peer_rate_limits| peer_rate_limits.get(&rate_limit_id))
+                .is_some();
+            let has_pending_deletion = rate_limits
+                .rate_limits_pending_deletion
+                .by_peer_and_id
+                .contains_key(&(peer_id, rate_limit_id.clone()));
+
+            assert!(
+                !has_pending_deletion || has_active_rate_limit,
+                "disconnecting close to expiry must not leave a pending-deletion entry without the matching active rate limit",
+            );
+
+            if has_active_rate_limit {
+                observed_pre_expiry_disconnect = true;
+
+                wait_until(expiration_time + Duration::from_millis(1));
+                rate_limits.remove_rate_limits(cleanup_peer_id);
+
+                assert!(
+                    !rate_limits.rate_limits.contains_key(&peer_id),
+                    "the active rate limit should be removed once the pending deletion expires",
+                );
+                assert!(
+                    !rate_limits
+                        .rate_limits_pending_deletion
+                        .by_peer_and_id
+                        .contains_key(&(peer_id, rate_limit_id.clone())),
+                    "the pending-deletion index should be cleared once the rate limit expires",
+                );
+                assert!(
+                    !rate_limits
+                        .rate_limits_pending_deletion
+                        .by_expiration_time
+                        .iter()
+                        .any(|expiration| {
+                            expiration.peer_id == peer_id
+                                && expiration.rate_limit_id == rate_limit_id
+                        }),
+                    "the expiration index should be cleared once the rate limit expires",
+                );
+            }
+        }
+
+        assert!(
+            observed_pre_expiry_disconnect,
+            "the test must exercise at least one disconnect that happens before the rate limit expires",
+        );
+    }
+}
