@@ -225,7 +225,20 @@ impl Blockchain {
                         last_block_number = ?block_numbers.last(),
                         "Inserting macro block"
                     );
-                    assert_eq!(batch_number, prev_batch + 1, "Missing batch");
+                    if batch_number != prev_batch + 1 {
+                        warn!(
+                            %block,
+                            reason = "missing batch in history",
+                            history_item_block_number = hist_tx.block_number,
+                            history_item_batch = batch_number,
+                            prev_batch,
+                            "Rejecting block",
+                        );
+                        txn.abort();
+                        #[cfg(feature = "metrics")]
+                        this.metrics.note_invalid_block();
+                        return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+                    }
 
                     block_numbers.push(Policy::macro_block_of(prev_batch).unwrap());
                     block_timestamps.push(0); // FIXME
@@ -306,11 +319,18 @@ impl Blockchain {
                     .push(Inherent::FinalizeBatch);
 
                 if Policy::is_election_block_at(*block_number) {
-                    assert_eq!(
-                        *block_number,
-                        block.block_number(),
-                        "Only the last block can be an election block"
-                    );
+                    if *block_number != block.block_number() {
+                        warn!(
+                            %block,
+                            reason = "foreign election block in history",
+                            history_block_number = *block_number,
+                            "Rejecting block",
+                        );
+                        txn.abort();
+                        #[cfg(feature = "metrics")]
+                        this.metrics.note_invalid_block();
+                        return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+                    }
                     block_inherents
                         .get_mut(i)
                         .unwrap()
