@@ -18,11 +18,6 @@ pub struct TendermintProof {
 }
 
 impl TendermintProof {
-    /// This simply returns the number of slots that voted (precommitted) to this block.
-    pub fn votes(&self) -> u16 {
-        self.sig.signers.len() as u16
-    }
-
     /// Verifies the proof. This only checks that the proof is valid for this block, not that the
     /// block itself is valid.
     pub fn verify(block: &MacroBlock, current_validators: &Validators) -> bool {
