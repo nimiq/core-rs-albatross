@@ -179,12 +179,9 @@ impl Validators {
         &self.validators[self.get_band_from_slot(slot_number) as usize]
     }
 
-    /// Returns the validator given the slot band.
-    ///
-    /// ## Panic
-    /// This function requires the slot_band to be within bounds. If it is not this function will panic.
-    pub fn get_validator_by_slot_band(&self, slot_band: u16) -> &Validator {
-        &self.validators[slot_band as usize]
+    /// Returns the validator given the slot band, if it exists.
+    pub fn get_validator_by_slot_band(&self, slot_band: u16) -> Option<&Validator> {
+        self.validators.get(slot_band as usize)
     }
 
     /// Returns the validator given its address, if it exists.

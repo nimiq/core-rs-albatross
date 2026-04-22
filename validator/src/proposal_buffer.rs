@@ -385,8 +385,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNet
         // Fetch current validators.
         let validators = bc.current_validators().unwrap();
 
-        // Make sure the given validator id is not outside of the range of valid validator ids for the current validator set.
-        if proposal.0.signer as usize >= validators.num_validators() {
+        // Reject proposals that refer to a nonexistent validator before signature verification.
+        let Some(stated_proposer) = validators.get_validator_by_slot_band(proposal.0.signer) else {
             // The proposal indicates a nonsensical proposer as the validator id is out of bounds.
             // The proposal is dropped and propagation is stopped.
             log::debug!(proposal = ?proposal.0, "Proposal signer does not exist, IOOB");
@@ -396,10 +396,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNet
                     MsgAcceptance::Reject,
                 );
             return;
-        }
-
-        // Get the validator whose id was presented in the proposal message.
-        let stated_proposer = validators.get_validator_by_slot_band(proposal.0.signer);
+        };
 
         // Calculate the hash which had been signed.
         let data = TendermintProposal {

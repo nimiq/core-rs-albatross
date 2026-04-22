@@ -92,7 +92,9 @@ impl SignedProposal {
         let validators = blockchain.current_validators().unwrap();
 
         // Get the validator who signed the proposal and whose signature was already verified.
-        let assumed_validator = validators.get_validator_by_slot_band(self.signer);
+        let Some(assumed_validator) = validators.get_validator_by_slot_band(self.signer) else {
+            return false;
+        };
 
         // Calculate the validator who was supposed to produce the block.
         let actual_validator = blockchain

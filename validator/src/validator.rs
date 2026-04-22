@@ -340,7 +340,9 @@ where
         state.slot_band = validators.get_slot_band_by_address(&state.validator_address);
 
         if let Some(slot_band) = state.slot_band {
-            let epoch_validator = validators.get_validator_by_slot_band(slot_band);
+            let epoch_validator = validators
+                .get_validator_by_slot_band(slot_band)
+                .expect("validator slot band from address lookup must exist");
             log::info!(
                 validator_address = %state.validator_address,
                 validator_slot_band = slot_band,
