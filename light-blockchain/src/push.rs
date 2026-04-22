@@ -389,42 +389,6 @@ impl LightBlockchain {
         Ok(PushResult::Rebranched)
     }
 
-    /// Pushes an election block backwards into the chain. This pushes the election block immediately
-    /// before the oldest election block that we have. It is useful in case we need to receive a proof
-    /// for a transaction in a past epoch, in that case the simplest course of action is to "walk"
-    /// backwards from our current election block until we get to the desired epoch.
-    pub fn push_election_backwards(
-        this: RwLockUpgradableReadGuard<Self>,
-        header: MacroHeader,
-    ) -> Result<PushResult, PushError> {
-        // Get epoch number.
-        let epoch = Policy::epoch_at(header.block_number);
-
-        // Check if we already know this block.
-        if this.chain_store.get_election(epoch).is_some() {
-            return Ok(PushResult::Known);
-        }
-
-        // Check if we have this block's successor.
-        let prev_block = this
-            .chain_store
-            .get_election(epoch + Policy::blocks_per_epoch())
-            .ok_or(PushError::InvalidSuccessor)?;
-
-        // Verify that the block is indeed the predecessor.
-        if header.hash() != prev_block.parent_election_hash {
-            return Err(PushError::InvalidPredecessor);
-        }
-
-        // Upgrade the blockchain lock
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
-
-        // Store the election block header.
-        this.chain_store.put_election(header);
-
-        Ok(PushResult::Extended)
-    }
-
     fn detect_forks(&self, block: &MicroBlock, validator_address: &Address) {
         assert!(!block.is_skip_block());
 
