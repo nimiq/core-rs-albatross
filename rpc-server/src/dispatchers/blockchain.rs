@@ -508,7 +508,8 @@ impl BlockchainInterface for BlockchainDispatcher {
                     block_number,
                     disabled: staking_contract
                         .punished_slots
-                        .current_batch_punished_slots(),
+                        .previous_batch_punished_slots()
+                        .clone(),
                 },
                 &blockchain_proxy,
             ))
