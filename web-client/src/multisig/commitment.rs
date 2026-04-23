@@ -9,6 +9,16 @@ use wasm_bindgen_derive::TryFromJsValue;
 use super::random_secret::RandomSecret;
 use crate::primitives::public_key::{PublicKey, PublicKeyAnyArrayType};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+enum SumMuSig2Error {
+    #[error("The number of public keys must match the number of commitment groups")]
+    LengthMismatch,
+    #[error("At least one public key must be provided")]
+    EmptyPublicKeys,
+    #[error("Number of commitments in each group must be 2")]
+    InvalidCommitmentGroupSize,
+}
+
 /// A cryptographic commitment to a {@link RandomSecret}. The commitment is public, while the secret is, well, secret.
 #[derive(TryFromJsValue)]
 #[wasm_bindgen]
@@ -66,24 +76,8 @@ impl Commitment {
     ) -> Result<Commitment, JsError> {
         let public_keys = PublicKey::unpack_public_keys(public_keys)?;
         let commitment_groups = Commitment::unpack_commitments_list(commitment_groups)?;
-
-        if public_keys.len() != commitment_groups.len() {
-            return Err(JsError::new(
-                "The number of public keys must match the number of commitment groups",
-            ));
-        }
-
-        // Pack commitments into compile-time-known groups of MUSIG2_PARAMETER_V
-        let mut commitment_pairs: Vec<
-            [nimiq_keys::multisig::commitment::Commitment; MUSIG2_PARAMETER_V],
-        > = vec![];
-
-        for group in &commitment_groups {
-            let mut commitment_pair =
-                [nimiq_keys::multisig::commitment::Commitment::default(); MUSIG2_PARAMETER_V];
-            commitment_pair.copy_from_slice(group);
-            commitment_pairs.push(commitment_pair);
-        }
+        let commitment_pairs = Self::pack_commitment_pairs(&public_keys, &commitment_groups)
+            .map_err(|error| JsError::from(&error))?;
 
         let mut builder =
             CommitmentsBuilder::with_public_commitments(public_keys[0], commitment_pairs[0]);
@@ -212,6 +206,37 @@ impl Commitment {
 
         Ok(commitments_list)
     }
+
+    fn pack_commitment_pairs(
+        public_keys: &[nimiq_keys::Ed25519PublicKey],
+        commitment_groups: &[Vec<nimiq_keys::multisig::commitment::Commitment>],
+    ) -> Result<
+        Vec<[nimiq_keys::multisig::commitment::Commitment; MUSIG2_PARAMETER_V]>,
+        SumMuSig2Error,
+    > {
+        if public_keys.len() != commitment_groups.len() {
+            return Err(SumMuSig2Error::LengthMismatch);
+        }
+        if public_keys.is_empty() {
+            return Err(SumMuSig2Error::EmptyPublicKeys);
+        }
+        if commitment_groups
+            .iter()
+            .any(|commitments| commitments.len() != MUSIG2_PARAMETER_V)
+        {
+            return Err(SumMuSig2Error::InvalidCommitmentGroupSize);
+        }
+
+        let mut commitment_pairs = Vec::with_capacity(commitment_groups.len());
+        for group in commitment_groups {
+            let mut commitment_pair =
+                [nimiq_keys::multisig::commitment::Commitment::default(); MUSIG2_PARAMETER_V];
+            commitment_pair.copy_from_slice(group);
+            commitment_pairs.push(commitment_pair);
+        }
+
+        Ok(commitment_pairs)
+    }
 }
 
 #[wasm_bindgen]
@@ -224,4 +249,40 @@ extern "C" {
 
     #[wasm_bindgen(typescript_type = "(Commitment | string | Uint8Array)[][]")]
     pub type CommitmentAnyArrayArrayType;
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_keys::{KeyPair, SecureGenerate};
+
+    use super::{Commitment, SumMuSig2Error};
+
+    #[test]
+    fn it_rejects_empty_musig2_inputs() {
+        assert_eq!(
+            Commitment::pack_commitment_pairs(&[], &[]),
+            Err(SumMuSig2Error::EmptyPublicKeys)
+        );
+    }
+
+    #[test]
+    fn it_rejects_malformed_musig2_commitment_groups() {
+        let signer = KeyPair::generate_default_csprng();
+        assert_eq!(
+            Commitment::pack_commitment_pairs(
+                &[signer.public],
+                &[vec![nimiq_keys::multisig::commitment::Commitment::default()]],
+            ),
+            Err(SumMuSig2Error::InvalidCommitmentGroupSize)
+        )
+    }
+
+    #[test]
+    fn it_rejects_mismatched_signer_and_commitment_group_counts() {
+        let signer = KeyPair::generate_default_csprng();
+        assert_eq!(
+            Commitment::pack_commitment_pairs(&[signer.public], &[]),
+            Err(SumMuSig2Error::LengthMismatch)
+        );
+    }
 }
