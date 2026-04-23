@@ -6,7 +6,7 @@ use crate::{
     mmr::{
         peaks::PeakIterator,
         position::{leaf_number_to_index, Position},
-        proof::RangeProof,
+        proof::{RangeProof, MAX_MMR_SIZE},
         utils::bagging,
         MerkleMountainRange,
     },
@@ -69,6 +69,10 @@ impl<H: Merge + PartialEq + Clone, S: Store<H>> PartialMerkleMountainRange<H, S>
     where
         T: Hash<H>,
     {
+        if range_proof.proof.mmr_size > MAX_MMR_SIZE {
+            return Err(Error::InvalidProof);
+        }
+
         // This is an optimized version of the proof's `compute_root` that is connected to a store.
         // Check if proof has right size.
         if self
@@ -472,5 +476,27 @@ mod tests {
 
         let proof = mmr.prove_range(1..=1, Some(mmr.len()), true).unwrap();
         assert_eq!(pmmr.push_proof(proof, &[2, 3, 5]), Err(Error::InvalidProof));
+    }
+
+    /// A crafted `RangeProof` with an oversized `mmr_size` must be rejected
+    /// before it can reach `PeakIterator::new`.
+    #[test]
+    fn push_proof_rejects_oversized_mmr_size() {
+        use crate::mmr::proof::{Proof, RangeProof};
+
+        let mut pmmr: PartialMerkleMountainRange<TestHash, _> =
+            PartialMerkleMountainRange::new(MemoryStore::new());
+
+        for bad_size in [usize::MAX, (usize::MAX / 2) + 1] {
+            let proof: RangeProof<TestHash> = RangeProof {
+                proof: Proof {
+                    mmr_size: bad_size,
+                    nodes: vec![],
+                },
+                assume_previous: false,
+            };
+            let leaves: [usize; 0] = [];
+            assert_eq!(pmmr.push_proof(proof, &leaves), Err(Error::InvalidProof));
+        }
     }
 }

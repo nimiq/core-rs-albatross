@@ -15,9 +15,13 @@ impl PeakIterator {
             // the largest n for which 2^n - 1 <= size.
             // The following code uses k = 2^n.
             let mut k = 1;
-            // Find largest k such that k - 1 <= size.
+            // Find largest k such that k - 1 <= size. `checked_mul` prevents a wrap
+            // of `k` to 0 (infinite loop).
             while k - 1 <= size {
-                k <<= 1;
+                match k.checked_mul(2) {
+                    Some(next) => k = next,
+                    None => break,
+                }
             }
             // Calculate peak index when starting with index 1.
             let peak_index_one_based = (k >> 1) - 1;

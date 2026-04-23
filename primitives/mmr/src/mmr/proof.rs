@@ -39,6 +39,11 @@ impl<H: Merge + Eq, T: Hash<H>> SizeProof<H, T> {
     }
 }
 
+/// Largest `mmr_size` we are willing to verify. Anything above this is physically
+/// impossible (a valid MMR with this many nodes would be a gigantic state).
+/// Rejecting early turns crafted sizes into a clean `InvalidProof`.
+pub(crate) const MAX_MMR_SIZE: usize = usize::MAX / 2;
+
 /// A Merkle proof for a MMR.
 #[derive(Clone, Debug)]
 #[cfg_attr(
@@ -66,6 +71,12 @@ impl<H: Merge + Clone> Proof<H> {
     where
         T: Hash<H>,
     {
+        // Reject proofs whose `mmr_size` is large enough to wedge `PeakIterator`
+        // or overflow `Position` arithmetic. No legitimate MMR ever reaches this.
+        if self.mmr_size > MAX_MMR_SIZE {
+            return Err(Error::InvalidProof);
+        }
+
         // Sort by positions and check that we only prove leaves.
         let positions: Result<Vec<(Position, H)>, Error> = leaves
             .iter()
@@ -202,6 +213,13 @@ impl<H: Merge + Clone + Eq> Proof<H> {
     where
         T: Hash<H>,
     {
+        // Must run before the `mmr_size == 0` shortcut below, otherwise a crafted
+        // proof with empty `nodes` and oversize `mmr_size` would never reach the
+        // guard in `calculate_root`.
+        if self.mmr_size > MAX_MMR_SIZE {
+            return Err(Error::InvalidProof);
+        }
+
         // If the proof came from an empty tree we just need to check that we are not trying to
         // prove any leaves and that the given root matches the empty tree root.
         if self.mmr_size == 0 && self.nodes.is_empty() {
@@ -797,5 +815,36 @@ mod tests {
             proof.verify_with_start(&mmr.get_root().unwrap(), 2, &[0]),
             Err(Error::ProveInvalidLeaves)
         );
+    }
+
+    /// A crafted `Proof` with `mmr_size > MAX_MMR_SIZE` must be rejected
+    /// as `InvalidProof` by both `calculate_root` and `verify`, rather than panicking
+    /// or hanging inside `PeakIterator::new`.
+    #[test]
+    fn calculate_root_rejects_oversized_mmr_size() {
+        let leaf: usize = 1;
+        let leaves = [(0usize, &leaf)];
+
+        for bad_size in [usize::MAX, (usize::MAX / 2) + 1] {
+            let proof: Proof<TestHash> = Proof {
+                mmr_size: bad_size,
+                nodes: vec![TestHash(42)],
+            };
+            assert_eq!(proof.calculate_root(&leaves), Err(Error::InvalidProof));
+            assert_eq!(
+                proof.verify(&TestHash(0), &leaves),
+                Err(Error::InvalidProof)
+            );
+        }
+
+        // At the boundary `mmr_size == MAX_MMR_SIZE` we do not short-circuit on
+        // size; the proof proceeds into verification. The outcome is necessarily
+        // an `Err` (the crafted proof is not consistent), but the important bit
+        // is that verification terminates cleanly rather than hanging/panicking.
+        let proof_at_boundary: Proof<TestHash> = Proof {
+            mmr_size: MAX_MMR_SIZE,
+            nodes: vec![TestHash(42)],
+        };
+        assert!(proof_at_boundary.calculate_root(&leaves).is_err());
     }
 }
