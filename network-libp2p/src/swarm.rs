@@ -598,13 +598,15 @@ fn handle_dht_get(
             let count = store_dht_record(&mut event_info.state.dht_get_results, id, dht_record);
             // Check if we already have a quorum
             if count == event_info.state.dht_quorum {
-                event_info
-                    .swarm
-                    .behaviour_mut()
-                    .dht
-                    .query_mut(&id)
-                    .unwrap()
-                    .finish();
+                if let Some(mut query) = event_info.swarm.behaviour_mut().dht.query_mut(&id) {
+                    query.finish();
+                } else {
+                    warn!(
+                        query_id = ?id,
+                        ?step,
+                        "Quorum reached but DHT query already removed from Kademlia pool"
+                    );
+                }
             }
         }
         Ok(GetRecordOk::FinishedWithNoAdditionalRecord { cache_candidates }) => {
