@@ -71,15 +71,19 @@ impl FromStr for ES256PublicKey {
     }
 }
 
-impl<'a> From<&'a [u8; ES256PublicKey::SIZE]> for ES256PublicKey {
-    fn from(bytes: &'a [u8; ES256PublicKey::SIZE]) -> Self {
-        Self::from_bytes(bytes).expect("Unexpected size for")
+impl<'a> TryFrom<&'a [u8; ES256PublicKey::SIZE]> for ES256PublicKey {
+    type Error = KeysError;
+
+    fn try_from(bytes: &'a [u8; ES256PublicKey::SIZE]) -> Result<Self, Self::Error> {
+        Self::from_bytes(bytes)
     }
 }
 
-impl From<[u8; ES256PublicKey::SIZE]> for ES256PublicKey {
-    fn from(bytes: [u8; ES256PublicKey::SIZE]) -> Self {
-        ES256PublicKey::from(&bytes)
+impl TryFrom<[u8; ES256PublicKey::SIZE]> for ES256PublicKey {
+    type Error = KeysError;
+
+    fn try_from(bytes: [u8; ES256PublicKey::SIZE]) -> Result<Self, Self::Error> {
+        Self::from_bytes(&bytes)
     }
 }
 

@@ -32,15 +32,6 @@ impl fmt::Display for ES256Signature {
     }
 }
 
-impl Default for ES256Signature {
-    fn default() -> Self {
-        ES256Signature(
-            p256::ecdsa::Signature::from_bytes(&[0u8; Self::SIZE].into())
-                .expect("Invalid slice length"),
-        )
-    }
-}
-
 impl FromHex for ES256Signature {
     type Error = ParseError;
 
@@ -49,17 +40,19 @@ impl FromHex for ES256Signature {
     }
 }
 
-impl<'a> From<&'a [u8; Self::SIZE]> for ES256Signature {
-    fn from(bytes: &'a [u8; Self::SIZE]) -> Self {
-        ES256Signature::from(*bytes)
+impl<'a> TryFrom<&'a [u8; Self::SIZE]> for ES256Signature {
+    type Error = SignatureError;
+
+    fn try_from(bytes: &'a [u8; Self::SIZE]) -> Result<Self, Self::Error> {
+        Self::from_bytes(bytes)
     }
 }
 
-impl From<[u8; Self::SIZE]> for ES256Signature {
-    fn from(bytes: [u8; Self::SIZE]) -> Self {
-        ES256Signature(
-            p256::ecdsa::Signature::from_bytes(&bytes.into()).expect("Invalid slice length"),
-        )
+impl TryFrom<[u8; Self::SIZE]> for ES256Signature {
+    type Error = SignatureError;
+
+    fn try_from(bytes: [u8; Self::SIZE]) -> Result<Self, Self::Error> {
+        Self::from_bytes(&bytes)
     }
 }
 
