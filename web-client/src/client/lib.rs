@@ -64,6 +64,11 @@ use crate::{
 /// Maximum number of transactions that can be requested by address
 pub const MAX_TRANSACTIONS_BY_ADDRESS: u16 = 500;
 
+fn is_transaction_expired(validity_start_height: u32, current_height: u32) -> bool {
+    validity_start_height
+        <= current_height.saturating_sub(Policy::transaction_validity_window_blocks())
+}
+
 /// Describes the state of consensus of the client.
 #[derive(Tsify)]
 #[serde(rename_all = "lowercase")]
@@ -935,9 +940,7 @@ impl Client {
                 continue;
             }
 
-            if details.transaction.validity_start_height
-                <= current_height - Policy::transaction_validity_window()
-            {
+            if is_transaction_expired(details.transaction.validity_start_height, current_height) {
                 // Transaction expired before getting included.
                 let mut expired_details = details.clone();
                 expired_details.state = TransactionState::Expired;
@@ -1348,6 +1351,79 @@ impl Client {
         id += 1;
         self.listener_id.set(id);
         id
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_primitives::policy::{Policy, MAINNET_POLICY};
+
+    use super::is_transaction_expired;
+
+    #[test]
+    fn expiry_check_uses_block_count_not_batch_count() {
+        let _ = Policy::get_or_init(MAINNET_POLICY);
+
+        let batch_window = Policy::transaction_validity_window();
+        let block_window = Policy::transaction_validity_window_blocks();
+
+        assert_ne!(
+            batch_window, block_window,
+            "batch window ({batch_window}) and block window ({block_window}) must differ"
+        );
+        assert_eq!(
+            block_window,
+            batch_window * Policy::blocks_per_batch(),
+            "block window should be batch_window * blocks_per_batch"
+        );
+
+        let validity_start_height = 10_000;
+        let current_height = 10_500;
+        let blocks_elapsed = current_height - validity_start_height;
+
+        assert!(
+            blocks_elapsed < block_window,
+            "transaction should still be within the block validity window"
+        );
+        assert!(
+            blocks_elapsed > batch_window,
+            "transaction should be outside the batch window to exercise the bug"
+        );
+
+        assert!(
+            !is_transaction_expired(validity_start_height, current_height),
+            "pending transaction should not expire while it is still inside the block-based validity window"
+        );
+    }
+
+    #[test]
+    fn expiry_boundary_conditions_match_block_window() {
+        let _ = Policy::get_or_init(MAINNET_POLICY);
+
+        let block_window = Policy::transaction_validity_window_blocks();
+        let current_height = 20_000;
+        let test_cases = [
+            (0, false),
+            (Policy::transaction_validity_window() - 1, false),
+            (Policy::transaction_validity_window(), false),
+            (Policy::transaction_validity_window() + 1, false),
+            (block_window / 2, false),
+            (block_window - 1, false),
+            (block_window, true),
+            (block_window + 1, true),
+        ];
+
+        for (blocks_elapsed, should_be_expired) in test_cases {
+            let validity_start_height = current_height - blocks_elapsed;
+
+            assert_eq!(
+                is_transaction_expired(validity_start_height, current_height),
+                should_be_expired,
+                "transaction {} blocks old should{} be expired",
+                blocks_elapsed,
+                if should_be_expired { "" } else { " not" },
+            );
+        }
     }
 }
 
