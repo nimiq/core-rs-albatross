@@ -182,6 +182,7 @@ pub struct Handler {
 
 impl Handler {
     const STATE_TRANSITION_TIMEOUT: Duration = Duration::from_millis(3000);
+    const MAX_SEND_UPDATE_INTERVAL: Duration = Duration::from_secs(3600);
     pub fn new(
         peer_id: PeerId,
         config: Config,
@@ -623,8 +624,11 @@ impl ConnectionHandler for Handler {
                                     if let Some(mut update_interval) = update_interval {
                                         let min_secs =
                                             self.config.min_send_update_interval.as_secs();
+                                        let max_secs = Self::MAX_SEND_UPDATE_INTERVAL.as_secs();
                                         if update_interval < min_secs {
                                             update_interval = min_secs;
+                                        } else if update_interval > max_secs {
+                                            update_interval = max_secs;
                                         }
                                         self.periodic_update_interval =
                                             Some(interval(Duration::from_secs(update_interval)));
