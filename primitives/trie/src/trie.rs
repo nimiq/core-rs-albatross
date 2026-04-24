@@ -355,6 +355,11 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
         value: Vec<u8>,
         missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
     ) {
+        debug_assert!(
+            !key.is_empty(),
+            "empty (ROOT) key must be rejected at the put_chunk boundary",
+        );
+
         // Start by getting the root node.
         let mut cur_node = self
             .get_root(txn)
@@ -413,7 +418,8 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
             // with the given key. Update the value.
             if cur_node.key == *key {
                 // Update the node and store it.
-                // TODO This unwrap() will fail when attempting to store a value at the root node
+                // `put_raw` rejects empty keys at its entry, so `cur_node` here never has
+                // `root_data.is_some()`; `put_value` cannot return `RootCantHaveValue`.
                 let prev_kind = cur_node.kind();
                 let old_value = cur_node.put_value(value).unwrap();
                 self.put_node(txn, &cur_node, old_value.into());
@@ -840,6 +846,15 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
                     "first key is inconsistent with key range",
                 ));
             }
+
+            // The root node holds no value, so a ROOT-keyed item would panic in `put_raw`.
+            // ROOT is the minimum key, so checking `items[0]` suffices given the sort check below.
+            if chunk.items[0].key.is_empty() {
+                return Err(MerkleRadixTrieError::InvalidChunk(
+                    "item key must not be the root key",
+                ));
+            }
+
             let last_item_key = chunk.items.last().unwrap().key.clone();
             if let Some(end_key) = &chunk.end_key
                 && last_item_key >= *end_key
@@ -2212,6 +2227,35 @@ mod tests {
             trie.put_chunk(&mut txn, KeyNibbles::ROOT, chunk, hash),
             Err(MerkleRadixTrieError::TrieAlreadyComplete)
         );
+    }
+
+    #[test]
+    fn put_chunk_rejects_root_keyed_item() {
+        // A ROOT-keyed item used to reach `put_raw` and panic on
+        // `put_value(...).unwrap()`; `put_chunk` must reject it as `InvalidChunk`.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let trie = MerkleRadixTrie::new_incomplete(&env, TestTrie);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        assert!(!trie.is_complete(&txn));
+
+        let proof_root = TrieNode::new_root();
+        let expected_hash = proof_root.hash_assert();
+        let proof = TrieProof::new(vec![proof_root.into()], Default::default());
+
+        let malicious_chunk = TrieChunk::new(
+            None,
+            vec![TrieItem::new(
+                KeyNibbles::ROOT,
+                vec![0xab, 0xbc, 0xcd, 0xde],
+            )],
+            proof,
+        );
+
+        match trie.put_chunk(&mut txn, KeyNibbles::ROOT, malicious_chunk, expected_hash) {
+            Err(MerkleRadixTrieError::InvalidChunk(_)) => {}
+            other => panic!("expected InvalidChunk(_), got {:?}", other),
+        }
     }
 
     #[test]
