@@ -104,9 +104,11 @@ impl<N: Network> DiffRequestComponent<N> {
                                 // If valid, return the diff.
                                 return Ok(diff);
                             }
-                            warn!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: invalid diff");
+                            // A tree-proof mismatch is cryptographically tied to the response
+                            // contents; an honest peer cannot produce it by accident.
+                            warn!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: invalid diff, removing peer");
+                            peers.write().remove_peer(&peer_id);
                         }
-                        // TODO: remove peer, retry elsewhere
                         Ok(ResponseTrieDiff::IncompleteState) => {
                             debug!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: incomplete state")
                         }
