@@ -23,6 +23,7 @@ workspace = true
 clear_on_drop = { version = "0.2", optional = true }
 futures = { workspace = true, optional = true }
 hex = { version = "0.4", optional = true }
+instant = { version = "0.1", features = ["wasm-bindgen"] }
 libp2p-identity = { version = "0.2", optional = true }
 log = { workspace = true, optional = true }
 parking_lot = "0.12"

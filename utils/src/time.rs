@@ -1,7 +1,9 @@
 use std::{
     sync::atomic::{AtomicI64, Ordering},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
+
+use instant::SystemTime;
 
 /// Time with fixed offset from wall-clock, in milliseconds
 #[derive(Debug, Default)]
@@ -38,15 +40,12 @@ impl OffsetTime {
 }
 
 pub fn systemtime_to_timestamp(time: SystemTime) -> u64 {
-    match time.duration_since(UNIX_EPOCH) {
+    match time.duration_since(SystemTime::UNIX_EPOCH) {
         Ok(duration) => duration.as_secs() * 1000 + u64::from(duration.subsec_nanos()) / 1_000_000,
-        Err(e) => panic!(
-            "SystemTime before UNIX EPOCH! Difference: {:?}",
-            e.duration()
-        ),
+        Err(_) => panic!("SystemTime before UNIX EPOCH"),
     }
 }
 
 pub fn timestamp_to_systemtime(timestamp: u64) -> SystemTime {
-    UNIX_EPOCH + Duration::from_millis(timestamp)
+    SystemTime::UNIX_EPOCH + Duration::from_millis(timestamp)
 }
