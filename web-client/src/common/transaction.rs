@@ -382,6 +382,18 @@ impl From<nimiq_transaction::Transaction> for Transaction {
 }
 
 impl Transaction {
+    fn raw_data(data: &[u8]) -> PlainRawData {
+        PlainRawData {
+            raw: hex::encode(data),
+        }
+    }
+
+    fn raw_proof(proof: &[u8]) -> PlainRawProof {
+        PlainRawProof {
+            raw: hex::encode(proof),
+        }
+    }
+
     #[cfg(feature = "primitives")]
     pub fn do_sign(
         &mut self,
@@ -459,6 +471,10 @@ impl Transaction {
         genesis_block_number: Option<u32>,
         genesis_timestamp: Option<u64>,
     ) -> PlainTransaction {
+        let raw_sender_data = Self::raw_data(&self.inner.sender_data);
+        let raw_recipient_data = Self::raw_data(&self.inner.recipient_data);
+        let raw_proof = Self::raw_proof(&self.inner.proof);
+
         PlainTransaction {
             transaction_hash: self.hash(),
             format: self.format(),
@@ -470,35 +486,27 @@ impl Transaction {
             fee: self.fee(),
             fee_per_byte: self.fee_per_byte(),
             validity_start_height: self.validity_start_height(),
-            network: to_network_id(self.network_id())
-                .ok()
-                .unwrap()
-                .to_string()
-                .to_lowercase(),
+            network: self.inner.network_id.to_string().to_lowercase(),
             flags: self.flags() as u8,
             sender_data: {
-                let raw_data = PlainRawData {
-                    raw: hex::encode(self.sender_data()),
-                };
-
                 if self.inner.sender_type == AccountType::Staking {
-                    let data = OutgoingStakingTransactionData::parse(&self.inner).unwrap();
-                    match data {
-                        OutgoingStakingTransactionData::DeleteValidator => {
-                            PlainTransactionSenderData::DeleteValidator(raw_data)
+                    match OutgoingStakingTransactionData::parse(&self.inner) {
+                        Ok(OutgoingStakingTransactionData::DeleteValidator) => {
+                            PlainTransactionSenderData::DeleteValidator(raw_sender_data)
                         }
-                        OutgoingStakingTransactionData::RemoveStake => {
-                            PlainTransactionSenderData::RemoveStake(raw_data)
+                        Ok(OutgoingStakingTransactionData::RemoveStake) => {
+                            PlainTransactionSenderData::RemoveStake(raw_sender_data)
                         }
+                        Err(_) => PlainTransactionSenderData::Raw(raw_sender_data),
                     }
                 } else {
-                    PlainTransactionSenderData::Raw(PlainRawData { raw: raw_data.raw })
+                    PlainTransactionSenderData::Raw(raw_sender_data)
                 }
             },
             data: {
                 if self.inner.recipient_type == AccountType::Staking {
-                    // Parse transaction data
-                    StakingContract::parse_data(&self.inner.recipient_data).unwrap()
+                    StakingContract::parse_data(&self.inner.recipient_data)
+                        .unwrap_or(PlainTransactionRecipientData::Raw(raw_recipient_data))
                 } else if self.inner.recipient_type == AccountType::Vesting {
                     VestingContract::parse_data(
                         &self.inner.recipient_data,
@@ -507,7 +515,7 @@ impl Transaction {
                         genesis_block_number,
                         genesis_timestamp,
                     )
-                    .unwrap()
+                    .unwrap_or(PlainTransactionRecipientData::Raw(raw_recipient_data))
                 } else if self.inner.recipient_type == AccountType::HTLC {
                     HashedTimeLockedContract::parse_data(
                         &self.inner.recipient_data,
@@ -515,34 +523,32 @@ impl Transaction {
                         genesis_block_number,
                         genesis_timestamp,
                     )
-                    .unwrap()
+                    .unwrap_or(PlainTransactionRecipientData::Raw(raw_recipient_data))
                 } else {
-                    PlainTransactionRecipientData::Raw(PlainRawData {
-                        raw: hex::encode(self.recipient_data()),
-                    })
+                    PlainTransactionRecipientData::Raw(raw_recipient_data)
                 }
             },
             proof: {
                 if self.inner.proof.is_empty() {
-                    PlainTransactionProof::Raw(PlainRawProof::default())
+                    PlainTransactionProof::Raw(raw_proof)
                 } else if self.inner.sender_type == AccountType::HTLC {
                     HashedTimeLockedContract::parse_proof(
                         &self.inner.proof,
                         !self.inner.network_id.is_albatross(),
                     )
-                    .unwrap()
+                    .unwrap_or(PlainTransactionProof::Raw(raw_proof))
                 } else {
                     // Depending on the network the signature proofs are constructed slightly differently.
                     let proof = if self.inner.network_id.is_albatross() {
-                        SignatureProof::deserialize(&self.inner.proof).unwrap()
+                        SignatureProof::deserialize(&self.inner.proof)
                     } else {
-                        SignatureProof::from(
-                            PoWSignatureProof::deserialize_all(&self.inner.proof)
-                                .unwrap()
-                                .into_pos(),
-                        )
+                        PoWSignatureProof::deserialize_all(&self.inner.proof)
+                            .map_err(JsError::from)
+                            .map(|proof| SignatureProof::from(proof.into_pos()))
                     };
-                    proof.to_plain_transaction_proof()
+                    proof
+                        .map(|proof| proof.to_plain_transaction_proof())
+                        .unwrap_or(PlainTransactionProof::Raw(raw_proof))
                 }
             },
             size: self.serialized_size(),
