@@ -10,8 +10,11 @@ use nimiq_transaction::{
 };
 #[cfg(feature = "client")]
 use nimiq_transaction::{
-    historic_transaction::{HistoricTransaction, HistoricTransactionData, RewardEvent},
-    ExecutedTransaction,
+    historic_transaction::{
+        EquivocationEvent, HistoricTransaction, HistoricTransactionData, JailEvent, PenalizeEvent,
+        RewardEvent,
+    },
+    EquivocationLocator, ExecutedTransaction,
 };
 #[cfg(feature = "primitives")]
 use nimiq_transaction_builder::TransactionProofBuilder;
@@ -941,6 +944,89 @@ impl PlainTransaction {
             valid: true,
         }
     }
+
+    fn from_historic_inherent(
+        hash: Blake2bHash,
+        network: NetworkId,
+        block_number: u32,
+        validator_address: nimiq_keys::Address,
+        raw_data: Vec<u8>,
+    ) -> PlainTransaction {
+        let size = raw_data.len();
+        PlainTransaction {
+            transaction_hash: hash.to_hex(),
+            format: TransactionFormat::Extended,
+            sender: Address::from(validator_address).to_plain(),
+            sender_type: AccountType::Basic,
+            recipient: Address::from(Policy::STAKING_CONTRACT_ADDRESS).to_plain(),
+            recipient_type: AccountType::Staking,
+            value: Coin::ZERO.into(),
+            fee: Coin::ZERO.into(),
+            fee_per_byte: 0.0,
+            validity_start_height: block_number,
+            network: network.to_string().to_lowercase(),
+            flags: 0,
+            sender_data: PlainTransactionSenderData::Raw(PlainRawData { raw: String::new() }),
+            data: PlainTransactionRecipientData::Raw(PlainRawData {
+                raw: hex::encode(raw_data),
+            }),
+            proof: PlainTransactionProof::Raw(PlainRawProof::default()),
+            size,
+            valid: true,
+        }
+    }
+
+    pub fn from_penalize_event(
+        ev: PenalizeEvent,
+        hash: Blake2bHash,
+        network: NetworkId,
+        block_number: u32,
+    ) -> PlainTransaction {
+        let validator_address = ev.validator_address.clone();
+        Self::from_historic_inherent(
+            hash,
+            network,
+            block_number,
+            validator_address,
+            ev.serialize_to_vec(),
+        )
+    }
+
+    pub fn from_jail_event(
+        ev: JailEvent,
+        hash: Blake2bHash,
+        network: NetworkId,
+        block_number: u32,
+    ) -> PlainTransaction {
+        let validator_address = ev.validator_address.clone();
+        Self::from_historic_inherent(
+            hash,
+            network,
+            block_number,
+            validator_address,
+            ev.serialize_to_vec(),
+        )
+    }
+
+    pub fn from_equivocation_event(
+        ev: EquivocationEvent,
+        hash: Blake2bHash,
+        network: NetworkId,
+        block_number: u32,
+    ) -> PlainTransaction {
+        let validator_address = match &ev.locator {
+            EquivocationLocator::Fork(locator) => locator.validator_address.clone(),
+            EquivocationLocator::DoubleProposal(locator) => locator.validator_address.clone(),
+            EquivocationLocator::DoubleVote(locator) => locator.validator_address.clone(),
+        };
+        Self::from_historic_inherent(
+            hash,
+            network,
+            block_number,
+            validator_address,
+            ev.serialize_to_vec(),
+        )
+    }
 }
 
 /// Describes the state of a transaction as known by the client.
@@ -1059,6 +1145,7 @@ impl PlainTransactionDetails {
     ) -> Option<PlainTransactionDetails> {
         let block_number = hist_tx.block_number;
         let block_time = hist_tx.block_time;
+        let tx_hash = hist_tx.tx_hash().into();
 
         let state = if Policy::last_macro_block(current_block) >= block_number {
             TransactionState::Confirmed
@@ -1081,14 +1168,40 @@ impl PlainTransactionDetails {
                 true,
                 PlainTransaction::from_reward_event(
                     ev.clone(),
-                    hist_tx.tx_hash().into(),
+                    tx_hash,
                     hist_tx.network_id,
                     hist_tx.block_number,
                 ),
             ),
-            HistoricTransactionData::Penalize(_) => return None,
-            HistoricTransactionData::Jail(_) => return None,
-            HistoricTransactionData::Equivocation(_) => return None,
+            // Represent slash/equivocation inherents as synthetic plain transactions so
+            // historic lookups in WASM don't panic on `.expect("no non-reward inherent")`.
+            HistoricTransactionData::Penalize(ev) => (
+                true,
+                PlainTransaction::from_penalize_event(
+                    ev,
+                    tx_hash,
+                    hist_tx.network_id,
+                    hist_tx.block_number,
+                ),
+            ),
+            HistoricTransactionData::Jail(ev) => (
+                true,
+                PlainTransaction::from_jail_event(
+                    ev,
+                    tx_hash,
+                    hist_tx.network_id,
+                    hist_tx.block_number,
+                ),
+            ),
+            HistoricTransactionData::Equivocation(ev) => (
+                true,
+                PlainTransaction::from_equivocation_event(
+                    ev,
+                    tx_hash,
+                    hist_tx.network_id,
+                    hist_tx.block_number,
+                ),
+            ),
         };
 
         Some(PlainTransactionDetails {
@@ -1099,6 +1212,128 @@ impl PlainTransactionDetails {
             timestamp: Some(block_time),
             confirmations: Some(current_block - block_number + 1),
         })
+    }
+}
+
+#[cfg(all(test, feature = "client"))]
+mod tests {
+    use nimiq_keys::Address as NativeAddress;
+    use nimiq_primitives::{networks::NetworkId, policy::Policy};
+    use nimiq_transaction::{
+        historic_transaction::{
+            EquivocationEvent, HistoricTransaction, HistoricTransactionData, JailEvent,
+            PenalizeEvent,
+        },
+        EquivocationLocator, ForkLocator,
+    };
+
+    use super::PlainTransactionDetails;
+
+    fn make_penalize_historic_tx() -> HistoricTransaction {
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: 100,
+            block_time: 1000,
+            data: HistoricTransactionData::Penalize(PenalizeEvent {
+                validator_address: NativeAddress::default(),
+                slot: 0,
+                offense_event_block: 50,
+            }),
+        }
+    }
+
+    fn make_jail_historic_tx() -> HistoricTransaction {
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: 100,
+            block_time: 1000,
+            data: HistoricTransactionData::Jail(JailEvent {
+                validator_address: NativeAddress::default(),
+                slots: 0..10,
+                offense_event_block: 50,
+                new_epoch_slot_range: None,
+            }),
+        }
+    }
+
+    fn make_equivocation_historic_tx() -> HistoricTransaction {
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: 100,
+            block_time: 1000,
+            data: HistoricTransactionData::Equivocation(EquivocationEvent {
+                locator: EquivocationLocator::Fork(ForkLocator {
+                    validator_address: NativeAddress::default(),
+                    block_number: 50,
+                }),
+            }),
+        }
+    }
+
+    #[test]
+    fn penalize_inherent_does_not_panic_on_conversion() {
+        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
+        let hist_tx = make_penalize_historic_tx();
+        let current_block = 200;
+
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            PlainTransactionDetails::try_from_historic_transaction(
+                hist_tx,
+                current_block,
+                None,
+                None,
+            )
+            .expect("no non-reward inherent")
+        }));
+
+        outcome.expect(
+            "Penalize inherent should be convertible to PlainTransactionDetails, \
+             not cause a panic via .expect() on None",
+        );
+    }
+
+    #[test]
+    fn jail_inherent_does_not_panic_on_conversion() {
+        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
+        let hist_tx = make_jail_historic_tx();
+        let current_block = 200;
+
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            PlainTransactionDetails::try_from_historic_transaction(
+                hist_tx,
+                current_block,
+                None,
+                None,
+            )
+            .expect("no non-reward inherent")
+        }));
+
+        outcome.expect(
+            "Jail inherent should be convertible to PlainTransactionDetails, \
+             not cause a panic via .expect() on None",
+        );
+    }
+
+    #[test]
+    fn equivocation_inherent_does_not_panic_on_conversion() {
+        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
+        let hist_tx = make_equivocation_historic_tx();
+        let current_block = 200;
+
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            PlainTransactionDetails::try_from_historic_transaction(
+                hist_tx,
+                current_block,
+                None,
+                None,
+            )
+            .expect("no non-reward inherent")
+        }));
+
+        outcome.expect(
+            "Equivocation inherent should be convertible to PlainTransactionDetails, \
+             not cause a panic via .expect() on None",
+        );
     }
 }
 
