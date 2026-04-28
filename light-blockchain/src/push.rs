@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use nimiq_block::{Block, ForkProof, MacroHeader, MicroBlock};
+use nimiq_block::{Block, ForkProof, MicroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ForkEvent, PushError, PushResult,
 };

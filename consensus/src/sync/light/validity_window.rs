@@ -23,6 +23,14 @@ use crate::{
 };
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
+    fn reset_validity_synchronization(&mut self) {
+        self.validity_requests = None;
+
+        for peer_id in std::mem::take(&mut self.syncing_peers) {
+            self.validity_queue.remove_peer(&peer_id);
+        }
+    }
+
     pub async fn request_validity_window_chunk(
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
@@ -230,9 +238,22 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
-        while let Poll::Ready(Some(Ok((request, result, peer_id)))) =
-            self.validity_queue.poll_next_unpin(cx)
-        {
+        while let Poll::Ready(Some(queue_result)) = self.validity_queue.poll_next_unpin(cx) {
+            let (request, result, peer_id) = match queue_result {
+                Ok(result) => result,
+                Err(failed_request) => {
+                    log::warn!(
+                        epoch_number = failed_request.epoch_number,
+                        block_number = failed_request.block_number,
+                        chunk_index = failed_request.chunk_index,
+                        "Validity sync request failed after exhausting all retry attempts, resetting validity synchronization state"
+                    );
+
+                    self.reset_validity_synchronization();
+                    break;
+                }
+            };
+
             log::trace!(%peer_id, chunk_index=request.chunk_index, block_number=request.block_number,  "Processing response from validity queue");
 
             match result {
@@ -452,5 +473,118 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         }
 
         Poll::Pending
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::Arc,
+        task::{Context, Poll},
+    };
+
+    use futures::{future, task::noop_waker_ref, FutureExt};
+    use nimiq_blockchain::{Blockchain, BlockchainConfig};
+    use nimiq_blockchain_interface::AbstractBlockchain;
+    use nimiq_blockchain_proxy::BlockchainProxy;
+    use nimiq_database::mdbx::MdbxDatabase;
+    use nimiq_network_interface::{
+        network::Network,
+        request::{OutboundRequestError, RequestError},
+    };
+    use nimiq_network_mock::{MockHub, MockNetwork};
+    use nimiq_primitives::{networks::NetworkId, policy::Policy};
+    use nimiq_test_log::test;
+    use nimiq_utils::time::OffsetTime;
+    use nimiq_zkp_component::ZKPComponent;
+    use parking_lot::RwLock;
+
+    use crate::{
+        messages::RequestHistoryChunk,
+        sync::{
+            light::{sync::ValidityChunkRequest, LightMacroSync},
+            peer_list::PeerList,
+            sync_queue::SyncQueue,
+        },
+    };
+
+    fn blockchain() -> BlockchainProxy {
+        let time = Arc::new(OffsetTime::new());
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        BlockchainProxy::Full(Arc::new(RwLock::new(
+            Blockchain::new(
+                env,
+                BlockchainConfig::default(),
+                NetworkId::UnitAlbatross,
+                time,
+            )
+            .unwrap(),
+        )))
+    }
+
+    #[test(tokio::test)]
+    async fn it_resets_validity_sync_state_after_retry_exhaustion() {
+        let blockchain = blockchain();
+        let mut hub = MockHub::default();
+        let network = Arc::new(hub.new_network());
+
+        let zkp_component = ZKPComponent::new(blockchain.clone(), Arc::clone(&network), None).await;
+        let zkp_component_proxy = zkp_component.proxy();
+
+        let mut sync = LightMacroSync::<MockNetwork>::new(
+            blockchain.clone(),
+            Arc::clone(&network),
+            network.subscribe_events(),
+            zkp_component_proxy,
+            0,
+        );
+
+        let peer_id = network.peer_id();
+        let macro_head = blockchain.read().macro_head().header.clone();
+        let request = RequestHistoryChunk {
+            epoch_number: Policy::epoch_at(macro_head.block_number),
+            block_number: macro_head.block_number,
+            chunk_index: 0,
+        };
+
+        sync.validity_queue = SyncQueue::new(
+            Arc::clone(&network),
+            vec![(request.clone(), None)],
+            Arc::new(RwLock::new(PeerList::default())),
+            1,
+            |_, _, _| {
+                future::ready(Err(RequestError::OutboundRequest(
+                    OutboundRequestError::NoResponse,
+                )))
+                .boxed()
+            },
+        );
+        sync.validity_queue.add_peer(peer_id);
+        sync.validity_requests = Some(ValidityChunkRequest {
+            verifier_block_number: request.block_number,
+            root_hash: macro_head.history_root,
+            chunk_index: request.chunk_index as u32,
+            election_in_window: false,
+            last_chunk_items: None,
+        });
+        sync.syncing_peers.insert(peer_id);
+
+        let poll_result =
+            sync.poll_validity_window_chunks(&mut Context::from_waker(noop_waker_ref()));
+
+        assert!(matches!(poll_result, Poll::Pending));
+        assert!(sync.validity_requests.is_none());
+        assert!(sync.syncing_peers.is_empty());
+        assert_eq!(sync.validity_queue.num_peers(), 0);
+        assert!(sync.validity_queue.is_empty());
+
+        sync.start_validity_synchronization(peer_id);
+
+        let resumed_request = sync
+            .validity_requests
+            .as_ref()
+            .expect("validity sync should be restartable after reset");
+        assert_eq!(resumed_request.chunk_index, 0);
+        assert!(sync.syncing_peers.contains(&peer_id));
     }
 }
