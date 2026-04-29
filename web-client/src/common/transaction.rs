@@ -1215,6 +1215,63 @@ impl PlainTransactionDetails {
     }
 }
 
+/// JSON-compatible and human-readable format of transaction receipts.
+#[cfg(feature = "client")]
+#[derive(serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainTransactionReceipt {
+    /// The transaction's unique hash, used as its identifier. Sometimes also called `txId`.
+    pub transaction_hash: String,
+    /// The transaction's block height where it is included in the blockchain.
+    pub block_height: u32,
+}
+
+#[cfg(feature = "client")]
+impl PlainTransactionReceipt {
+    /// Creates a PlainTransactionReceipt struct that can be serialized to JS.
+    pub fn from_receipt(receipt: &(Blake2bHash, u32)) -> Self {
+        Self {
+            transaction_hash: receipt.0.to_hex(),
+            block_height: receipt.1,
+        }
+    }
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "PlainTransaction")]
+    pub type PlainTransactionType;
+
+    #[wasm_bindgen(typescript_type = "PlainTransactionDetails")]
+    pub type PlainTransactionDetailsType;
+
+    #[wasm_bindgen(typescript_type = "PlainTransactionDetails[]")]
+    pub type PlainTransactionDetailsArrayType;
+
+    #[wasm_bindgen(typescript_type = "PlainTransactionReceipt[]")]
+    pub type PlainTransactionReceiptArrayType;
+
+    #[wasm_bindgen(typescript_type = "PlainTransactionRecipientData")]
+    pub type PlainTransactionRecipientDataType;
+
+    #[wasm_bindgen(typescript_type = "PlainTransactionProof")]
+    pub type PlainTransactionProofType;
+}
+
+#[cfg(feature = "primitives")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "Transaction | PlainTransaction | string | Uint8Array")]
+    pub type TransactionAnyType;
+}
+
+#[cfg(not(feature = "primitives"))]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "PlainTransaction | string | Uint8Array")]
+    pub type TransactionAnyType;
+}
+
 #[cfg(all(test, feature = "client"))]
 mod tests {
     use nimiq_keys::Address as NativeAddress;
@@ -1335,61 +1392,4 @@ mod tests {
              not cause a panic via .expect() on None",
         );
     }
-}
-
-/// JSON-compatible and human-readable format of transaction receipts.
-#[cfg(feature = "client")]
-#[derive(serde::Serialize, serde::Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub struct PlainTransactionReceipt {
-    /// The transaction's unique hash, used as its identifier. Sometimes also called `txId`.
-    pub transaction_hash: String,
-    /// The transaction's block height where it is included in the blockchain.
-    pub block_height: u32,
-}
-
-#[cfg(feature = "client")]
-impl PlainTransactionReceipt {
-    /// Creates a PlainTransactionReceipt struct that can be serialized to JS.
-    pub fn from_receipt(receipt: &(Blake2bHash, u32)) -> Self {
-        Self {
-            transaction_hash: receipt.0.to_hex(),
-            block_height: receipt.1,
-        }
-    }
-}
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(typescript_type = "PlainTransaction")]
-    pub type PlainTransactionType;
-
-    #[wasm_bindgen(typescript_type = "PlainTransactionDetails")]
-    pub type PlainTransactionDetailsType;
-
-    #[wasm_bindgen(typescript_type = "PlainTransactionDetails[]")]
-    pub type PlainTransactionDetailsArrayType;
-
-    #[wasm_bindgen(typescript_type = "PlainTransactionReceipt[]")]
-    pub type PlainTransactionReceiptArrayType;
-
-    #[wasm_bindgen(typescript_type = "PlainTransactionRecipientData")]
-    pub type PlainTransactionRecipientDataType;
-
-    #[wasm_bindgen(typescript_type = "PlainTransactionProof")]
-    pub type PlainTransactionProofType;
-}
-
-#[cfg(feature = "primitives")]
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(typescript_type = "Transaction | PlainTransaction | string | Uint8Array")]
-    pub type TransactionAnyType;
-}
-
-#[cfg(not(feature = "primitives"))]
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(typescript_type = "PlainTransaction | string | Uint8Array")]
-    pub type TransactionAnyType;
 }
