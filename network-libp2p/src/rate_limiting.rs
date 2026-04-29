@@ -103,7 +103,7 @@ impl PendingDeletion {
             .expect("First item must exist");
         assert!(
             self.by_peer_and_id
-                .remove(&(expiration.peer_id.clone(), expiration.rate_limit_id.clone()))
+                .remove(&(expiration.peer_id, expiration.rate_limit_id.clone()))
                 .is_some(),
             "The pending for deletion rate limits should be consistent among them"
         );
