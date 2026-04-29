@@ -333,6 +333,9 @@ impl ChainStore {
                     // find if there is a previous non-prunable macro block
                 }
             }
+            if prev_macro_block_number <= Policy::genesis_block_number() {
+                break;
+            }
             prev_macro_block_number = Policy::macro_block_before(prev_macro_block_number);
         }
         Ok(blocks.into_iter().rev().collect())

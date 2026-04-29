@@ -128,6 +128,24 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
             Ok(Block::Micro(_)) => return Err(BatchSetError::MicroBlockGiven),
             Err(_) => return Err(BatchSetError::TargetHashNotFound),
         };
+
+        let prove_history_len =
+            |batch_set_hash: &Blake2bHash, block_number: u32| -> Result<_, BatchSetError> {
+                blockchain
+                    .history_store
+                    .prove_num_leaves(block_number, None)
+                    .map_err(|error| {
+                        log::error!(
+                            error = ?error,
+                            requested_hash = %self.hash,
+                            batch_set_hash = %batch_set_hash,
+                            block_number,
+                            "Failed to prove history size for batch set request"
+                        );
+                        BatchSetError::CouldntProduceHistorySizeProof
+                    })
+            };
+
         // Try to get the epoch chunk hashes following the given macro block.
         // For each hash, fetch the macro block and its history length, and build a batch set.
         // If there are no chunks, create a single batch set with the provided block.
@@ -144,10 +162,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
                     .get_block(&macro_hash, true, None)
                     .expect("Macro block must exist since it can't be pruned");
 
-                let history_len = blockchain
-                    .history_store
-                    .prove_num_leaves(macro_block.block_number(), None)
-                    .expect("Failed to prove history size");
+                let history_len = prove_history_len(&macro_hash, macro_block.block_number())?;
 
                 let batch_set = BatchSet {
                     macro_block: macro_block.unwrap_macro(),
@@ -158,10 +173,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
             batch_sets
         } else {
             // If there are no epoch chunks, create a single batch set from the given macro block.
-            let history_len = blockchain
-                .history_store
-                .prove_num_leaves(block.block_number(), None)
-                .expect("Failed to prove history size");
+            let history_len = prove_history_len(&self.hash, block.block_number())?;
 
             let batch_set = BatchSet {
                 macro_block: block.clone(),

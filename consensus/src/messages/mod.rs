@@ -275,6 +275,8 @@ pub enum BatchSetError {
     TargetHashNotFound,
     #[error("the hash of a micro block was given")]
     MicroBlockGiven,
+    #[error("couldn't produce history size proof")]
+    CouldntProduceHistorySizeProof,
     #[error("unknown error")]
     #[serde(other)]
     Other,
