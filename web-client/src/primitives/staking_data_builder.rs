@@ -81,13 +81,17 @@ impl StakingDataBuilder {
     /// 2. Create a signature proof over the transaction with the staker's keypair
     /// 3. Use `StakingDataBuilder.setProof(tx.data, proof)` to set the created proof on the staking data
     /// 4. Set the updated staking data back on the transaction as `tx.data`
+    ///
+    /// Throws when the number given for `new_active_balance` does not fit within a Coin value.
     #[wasm_bindgen(js_name = setActiveStake)]
-    pub fn set_active_stake(new_active_balance: u64) -> Vec<u8> {
-        IncomingStakingTransactionData::SetActiveStake {
-            new_active_balance: Coin::from_u64_unchecked(new_active_balance),
+    pub fn set_active_stake(new_active_balance: u64) -> Result<Vec<u8>, JsError> {
+        let data = IncomingStakingTransactionData::SetActiveStake {
+            new_active_balance: Coin::try_from(new_active_balance)?,
             proof: nimiq_transaction::SignatureProof::default(),
         }
-        .serialize_to_vec()
+        .serialize_to_vec();
+
+        Ok(data)
     }
 
     /// Creates staking transaction data for retiring stake.
@@ -97,13 +101,17 @@ impl StakingDataBuilder {
     /// 2. Create a signature proof over the transaction with the staker's keypair
     /// 3. Use `StakingDataBuilder.setProof(tx.data, proof)` to set the created proof on the staking data
     /// 4. Set the updated staking data back on the transaction as `tx.data`
+    ///
+    /// Throws when the number given for `retire_stake` does not fit within a Coin value.
     #[wasm_bindgen(js_name = retireStake)]
-    pub fn retire_stake(retire_stake: u64) -> Vec<u8> {
-        IncomingStakingTransactionData::RetireStake {
-            retire_stake: Coin::from_u64_unchecked(retire_stake),
+    pub fn retire_stake(retire_stake: u64) -> Result<Vec<u8>, JsError> {
+        let data = IncomingStakingTransactionData::RetireStake {
+            retire_stake: Coin::try_from(retire_stake)?,
             proof: nimiq_transaction::SignatureProof::default(),
         }
-        .serialize_to_vec()
+        .serialize_to_vec();
+
+        Ok(data)
     }
 
     /// Sets the signature proof on the provided staking transaction data.
@@ -119,5 +127,33 @@ impl StakingDataBuilder {
     #[wasm_bindgen(js_name = removeStake)]
     pub fn remove_stake() -> Vec<u8> {
         OutgoingStakingTransactionData::RemoveStake.serialize_to_vec()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_primitives::coin::Coin;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    use super::StakingDataBuilder;
+
+    #[wasm_bindgen_test]
+    fn set_active_stake_validates_coin_range() {
+        assert!(StakingDataBuilder::set_active_stake(0).is_ok());
+        assert!(StakingDataBuilder::set_active_stake(1).is_ok());
+        assert!(StakingDataBuilder::set_active_stake(Coin::MAX_SAFE_VALUE).is_ok());
+
+        assert!(StakingDataBuilder::set_active_stake(Coin::MAX_SAFE_VALUE + 1).is_err());
+        assert!(StakingDataBuilder::set_active_stake(u64::MAX).is_err());
+    }
+
+    #[wasm_bindgen_test]
+    fn retire_stake_validates_coin_range() {
+        assert!(StakingDataBuilder::retire_stake(0).is_ok());
+        assert!(StakingDataBuilder::retire_stake(1).is_ok());
+        assert!(StakingDataBuilder::retire_stake(Coin::MAX_SAFE_VALUE).is_ok());
+
+        assert!(StakingDataBuilder::retire_stake(Coin::MAX_SAFE_VALUE + 1).is_err());
+        assert!(StakingDataBuilder::retire_stake(u64::MAX).is_err());
     }
 }
