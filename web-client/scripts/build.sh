@@ -67,10 +67,31 @@ function generate() {
 }
 
 # Prepare build environment
-if ! command -v wasm-bindgen &> /dev/null
-then
-    echo "Installing wasm-bindgen..."
-    cargo install wasm-bindgen-cli
+LOCKED_WASM_BINDGEN_VERSION=$(awk '
+    $0 == "name = \"wasm-bindgen\"" { found = 1; next }
+    found && /^version = / { gsub(/version = "|"/, ""); print; exit }
+' ../Cargo.lock)
+
+if [ -z "$LOCKED_WASM_BINDGEN_VERSION" ]; then
+    echo "Error: could not resolve wasm-bindgen version from ../Cargo.lock" >&2
+    exit 1
+fi
+
+if ! command -v wasm-bindgen &> /dev/null; then
+    echo "Error: wasm-bindgen-cli is not installed." >&2
+    echo "Install the version pinned in Cargo.lock with:" >&2
+    echo "    cargo install --locked wasm-bindgen-cli@$LOCKED_WASM_BINDGEN_VERSION" >&2
+    exit 1
+fi
+
+INSTALLED_WASM_BINDGEN_VERSION=$(wasm-bindgen --version | awk '{print $2}')
+if [ "$INSTALLED_WASM_BINDGEN_VERSION" != "$LOCKED_WASM_BINDGEN_VERSION" ]; then
+    echo "Error: wasm-bindgen-cli version mismatch." >&2
+    echo "  Cargo.lock pins:  $LOCKED_WASM_BINDGEN_VERSION" >&2
+    echo "  Installed:        $INSTALLED_WASM_BINDGEN_VERSION" >&2
+    echo "Reinstall with:" >&2
+    echo "    cargo install --locked wasm-bindgen-cli@$LOCKED_WASM_BINDGEN_VERSION" >&2
+    exit 1
 fi
 if ! command -v wasm-opt &> /dev/null
 then

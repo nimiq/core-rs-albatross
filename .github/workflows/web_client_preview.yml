@@ -20,6 +20,18 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+      - name: Resolve wasm-bindgen version from Cargo.lock
+        id: wasm-bindgen
+        run: |
+          VERSION=$(awk '
+            $0 == "name = \"wasm-bindgen\"" { found = 1; next }
+            found && /^version = / { gsub(/version = "|"/, ""); print; exit }
+          ' Cargo.lock)
+          if [ -z "$VERSION" ]; then echo "::error::Could not resolve wasm-bindgen version from Cargo.lock"; exit 1; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@${{ steps.wasm-bindgen.outputs.version }}
       - name: Build package
         working-directory: ./web-client
         run: ./scripts/build.sh
