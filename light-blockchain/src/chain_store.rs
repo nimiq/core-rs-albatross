@@ -369,7 +369,7 @@ impl ChainStore {
         self.chain_db
             .retain(|_, block| should_retain_block(block.head.block_number()));
         self.election_db
-            .retain(|&block_number, _| should_retain_block(block_number));
+            .retain(|_, header| should_retain_block(header.block_number));
     }
 }
 
@@ -479,5 +479,25 @@ mod tests {
                 assert!(true, "Expected error but found Ok instead")
             }
         }
+    }
+
+    #[test]
+    fn clear_old_blocks_retains_recent_election_headers_by_block_number() {
+        let mut store = ChainStore::default();
+        let election_block_number = Policy::genesis_block_number() + Policy::blocks_per_epoch();
+        let epoch_number = Policy::epoch_at(election_block_number);
+        let header = MacroHeader {
+            block_number: election_block_number,
+            ..Default::default()
+        };
+
+        store.put_election(header.clone());
+        store.clear_old_blocks(election_block_number + Policy::blocks_per_batch());
+
+        assert_eq!(store.get_election(epoch_number), Some(&header));
+
+        store.clear_old_blocks(election_block_number + Policy::blocks_per_epoch() + 1);
+
+        assert_eq!(store.get_election(epoch_number), None);
     }
 }
