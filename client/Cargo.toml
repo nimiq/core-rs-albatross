@@ -24,7 +24,7 @@ workspace = true
 futures = { workspace = true }
 log = { workspace = true }
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time", "tracing"] }
-tokio-metrics = "0.4"
+tokio-metrics = "0.5"
 
 nimiq-time = { workspace = true }
 nimiq-utils = { workspace = true, features = ["spawn"] }
