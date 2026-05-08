@@ -32,7 +32,7 @@ ed25519-zebra = "4.2"
 hex = "0.4"
 itertools = "0.14"
 p256 = "0.13"
-rand = "0.9"
+rand = "0.10"
 rand_core_compat = { version = "0.1", features = ["rand_core_0_6", "rand_core_0_9"] }
 serde = { version = "1.0", optional = true }
 sha2 = "0.10"
