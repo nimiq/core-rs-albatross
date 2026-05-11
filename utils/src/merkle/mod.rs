@@ -184,6 +184,26 @@ impl<H: HashOutput> MerklePath<H> {
         self.compute_root_internal::<T>(leaf_value, true)
     }
 
+    /// Compute the root from a leaf that is already hashed. Unlike
+    /// `compute_root`, this does not hash the leaf again — useful when callers
+    /// only have the leaf hash (not the original `T`), e.g. the bridge
+    /// contract's burn-proof verifier.
+    pub fn compute_root_from_hash(&self, leaf_hash: H) -> H {
+        let mut root = leaf_hash;
+        for node in self.nodes.iter() {
+            let mut h = H::Builder::default();
+            if node.left {
+                h.hash(&node.hash);
+            }
+            h.hash(&root);
+            if !node.left {
+                h.hash(&node.hash);
+            }
+            root = h.finish();
+        }
+        root
+    }
+
     fn compute_root_internal<T: SerializeContent>(&self, leaf_value: &T, sorted: bool) -> H {
         let mut root = H::Builder::default().chain(leaf_value).finish();
         for node in self.nodes.iter() {

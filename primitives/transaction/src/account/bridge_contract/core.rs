@@ -57,20 +57,22 @@ impl AnyMerkleProof {
                     .map_err(|_| BridgeError::InvalidMerkleProof)?;
                 Ok(AnyHash::Keccak256(AnyHash32::from(root.as_bytes())))
             }
-            // MerklePath variants - use the leaf hash directly
+            // MerklePath variants — `leaf` here is already the leaf hash, so
+            // use `compute_root_from_hash` to skip MerklePath's internal
+            // re-hashing of the input (which would double-hash the leaf).
             (AnyMerkleProof::Blake2bPath(path), AnyHash::Blake2b(leaf)) => {
                 let leaf_hash = Blake2bHash::from(leaf.0);
-                let root = path.compute_root(&leaf_hash);
+                let root = path.compute_root_from_hash(leaf_hash);
                 Ok(AnyHash::Blake2b(AnyHash32::from(root.as_bytes())))
             }
             (AnyMerkleProof::Sha256Path(path), AnyHash::Sha256(leaf)) => {
                 let leaf_hash = Sha256Hash::from(leaf.0);
-                let root = path.compute_root(&leaf_hash);
+                let root = path.compute_root_from_hash(leaf_hash);
                 Ok(AnyHash::Sha256(AnyHash32::from(root.as_bytes())))
             }
             (AnyMerkleProof::Keccak256Path(path), AnyHash::Keccak256(leaf)) => {
                 let leaf_hash = Keccak256Hash::from(leaf.0);
-                let root = path.compute_root(&leaf_hash);
+                let root = path.compute_root_from_hash(leaf_hash);
                 Ok(AnyHash::Keccak256(AnyHash32::from(root.as_bytes())))
             }
             _ => Err(BridgeError::InvalidMerkleProof),
