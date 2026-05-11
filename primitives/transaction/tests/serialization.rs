@@ -1,7 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
 use log::error;
-use nimiq_hash::Blake2bHasher;
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, ES256PublicKey, ES256Signature, PublicKey, Signature};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize, SerializedMaxSize};
@@ -135,10 +135,16 @@ fn it_cannot_deserialize_webuath_proofs_exceeding_max_size() {
 #[test]
 fn it_cannot_deserialize_merkle_proofs_exceeding_max_size() {
     let mut proof = SignatureProof::default();
-    let values = vec![""; 34];
-    error!("{}", proof.serialized_size());
 
-    proof.merkle_path = MerklePath::new::<Blake2bHasher, &str>(&values, &values[1]);
+    // Build a Merkle path that exceeds MAX_MERKLE_PATH_SIZE. MerklePath::new
+    // only yields ceil(log2(N)) nodes for N leaves, so construct an oversized
+    // path directly from sibling hashes instead. Each node contributes a
+    // 32-byte hash, so this many nodes is guaranteed to exceed the limit.
+    let node_count = Policy::MAX_MERKLE_PATH_SIZE / 32 + 1;
+    proof.merkle_path = MerklePath::from_sibling_hashes(
+        vec![Blake2bHash::default(); node_count],
+        vec![false; node_count],
+    );
 
     let serialized = proof.serialize_to_vec();
 
