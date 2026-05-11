@@ -7,6 +7,7 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::{
     account::{AccountError, AccountType, FailReason},
+    coin::Coin,
     key_nibbles::KeyNibbles,
     trie::{
         error::IncompleteTrie,
@@ -541,8 +542,15 @@ impl Accounts {
         let pruned_account = self.put_or_prune(txn, sender_address, sender_account);
 
         // If sender returned no-op (None receipt) and sender is a Bridge contract,
-        // deduct fee from the transaction signer instead
-        if sender_receipt.is_none() && transaction.sender_type == AccountType::Bridge {
+        // deduct fee from the transaction signer instead. Skip when there is no fee
+        // to deduct: bridges accept permissionless burn submissions with `transaction.proof`
+        // empty and `fee = 0`, and `extract_signer_address` would otherwise fail to
+        // deserialize the empty proof and surface a misleading `InvalidSignature`,
+        // masking the real failure from `commit_outgoing_transaction`.
+        if sender_receipt.is_none()
+            && transaction.sender_type == AccountType::Bridge
+            && transaction.fee != Coin::ZERO
+        {
             return self.deduct_fee_from_signer(txn, transaction, tx_logger, pruned_account);
         }
 
