@@ -107,45 +107,43 @@ impl<H: HashOutput> MerklePath<H> {
         sorted: bool,
     ) -> MerklePath<H> {
         let leaf_hash = D::default().chain(leaf_value).finish();
-        let mut path: Vec<MerklePathNode<D::Output>> = Vec::new();
-        MerklePath::<H>::compute_internal::<D, T>(values, &leaf_hash, &mut path, sorted);
-        MerklePath { nodes: path }
+        let (_, _, nodes) =
+            MerklePath::<H>::compute_internal::<D, T>(values, &leaf_hash, sorted);
+        MerklePath { nodes }
     }
 
+    /// Recursively compute the Merkle root and, if `leaf_hash` is present in
+    /// `values`, the path to the (leftmost) occurrence.
+    ///
+    /// Each recursion returns its own tentative path; the caller keeps the
+    /// side that actually contained the leaf and discards the other. This
+    /// prevents duplicate leaves (same `leaf_hash` appearing in both subtrees)
+    /// from producing spurious path nodes by both recursions pushing to a
+    /// shared buffer.
     fn compute_internal<D: Hasher<Output = H>, T: SerializeContent>(
         values: &[T],
         leaf_hash: &D::Output,
-        path: &mut Vec<MerklePathNode<H>>,
         sorted: bool,
-    ) -> (bool, H) {
+    ) -> (bool, H, Vec<MerklePathNode<H>>) {
         let mut hasher = D::default();
-        let mut contains_leaf = false;
         match values.len() {
             0 => {
                 hasher.write_all(&[]).unwrap();
+                (false, hasher.finish(), Vec::new())
             }
             1 => {
                 hasher.hash(&values[0]);
                 let hash = hasher.finish();
-                return (hash.eq(leaf_hash), hash);
+                (hash.eq(leaf_hash), hash, Vec::new())
             }
             len => {
                 let mid = len.div_ceil(2);
-                let (contains_left, left_hash) = MerklePath::<H>::compute_internal::<D, T>(
-                    &values[..mid],
-                    leaf_hash,
-                    path,
-                    sorted,
-                );
-                let (contains_right, right_hash) = MerklePath::<H>::compute_internal::<D, T>(
-                    &values[mid..],
-                    leaf_hash,
-                    path,
-                    sorted,
-                );
+                let (contains_left, left_hash, left_path) =
+                    MerklePath::<H>::compute_internal::<D, T>(&values[..mid], leaf_hash, sorted);
+                let (contains_right, right_hash, right_path) =
+                    MerklePath::<H>::compute_internal::<D, T>(&values[mid..], leaf_hash, sorted);
 
                 if sorted {
-                    // For sorted mode, hash in lexicographic order
                     if left_hash.as_bytes() <= right_hash.as_bytes() {
                         hasher.hash(&left_hash);
                         hasher.hash(&right_hash);
@@ -158,22 +156,27 @@ impl<H: HashOutput> MerklePath<H> {
                     hasher.hash(&right_hash);
                 }
 
-                if contains_left {
-                    path.push(MerklePathNode {
+                let (contains_leaf, path) = if contains_left {
+                    let mut p = left_path;
+                    p.push(MerklePathNode {
                         hash: right_hash,
                         left: false,
                     });
-                    contains_leaf = true;
+                    (true, p)
                 } else if contains_right {
-                    path.push(MerklePathNode {
+                    let mut p = right_path;
+                    p.push(MerklePathNode {
                         hash: left_hash,
                         left: true,
                     });
-                    contains_leaf = true;
-                }
+                    (true, p)
+                } else {
+                    (false, Vec::new())
+                };
+
+                (contains_leaf, hasher.finish(), path)
             }
-        };
-        (contains_leaf, hasher.finish())
+        }
     }
 
     pub fn compute_root<T: SerializeContent>(&self, leaf_value: &T) -> H {
