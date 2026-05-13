@@ -1090,53 +1090,45 @@ mod tests {
     }
 
     #[test]
-    fn transaction_in_validity_window_works() {
+    fn transaction_in_validity_window_matches_protocol_validity() {
         // Initialize History Store.
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
 
-        // Create historic transactions.
-        let ext_0 = create_transaction(Policy::genesis_block_number() + 1, 0);
-        let ext_1 = create_transaction(Policy::genesis_block_number() + 1, 1);
+        let first_inclusion_block = Policy::genesis_block_number() + 1;
+        let validity_start_height = first_inclusion_block + Policy::blocks_per_batch();
+        let last_valid_block =
+            validity_start_height + Policy::transaction_validity_window_blocks() - 1;
 
-        let hist_txs = vec![ext_0.clone(), ext_1.clone()];
+        // Create a transaction that is first accepted at the earliest possible block in its
+        // validity range. This is the case that used to fall out of replay protection too early.
+        let replay_tx =
+            create_transaction_with_validity_start(first_inclusion_block, 0, validity_start_height);
+        let raw_tx = match &replay_tx.data {
+            HistoricTransactionData::Basic(tx) => tx.get_raw_transaction(),
+            _ => unreachable!("test helper must create a basic transaction"),
+        };
 
-        // Add historic transactions to History Store.
+        assert!(raw_tx.is_valid_at(first_inclusion_block));
+        assert!(raw_tx.is_valid_at(last_valid_block));
+        assert!(!raw_tx.is_valid_at(last_valid_block + 1));
+
+        // Add the transaction to the history store at its first valid block.
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 1, &hist_txs);
+        history_store.add_to_history(&mut txn, first_inclusion_block, &[replay_tx.clone()]);
 
-        // Those transactions should be part of the valitidy window
-        assert!(history_store.tx_in_validity_window(&ext_0.tx_hash(), Some(&txn)));
+        assert!(history_store.tx_in_validity_window(&replay_tx.tx_hash(), Some(&txn)));
 
-        assert!(history_store.tx_in_validity_window(&ext_1.tx_hash(), Some(&txn)));
-
-        // Now keep pushing transactions to the history store until we are past the transaction validity window
-        let validity_window_blocks = Policy::transaction_validity_window_blocks();
-
-        let mut txn_hashes = vec![];
-
-        for bn in 2..validity_window_blocks + 10 {
-            let historic_txn = create_transaction(Policy::genesis_block_number() + bn, bn as u64);
-            txn_hashes.push(historic_txn.tx_hash());
-            history_store.add_to_history(
-                &mut txn,
-                Policy::genesis_block_number() + bn,
-                &[historic_txn],
-            );
+        let validity_store = history_store.validity_store.as_ref().unwrap();
+        for block_number in first_inclusion_block + 1..=last_valid_block {
+            validity_store.update_validity_store(&mut txn, block_number);
         }
 
-        // Since we are past the txn in validity window, the first two transaction should no longer be in it
-        assert!(!history_store.tx_in_validity_window(&ext_0.tx_hash(), Some(&txn)));
+        assert!(history_store.tx_in_validity_window(&replay_tx.tx_hash(), Some(&txn)));
 
-        assert!(!history_store.tx_in_validity_window(&ext_1.tx_hash(), Some(&txn)));
+        validity_store.update_validity_store(&mut txn, last_valid_block + 1);
 
-        for txn_hash in &txn_hashes[..8] {
-            assert!(!history_store.tx_in_validity_window(txn_hash, Some(&txn)));
-        }
-
-        for txn_hash in &txn_hashes[8..] {
-            assert!(history_store.tx_in_validity_window(txn_hash, Some(&txn)));
-        }
+        assert!(!history_store.tx_in_validity_window(&replay_tx.tx_hash(), Some(&txn)));
     }
 
     #[test]
@@ -1577,6 +1569,14 @@ mod tests {
     }
 
     fn create_transaction(block: u32, value: u64) -> HistoricTransaction {
+        create_transaction_with_validity_start(block, value, 0)
+    }
+
+    fn create_transaction_with_validity_start(
+        block: u32,
+        value: u64,
+        validity_start_height: u32,
+    ) -> HistoricTransaction {
         HistoricTransaction {
             network_id: NetworkId::UnitAlbatross,
             block_number: block,
@@ -1590,7 +1590,7 @@ mod tests {
                     Address::burn_address(),
                     Coin::from_u64_unchecked(value),
                     Coin::from_u64_unchecked(0),
-                    0,
+                    validity_start_height,
                     NetworkId::UnitAlbatross,
                 ),
             )),
