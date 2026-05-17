@@ -2259,6 +2259,45 @@ mod tests {
     }
 
     #[test]
+    fn put_chunk_rejects_oversized_child_suffix() {
+        // A `TrieNodeChild.suffix` deserialized from the network used to cause an
+        // out-of-bounds slice panic inside `KeyNibbles::Add` when concatenated with the
+        // proof node's parent key. Both operands pass the `length <= 126` deserialize
+        // check individually, but together they exceed the 63-byte storage buffer.
+        // `put_chunk` must reject such a chunk gracefully instead of panicking.
+        use nimiq_primitives::trie::trie_node::TrieNodeChild;
+
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let trie = MerkleRadixTrie::new_incomplete(&env, TestTrie);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        assert!(!trie.is_complete(&txn));
+
+        let parent_key: KeyNibbles = "a".repeat(40).parse().unwrap();
+        let oversized_suffix: KeyNibbles = "b".repeat(90).parse().unwrap();
+
+        let mut proof_node: TrieProofNode = TrieNode::new_empty(parent_key.clone()).into();
+        // 40 + 90 = 130 nibbles > MAX_BYTES * 2 = 126 — would overflow `Add`.
+        proof_node.children[0] = Some(TrieNodeChild {
+            suffix: oversized_suffix,
+            hash: Blake2bHash::default(),
+        });
+
+        let proof_root = TrieNode::new_root();
+        let expected_hash = proof_root.hash_assert();
+        let proof = TrieProof::new(vec![proof_node, proof_root.into()], Default::default());
+
+        let malicious_chunk =
+            TrieChunk::new(None, vec![TrieItem::new(parent_key, vec![0x42])], proof);
+
+        // The exact error doesn't matter — what matters is that this returns instead
+        // of panicking inside `KeyNibbles::Add`.
+        assert!(trie
+            .put_chunk(&mut txn, KeyNibbles::ROOT, malicious_chunk, expected_hash)
+            .is_err());
+    }
+
+    #[test]
     fn partial_tree_put_chunks_manual() {
         let key_1 = "413f22".parse().unwrap();
         let key_2 = "413".parse().unwrap();

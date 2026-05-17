@@ -48,9 +48,12 @@ impl TrieNodeChild {
         parent_key: &KeyNibbles,
         missing_range: &Option<RangeFrom<KeyNibbles>>,
     ) -> bool {
+        let Some(combined) = parent_key.checked_add(&self.suffix) else {
+            return false;
+        };
         missing_range
             .as_ref()
-            .map(|range| range.contains(&(parent_key + &self.suffix)))
+            .map(|range| range.contains(&combined))
             .unwrap_or(false)
     }
 
@@ -63,10 +66,13 @@ impl TrieNodeChild {
         parent_key: &KeyNibbles,
         missing_range: &Option<RangeFrom<KeyNibbles>>,
     ) -> Result<KeyNibbles, MerkleRadixTrieError> {
+        let combined = parent_key
+            .checked_add(&self.suffix)
+            .ok_or(MerkleRadixTrieError::WrongPrefix)?;
         if self.is_stump(parent_key, missing_range) {
             return Err(MerkleRadixTrieError::ChildIsStump);
         }
-        Ok(parent_key + &self.suffix)
+        Ok(combined)
     }
 }
 
@@ -722,5 +728,33 @@ mod tests {
 
         let root_node = TrieNode::new_root();
         assert_eq!(root_node.value, None);
+    }
+
+    #[test]
+    fn key_rejects_oversized_suffix() {
+        // Both operands deserialize as valid `KeyNibbles` individually (length <= 126),
+        // but their concatenation would overflow the 63-byte buffer in `KeyNibbles::Add`.
+        // `TrieNodeChild::key` must return an error instead of panicking.
+        let cases = [
+            ("a".repeat(40), "b".repeat(90)), // even+even
+            ("a".repeat(41), "b".repeat(87)), // odd+odd
+        ];
+
+        for (parent_str, suffix_str) in &cases {
+            let parent: KeyNibbles = parent_str.parse().unwrap();
+            let suffix: KeyNibbles = suffix_str.parse().unwrap();
+            let child = TrieNodeChild {
+                suffix,
+                hash: Blake2bHash::default(),
+            };
+
+            assert_eq!(
+                child.key(&parent, &None),
+                Err(MerkleRadixTrieError::WrongPrefix),
+            );
+            // `is_stump` is panic-safe too: oversized combined keys cannot lie inside
+            // any `missing_range`, so it must return `false` without invoking `Add`.
+            assert!(!child.is_stump(&parent, &None));
+        }
     }
 }

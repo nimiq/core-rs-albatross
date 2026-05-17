@@ -226,6 +226,16 @@ impl KeyNibbles {
             (false, false) => self.cmp(other),
         }
     }
+
+    /// Concatenates two keys, returning `None` if the combined nibble length would exceed
+    /// the storage capacity (`MAX_BYTES * 2`). Use this at trust boundaries where one of
+    /// the operands is deserialized from an untrusted source.
+    pub fn checked_add(&self, other: &KeyNibbles) -> Option<KeyNibbles> {
+        if self.len() + other.len() > Self::MAX_BYTES * 2 {
+            return None;
+        }
+        Some(self + other)
+    }
 }
 
 impl Default for KeyNibbles {
@@ -510,6 +520,25 @@ mod tests {
         let key2: KeyNibbles = "986".parse().unwrap();
 
         assert_eq!((&key1 + &key2).to_string(), "cfb986");
+    }
+
+    #[test]
+    fn checked_add_rejects_overflow() {
+        // Each operand is individually valid (length <= MAX_BYTES * 2), but their
+        // combined nibble length exceeds the 63-byte storage capacity.
+        let parent_even: KeyNibbles = "a".repeat(40).parse().unwrap();
+        let suffix_even: KeyNibbles = "b".repeat(90).parse().unwrap();
+        assert_eq!(parent_even.checked_add(&suffix_even), None);
+
+        let parent_odd: KeyNibbles = "a".repeat(41).parse().unwrap();
+        let suffix_odd: KeyNibbles = "b".repeat(87).parse().unwrap();
+        assert_eq!(parent_odd.checked_add(&suffix_odd), None);
+
+        // At the limit (sum == 126) the addition still succeeds.
+        let lhs: KeyNibbles = "a".repeat(63).parse().unwrap();
+        let rhs: KeyNibbles = "b".repeat(63).parse().unwrap();
+        let combined = lhs.checked_add(&rhs).expect("sum at the limit should fit");
+        assert_eq!(combined.len(), 126);
     }
 
     #[test]
