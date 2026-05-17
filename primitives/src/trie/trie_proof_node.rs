@@ -80,18 +80,17 @@ impl TrieProofNode {
         self.children.iter().any(|c| c.is_some())
     }
     pub fn child_index(&self, child_prefix: &KeyNibbles) -> Result<usize, MerkleRadixTrieError> {
-        if !self.key.is_prefix_of(child_prefix) {
+        if !self.key.is_prefix_of(child_prefix) || self.key.len() == child_prefix.len() {
             error!(
-                "Child's prefix {} is not a prefix of the node with key {}!",
+                "Child's prefix {} is not a strict prefix of the node with key {}!",
                 child_prefix, self.key,
             );
             return Err(MerkleRadixTrieError::WrongPrefix);
         }
 
-        // Key length has to be smaller or equal to the child prefix length, so this will only panic
-        // when `child_prefix` has the same length as `self.key()`.
-        // PITODO: return error instead of unwrapping
-        Ok(child_prefix.get(self.key.len()).unwrap())
+        child_prefix
+            .get(self.key.len())
+            .ok_or(MerkleRadixTrieError::WrongPrefix)
     }
 
     pub fn child(&self, child_prefix: &KeyNibbles) -> Result<&TrieNodeChild, MerkleRadixTrieError> {

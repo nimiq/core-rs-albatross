@@ -213,7 +213,36 @@ mod tests {
     use nimiq_test_log::test;
 
     use super::*;
-    use crate::trie::trie_node::TrieNode;
+    use crate::trie::{trie_node::TrieNode, trie_proof_node::TrieProofNode};
+
+    #[test]
+    fn verify_rejects_proof_with_duplicate_keys() {
+        let key_leaf: KeyNibbles = "001".parse().unwrap();
+        let key_branch: KeyNibbles = "00".parse().unwrap();
+
+        let leaf = TrieNode::new_leaf(key_leaf.clone(), vec![42]);
+
+        let mut branch = TrieNode::new_empty(key_branch.clone());
+        branch.put_child(&key_leaf, leaf.hash_assert()).unwrap();
+
+        let mut root = TrieNode::new_empty(KeyNibbles::ROOT);
+        root.put_child(&key_branch, branch.hash_assert()).unwrap();
+
+        let branch_proof_node: TrieProofNode = branch.into();
+        let root_proof_node: TrieProofNode = root.clone().into();
+
+        let proof = TrieProof::new(
+            vec![
+                branch_proof_node.clone(),
+                branch_proof_node,
+                root_proof_node,
+            ],
+            Default::default(),
+        );
+
+        let root_hash = root.hash_assert();
+        assert!(!proof.verify(&root_hash));
+    }
 
     // We're going to construct proofs based on this tree:
     //
