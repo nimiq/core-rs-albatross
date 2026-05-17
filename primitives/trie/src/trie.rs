@@ -489,6 +489,16 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
         key: &KeyNibbles,
         missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
     ) -> Result<bool, MerkleRadixTrieError> {
+        // The root node is loaded below and the descent loop's invariant is
+        // `node.key != key`; the ROOT key would violate that on the first
+        // iteration. Reject it cleanly so `apply_diff` returns an error
+        // instead of panicking on an attacker-supplied diff entry.
+        if key.is_empty() {
+            return Err(MerkleRadixTrieError::InvalidChunk(
+                "diff key must not be the root key",
+            ));
+        }
+
         let mut node = self
             .get_root(txn)
             .expect("The Merkle Radix Trie didn't have a root node!");
@@ -497,9 +507,6 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
         let mut new_stump = false;
         // Descend down the tree and collect nodes to be updated.
         loop {
-            // This function should only be called with keys in the missing range.
-            assert_ne!(&node.key, key);
-
             // Check that the key we are trying to update can exist in this part of the tree.
             if !node.key.is_prefix_of(key) {
                 return Err(MerkleRadixTrieError::ChildDoesNotExist);
@@ -2323,6 +2330,32 @@ mod tests {
         assert!(trie
             .put_chunk(&mut txn, KeyNibbles::ROOT, malicious_chunk, expected_hash)
             .is_err());
+    }
+
+    #[test]
+    fn apply_diff_with_root_key_returns_error_instead_of_panicking() {
+        // A ROOT-keyed entry in a TrieDiff used to reach
+        // `update_within_missing_part_raw` and panic on the descent loop's
+        // `assert_ne!(&node.key, key)`; `apply_diff` must return an error.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let trie = MerkleRadixTrie::new_incomplete(&env, TestTrie);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        assert!(!trie.is_complete(&txn));
+
+        let mut diff_map = BTreeMap::new();
+        diff_map.insert(KeyNibbles::ROOT, Some(vec![1, 2, 3]));
+        match trie.apply_diff(&mut txn, TrieDiff(diff_map)) {
+            Err(MerkleRadixTrieError::InvalidChunk(_)) => {}
+            other => panic!("expected InvalidChunk(_), got {:?}", other),
+        }
+
+        let mut diff_map = BTreeMap::new();
+        diff_map.insert(KeyNibbles::ROOT, None);
+        match trie.apply_diff(&mut txn, TrieDiff(diff_map)) {
+            Err(MerkleRadixTrieError::InvalidChunk(_)) => {}
+            other => panic!("expected InvalidChunk(_), got {:?}", other),
+        }
     }
 
     #[test]
