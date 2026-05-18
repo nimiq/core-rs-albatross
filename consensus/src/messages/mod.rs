@@ -606,6 +606,8 @@ pub struct ResponseTrieProof {
 pub enum ResponseTrieProofError {
     #[error("incomplete trie")]
     IncompleteTrie,
+    #[error("empty keys")]
+    EmptyKeys,
     #[error("too many keys")]
     TooManyKeys,
     #[error("duplicate keys")]

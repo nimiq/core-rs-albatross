@@ -1198,6 +1198,13 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
         txn: &MdbxReadTransaction,
         mut keys: Vec<&KeyNibbles>,
     ) -> Result<TrieProof, IncompleteTrie> {
+        if keys.is_empty() {
+            return Ok(TrieProof::new(
+                vec![self.get_root(txn).unwrap().into()],
+                Default::default(),
+            ));
+        }
+
         // We sort the keys in post-order.
         keys.sort_by(|&k1, &k2| k1.post_order_cmp(k2));
 
@@ -1776,6 +1783,27 @@ mod tests {
         let proof = trie.get_proof(&txn, vec![&key_4]).unwrap();
         assert_eq!(proof.nodes.len(), 2);
         assert!(proof.verify(&trie.root_hash_assert(&txn)));
+    }
+
+    #[test]
+    fn get_proof_accepts_empty_key_sets() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let trie = MerkleRadixTrie::new(&env, TestTrie);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+
+        let key: KeyNibbles = "cfb986f5a".parse().unwrap();
+        trie.put(&mut txn, &key, 9u8).expect("complete trie");
+        trie.update_root(&mut txn).expect("complete trie");
+
+        let proof = trie.get_proof(&txn, Vec::new()).unwrap();
+        assert_eq!(proof.nodes.len(), 1);
+        assert!(proof.verify(&trie.root_hash_assert(&txn)));
+
+        let proof_values = proof
+            .verify_values(&trie.root_hash_assert(&txn), &[])
+            .unwrap();
+        assert!(proof_values.is_empty());
     }
 
     #[test]

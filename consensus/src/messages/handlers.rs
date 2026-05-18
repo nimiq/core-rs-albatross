@@ -746,6 +746,9 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTrieProof {
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> Result<ResponseTrieProof, ResponseTrieProofError> {
         // Validate request.
+        if self.keys.is_empty() {
+            return Err(ResponseTrieProofError::EmptyKeys);
+        }
         if self.keys.len() > Self::MAX_KEYS {
             return Err(ResponseTrieProofError::TooManyKeys);
         }

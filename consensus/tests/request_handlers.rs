@@ -103,6 +103,19 @@ fn transaction_receipts_request_without_index_returns_empty_list() {
 }
 
 #[test]
+fn trie_proof_request_rejects_empty_keys() {
+    let blockchain = blockchain_with_accounts();
+
+    let response = <RequestTrieProof as Handle<MockNetwork, Arc<RwLock<Blockchain>>>>::handle(
+        &RequestTrieProof { keys: vec![] },
+        MockPeerId(0),
+        &blockchain,
+    );
+
+    assert!(matches!(response, Err(ResponseTrieProofError::EmptyKeys)));
+}
+
+#[test]
 fn trie_proof_request_rejects_duplicate_missing_keys() {
     let blockchain = blockchain_with_accounts();
     let absent_key: KeyNibbles = "deadbeefdeadbeefdeadbeef01".parse().unwrap();
