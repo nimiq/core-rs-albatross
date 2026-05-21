@@ -11,15 +11,6 @@ pub trait ValidatorInterface {
     /// Returns our validator address.
     async fn get_address(&self) -> RPCResult<Address, (), Self::Error>;
 
-    /// Returns our validator signing key.
-    async fn get_signing_key(&self) -> RPCResult<String, (), Self::Error>;
-
-    /// Returns our current validator voting key.
-    async fn get_voting_key(&self) -> RPCResult<String, (), Self::Error>;
-
-    /// Returns all available voting keys.
-    async fn get_voting_keys(&self) -> RPCResult<Vec<String>, (), Self::Error>;
-
     // Adds a voting key that will be used when the key expected by the chain changes
     async fn add_voting_key(&self, secret_key: String) -> RPCResult<(), (), Self::Error>;
 

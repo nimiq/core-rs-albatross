@@ -6,7 +6,7 @@ use nimiq_consensus::ConsensusProxy;
 use nimiq_keys::Address;
 use nimiq_network_libp2p::Network;
 use nimiq_rpc_interface::{types::RPCResult, validator::ValidatorInterface};
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::Deserialize;
 use nimiq_validator::validator::ValidatorState;
 use parking_lot::RwLock;
 
@@ -33,35 +33,6 @@ impl ValidatorInterface for ValidatorDispatcher {
 
     async fn get_address(&self) -> RPCResult<Address, (), Self::Error> {
         Ok(self.validator.read().validator_address.clone().into())
-    }
-
-    // TODO: why do we give out secret keys via RPC?
-    async fn get_signing_key(&self) -> RPCResult<String, (), Self::Error> {
-        Ok(hex::encode(self.validator.read().signing_key.private.serialize_to_vec()).into())
-    }
-
-    async fn get_voting_key(&self) -> RPCResult<String, (), Self::Error> {
-        Ok(hex::encode(
-            self.validator
-                .read()
-                .voting_keys
-                .get_current_key()
-                .secret_key
-                .serialize_to_vec(),
-        )
-        .into())
-    }
-
-    async fn get_voting_keys(&self) -> RPCResult<Vec<String>, (), Self::Error> {
-        Ok(self
-            .validator
-            .read()
-            .voting_keys
-            .get_keys()
-            .into_iter()
-            .map(|key| hex::encode(key.secret_key.serialize_to_vec()))
-            .collect::<Vec<String>>()
-            .into())
     }
 
     async fn add_voting_key(&self, secret_key: String) -> RPCResult<(), (), Self::Error> {

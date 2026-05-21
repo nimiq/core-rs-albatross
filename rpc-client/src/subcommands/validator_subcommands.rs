@@ -22,12 +22,6 @@ pub enum ValidatorCommand {
     /// Returns the address of the local validator.
     ValidatorAddress {},
 
-    /// Returns the signing key of the local validator.
-    ValidatorSigningKey {},
-
-    /// Returns the voting key of the local validator.
-    ValidatorVotingKey {},
-
     /// Sends a transaction to the network to create this validator. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee and the validator deposit. The sender wallet must be unlocked
     /// prior to this command.
@@ -40,6 +34,9 @@ pub enum ValidatorCommand {
     CreateNewValidator {
         /// The fee will be paid from this address. This address must be already unlocked.
         sender_wallet: Address,
+
+        /// The Schnorr signing secret key used by the validator.
+        signing_secret_key: String,
 
         /// The BLS key used by the validator.
         voting_secret_key: String,
@@ -93,6 +90,9 @@ pub enum ValidatorCommand {
         /// The fee will be paid from this address. This wallet must be already unlocked.
         sender_wallet: Address,
 
+        /// The Schnorr signing secret key used by the validator.
+        signing_secret_key: String,
+
         #[clap(flatten)]
         tx_commons: TxCommon,
     },
@@ -103,6 +103,9 @@ pub enum ValidatorCommand {
     ReactivateValidator {
         /// The fee will be paid from this address. This wallet must be already unlocked.
         sender_wallet: Address,
+
+        /// The Schnorr signing secret key used by the validator.
+        signing_secret_key: String,
 
         #[clap(flatten)]
         tx_commons: TxCommon,
@@ -127,14 +130,6 @@ impl HandleSubcommand for ValidatorCommand {
                 println!("{:#?}", client.validator.get_address().await?);
             }
 
-            ValidatorCommand::ValidatorSigningKey {} => {
-                println!("{:#?}", client.validator.get_signing_key().await?);
-            }
-
-            ValidatorCommand::ValidatorVotingKey {} => {
-                println!("{:#?}", client.validator.get_voting_key().await?);
-            }
-
             ValidatorCommand::SetAutoReactivateValidator {
                 automatic_reactivate,
             } => {
@@ -147,20 +142,20 @@ impl HandleSubcommand for ValidatorCommand {
 
             ValidatorCommand::CreateNewValidator {
                 sender_wallet,
+                signing_secret_key,
                 voting_secret_key,
                 reward_address,
                 signal_data,
                 tx_commons,
             } => {
                 let validator_address = client.validator.get_address().await?.data;
-                let key_data = client.validator.get_signing_key().await?.data;
                 if tx_commons.dry {
                     let tx = client
                         .consensus
                         .create_new_validator_transaction(
                             sender_wallet,
                             validator_address,
-                            key_data,
+                            signing_secret_key,
                             voting_secret_key,
                             reward_address,
                             signal_data,
@@ -175,7 +170,7 @@ impl HandleSubcommand for ValidatorCommand {
                         .send_new_validator_transaction(
                             sender_wallet,
                             validator_address,
-                            key_data,
+                            signing_secret_key,
                             voting_secret_key,
                             reward_address,
                             signal_data,
@@ -231,17 +226,17 @@ impl HandleSubcommand for ValidatorCommand {
 
             ValidatorCommand::DeactivateValidator {
                 sender_wallet,
+                signing_secret_key,
                 tx_commons,
             } => {
                 let validator_address = client.validator.get_address().await?.data;
-                let key_data = client.validator.get_signing_key().await?.data;
                 if tx_commons.dry {
                     let tx = client
                         .consensus
                         .create_deactivate_validator_transaction(
                             sender_wallet,
                             validator_address,
-                            key_data,
+                            signing_secret_key,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )
@@ -253,7 +248,7 @@ impl HandleSubcommand for ValidatorCommand {
                         .send_deactivate_validator_transaction(
                             sender_wallet,
                             validator_address,
-                            key_data,
+                            signing_secret_key,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )
@@ -264,17 +259,17 @@ impl HandleSubcommand for ValidatorCommand {
 
             ValidatorCommand::ReactivateValidator {
                 sender_wallet,
+                signing_secret_key,
                 tx_commons,
             } => {
                 let validator_address = client.validator.get_address().await?.data;
-                let key_data = client.validator.get_signing_key().await?.data;
                 if tx_commons.dry {
                     let tx = client
                         .consensus
                         .create_reactivate_validator_transaction(
                             sender_wallet,
                             validator_address,
-                            key_data,
+                            signing_secret_key,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )
@@ -286,7 +281,7 @@ impl HandleSubcommand for ValidatorCommand {
                         .send_reactivate_validator_transaction(
                             sender_wallet,
                             validator_address,
-                            key_data,
+                            signing_secret_key,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )
