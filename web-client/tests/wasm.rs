@@ -6,7 +6,7 @@ use std::{
 use futures::{poll, Stream, StreamExt};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, BlsCache, Consensus};
-use nimiq_genesis::NetworkId;
+use nimiq_genesis::NetworkId::UnitAlbatross;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_network_mock::MockHub;
@@ -28,7 +28,7 @@ pub async fn it_can_initialize_with_mock_network() {
 
     let mock_network = Arc::new(hub.new_network());
 
-    let blockchain = Arc::new(RwLock::new(LightBlockchain::new(NetworkId::DevAlbatross)));
+    let blockchain = Arc::new(RwLock::new(LightBlockchain::new(UnitAlbatross)));
 
     let blockchain_proxy = BlockchainProxy::from(&blockchain);
 

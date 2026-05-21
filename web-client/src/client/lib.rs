@@ -1393,13 +1393,13 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
-    use nimiq_primitives::policy::{Policy, MAINNET_POLICY};
+    use nimiq_primitives::policy::{Policy, TEST_POLICY};
 
     use super::is_transaction_expired;
 
     #[test]
     fn expiry_check_uses_block_count_not_batch_count() {
-        let _ = Policy::get_or_init(MAINNET_POLICY);
+        let _ = Policy::get_or_init(TEST_POLICY);
 
         let batch_window = Policy::transaction_validity_window();
         let block_window = Policy::transaction_validity_window_blocks();
@@ -1415,8 +1415,8 @@ mod tests {
         );
 
         let validity_start_height = 10_000;
-        let current_height = 10_500;
-        let blocks_elapsed = current_height - validity_start_height;
+        let blocks_elapsed = batch_window + 1;
+        let current_height = validity_start_height + blocks_elapsed;
 
         assert!(
             blocks_elapsed < block_window,
@@ -1435,7 +1435,7 @@ mod tests {
 
     #[test]
     fn expiry_boundary_conditions_match_block_window() {
-        let _ = Policy::get_or_init(MAINNET_POLICY);
+        let _ = Policy::get_or_init(TEST_POLICY);
 
         let block_window = Policy::transaction_validity_window_blocks();
         let current_height = 20_000;

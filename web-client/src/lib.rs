@@ -13,7 +13,7 @@ mod primitives;
 
 #[cfg(test)]
 mod tests {
-    use nimiq_primitives::policy::Policy;
+    use nimiq_primitives::policy::{Policy, TEST_POLICY};
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -28,6 +28,8 @@ mod tests {
 
     #[wasm_bindgen_test]
     pub fn it_can_create_and_sign_basic_transactions() {
+        let _ = Policy::get_or_init(TEST_POLICY);
+
         let keypair = KeyPair::generate();
 
         let mut tx = TransactionBuilder::new_basic(
@@ -54,6 +56,8 @@ mod tests {
 
     #[wasm_bindgen_test]
     pub fn it_can_create_and_sign_validator_transactions() {
+        let _ = Policy::get_or_init(TEST_POLICY);
+
         let keypair = KeyPair::generate();
 
         let mut tx = TransactionBuilder::new_create_validator(

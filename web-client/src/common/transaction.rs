@@ -1271,7 +1271,11 @@ extern "C" {
 #[cfg(all(test, feature = "client"))]
 mod tests {
     use nimiq_keys::Address;
-    use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
+    use nimiq_primitives::{
+        coin::Coin,
+        networks::NetworkId::UnitAlbatross,
+        policy::{Policy, TEST_POLICY},
+    };
     use nimiq_transaction::{
         historic_transaction::{
             EquivocationEvent, HistoricTransaction, HistoricTransactionData, JailEvent,
@@ -1285,7 +1289,7 @@ mod tests {
 
     fn make_penalize_historic_tx() -> HistoricTransaction {
         HistoricTransaction {
-            network_id: NetworkId::UnitAlbatross,
+            network_id: UnitAlbatross,
             block_number: 100,
             block_time: 1000,
             data: HistoricTransactionData::Penalize(PenalizeEvent {
@@ -1298,7 +1302,7 @@ mod tests {
 
     fn make_jail_historic_tx() -> HistoricTransaction {
         HistoricTransaction {
-            network_id: NetworkId::UnitAlbatross,
+            network_id: UnitAlbatross,
             block_number: 100,
             block_time: 1000,
             data: HistoricTransactionData::Jail(JailEvent {
@@ -1312,7 +1316,7 @@ mod tests {
 
     fn make_equivocation_historic_tx() -> HistoricTransaction {
         HistoricTransaction {
-            network_id: NetworkId::UnitAlbatross,
+            network_id: UnitAlbatross,
             block_number: 100,
             block_time: 1000,
             data: HistoricTransactionData::Equivocation(EquivocationEvent {
@@ -1331,7 +1335,7 @@ mod tests {
             Coin::from_u64_unchecked(100),
             Coin::from_u64_unchecked(0),
             1,
-            NetworkId::UnitAlbatross,
+            UnitAlbatross,
         );
         inner.flags = flags;
         Transaction::from(inner)
@@ -1339,7 +1343,7 @@ mod tests {
 
     #[test]
     fn penalize_inherent_does_not_panic_on_conversion() {
-        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
+        let _ = Policy::get_or_init(TEST_POLICY);
         let hist_tx = make_penalize_historic_tx();
         let current_block = Policy::genesis_block_number() + 1;
 
@@ -1361,7 +1365,7 @@ mod tests {
 
     #[test]
     fn jail_inherent_does_not_panic_on_conversion() {
-        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
+        let _ = Policy::get_or_init(TEST_POLICY);
         let hist_tx = make_jail_historic_tx();
         let current_block = Policy::genesis_block_number() + 1;
 
@@ -1383,7 +1387,7 @@ mod tests {
 
     #[test]
     fn equivocation_inherent_does_not_panic_on_conversion() {
-        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
+        let _ = Policy::get_or_init(TEST_POLICY);
         let hist_tx = make_equivocation_historic_tx();
         let current_block = Policy::genesis_block_number() + 1;
 
