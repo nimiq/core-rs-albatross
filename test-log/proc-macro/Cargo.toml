@@ -1,5 +1,6 @@
 [package]
 name = "nimiq-test-log-proc-macro"
+publish = false
 version.workspace = true
 authors = ["Daniel Mueller <deso@posteo.net>"]
 edition.workspace = true
