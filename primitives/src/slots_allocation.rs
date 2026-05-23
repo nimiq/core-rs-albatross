@@ -224,7 +224,15 @@ impl Validators {
                 .voting_key
                 .uncompress()
                 .ok_or(InvalidValidatorsError)?;
-            total_slots += validator.num_slots();
+            // Use `checked_add` so a crafted validator set cannot silently wrap the
+            // running total around `u16` (overflow checks are disabled in the release
+            // profile). Any overflow implies far more than `Policy::SLOTS` slots, so the
+            // set is invalid; rejecting here prevents a wrapped total from slipping
+            // through and later mismatching the `usize` total computed in
+            // `Validators::hash()`
+            total_slots = total_slots
+                .checked_add(validator.num_slots())
+                .ok_or(InvalidValidatorsError)?;
         }
 
         // Check structural invariants that would cause panics in Hash implementation

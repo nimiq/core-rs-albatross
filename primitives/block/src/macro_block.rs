@@ -527,4 +527,46 @@ mod test {
 
         assert_eq!(new_hash, old_hash);
     }
+
+    /// Verifies that `validate_keys()` rejects a validator set whose slot total
+    /// would wrap around `u16` to exactly `Policy::SLOTS`.
+    ///
+    /// Regression test for the u16 accumulation overflow (finding C1, poc3): with
+    /// overflow checks disabled (release profile), a plain `u16 += ` accumulator could
+    /// wrap to `Policy::SLOTS` and let a malformed set pass validation while still
+    /// mismatching the `usize` total computed in `hash()`, re-opening the crash on the
+    /// gossip path. `validate_keys` now uses `checked_add`, which rejects on overflow.
+    #[test]
+    fn validate_keys_rejects_u16_wrapping_slot_total() {
+        use nimiq_keys::SecureGenerate;
+
+        let compressed = nimiq_bls::KeyPair::generate_default_csprng()
+            .public_key
+            .compress();
+
+        // Two validators whose true total slot count is 65535 + 513 = 66048, which
+        // wraps to exactly Policy::SLOTS (512) in u16 arithmetic
+        let validator_a = Validator::new(
+            nimiq_keys::Address::default(),
+            compressed.clone(),
+            SchnorrPublicKey::default(),
+            0..u16::MAX, // 65535 slots
+        );
+        let validator_b = Validator::new(
+            nimiq_keys::Address::default(),
+            compressed,
+            SchnorrPublicKey::default(),
+            0..(Policy::SLOTS + 1), // 513 slots; 65535 + 513 = 66048 ≡ 512 (mod 2^16)
+        );
+        let validators = Validators::new(vec![validator_a, validator_b]);
+
+        // Sanity check: this is exactly the case that wraps a u16 to Policy::SLOTS
+        let true_total: usize = validators.iter().map(|v| v.num_slots() as usize).sum();
+        assert_eq!(true_total, Policy::SLOTS as usize + (1 << 16));
+        assert_eq!(true_total as u16, Policy::SLOTS);
+
+        // `checked_add` must reject it (a plain `u16 +=` accumulator would have wrapped
+        // to Policy::SLOTS and passed)
+        assert!(validators.validate_keys().is_err());
+    }
 }
