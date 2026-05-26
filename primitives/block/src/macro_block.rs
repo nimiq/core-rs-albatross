@@ -528,6 +528,41 @@ mod test {
         assert_eq!(new_hash, old_hash);
     }
 
+    /// Verifies that `Validators::hash()` does not panic when the validator set has
+    /// an invalid total slot count, and that `validate_keys()` rejects it.
+    ///
+    /// Regression test for the election-macro-block crash (finding C1): on the
+    /// sync/request paths (`Blockchain::push`, `LightBlockchain::push`,
+    /// `push_history_sync`, `push_zkp`) the block hash is computed *before*
+    /// verification, so an unconditional assertion in `hash()` would crash the node
+    /// on a single malformed block. Before the fix, `hash()` asserted
+    /// `total_slots == Policy::SLOTS` and would panic here.
+    #[test]
+    fn hash_with_wrong_slot_total_does_not_panic() {
+        use nimiq_hash::{Blake2sHash, Hash};
+        use nimiq_keys::SecureGenerate;
+
+        let compressed = nimiq_bls::KeyPair::generate_default_csprng()
+            .public_key
+            .compress();
+
+        // Wrong total slot count: Policy::SLOTS + 1 is neither equal to
+        // Policy::SLOTS nor a multiple of PK_TREE_BREADTH
+        let validator = Validator::new(
+            nimiq_keys::Address::default(),
+            compressed,
+            SchnorrPublicKey::default(),
+            0..(Policy::SLOTS + 1),
+        );
+        let validators = Validators::new(vec![validator]);
+
+        // Must not panic even though the slot total is invalid
+        let _hash: Blake2sHash = validators.hash();
+
+        // And the malformed set must be rejected during verification
+        assert!(validators.validate_keys().is_err());
+    }
+
     /// Verifies that `validate_keys()` rejects a validator set whose slot total
     /// would wrap around `u16` to exactly `Policy::SLOTS`.
     ///

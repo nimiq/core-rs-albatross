@@ -260,14 +260,6 @@ impl Hash for Validators {
     /// This function is meant to calculate the public key tree "off-circuit". Generating the public key
     /// tree with this function guarantees that it is compatible with the ZK circuit.
     fn hash<H: HashOutput>(&self) -> H {
-        let total_slots: usize = self.iter().map(|v| v.num_slots() as usize).sum();
-
-        // Checking that the number of slots is equal to the expected number of validator slots.
-        assert_eq!(total_slots, Policy::SLOTS as usize);
-
-        // Checking that the number of slots is a multiple of the number of leaves.
-        assert_eq!(total_slots % PK_TREE_BREADTH, 0);
-
         // Use the raw compressed key bytes directly instead of decompressing to
         // G2Projective and re-serializing. For valid keys, the canonical compressed
         // serialization is a fixed-point of the uncompress -> serialize_compressed
