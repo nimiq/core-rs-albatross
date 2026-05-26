@@ -123,8 +123,9 @@ impl<N: Network> BlockQueue<N> {
         let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
         let blockchain_rx = blockchain.read().notifier_as_stream();
         let fork_rx = blockchain.read().fork_notifier_as_stream();
+        let network_id = blockchain.read().network_id();
         let request_component =
-            BlockRequestComponent::new(Arc::clone(&network), config.include_body);
+            BlockRequestComponent::new(Arc::clone(&network), network_id, config.include_body);
 
         Self {
             config,

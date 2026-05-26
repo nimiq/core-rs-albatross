@@ -18,7 +18,7 @@ use nimiq_network_interface::{
     network::{Network, NetworkEvent},
     request::RequestError,
 };
-use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
+use nimiq_primitives::{networks::NetworkId, policy::Policy, slots_allocation::Validators};
 use nimiq_utils::spawn;
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -110,7 +110,8 @@ pub struct SyncQueueError {
 /// The public interface allows to request blocks, which are not immediately returned.
 /// The blocks instead are returned by polling the component.
 pub struct BlockRequestComponent<N: Network> {
-    sync_queue: SyncQueue<N, MissingBlockRequest, MissingBlockResponse<N>, MissingBlockError, ()>, // requesting missing blocks from peers
+    sync_queue:
+        SyncQueue<N, MissingBlockRequest, MissingBlockResponse<N>, MissingBlockError, NetworkId>, // requesting missing blocks from peers
     peers: Arc<RwLock<PeerList<N>>>,
     include_body: bool,
     /// Pending requests.
@@ -120,7 +121,7 @@ pub struct BlockRequestComponent<N: Network> {
 impl<N: Network> BlockRequestComponent<N> {
     const NUM_PENDING_BLOCKS: usize = 5;
 
-    pub fn new(network: Arc<N>, include_body: bool) -> Self {
+    pub fn new(network: Arc<N>, network_id: NetworkId, include_body: bool) -> Self {
         let peers = Arc::new(RwLock::new(PeerList::default()));
         let mut network_event_rx = network.subscribe_events();
 
@@ -172,7 +173,7 @@ impl<N: Network> BlockRequestComponent<N> {
                     }
                     .boxed()
                 },
-                |request, response, _| {
+                |request, response, network_id| {
                     // We check general consistency for the response:
                     // 1. Check that the blocks end on target block or macro block
                     // 2. Verify macro block signature (last block)
@@ -203,6 +204,23 @@ impl<N: Network> BlockRequestComponent<N> {
                                 has_body = block.has_body(),
                                 include_body = request.include_body,
                                 "Received block with body where none was expected or vice versa",
+                            );
+                            return false;
+                        }
+
+                        // Verify the header before the chain is hashed below, to cheaply reject
+                        // malformed blocks (wrong network/version, oversized extra data, or — for
+                        // election blocks — an invalid validator set) without buffering them.
+                        // `max_timestamp` is `u64::MAX` because these are historical blocks
+                        // requested by hash/height: the future-drift check is only meaningful for
+                        // live blocks and is re-applied with the real clock at push time
+                        if let Err(error) =
+                            block.verify_header(*network_id, block.is_skip(), u64::MAX)
+                        {
+                            log::error!(
+                                %block,
+                                %error,
+                                "Received missing block with an invalid header"
                             );
                             return false;
                         }
@@ -270,7 +288,7 @@ impl<N: Network> BlockRequestComponent<N> {
 
                     true
                 },
-                (),
+                network_id,
             ),
             peers,
             include_body,
