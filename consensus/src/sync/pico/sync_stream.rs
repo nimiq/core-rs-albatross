@@ -11,9 +11,12 @@ use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent};
 use nimiq_primitives::policy::Policy;
 
-use crate::sync::{
-    pico::PicoMacroSync,
-    sync_interface::{MacroSync, MacroSyncReturn},
+use crate::{
+    messages::BlockError,
+    sync::{
+        pico::PicoMacroSync,
+        sync_interface::{MacroSync, MacroSyncReturn},
+    },
 };
 
 impl<TNetwork: Network> PicoMacroSync<TNetwork> {
@@ -230,6 +233,12 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
                         let future = Self::request_head(Arc::clone(&self.network), peer_id).boxed();
                         self.head_stream.push(future);
                     }
+                }
+                // A peer that replies with a block other than the requested one is either
+                // buggy or malicious; either way we ban it
+                (Ok(Err(BlockError::ResponseHashMismatch)), peer_id) => {
+                    log::warn!(%peer_id, "Banning peer that replied with a block other than the requested one");
+                    self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
                 }
                 (Ok(Err(error)), peer_id) => {
                     trace!(%error, %peer_id, "Received a response for a failed request on the remote side");

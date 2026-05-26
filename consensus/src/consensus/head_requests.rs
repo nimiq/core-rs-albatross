@@ -18,7 +18,7 @@ use nimiq_network_interface::{
 };
 use nimiq_utils::{spawn, stream::FuturesUnordered};
 
-use crate::messages::{BlockError, RequestBlock, RequestHead, ResponseHead};
+use crate::messages::{BlockError, RequestHead, ResponseHead};
 
 /// Requests the head blocks for a set of peers.
 /// Calculates the number of known/unknown blocks and a vector of unknown blocks.
@@ -100,35 +100,6 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
             .request::<RequestHead>(RequestHead {}, peer_id)
             .await
     }
-
-    /// Requests a block by hash from the specified peer, optionally including the body.
-    ///
-    /// Verifies that the returned block matches the requested hash.
-    async fn request_block(
-        network: Arc<TNetwork>,
-        peer_id: TNetwork::PeerId,
-        hash: Blake2bHash,
-        include_body: bool,
-    ) -> Result<Result<Block, BlockError>, RequestError> {
-        network
-            .request::<RequestBlock>(
-                RequestBlock {
-                    hash: hash.clone(),
-                    include_body,
-                },
-                peer_id,
-            )
-            .await
-            .map(|block_res| {
-                // Modify response if the block received does not correspond to the one requested.
-                Ok(block_res.and_then(|mut block| {
-                    if block.hash_cached() != hash {
-                        return Err(BlockError::ResponseHashMismatch);
-                    }
-                    Ok(block)
-                }))
-            })?
-    }
 }
 
 impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
@@ -159,8 +130,13 @@ impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
                             self.head_blocks.push(
                                 async move {
                                     (
-                                        Self::request_block(network, peer_id, hash, include_body)
-                                            .await,
+                                        crate::sync::request_block(
+                                            network,
+                                            peer_id,
+                                            hash,
+                                            include_body,
+                                        )
+                                        .await,
                                         peer_id,
                                     )
                                 }

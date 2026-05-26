@@ -10,8 +10,7 @@ use nimiq_network_interface::{
 
 use crate::{
     messages::{
-        BlockError, MacroChain, MacroChainError, RequestBlock, RequestHead, RequestMacroChain,
-        ResponseHead,
+        BlockError, MacroChain, MacroChainError, RequestHead, RequestMacroChain, ResponseHead,
     },
     sync::{pico::PicoMacroSync, sync_interface::PeerMacroRequests},
 };
@@ -93,16 +92,8 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
         peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
     ) -> Result<Result<Block, BlockError>, RequestError> {
-        // We will only request macro blocks, so we always need the body
-        network
-            .request::<RequestBlock>(
-                RequestBlock {
-                    hash,
-                    include_body: false,
-                },
-                peer_id,
-            )
-            .await
+        // Macro sync only needs the header, so the body is not requested
+        crate::sync::request_block(network, peer_id, hash, false).await
     }
 
     /// Requests the macro chain to the given peer.

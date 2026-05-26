@@ -16,9 +16,12 @@ use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent};
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_component::types::ZKPRequestEvent::{OutdatedProof, Proof};
 
-use crate::sync::{
-    light::LightMacroSync,
-    sync_interface::{MacroSync, MacroSyncReturn},
+use crate::{
+    messages::BlockError,
+    sync::{
+        light::LightMacroSync,
+        sync_interface::{MacroSync, MacroSyncReturn},
+    },
 };
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
@@ -420,6 +423,12 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         .boxed();
                         self.epoch_ids_stream.push(future);
                     }
+                }
+                // A peer that replies with a block other than the requested one is either
+                // buggy or malicious; either way we ban it
+                (Ok(Err(BlockError::ResponseHashMismatch)), peer_id) => {
+                    log::warn!(%peer_id, "Banning peer that replied with a block other than the requested one");
+                    self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
                 }
                 (Ok(Err(error)), peer_id) => {
                     trace!(%error, %peer_id, "Received a response for a failed request on the remote side");

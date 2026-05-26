@@ -242,16 +242,24 @@ impl<N: Network> BlockRequestComponent<N> {
                         return false;
                     }
 
-                    // Check that the last block is valid.
-                    // The last block must be the target block or a macro block.
+                    // Check that the last block is valid. If it is at the target height it must
+                    // be the requested target block, i.e. its hash must match the requested one
+                    // (this holds for both macro and micro target blocks). Otherwise it must be
+                    // an intermediate macro block below the target that serves as a valid
+                    // stopping point; the rest of the chain up to the target is fetched by
+                    // follow-up requests.
                     let last_block = blocks.last_mut().unwrap(); // cannot be empty
                     let block_hash = last_block.hash_cached();
-                    if !(last_block.is_macro()
-                        || (last_block.block_number() == request.target_block_number
-                            && block_hash == request.target_block_hash))
-                    {
+                    let valid_last_block =
+                        if last_block.block_number() == request.target_block_number {
+                            block_hash == request.target_block_hash
+                        } else {
+                            last_block.is_macro()
+                        };
+                    if !valid_last_block {
                         log::error!(
                             request.target_block_number,
+                            last_block = last_block.block_number(),
                             %block_hash,
                             %request.target_block_hash,
                             "Received invalid missing blocks (invalid target block)"
