@@ -20,6 +20,7 @@ mod utils;
 
 pub const DISCOVERY_PROTOCOL: &str = "/nimiq/discovery/0.0.1";
 pub const DHT_PROTOCOL: &str = "/nimiq/kad/0.0.1";
+pub const IDENTIFY_PROTOCOL: &str = "/nimiq/identify/0.0.1";
 pub const AUTONAT_DIAL_REQUEST_PROTOCOL: &str = "/libp2p/autonat/2/dial-request";
 pub const AUTONAT_DIAL_BACK_PROTOCOL: &str = "/libp2p/autonat/2/dial-back";
 

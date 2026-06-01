@@ -71,4 +71,14 @@ impl NetworkInterface for NetworkDispatcher {
 
         Ok(rpc_address_book.into())
     }
+
+    async fn get_peer_user_agents(&self) -> RPCResult<Vec<(String, String)>, (), Self::Error> {
+        Ok(self
+            .network
+            .get_peer_user_agents()
+            .into_iter()
+            .map(|(peer_id, user_agent)| (peer_id.to_string(), user_agent))
+            .collect::<Vec<_>>()
+            .into())
+    }
 }

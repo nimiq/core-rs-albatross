@@ -2,7 +2,7 @@ use std::{iter, sync::Arc};
 
 use libp2p::{
     autonat::v2::{self as autonat, client::Config as AutonatConfig},
-    connection_limits, gossipsub,
+    connection_limits, gossipsub, identify,
     kad::{self, store::MemoryStore},
     ping, request_response,
     swarm::NetworkBehaviour,
@@ -15,7 +15,7 @@ use crate::{
     connection_pool::behaviour::Config as PoolConfig,
     discovery::{self, peer_contacts::PeerContactBook},
     dispatch::codecs::MessageCodec,
-    Config,
+    Config, IDENTIFY_PROTOCOL,
 };
 
 /// Maximum simultaneous libp2p connections per peer
@@ -39,6 +39,7 @@ pub struct Behaviour {
     #[cfg(feature = "kad")]
     pub dht: kad::Behaviour<MemoryStore>,
     pub gossipsub: gossipsub::Behaviour,
+    pub identify: identify::Behaviour,
     pub ping: ping::Behaviour,
     pub request_response: request_response::Behaviour<MessageCodec>,
 }
@@ -79,6 +80,11 @@ impl Behaviour {
         gossipsub
             .with_peer_score(peer_score_params, thresholds)
             .expect("Valid score params and thresholds");
+
+        let identify = identify::Behaviour::new(
+            identify::Config::new(IDENTIFY_PROTOCOL.to_string(), public_key)
+                .with_agent_version(config.user_agent.clone()),
+        );
 
         // Ping behaviour:
         // - Send a ping every 15 seconds and timeout at 20 seconds.
@@ -133,6 +139,7 @@ impl Behaviour {
             dht,
             discovery,
             gossipsub,
+            identify,
             ping,
             pool,
             request_response,

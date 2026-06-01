@@ -23,6 +23,8 @@ pub struct TlsConfig {
 pub struct Config {
     pub keypair: Keypair,
     pub peer_contact: PeerContact,
+    /// User-agent string announced to peers via libp2p identify.
+    pub user_agent: String,
     pub seeds: Vec<Multiaddr>,
     pub discovery: discovery::Config,
     pub kademlia: kad::Config,
@@ -50,6 +52,7 @@ impl Config {
     pub fn new(
         keypair: Keypair,
         peer_contact: PeerContact,
+        user_agent: String,
         seeds: Vec<Multiaddr>,
         genesis_hash: Blake2bHash,
         memory_transport: bool,
@@ -97,6 +100,7 @@ impl Config {
         Self {
             keypair,
             peer_contact,
+            user_agent,
             seeds,
             discovery: discovery::Config::new(
                 genesis_hash,

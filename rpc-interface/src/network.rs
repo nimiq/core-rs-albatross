@@ -18,4 +18,7 @@ pub trait NetworkInterface {
 
     /// Returns the address book
     async fn get_address_book(&self) -> RPCResult<Vec<(String, PeerType)>, (), Self::Error>;
+
+    /// Returns user-agent strings announced by connected peers.
+    async fn get_peer_user_agents(&self) -> RPCResult<Vec<(String, String)>, (), Self::Error>;
 }

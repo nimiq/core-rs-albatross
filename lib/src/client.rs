@@ -335,6 +335,7 @@ impl ClientInner {
         let network_config = NetworkConfig::new(
             identity_keypair,
             peer_contact,
+            config.network.user_agent.to_string(),
             seeds,
             network_info.genesis_hash().clone(),
             false,
