@@ -63,11 +63,15 @@ impl Mempool {
     /// Default total size limit of control transactions in the mempool (bytes)
     pub const DEFAULT_CONTROL_SIZE_LIMIT: usize = 6_000_000;
 
+    /// Default maximum number of transactions per sender stored in the mempool
+    pub const DEFAULT_TX_PER_SENDER_LIMIT: usize = 1000;
+
     /// Creates a new mempool
     pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Self {
         let state = Arc::new(RwLock::new(MempoolState::new(
             config.size_limit,
             config.control_size_limit,
+            config.tx_per_sender_limit,
         )));
 
         Self {

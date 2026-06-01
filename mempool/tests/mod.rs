@@ -11,7 +11,9 @@ use nimiq_keys::{
     Address, Ed25519PublicKey as SchnorrPublicKey, KeyPair as SchnorrKeyPair,
     PrivateKey as SchnorrPrivateKey, SecureGenerate,
 };
-use nimiq_mempool::{config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority};
+use nimiq_mempool::{
+    config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority, verify::VerifyErr,
+};
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
@@ -2202,5 +2204,102 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
         mempool.num_transactions(),
         0,
         "Number of txns in the mempools is not what is expected"
+    );
+}
+
+#[test(tokio::test)]
+async fn tx_per_sender_limit_is_enforced() {
+    let tx_per_sender_limit = 3_usize;
+    let num_recipients = tx_per_sender_limit + 1;
+
+    let mut rng = test_rng(true);
+    let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
+
+    // One sender with enough balance for all transactions
+    let sender_accounts =
+        generate_accounts(vec![1_000_000; 1], &mut genesis_builder, true, &mut rng);
+    // One distinct recipient per transaction
+    let recipient_accounts = generate_accounts(
+        vec![0; num_recipients],
+        &mut genesis_builder,
+        false,
+        &mut rng,
+    );
+
+    let mut mempool_transactions = vec![];
+    for i in 0..num_recipients {
+        mempool_transactions.push(TestTransaction {
+            fee: (i + 1) as u64,
+            value: 1,
+            sender: sender_accounts[0].clone(),
+            recipient: recipient_accounts[i].clone(),
+        });
+    }
+    let (txns, _) = generate_transactions(mempool_transactions, true);
+
+    let mut rng2 = test_rng(true);
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng2)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng2).public_key,
+        Address::default(),
+        None,
+        None,
+        false,
+    );
+
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+
+    let genesis_block = match genesis_info.block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            BlockchainConfig::default(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+
+    let mempool = Mempool::new(
+        Arc::clone(&blockchain),
+        MempoolConfig {
+            tx_per_sender_limit,
+            ..Default::default()
+        },
+    );
+
+    // The first `tx_per_sender_limit` transactions must be accepted.
+    for tx in txns.iter().take(tx_per_sender_limit) {
+        assert_eq!(
+            mempool.add_transaction(tx.clone(), None),
+            Ok(()),
+            "Expected transaction to be accepted"
+        );
+    }
+    assert_eq!(mempool.num_transactions(), tx_per_sender_limit);
+
+    // The next transaction from the same sender must be rejected.
+    assert_eq!(
+        mempool.add_transaction(txns[tx_per_sender_limit].clone(), None),
+        Err(VerifyErr::SenderLimitReached),
+        "Expected transaction to be rejected due to per-sender limit"
+    );
+    assert_eq!(
+        mempool.num_transactions(),
+        tx_per_sender_limit,
+        "Mempool size should be unchanged after rejected transaction"
     );
 }

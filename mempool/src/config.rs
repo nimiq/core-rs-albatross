@@ -10,6 +10,8 @@ pub struct MempoolConfig {
     pub size_limit: usize,
     /// Total size limit of transactions in the control mempool (bytes)
     pub control_size_limit: usize,
+    /// Maximum number of transactions stored per sender
+    pub tx_per_sender_limit: usize,
     /// Mempool filter rules
     pub filter_rules: MempoolRules,
     /// Mempool filter limit or size
@@ -21,6 +23,7 @@ impl Default for MempoolConfig {
         MempoolConfig {
             size_limit: Mempool::DEFAULT_SIZE_LIMIT,
             control_size_limit: Mempool::DEFAULT_CONTROL_SIZE_LIMIT,
+            tx_per_sender_limit: Mempool::DEFAULT_TX_PER_SENDER_LIMIT,
             filter_rules: MempoolRules::default(),
             filter_limit: MempoolFilter::DEFAULT_BLACKLIST_SIZE,
         }

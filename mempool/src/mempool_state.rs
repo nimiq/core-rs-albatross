@@ -26,16 +26,24 @@ pub(crate) struct MempoolState {
     // The pending balance per sender.
     pub(crate) state_by_sender: HashMap<Address, SenderPendingState>,
 
+    // Maximum number of transactions stored per sender.
+    pub(crate) tx_per_sender_limit: usize,
+
     #[cfg(feature = "metrics")]
     pub(crate) metrics: Arc<MempoolMetrics>,
 }
 
 impl MempoolState {
-    pub fn new(regular_txns_limit: usize, control_txns_limit: usize) -> Self {
+    pub fn new(
+        regular_txns_limit: usize,
+        control_txns_limit: usize,
+        tx_per_sender_limit: usize,
+    ) -> Self {
         MempoolState {
             regular_transactions: MempoolTransactions::new(regular_txns_limit),
             control_transactions: MempoolTransactions::new(control_txns_limit),
             state_by_sender: HashMap::new(),
+            tx_per_sender_limit,
             #[cfg(feature = "metrics")]
             metrics: Default::default(),
         }
@@ -65,6 +73,13 @@ impl MempoolState {
         let tx_hash = tx.hash();
         if self.contains(&tx_hash) {
             return Err(VerifyErr::Known);
+        }
+
+        // Reject if this sender already has too many transactions in the mempool.
+        if let Some(sender_state) = self.state_by_sender.get(&tx.sender)
+            && sender_state.txns.len() >= self.tx_per_sender_limit
+        {
+            return Err(VerifyErr::SenderLimitReached);
         }
 
         // Reserve the balance necessary for this transaction on the sender account.

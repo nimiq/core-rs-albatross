@@ -808,6 +808,7 @@ impl ClientConfigBuilder {
         self.mempool = Some(MempoolConfig {
             size_limit,
             control_size_limit,
+            tx_per_sender_limit: MempoolConfig::default().tx_per_sender_limit,
             filter_rules,
             filter_limit,
         });

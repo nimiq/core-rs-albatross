@@ -315,6 +315,10 @@ level = "debug"
 # Default: 6_000_000
 #control_size_limit = 6_000_000
 
+# Maximum number of transactions per sender stored in the mempool.
+# Default: 1000
+#tx_per_sender_limit = 1000
+
 # Maximum size of the transaction black list.
 # Default: 25000
 #blacklist_limit = 25000

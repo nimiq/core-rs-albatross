@@ -28,6 +28,8 @@ pub enum VerifyErr {
     Filtered,
     #[error("Can't verify transaction without consensus")]
     NoConsensus,
+    #[error("Sender has reached the maximum number of transactions in the mempool")]
+    SenderLimitReached,
 }
 
 /// Verifies a transaction and adds it to the mempool.
