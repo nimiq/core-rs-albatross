@@ -335,6 +335,7 @@ impl Accounts {
         diff: TrieDiff,
     ) -> Result<RevertTrieDiff, AccountsError> {
         let diff = self.tree.apply_diff(txn, diff)?;
+        // The trie may be incomplete, so a root-update failure is expected.
         self.tree.update_root(txn).ok();
         Ok(diff)
     }
@@ -587,12 +588,15 @@ impl Accounts {
                     receipts,
                     block_logger,
                 )?;
+                // Full revert: the trie must always be complete.
+                self.tree.update_root(txn)?;
             }
             RevertInfo::Diff(diff) => {
                 self.revert_diff(txn, diff)?;
+                // The trie may be incomplete, so a root-update failure is expected.
+                self.tree.update_root(txn).ok();
             }
         }
-        self.tree.update_root(txn).ok();
         Ok(())
     }
 
