@@ -9,7 +9,11 @@ use nimiq_database::{mdbx::MdbxReadTransaction as DBTransaction, traits::WriteTr
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{
-    account::AccountError, key_nibbles::KeyNibbles, policy::Policy, slots_allocation::Slot,
+    account::{AccountError, AccountType},
+    coin::Coin,
+    key_nibbles::KeyNibbles,
+    policy::Policy,
+    slots_allocation::Slot,
 };
 use nimiq_transaction::{historic_transaction::RawTransactionHash, Transaction};
 
@@ -190,6 +194,51 @@ impl Blockchain {
         self.state
             .accounts
             .release_balance(account, transaction, reserved_balance, None)
+    }
+
+    /// For a bridge-sender transaction with a non-zero fee, reserve the fee against the
+    /// burn-proof signer's account. A permissionless bridge burn-release pays its fee
+    /// from the signer at commit (the bridge itself reserves/deducts only `value`), so
+    /// the fee must be reserved against the signer here or the transaction could pass
+    /// mempool admission and then fail at commit. No-op for non-bridge or zero-fee txs.
+    ///
+    /// The fee is reserved within the bridge sender's `ReservedBalance` (via `reserve_for`),
+    /// which aggregates multiple burn-releases routed through the same bridge by the same
+    /// signer. NOTE (#9 follow-up): it does not aggregate a signer's obligations across
+    /// different bridges or with the signer's own (non-bridge) transactions; those
+    /// topologies can still over-commit a signer and need the signer-bucket tracking.
+    pub fn reserve_bridge_signer_fee(
+        &self,
+        transaction: &Transaction,
+        reserved_balance: &mut ReservedBalance,
+    ) -> Result<(), AccountError> {
+        if transaction.sender_type != AccountType::Bridge || transaction.fee == Coin::ZERO {
+            return Ok(());
+        }
+
+        let signer = self.state.accounts.extract_signer_address(transaction)?;
+        let signer_balance = self
+            .get_account_if_complete(&signer)
+            .map(|account| account.balance())
+            .unwrap_or(Coin::ZERO);
+
+        reserved_balance.reserve_for(&signer, signer_balance, transaction.fee)
+    }
+
+    /// Release a previously reserved bridge signer fee (inverse of
+    /// [`Self::reserve_bridge_signer_fee`]). No-op for non-bridge or zero-fee txs.
+    pub fn release_bridge_signer_fee(
+        &self,
+        transaction: &Transaction,
+        reserved_balance: &mut ReservedBalance,
+    ) {
+        if transaction.sender_type != AccountType::Bridge || transaction.fee == Coin::ZERO {
+            return;
+        }
+
+        if let Ok(signer) = self.state.accounts.extract_signer_address(transaction) {
+            reserved_balance.release_for(&signer, transaction.fee);
+        }
     }
 
     /// Checks if we have seen some transaction with this hash inside the validity window. This is

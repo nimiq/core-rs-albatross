@@ -470,6 +470,11 @@ impl Mempool {
                 };
                 let still_valid = blockchain
                     .reserve_balance(&sender_account, tx, &mut sender_state.reserved_balance)
+                    .and_then(|()| {
+                        // Re-reserve the bridge signer fee too (no-op for non-bridge txs),
+                        // mirroring `MempoolState::put`.
+                        blockchain.reserve_bridge_signer_fee(tx, &mut sender_state.reserved_balance)
+                    })
                     .is_ok();
                 if !still_valid {
                     mempool_state.remove(blockchain, tx_hash, EvictionReason::Invalid);

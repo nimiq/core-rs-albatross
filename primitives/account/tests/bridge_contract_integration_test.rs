@@ -1,6 +1,8 @@
 use nimiq_account::{
-    Account, BasicAccount, BlockLogger, BlockState, BridgeContract, TransactionOperationReceipt,
+    Account, AccountTransactionInteraction, BasicAccount, BlockLogger, BlockState, BridgeContract,
+    ReservedBalance, TransactionOperationReceipt,
 };
+use nimiq_database::traits::Database;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
@@ -633,4 +635,80 @@ fn fee_for_failed_outgoing_tx_is_charged_to_sender_data_signer() {
         accounts.get_complete(&victim_address, None).balance(),
         initial_victim_balance,
     );
+}
+
+/// Regression test (#9): an outgoing bridge burn-release reserves only `value` against
+/// the bridge balance, NOT `value + fee`. The fee is paid by the burn-proof signer and
+/// is reserved against the signer by the mempool (`reserve_bridge_signer_fee`), not
+/// against the bridge here. Before the fix `reserve_balance` reserved `total_value`,
+/// which both over-reserved the bridge and left the signer fee unreserved.
+#[test]
+fn reserve_balance_excludes_fee_for_bridge() {
+    let signer = KeyPair::generate_default_csprng();
+    let signer_address = Address::from(&signer.public);
+    let bridge_address = Address::from([3u8; 20]);
+    let recipient_address = Address::from([4u8; 20]);
+    let source_chain_id = 1;
+
+    let bridge_contract = BridgeContract {
+        owner: signer_address.clone(),
+        oracle_address: Address::from([2u8; 20]),
+        balance: Coin::from_u64_unchecked(1000),
+        source_chain_id,
+        chain_config: create_test_chain_config(source_chain_id),
+        transaction_count: 0,
+    };
+
+    let accounts = TestCommitRevert::with_initial_state(&[(
+        bridge_address.clone(),
+        Account::Bridge(bridge_contract.clone()),
+    )]);
+
+    // Outgoing bridge transaction with value = 100 and a non-zero fee = 10.
+    let outgoing_tx = OutgoingTransaction {
+        burn_transaction_data: vec![0u8; 32],
+        merkle_proof: AnyMerkleProof::Blake2b(MerkleProof::<Blake2bHash>::new(&[], &[])),
+        oracle_state_index: 0,
+    };
+    let mut bridge_data = OutgoingBridgeTransactionData {
+        burn_proof: outgoing_tx,
+        proof: SignatureProof::default(),
+    };
+
+    let value = Coin::from_u64_unchecked(100);
+    let fee = Coin::from_u64_unchecked(10);
+
+    let mut transaction = Transaction::new_extended(
+        bridge_address.clone(),
+        AccountType::Bridge,
+        bridge_data.serialize_to_vec(),
+        recipient_address,
+        AccountType::Basic,
+        vec![],
+        value,
+        fee,
+        1,
+        NetworkId::UnitAlbatross,
+    );
+    let signer_proof =
+        SignatureProof::from_ed25519(signer.public, signer.sign(&transaction.serialize_content()));
+    bridge_data.set_signature(signer_proof);
+    transaction.sender_data = bridge_data.serialize_to_vec();
+
+    let block_state = BlockState::new(1, 1);
+    let mut db_txn = accounts.env().write_transaction();
+    let data_store = accounts.data_store(&bridge_address);
+    let mut reserved_balance = ReservedBalance::new(bridge_address.clone());
+
+    bridge_contract
+        .reserve_balance(
+            &transaction,
+            &mut reserved_balance,
+            &block_state,
+            data_store.read(&mut db_txn),
+        )
+        .expect("reserve_balance should succeed");
+
+    // Only `value` is reserved against the bridge — not `value + fee`.
+    assert_eq!(reserved_balance.balance(), value);
 }

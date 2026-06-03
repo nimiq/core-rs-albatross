@@ -557,14 +557,17 @@ impl AccountTransactionInteraction for BridgeContract {
         _block_state: &BlockState,
         _data_store: DataStoreRead,
     ) -> Result<(), AccountError> {
+        // Only the released `value` comes from the bridge balance. The fee is paid by
+        // the burn-proof signer (see `Accounts::charge_fee_to_signer`), so it is reserved
+        // against the signer's account by the mempool, not against the bridge here.
         let needed = reserved_balance
             .balance()
-            .checked_add(transaction.total_value())
+            .checked_add(transaction.value)
             .ok_or(AccountError::InvalidCoinValue)?;
         let new_balance = self.balance.safe_sub(needed)?;
         self.can_change_balance(transaction, new_balance, true)?;
 
-        reserved_balance.reserve(self.balance, transaction.total_value())
+        reserved_balance.reserve(self.balance, transaction.value)
     }
 
     fn release_balance(
@@ -573,7 +576,7 @@ impl AccountTransactionInteraction for BridgeContract {
         reserved_balance: &mut ReservedBalance,
         _data_store: DataStoreRead,
     ) -> Result<(), AccountError> {
-        reserved_balance.release(transaction.total_value());
+        reserved_balance.release(transaction.value);
         Ok(())
     }
 }
