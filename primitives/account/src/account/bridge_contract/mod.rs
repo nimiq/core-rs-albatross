@@ -516,11 +516,6 @@ impl AccountTransactionInteraction for BridgeContract {
         // Revert nonce update in the accounts tree
         let mut store = BridgeContractStoreWrite::new(&mut data_store);
 
-        let current_nonce = store
-            .get_nonce(&receipt.target_address)
-            .map(|n| n.nonce)
-            .unwrap_or(0);
-
         // Restore the previous nonce. If the reverted nonce was 1 (the first ever for
         // this address), remove the entry entirely so state matches the pre-tx condition.
         if receipt.nonce > 1 {
