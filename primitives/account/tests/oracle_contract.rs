@@ -563,6 +563,70 @@ fn it_reverts_update_after_multiple_wraps() {
     );
 }
 
+/// Regression test (#7): reverting an *oversized* update (more hashes than `hash_count`)
+/// on an already-populated contract must restore the exact pre-commit ring buffer and
+/// `latest_index`. Before the fix the eviction receipt captured intermediate values
+/// written earlier in the same update, so revert reconstructed a corrupt buffer.
+#[test]
+fn it_reverts_oversized_update_on_populated_contract() {
+    let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
+    let block_state = BlockState::new(1, 1);
+
+    // Populate past one full wrap so the oversized update below starts in the
+    // all-evictions regime (start_index >= hash_count).
+    let initial_hashes: Vec<AnyHash> = (0..12).map(make_hash).collect();
+    let tx1 = make_update_transaction(Address([1u8; 20]), &key_1, initial_hashes);
+    let mut tx_logger = TransactionLog::empty();
+    accounts
+        .test_commit_incoming_transaction(
+            &mut oracle_contract,
+            &tx1,
+            &block_state,
+            &mut tx_logger,
+            true,
+        )
+        .expect("Failed to populate oracle");
+
+    // Snapshot the exact pre-commit state.
+    let pre_hashes = oracle_contract.hashes.clone();
+    let pre_latest = oracle_contract.latest_index;
+
+    // Oversized update: 15 hashes into a 10-slot buffer overwrites several slots twice.
+    let oversized: Vec<AnyHash> = (12..27).map(make_hash).collect();
+    let tx2 = make_update_transaction(Address([1u8; 20]), &key_1, oversized);
+    let mut tx_logger2 = TransactionLog::empty();
+    let receipt = {
+        let mut db_txn = accounts.env().write_transaction();
+        let mut txn: nimiq_trie::WriteTransactionProxy = (&mut db_txn).into();
+        let data_store = accounts.data_store(&Address([1u8; 20]));
+        oracle_contract
+            .commit_incoming_transaction(
+                &tx2,
+                &block_state,
+                data_store.write(&mut txn),
+                &mut tx_logger2,
+            )
+            .expect("Failed to commit oversized update")
+    };
+
+    let mut db_txn = accounts.env().write_transaction();
+    let mut txn: nimiq_trie::WriteTransactionProxy = (&mut db_txn).into();
+    let data_store = accounts.data_store(&Address([1u8; 20]));
+    oracle_contract
+        .revert_incoming_transaction(
+            &tx2,
+            &block_state,
+            receipt,
+            data_store.write(&mut txn),
+            &mut tx_logger2,
+        )
+        .expect("Failed to revert oversized update");
+
+    // The ring buffer and latest_index must be byte-for-byte the pre-commit state.
+    assert_eq!(oracle_contract.latest_index, pre_latest);
+    assert_eq!(oracle_contract.hashes, pre_hashes);
+}
+
 #[test]
 fn it_can_change_owner() {
     let (accounts, mut oracle_contract, key_1, key_2) = init_tree();

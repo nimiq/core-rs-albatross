@@ -226,12 +226,20 @@ impl AccountTransactionInteraction for OracleContract {
                     let start_index = self.latest_index.map(|i| i + 1).unwrap_or(0);
                     let mut removed_hashes = Vec::new();
                     let mut first_removed_pos = None;
+                    // Tracks which physical slots have already had their pre-commit value
+                    // recorded in this update. An oversized update (more hashes than
+                    // `hash_count`) overwrites the same slot multiple times; only the FIRST
+                    // eviction of a slot holds its true pre-commit value — later evictions
+                    // would capture intermediate values written earlier in this same update
+                    // and corrupt the revert.
+                    let mut recorded = vec![false; self.hash_count as usize];
 
                     for (offset, new_hash) in hashes.iter().enumerate() {
                         let index = start_index + offset as u64;
                         let pos = (index % self.hash_count as u64) as usize;
 
-                        if index >= self.hash_count as u64 {
+                        if index >= self.hash_count as u64 && !recorded[pos] {
+                            recorded[pos] = true;
                             first_removed_pos.get_or_insert(pos as u16);
                             removed_hashes.push(self.hashes[pos].clone());
                         }
@@ -325,13 +333,17 @@ impl AccountTransactionInteraction for OracleContract {
                         }
 
                         let start_index = current_latest - (num_hashes - 1);
-                        let num_evicted = if start_index >= self.hash_count as u64 {
+                        let writes_at_eviction = if start_index >= self.hash_count as u64 {
                             num_hashes
                         } else {
                             start_index
                                 .saturating_add(num_hashes)
                                 .saturating_sub(self.hash_count as u64)
                         };
+                        // At most `hash_count` distinct slots can be evicted (one pre-commit
+                        // value recorded each); an oversized update overwrites some slots
+                        // repeatedly but the commit records only the first eviction per slot.
+                        let num_evicted = writes_at_eviction.min(self.hash_count as u64);
 
                         if num_evicted > 0 {
                             let update_receipt = UpdateReceipt::try_from(
