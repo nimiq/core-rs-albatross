@@ -38,6 +38,22 @@ impl CreationTransactionData {
             warn!("Chain config chain_id does not match source_chain_id");
             return Err(TransactionError::InvalidData);
         }
+        // Reject programs that contain Assert or PushExpected* operations.
+        // These require a ValidationContext (full execution mode) and cause
+        // parse_burn_data → extract_only to always fail, permanently locking funds.
+        for op in &self.chain_config.validation_program.operations {
+            match op {
+                super::core::ValidationOp::Assert
+                | super::core::ValidationOp::PushExpectedAmount
+                | super::core::ValidationOp::PushExpectedAddress
+                | super::core::ValidationOp::PushExpectedNonce
+                | super::core::ValidationOp::PushExpectedValidityHeight => {
+                    warn!("Validation program contains an operation incompatible with extraction-only mode");
+                    return Err(TransactionError::InvalidData);
+                }
+                _ => {}
+            }
+        }
         Ok(())
     }
 }

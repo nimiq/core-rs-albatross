@@ -427,6 +427,22 @@ impl AccountTransactionInteraction for BridgeContract {
             )
         };
 
+        // Reject proofs that exceed the chain's configured maximum depth.
+        // An empty proof is valid (single-leaf tree where leaf == root).
+        if !outgoing_data
+            .burn_proof
+            .is_proof_depth_valid(self.chain_config.max_proof_depth)
+        {
+            log::warn!(
+                proof_depth = outgoing_data.burn_proof.proof_depth(),
+                max_depth = self.chain_config.max_proof_depth,
+                "Merkle proof exceeds maximum allowed depth"
+            );
+            return Err(AccountError::InvalidTransaction(
+                TransactionError::InvalidProof,
+            ));
+        }
+
         // Verify the merkle proof
         let merkle_root = outgoing_data
             .burn_proof
@@ -505,22 +521,17 @@ impl AccountTransactionInteraction for BridgeContract {
             .map(|n| n.nonce)
             .unwrap_or(0);
 
-        if current_nonce == receipt.nonce {
-            // Remove the nonce entry if it matches
-            store.remove_nonce(&receipt.target_address);
+        // Restore the previous nonce. If the reverted nonce was 1 (the first ever for
+        // this address), remove the entry entirely so state matches the pre-tx condition.
+        if receipt.nonce > 1 {
+            store.put_nonce(
+                &receipt.target_address,
+                BridgeNonce {
+                    nonce: receipt.nonce - 1,
+                },
+            );
         } else {
-            // If nonce doesn't match, restore the previous nonce
-            // This handles the case where multiple transactions were processed
-            if receipt.nonce > 0 {
-                store.put_nonce(
-                    &receipt.target_address,
-                    BridgeNonce {
-                        nonce: receipt.nonce - 1,
-                    },
-                );
-            } else {
-                store.remove_nonce(&receipt.target_address);
-            }
+            store.remove_nonce(&receipt.target_address);
         }
 
         // Decrement transaction count

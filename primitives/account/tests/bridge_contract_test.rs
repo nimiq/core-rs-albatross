@@ -15,6 +15,7 @@ fn test_bridge_account_type() {
         endianness: Endianness::LittleEndian,
         block_time: std::time::Duration::from_secs(60),
         validation_program: nimiq_transaction::bridge_contract::ValidationProgram::empty(),
+        max_proof_depth: 64,
     };
 
     let bridge_contract = BridgeContract {
@@ -52,6 +53,7 @@ fn test_bridge_account_serialization() {
         endianness: Endianness::LittleEndian,
         block_time: std::time::Duration::from_secs(60),
         validation_program: nimiq_transaction::bridge_contract::ValidationProgram::empty(),
+        max_proof_depth: 64,
     };
 
     let bridge_contract = BridgeContract {
