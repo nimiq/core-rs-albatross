@@ -1539,11 +1539,17 @@ impl ValidationProgram {
                 let offset = ctx.pop_u64()? as usize;
                 let burn_tx_data = ctx.burn_tx_data();
 
-                if offset + length > burn_tx_data.len() {
+                // `offset` and `length` are attacker-controlled (from PushConst);
+                // use checked arithmetic so a wrapping `offset + length` cannot
+                // bypass the bounds check and panic on the slice below.
+                let end = offset
+                    .checked_add(length)
+                    .ok_or(BridgeError::InvalidDataLength)?;
+                if end > burn_tx_data.len() {
                     return Err(BridgeError::InvalidDataLength);
                 }
 
-                let bytes = burn_tx_data[offset..offset + length].to_vec();
+                let bytes = burn_tx_data[offset..end].to_vec();
                 ctx.stack_mut().push(StackValue::Bytes(bytes));
             }
 
@@ -1551,14 +1557,15 @@ impl ValidationProgram {
                 let offset = ctx.pop_u64()? as usize;
                 let burn_tx_data = ctx.burn_tx_data();
 
-                if offset + 8 > burn_tx_data.len() {
+                let end = offset
+                    .checked_add(8)
+                    .ok_or(BridgeError::InvalidDataLength)?;
+                if end > burn_tx_data.len() {
                     return Err(BridgeError::InvalidDataLength);
                 }
 
-                let value = endianness_conversion::parse_u64(
-                    &burn_tx_data[offset..offset + 8],
-                    *endianness,
-                )?;
+                let value =
+                    endianness_conversion::parse_u64(&burn_tx_data[offset..end], *endianness)?;
                 ctx.stack_mut().push(StackValue::U64(value));
             }
 
@@ -1566,14 +1573,15 @@ impl ValidationProgram {
                 let offset = ctx.pop_u64()? as usize;
                 let burn_tx_data = ctx.burn_tx_data();
 
-                if offset + 4 > burn_tx_data.len() {
+                let end = offset
+                    .checked_add(4)
+                    .ok_or(BridgeError::InvalidDataLength)?;
+                if end > burn_tx_data.len() {
                     return Err(BridgeError::InvalidDataLength);
                 }
 
-                let value = endianness_conversion::parse_u32(
-                    &burn_tx_data[offset..offset + 4],
-                    *endianness,
-                )?;
+                let value =
+                    endianness_conversion::parse_u32(&burn_tx_data[offset..end], *endianness)?;
                 ctx.stack_mut().push(StackValue::U32(value));
             }
 
@@ -1581,11 +1589,14 @@ impl ValidationProgram {
                 let offset = ctx.pop_u64()? as usize;
                 let burn_tx_data = ctx.burn_tx_data();
 
-                if offset + 20 > burn_tx_data.len() {
+                let end = offset
+                    .checked_add(20)
+                    .ok_or(BridgeError::InvalidDataLength)?;
+                if end > burn_tx_data.len() {
                     return Err(BridgeError::InvalidDataLength);
                 }
 
-                let bytes = burn_tx_data[offset..offset + 20].to_vec();
+                let bytes = burn_tx_data[offset..end].to_vec();
                 ctx.stack_mut().push(StackValue::Bytes(bytes));
             }
 
@@ -1593,12 +1604,15 @@ impl ValidationProgram {
                 let offset = ctx.pop_u64()? as usize;
                 let burn_tx_data = ctx.burn_tx_data();
 
-                if offset + 32 > burn_tx_data.len() {
+                let end = offset
+                    .checked_add(32)
+                    .ok_or(BridgeError::InvalidDataLength)?;
+                if end > burn_tx_data.len() {
                     return Err(BridgeError::InvalidDataLength);
                 }
 
                 let mut evm_bytes = [0u8; 32];
-                evm_bytes.copy_from_slice(&burn_tx_data[offset..offset + 32]);
+                evm_bytes.copy_from_slice(&burn_tx_data[offset..end]);
                 let value = crate::bridge_contract::decode_arithmetic::bytes32_to_u64(&evm_bytes)?;
                 ctx.stack_mut().push(StackValue::U64(value));
             }
