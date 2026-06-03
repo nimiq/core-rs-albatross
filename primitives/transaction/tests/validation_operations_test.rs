@@ -444,6 +444,7 @@ fn test_chain_config_with_validation_program() {
         endianness: Endianness::BigEndian,
         block_time: std::time::Duration::from_secs(12),
         validation_program,
+        max_proof_depth: 64,
     };
 
     // Verify the validation program is stored correctly

@@ -147,6 +147,10 @@ pub struct ChainConfig {
     /// Validation program for burn transactions
     /// Defines how to parse and validate burn transactions from the source chain
     pub validation_program: ValidationProgram,
+    /// Maximum allowed Merkle proof depth (number of sibling nodes).
+    /// Bounds the work required to verify a proof and prevents DoS via
+    /// artificially deep proofs. A depth of 64 covers trees with 2^64 leaves.
+    pub max_proof_depth: u32,
 }
 
 /// Represents a verified state hash from the Nimiq Oracle Contract.
@@ -519,7 +523,8 @@ impl OutgoingTransaction {
             .extracted_values
             .get("amount")
             .ok_or(BridgeError::InvalidRecipientData)?;
-        let amount = Coin::from_u64_unchecked(amount_value.as_u64()?);
+        let amount =
+            Coin::try_from(amount_value.as_u64()?).map_err(|_| BridgeError::InvalidAmount)?;
 
         let address_value = result
             .extracted_values
@@ -836,15 +841,13 @@ impl MerkleProofValidator {
 
     /// Validates the structure of a Merkle proof.
     ///
-    /// Checks that the proof depth does not exceed the maximum allowed
-    /// and that the proof is not empty.
+    /// Checks that the proof depth does not exceed the maximum allowed.
+    /// An empty proof is valid: it represents a single-leaf tree where the
+    /// leaf hash is the root (no siblings needed).
     ///
     pub fn validate_proof_structure(&self, proof: &AnyMerkleProof) -> Result<(), BridgeError> {
         if proof.len() > self.max_proof_depth as usize {
             return Err(BridgeError::ProofDepthExceeded);
-        }
-        if proof.is_empty() {
-            return Err(BridgeError::InvalidMerkleProof);
         }
         Ok(())
     }
