@@ -251,13 +251,10 @@ impl NetworkBehaviour for Behaviour {
             }
             FromSwarm::ConnectionEstablished(ConnectionEstablished {
                 peer_id,
-                other_established,
+                other_established: 0, // This is the first connection to this peer
                 ..
             }) => {
-                if other_established == 0 {
-                    // This is the first connection to this peer
-                    self.connected_peers.insert(peer_id);
-                }
+                self.connected_peers.insert(peer_id);
             }
             _ => {}
         }

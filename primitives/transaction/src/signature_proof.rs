@@ -448,8 +448,8 @@ mod serde_derive {
 
             // When present, serialize webauthn fields flattened into the root struct. The option variant is
             // encoded in the `type` field.
-            if self.webauthn_fields.is_some() {
-                state.serialize_field(FIELDS[4], self.webauthn_fields.as_ref().unwrap())?;
+            if let Some(webauthn_fields) = &self.webauthn_fields {
+                state.serialize_field(FIELDS[4], webauthn_fields)?;
             }
 
             state.end()

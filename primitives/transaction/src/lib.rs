@@ -727,11 +727,8 @@ mod serde_derive {
                             sv.serialize_field(BASIC_FIELDS[7], signature)?;
                         }
                     }
-                    if signature_proof.webauthn_fields.is_some() {
-                        sv.serialize_field(
-                            BASIC_FIELDS[8],
-                            signature_proof.webauthn_fields.as_ref().unwrap(),
-                        )?;
+                    if let Some(webauthn_fields) = &signature_proof.webauthn_fields {
+                        sv.serialize_field(BASIC_FIELDS[8], webauthn_fields)?;
                     }
                     sv.end()
                 }

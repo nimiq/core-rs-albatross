@@ -161,9 +161,9 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
     /// Begins the validity window sync process with the given peer from a specific starting point
     pub fn start_validity_synchronization(&mut self, peer_id: TNetwork::PeerId) {
-        if self.validity_requests.is_some() {
+        if let Some(validity_requests) = &self.validity_requests {
             // We already have a synchoronization in progress, so we just add the peer
-            let current_chunk = self.validity_requests.as_ref().unwrap().chunk_index;
+            let current_chunk = validity_requests.chunk_index;
             log::debug!(%peer_id,current_chunk,"Adding peer to existing validity synchronization process");
             self.validity_queue.add_peer(peer_id);
             self.syncing_peers.insert(peer_id);

@@ -523,17 +523,17 @@ impl<N: Network> Consensus<N> {
             #[cfg(feature = "full")]
             // The syncing process of the history node does guarantee we have the most recent zkp proof. Thus,
             // we may request it to our peers. This ensures the latest zkp replication across the different node types.
-            SyncerProxy::History(_) => {
-                // Only request a proof when we are too far from the last election head.
-                // This avoids spam requests when the proof for the latest election block is still being generated.
+            //
+            // Only request a proof when we are too far from the last election head.
+            // This avoids spam requests when the proof for the latest election block is still being generated.
+            SyncerProxy::History(_)
                 if self.zkp_proxy.get_zkp_state().latest_block.block_number()
                     < Policy::election_block_before(
                         self.blockchain.read().election_head().block_number(),
-                    )
-                {
-                    self.zkp_proxy
-                        .request_zkp_from_peers(self.sync.peers(), false);
-                }
+                    ) =>
+            {
+                self.zkp_proxy
+                    .request_zkp_from_peers(self.sync.peers(), false);
             }
             _ => {
                 // The Full and Light sync ensure the latest proof is already pushed, there is no need to
@@ -541,6 +541,8 @@ impl<N: Network> Consensus<N> {
                 // For Pico sync we avoid zkp overhead as much as possible. The zkp component will
                 // lazily store zkps propagated by the network. In the case of fall back to full sync,
                 // the latest proof is ensured by the syncing mechanism itself.
+                // History sync also ends up here when it is already close enough to the last election head,
+                // in which case we skip the request to avoid spamming while the latest proof is generated.
             }
         }
     }

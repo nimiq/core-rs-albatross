@@ -527,7 +527,7 @@ impl PeerContactBook {
     pub fn query(&self, services: Services) -> impl Iterator<Item = Arc<PeerContactInfo>> + '_ {
         // TODO: This is a naive implementation
         // TODO: Sort by score?
-        self.peer_contacts.iter().filter_map(move |(_, contact)| {
+        self.peer_contacts.values().filter_map(move |contact| {
             if contact.matches(services) {
                 Some(Arc::clone(contact))
             } else {

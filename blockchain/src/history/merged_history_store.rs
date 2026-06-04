@@ -74,13 +74,12 @@ impl<S: HistoryInterface> HistoryInterface for HistoryStoreMerger<S> {
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<Blake2bHash> {
         // The regular history store always returns a hash – even if no data is present.
-        if Policy::epoch_at(block_number) == 0 && self.pre_genesis.is_some() {
+        if Policy::epoch_at(block_number) == 0
+            && let Some(pre_genesis) = &self.pre_genesis
+        {
             // The pre-genesis database has separate transactions.
             // Since it is read-only, we can pass None as the transaction.
-            self.pre_genesis
-                .as_ref()
-                .unwrap()
-                .get_history_tree_root(block_number, None)
+            pre_genesis.get_history_tree_root(block_number, None)
         } else {
             self.main.get_history_tree_root(block_number, txn_option)
         }
@@ -360,18 +359,19 @@ impl<S: HistoryInterface + HistoryIndexInterface> HistoryIndexInterface for Hist
                 .get_tx_hashes_by_address(address, max, start_at.clone(), txn_option);
 
         // Fill up from pre-genesis if necessary.
-        if tx_hashes.len() < max as usize && self.pre_genesis.is_some() {
+        if tx_hashes.len() < max as usize
+            && let Some(pre_genesis) = &self.pre_genesis
+        {
             // If the transaction hashes are empty, we can start at the given hash
             // because the hash does not seem to be in the main database.
             let pre_genesis_start = if tx_hashes.is_empty() { start_at } else { None };
 
-            let mut pre_genesis_tx_hashes =
-                self.pre_genesis.as_ref().unwrap().get_tx_hashes_by_address(
-                    address,
-                    max - tx_hashes.len() as u16,
-                    pre_genesis_start,
-                    None,
-                );
+            let mut pre_genesis_tx_hashes = pre_genesis.get_tx_hashes_by_address(
+                address,
+                max - tx_hashes.len() as u16,
+                pre_genesis_start,
+                None,
+            );
             tx_hashes.append(&mut pre_genesis_tx_hashes);
         }
 
@@ -386,13 +386,12 @@ impl<S: HistoryInterface + HistoryIndexInterface> HistoryIndexInterface for Hist
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<HistoryTreeProof> {
         // The regular store always provides a proof.
-        if epoch_number == 0 && self.pre_genesis.is_some() {
+        if epoch_number == 0
+            && let Some(pre_genesis) = &self.pre_genesis
+        {
             // The pre-genesis database has separate transactions.
             // Since it is read-only, we can pass None as the transaction.
-            self.pre_genesis
-                .as_ref()
-                .unwrap()
-                .prove(epoch_number, hashes, verifier_state, None)
+            pre_genesis.prove(epoch_number, hashes, verifier_state, None)
         } else {
             self.main
                 .prove(epoch_number, hashes, verifier_state, txn_option)

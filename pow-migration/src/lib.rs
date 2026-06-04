@@ -130,7 +130,7 @@ pub async fn report_online(
         return Ok(pow_block_number);
     }
     // Get the latest online transaction that was sent
-    txns.sort_by(|a, b| a.block_number.cmp(&b.block_number));
+    txns.sort_by_key(|a| a.block_number);
 
     let latest_online_bn = txns.last().unwrap().block_number.expect(
         "Block number should exist since it was checked in the validity of online transactions",

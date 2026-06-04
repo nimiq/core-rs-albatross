@@ -258,8 +258,8 @@ impl StakingContract {
         // Retrieve unsupporting validators.
         let unsupporting_validators: Vec<_> = self
             .active_validators
-            .iter()
-            .filter_map(|(validator_address, _stake)| {
+            .keys()
+            .filter_map(|validator_address| {
                 let validator = store
                     .get_validator(validator_address)
                     .expect("Active Validators must be present in the Staking Contract.");

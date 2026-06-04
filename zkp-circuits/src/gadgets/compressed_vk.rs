@@ -77,16 +77,14 @@ impl CompressedInput<VerifyingKey<MNT6_753>, BasePrimeField<MNT6_753>>
                 bits_var.get(3).ok_or(SynthesisError::AssignmentMissing)?,
             )?;
 
-            let mut idx = 4;
             let mut gamma_abc_g1_var = vec![];
-            for elem in gamma_abc_g1.iter() {
+            for (idx, elem) in (4..).zip(gamma_abc_g1.iter()) {
                 let elem = CompressedAffineVar::with_y_bit(
                     ark_relations::ns!(cs, "gamma_abc_g1"),
                     || Ok(elem),
                     bits_var.get(idx).ok_or(SynthesisError::AssignmentMissing)?,
                 )?;
                 gamma_abc_g1_var.push(elem.into_projective());
-                idx += 1;
             }
 
             Ok(Self {
@@ -151,16 +149,14 @@ impl CompressedInput<VerifyingKey<MNT4_753>, BasePrimeField<MNT4_753>>
                 bits_var.get(3).ok_or(SynthesisError::AssignmentMissing)?,
             )?;
 
-            let mut idx = 4;
             let mut gamma_abc_g1_var = vec![];
-            for elem in gamma_abc_g1.iter() {
+            for (idx, elem) in (4..).zip(gamma_abc_g1.iter()) {
                 let elem = CompressedAffineVar::with_y_bit(
                     ark_relations::ns!(cs, "gamma_abc_g1"),
                     || Ok(elem),
                     bits_var.get(idx).ok_or(SynthesisError::AssignmentMissing)?,
                 )?;
                 gamma_abc_g1_var.push(elem.into_projective());
-                idx += 1;
             }
             Ok(Self {
                 alpha_g1: alpha_g1.into_projective(),

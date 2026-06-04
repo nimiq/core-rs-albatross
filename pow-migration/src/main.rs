@@ -114,10 +114,9 @@ async fn main() {
     let url =
         Url::parse(&args.url).unwrap_or_else(|error| exit_with_error(error, "Invalid RPC URL"));
 
-    let pow_client = if args.username.is_some() && args.password.is_some() {
-        Client::new_with_credentials(url, args.username.unwrap(), args.password.unwrap())
-    } else {
-        Client::new(url)
+    let pow_client = match (args.username, args.password) {
+        (Some(username), Some(password)) => Client::new_with_credentials(url, username, password),
+        _ => Client::new(url),
     };
 
     let block_windows = get_block_windows(config.network_id)

@@ -155,11 +155,11 @@ impl<N: Network> MempoolTask<N> {
                     self.mempool.update(&[(hash.clone(), block)], [].as_ref());
                 }
             }
-            BlockchainEvent::Rebranched(old_chain, new_chain) => {
-                // Mempool updates are only done once we are synced.
-                if self.consensus.is_ready_for_validation() {
-                    self.mempool.update(new_chain, old_chain);
-                }
+            // Mempool updates are only done once we are synced.
+            BlockchainEvent::Rebranched(old_chain, new_chain)
+                if self.consensus.is_ready_for_validation() =>
+            {
+                self.mempool.update(new_chain, old_chain);
             }
             _ => {
                 // Nothing to do here.
