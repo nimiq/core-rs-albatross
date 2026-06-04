@@ -7,6 +7,8 @@ use once_cell::sync::OnceCell;
 #[cfg(feature = "ts-types")]
 use wasm_bindgen::prelude::*;
 
+use crate::networks::NetworkId;
+
 /// Global policy
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
 
@@ -184,6 +186,25 @@ impl Policy {
     #[inline]
     pub fn get_or_init(policy: Policy) -> Policy {
         *GLOBAL_POLICY.get_or_init(|| policy)
+    }
+
+    /// Returns the default policy parameters for the given network.
+    ///
+    /// Note that the `genesis_block_number` and `max_supported_version` fields are taken from
+    /// the corresponding policy constant here, but callers are expected to override them with
+    /// the authoritative values from the network's genesis configuration (see
+    /// [`crate::networks::NetworkId`] / `NetworkInfo`) before installing the policy via
+    /// [`Policy::get_or_init`].
+    pub fn default_for_network(network_id: NetworkId) -> Policy {
+        match network_id {
+            NetworkId::MainAlbatross => MAINNET_POLICY,
+            NetworkId::TestAlbatross => TESTNET_POLICY,
+            // Dev shares the test network parameters; its genesis is supplied by `NetworkInfo`.
+            NetworkId::DevAlbatross => TESTNET_POLICY,
+            NetworkId::UnitAlbatross => TEST_POLICY,
+            // Non-Albatross networks are not supported; fall back to mainnet parameters.
+            _ => MAINNET_POLICY,
+        }
     }
 }
 
