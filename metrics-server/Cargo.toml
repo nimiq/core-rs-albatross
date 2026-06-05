@@ -24,7 +24,7 @@ bytes = "1.11"
 futures = { workspace = true }
 headers = "0.4"
 http-body-util = { version = "0.1" }
-hyper = { version = "1.9" }
+hyper = { version = "1.10" }
 hyper-util = { version = "0.1", features = ["server-auto", "tokio"] }
 log = { workspace = true }
 parking_lot = "0.12"
