@@ -53,11 +53,15 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             // If there are not enough votes, continue with the next
             if proposal_contributor_count < TProtocol::TWO_F_PLUS_ONE {
                 // The vote can improve if there is a proposal with < 2f+1 votes currently where also
-                // all of the other votes combined do not exceed f
-                can_improve |=
-                    total_contributors - proposal_contributor_count < TProtocol::F_PLUS_ONE;
+                // all of the other votes combined do not exceed f.
+                // Contributor sets across buckets are disjoint (enforced at verification time), so
+                // these counts never exceed the total. Use saturating arithmetic regardless so a
+                // malformed aggregate that slipped through cannot underflow the count
+                can_improve |= total_contributors.saturating_sub(proposal_contributor_count)
+                    < TProtocol::F_PLUS_ONE;
                 // Keep the remaining contributor count accurate.
-                remaining_contributor_count -= proposal_contributor_count;
+                remaining_contributor_count =
+                    remaining_contributor_count.saturating_sub(proposal_contributor_count);
                 continue;
             }
 
@@ -92,14 +96,17 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         }
 
         // Keep the remaining contributor count accurate.
-        remaining_contributor_count -= none_contributor_count;
+        remaining_contributor_count =
+            remaining_contributor_count.saturating_sub(none_contributor_count);
 
         // If none of the proposals checked can improve to 2f+1 there is the additional chance, that there might be an unknown proposal
         // which can (or already has) reached 2f+1 votes. As it is unknown it can not be voted for, but it should have been requested thus
         // waiting for the timeout could lead to receiving that proposal.
         // Only if neither known proposals can improve, nor is there enough vote power left to reach a conclusion the timeout is skipped.
 
-        if !can_improve && total_contributors - remaining_contributor_count >= TProtocol::F_PLUS_ONE
+        if !can_improve
+            && total_contributors.saturating_sub(remaining_contributor_count)
+                >= TProtocol::F_PLUS_ONE
         {
             // Vote against all proposals, as None has 2f+1 votes.
             log::debug!(?round_and_step, "Aggregation resulted in None polka",);
