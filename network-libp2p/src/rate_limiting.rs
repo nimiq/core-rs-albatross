@@ -41,6 +41,10 @@ impl RateLimitConfig {
 pub(crate) enum RateLimitId {
     Request(RequestType),
     Gossipsub(TopicHash),
+    /// Inbound DHT `PutRecord` requests. Rate limited per peer so a single peer
+    /// cannot flood the swarm task with record verifications.
+    #[cfg(feature = "kad")]
+    DhtPutRecord,
 }
 
 /// Holds the expiration time for a given peer and request type. This struct defines the ordering for the btree set.
@@ -417,6 +421,37 @@ mod tests {
         assert!(
             observed_pre_expiry_disconnect,
             "the test must exercise at least one disconnect that happens before the rate limit expires",
+        );
+    }
+
+    #[cfg(feature = "kad")]
+    #[test]
+    fn dht_put_rate_limit_is_enforced_per_peer() {
+        let config = RateLimitConfig {
+            max_requests: 3,
+            time_window: Duration::from_secs(60),
+        };
+        let peer_id = PeerId::random();
+        let mut rate_limits = RateLimits::default();
+
+        // The first `max_requests` puts from a peer are allowed.
+        for _ in 0..config.max_requests {
+            assert!(
+                !rate_limits.exceeds_rate_limit(peer_id, RateLimitId::DhtPutRecord, &config),
+                "puts within the limit must be allowed",
+            );
+        }
+
+        // Any further put within the same window is dropped.
+        assert!(
+            rate_limits.exceeds_rate_limit(peer_id, RateLimitId::DhtPutRecord, &config),
+            "puts exceeding the limit must be dropped",
+        );
+
+        // The limit is tracked per peer, so a different peer is unaffected.
+        assert!(
+            !rate_limits.exceeds_rate_limit(PeerId::random(), RateLimitId::DhtPutRecord, &config),
+            "a different peer must have its own independent rate limit",
         );
     }
 }

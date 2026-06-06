@@ -42,6 +42,8 @@ use tokio::sync::{broadcast, mpsc};
 
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
+#[cfg(feature = "kad")]
+use crate::rate_limiting::RateLimitConfig;
 use crate::{
     autonat::NatStatus,
     behaviour, dht,
@@ -67,6 +69,19 @@ struct EventInfo<'a> {
     #[cfg(feature = "metrics")]
     metrics: &'a Arc<NetworkMetrics>,
 }
+
+/// Per-peer rate limit for inbound DHT `PutRecord` requests.
+///
+/// The window matches the Kademlia replication interval configured in
+/// [`Config::new`] (60s). The limit is deliberately generous: the DHT holds at
+/// most a few hundred validator records (`Policy::SLOTS`), so legitimate
+/// replication and caching pushes from a single peer stay well below it, while
+/// a malicious peer is capped to roughly one verification per second.
+#[cfg(feature = "kad")]
+const DHT_PUT_RATE_LIMIT: RateLimitConfig = RateLimitConfig {
+    max_requests: 64,
+    time_window: Duration::from_secs(60),
+};
 
 #[cfg(feature = "kad")]
 fn store_dht_record<K>(
@@ -774,11 +789,27 @@ fn handle_dht_bootstrap(
 
 #[cfg(feature = "kad")]
 fn handle_dht_inbound_put(
-    _source: PeerId,
+    source: PeerId,
     _connection: ConnectionId,
     record: Record,
     event_info: EventInfo,
 ) {
+    // Rate limit inbound puts per peer before doing any verification work, so a
+    // single peer cannot starve the swarm task with record verifications.
+    if event_info.rate_limiting.exceeds_rate_limit(
+        source,
+        RateLimitId::DhtPutRecord,
+        &DHT_PUT_RATE_LIMIT,
+    ) {
+        debug!(
+            %source,
+            max_requests = %DHT_PUT_RATE_LIMIT.max_requests,
+            time_window = ?DHT_PUT_RATE_LIMIT.time_window,
+            "Dropping DHT PutRecord - rate limit exceeded",
+        );
+        return;
+    }
+
     // Verify incoming record
     let dht_record = match event_info.dht_verifier.verify(&record) {
         Ok(record) => record,
