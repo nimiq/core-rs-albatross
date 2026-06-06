@@ -285,11 +285,12 @@ where
         }
 
         // Get the valid contributors for this level.
-        // We have validated the level, so we can expect a range here.
-        let allowed_contributors = self
-            .partitioner
-            .identities_on(level)
-            .expect("Identities should exist");
+        // The level is within bounds, but it may still be empty for non-power-of-two validator
+        // sets (sparse subtrees). Reject such levels instead of panicking, since the level is
+        // attacker-controlled
+        let Ok(allowed_contributors) = self.partitioner.identities_on(level) else {
+            return Err(InvalidLevel { level, num_levels });
+        };
 
         // Check that the message origin is a valid contributor.
         let origin = msg.origin as usize;

@@ -8,7 +8,7 @@ use nimiq_handel::{
     aggregation::Aggregation,
     config::Config,
     contribution::{AggregatableContribution, ContributionError},
-    evaluator::WeightedVote,
+    evaluator::{Evaluator as EvaluatorTrait, VerificationError, WeightedVote},
     identity::{Identity, IdentityRegistry, WeightRegistry},
     network::Network,
     partitioner::{BinomialPartitioner, Partitioner},
@@ -327,6 +327,42 @@ async fn wait_for_contributions(
             count += 1;
         }
     }
+}
+
+#[test]
+fn verify_rejects_empty_level_without_panicking() {
+    // Regression test: for non-power-of-two validator sets some nodes have empty partitioner
+    // levels (sparse subtrees), so `identities_on(level)` returns `EmptyLevel` even for in-bounds
+    // levels. A malicious peer can send a `LevelUpdate` for such a level. `Evaluator::verify` must
+    // reject it with `InvalidLevel` instead of panicking, which it previously did via
+    // `identities_on(level).expect(...)`
+
+    // For node 9 of 10, levels 2 and 3 are empty (see
+    // `partitioner::tests::test_partitioner_non_power_of_two`)
+    let protocol = Protocol::new(9, 10);
+    assert!(protocol.partitioner.identities_on(2).is_err());
+
+    // Craft a level update targeting the empty (but in-bounds) level 2.
+    let mut contributors = BitSet::new();
+    contributors.insert(9);
+    let contribution = Contribution {
+        value: 1,
+        contributors,
+    };
+    let malicious_update = LevelUpdate::new(contribution.clone(), Some(contribution), 2, 0);
+
+    // This used to panic; it must now be rejected as an invalid level.
+    let result = protocol.evaluator.verify(&malicious_update);
+    assert!(
+        matches!(
+            result,
+            Err(VerificationError::InvalidLevel {
+                level: 2,
+                num_levels: 5
+            })
+        ),
+        "expected InvalidLevel, got {result:?}",
+    );
 }
 
 #[test(tokio::test)]
