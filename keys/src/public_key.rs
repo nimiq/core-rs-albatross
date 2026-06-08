@@ -19,6 +19,14 @@ impl Ed25519PublicKey {
     pub const SIZE: usize = 32;
 
     pub fn verify(&self, signature: &Ed25519Signature, data: &[u8]) -> bool {
+        // The all-zero (default) public key is a low-order curve point for which the
+        // all-zero signature satisfies the (cofactored, ZIP-215) verification equation
+        // for *any* message. Accepting it would turn the default `SignatureProof` into a
+        // universal wildcard, so we reject it explicitly as a signer.
+        if self.as_bytes() == &[0u8; Ed25519PublicKey::SIZE] {
+            return false;
+        }
+
         if let Ok(vk) = ed25519_zebra::VerificationKey::try_from(self.0) {
             vk.verify(&signature.0, data).is_ok()
         } else {

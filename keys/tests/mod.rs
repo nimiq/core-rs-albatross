@@ -55,6 +55,18 @@ fn falsify_wrong_signature() {
 }
 
 #[test]
+fn it_rejects_the_default_public_key() {
+    // The all-zero (default) public key is a low-order curve point for which the all-zero
+    // signature used to verify against any message, making it a universal wildcard. It must
+    // now be rejected as a signer regardless of the message.
+    let public_key = Ed25519PublicKey::default();
+    let signature = Ed25519Signature::default();
+    assert!(!public_key.verify(&signature, b""));
+    assert!(!public_key.verify(&signature, b"any message"));
+    assert!(!public_key.verify(&signature, b"another message"));
+}
+
+#[test]
 fn verify_rfc8032_test_vectors() {
     struct TestVector<'a, 'b, 'c, 'd> {
         private: &'a str,

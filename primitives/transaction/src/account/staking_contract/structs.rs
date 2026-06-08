@@ -255,6 +255,16 @@ pub fn verify_transaction_signature(
     transaction: &Transaction,
     sig_proof: &SignatureProof,
 ) -> Result<(), TransactionError> {
+    // Reject the all-zero (default) public key as a signer. It is a verification wildcard
+    // (see `SignatureProof::is_default_public_key`)
+    if sig_proof.is_default_public_key() {
+        warn!(
+            ?transaction,
+            "Rejecting staking transaction signed with the default (all-zero) public key",
+        );
+        return Err(TransactionError::InvalidProof);
+    }
+
     // If we are verifying the signature on an incoming transaction, then we need to reset the
     // signature field first.
     let tx = {

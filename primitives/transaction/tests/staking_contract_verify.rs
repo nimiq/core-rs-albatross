@@ -523,6 +523,38 @@ fn create_staker() {
 }
 
 #[test]
+fn it_rejects_staking_transaction_with_default_signer() {
+    let keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+
+    // A correctly signed create-staker transaction is accepted.
+    let tx = make_signed_incoming_tx(
+        IncomingStakingTransactionData::CreateStaker {
+            delegation: None,
+            proof: SignatureProof::default(),
+        },
+        Policy::MINIMUM_STAKE,
+        &keypair,
+        None,
+    );
+    assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
+
+    // Replacing the embedded staking proof with the all-zero default proof models the
+    // transaction a malicious block producer would forge to create a staker owned by the
+    // all-zero (wildcard) key. The default proof must be rejected as a signer.
+    let mut forged = tx;
+    forged.recipient_data = IncomingStakingTransactionData::set_signature_on_data(
+        &forged.recipient_data,
+        SignatureProof::default(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&forged),
+        Err(TransactionError::InvalidProof)
+    );
+}
+
+#[test]
 fn stake() {
     let keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
 
