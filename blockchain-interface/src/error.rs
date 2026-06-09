@@ -13,7 +13,7 @@ pub enum ForkEvent {
 }
 
 /// Events from the blockchain.
-/// Note that `Finalized` and `EpochFinalized` will be sent **in addition** to `Extended` events.
+/// Note that `Finalized`, `EpochFinalized`, and `ProtocolUpgrade` will be sent **in addition** to `Extended` events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlockchainEvent {
     Extended(Blake2bHash),
@@ -26,15 +26,17 @@ pub enum BlockchainEvent {
     Stored(Block),
     Finalized(Blake2bHash),
     EpochFinalized(Blake2bHash),
+    ProtocolUpgrade(Blake2bHash, /*version: */ u16),
 }
 
 impl BlockchainEvent {
     /// Returns all added block hashes by this event
     pub fn added_hashes(&self) -> Vec<Blake2bHash> {
         match self {
-            BlockchainEvent::EpochFinalized(_) => vec![],
+            BlockchainEvent::EpochFinalized(_)
+            | BlockchainEvent::Finalized(_)
+            | BlockchainEvent::ProtocolUpgrade(..) => vec![],
             BlockchainEvent::Extended(hash) => vec![hash.clone()],
-            BlockchainEvent::Finalized(_) => vec![],
             BlockchainEvent::HistoryAdopted(hash) => vec![hash.clone()],
             BlockchainEvent::Rebranched(adopted_blocks, _reverted_blocks) => adopted_blocks
                 .iter()

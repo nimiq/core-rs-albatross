@@ -245,9 +245,7 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
             let mut new_blocks = vec![];
 
             match event {
-                BlockchainEvent::Extended(block_hash)
-                | BlockchainEvent::EpochFinalized(block_hash)
-                | BlockchainEvent::Finalized(block_hash) => {
+                BlockchainEvent::Extended(block_hash) => {
                     let block = self
                         .blockchain
                         .read()
@@ -267,6 +265,13 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
                     // Stored events are not reported as they are not on the main chain.
                     // If they ever become main chain blocks, they will be reported then with the respective
                     // BlockchainEvent::Rebranched(..)
+                }
+
+                BlockchainEvent::EpochFinalized(_)
+                | BlockchainEvent::Finalized(_)
+                | BlockchainEvent::ProtocolUpgrade(..) => {
+                    // These events are not relevant for the notifications, as they are complements to the 'Extended' event,
+                    // and don't report new blocks by themselves.
                 }
             }
             // This hash map is used to collect all the notifications for a given peer.

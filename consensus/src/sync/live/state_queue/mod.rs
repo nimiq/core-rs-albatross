@@ -514,9 +514,7 @@ impl<N: Network> Stream for StateQueue<N> {
         // Reset on a rebranch (since we potentially revert to an incomplete state).
         while let Poll::Ready(Some(event)) = self.blockchain_rx.poll_next_unpin(cx) {
             match event {
-                BlockchainEvent::Finalized(_)
-                | BlockchainEvent::EpochFinalized(_)
-                | BlockchainEvent::Extended(_) => {
+                BlockchainEvent::Extended(_) => {
                     let (blockchain_state_complete, current_block_number) = {
                         let blockchain_rg = self.blockchain.read();
                         (
@@ -555,11 +553,17 @@ impl<N: Network> Stream for StateQueue<N> {
                         self.diff_queue.set_diff_needed(true);
                     }
                 }
+                BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => {
+                    // Nothing to do for finalized batches since macro block pushes emit the `Extended` event as well.
+                }
                 BlockchainEvent::HistoryAdopted(_) => {
                     // Nothing to do for adopted history
                 }
                 BlockchainEvent::Stored(_block) => {
                     // Block has not been applied so nothing to do here.
+                }
+                BlockchainEvent::ProtocolUpgrade(..) => {
+                    // Nothing todo for protocol upgrade.
                 }
             }
         }

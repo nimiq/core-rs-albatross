@@ -1149,6 +1149,9 @@ impl Client {
                         Some(BlockchainEvent::Stored(block)) => {
                             (block.hash(), "stored", Array::new(), Vec::new())
                         }
+                        Some(BlockchainEvent::ProtocolUpgrade(hash, _version)) => {
+                            (hash.clone(), "protocol-upgrade", Array::new(), Vec::new())
+                        }
                         None => {
                             break;
                         }

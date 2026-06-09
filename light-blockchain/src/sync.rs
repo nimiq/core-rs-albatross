@@ -81,8 +81,8 @@ impl LightBlockchain {
                 &block_hash,
             );
 
+            let is_protocol_upgrade: bool = block.version() > this.current_version();
             this.election_head = block.unwrap_macro_ref().clone();
-
             this.current_validators = block.validators();
 
             // Store the election block header.
@@ -90,8 +90,17 @@ impl LightBlockchain {
 
             // We shouldn't log errors if there are no listeners.
             this.notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash))
+                .send(BlockchainEvent::EpochFinalized(block_hash.clone()))
                 .ok();
+
+            if is_protocol_upgrade {
+                this.notifier
+                    .send(BlockchainEvent::ProtocolUpgrade(
+                        block_hash,
+                        this.current_version(),
+                    ))
+                    .ok();
+            }
         } else {
             // We shouldn't log errors if there are no listeners.
             this.notifier
@@ -155,8 +164,8 @@ impl LightBlockchain {
             .send(BlockchainEvent::Extended(block_hash.clone()))
             .ok();
 
+        let is_protocol_upgrade = block.version() > this.current_version();
         this.election_head = block.unwrap_macro_ref().clone();
-
         this.current_validators = block.validators();
 
         // Store the election block header.
@@ -164,9 +173,16 @@ impl LightBlockchain {
 
         // We shouldn't log errors if there are no listeners.
         this.notifier
-            .send(BlockchainEvent::EpochFinalized(block_hash))
+            .send(BlockchainEvent::EpochFinalized(block_hash.clone()))
             .ok();
-
+        if is_protocol_upgrade {
+            this.notifier
+                .send(BlockchainEvent::ProtocolUpgrade(
+                    block_hash,
+                    this.current_version(),
+                ))
+                .ok();
+        }
         Ok(PushResult::Extended)
     }
 }

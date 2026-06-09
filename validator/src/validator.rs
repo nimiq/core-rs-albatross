@@ -499,6 +499,9 @@ where
                 // Nothing to do here for now. Forks are already reported on `fork_event_rx`
                 // and inferior chain blocks are irrelevant here.
             }
+            BlockchainEvent::ProtocolUpgrade(..) => {
+                // Nothing to do here for the validator logic.
+            }
         }
     }
 

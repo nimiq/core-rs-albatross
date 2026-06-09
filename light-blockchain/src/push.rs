@@ -175,6 +175,7 @@ impl LightBlockchain {
         }
 
         // Update the head of the blockchain.
+        let is_protocol_upgrade = chain_info.head.version() > this.current_version();
         this.head = chain_info.head.clone();
 
         // If the block is a macro block then we also need to update the macro head.
@@ -208,8 +209,16 @@ impl LightBlockchain {
 
         if is_election_block {
             this.notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash))
+                .send(BlockchainEvent::EpochFinalized(block_hash.clone()))
                 .ok();
+            if is_protocol_upgrade {
+                this.notifier
+                    .send(BlockchainEvent::ProtocolUpgrade(
+                        block_hash,
+                        this.current_version(),
+                    ))
+                    .ok();
+            }
         } else if is_macro_block {
             this.notifier
                 .send(BlockchainEvent::Finalized(block_hash))
@@ -328,6 +337,7 @@ impl LightBlockchain {
         this.head = new_head_info.head.clone();
 
         // If the new head is a macro block, update the macro-related state as well.
+        let mut is_protocol_upgrade = false;
         if let Block::Macro(ref macro_block) = new_head_info.head {
             this.macro_head = macro_block.clone();
 
@@ -335,9 +345,9 @@ impl LightBlockchain {
                 .clear_old_blocks(new_head_info.head.block_number());
 
             if macro_block.is_election() {
+                is_protocol_upgrade = macro_block.header.version > this.current_version();
                 this.election_head = macro_block.clone();
                 this.current_validators = macro_block.get_validators();
-
                 // Store the election block header.
                 this.chain_store.put_election(macro_block.header.clone());
             }
@@ -380,6 +390,14 @@ impl LightBlockchain {
             this.notifier
                 .send(BlockchainEvent::EpochFinalized(this.head_hash()))
                 .ok();
+            if is_protocol_upgrade {
+                this.notifier
+                    .send(BlockchainEvent::ProtocolUpgrade(
+                        this.head_hash(),
+                        this.current_version(),
+                    ))
+                    .ok();
+            }
         } else if this.head.is_macro() {
             this.notifier
                 .send(BlockchainEvent::Finalized(this.head_hash()))

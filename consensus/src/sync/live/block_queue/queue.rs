@@ -532,9 +532,7 @@ impl<N: Network> BlockQueue<N> {
                     block_infos.push(block);
                 }
             }
-            BlockchainEvent::HistoryAdopted(block_hash)
-            | BlockchainEvent::Finalized(block_hash)
-            | BlockchainEvent::EpochFinalized(block_hash) => {
+            BlockchainEvent::HistoryAdopted(block_hash) => {
                 if let Ok(block) = self.blockchain.read().get_block(&block_hash, false) {
                     block_infos.push(block);
                 }
@@ -546,6 +544,11 @@ impl<N: Network> BlockQueue<N> {
             }
             BlockchainEvent::Stored(block) => {
                 block_infos.push(block);
+            }
+            BlockchainEvent::Finalized(_)
+            | BlockchainEvent::EpochFinalized(_)
+            | BlockchainEvent::ProtocolUpgrade(..) => {
+                // these events do not include new blocks, so we don't add anything.
             }
         }
         block_infos

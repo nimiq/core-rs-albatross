@@ -627,7 +627,9 @@ impl BlockchainInterface for BlockchainDispatcher {
                 let result = match event {
                     BlockchainEvent::Extended(hash) => Some(hash.into()),
                     BlockchainEvent::HistoryAdopted(hash) => Some(hash.into()),
-                    BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => None,
+                    BlockchainEvent::Finalized(_)
+                    | BlockchainEvent::EpochFinalized(_)
+                    | BlockchainEvent::ProtocolUpgrade(..) => None,
                     BlockchainEvent::Rebranched(_, new_branch) => {
                         Some(new_branch.last().unwrap().0.clone().into())
                     }

@@ -30,6 +30,6 @@ pub struct BlockchainState {
 impl BlockchainState {
     /// The current protocol version.
     pub fn current_version(&self) -> u16 {
-        self.main_chain.head.version()
+        self.election_head.header.version
     }
 }

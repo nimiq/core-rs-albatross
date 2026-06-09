@@ -293,8 +293,6 @@ async fn main_inner() -> Result<(), Error> {
         while let Some(event) = bc_events.next().await {
             let hash = match event {
                 BlockchainEvent::Extended(hash) => Some(hash),
-                BlockchainEvent::EpochFinalized(hash) => Some(hash),
-                BlockchainEvent::Finalized(hash) => Some(hash),
                 _ => None,
             };
             if let Some(hash) = hash {

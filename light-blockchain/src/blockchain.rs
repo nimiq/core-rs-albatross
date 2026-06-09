@@ -97,6 +97,10 @@ impl LightBlockchain {
         this.current_validators = genesis_block.validators()
     }
 
+    pub fn current_version(&self) -> u16 {
+        self.election_head.header.version
+    }
+
     /// Gets the active validators for a given epoch.
     pub fn get_validators_for_epoch(&self, epoch: u32) -> Result<Validators, BlockchainError> {
         let current_epoch = Policy::epoch_at(self.head.block_number());

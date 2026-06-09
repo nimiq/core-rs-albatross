@@ -473,6 +473,7 @@ impl Blockchain {
 
         // Update the blockchain state.
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
+        let old_version = this.state.current_version();
         this.state.main_chain = chain_info.clone();
         this.state.head_hash = block_hash.clone();
         this.state.macro_info = chain_info;
@@ -517,8 +518,16 @@ impl Blockchain {
 
         if is_election_block {
             this.notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash))
+                .send(BlockchainEvent::EpochFinalized(block_hash.clone()))
                 .ok();
+            if old_version < this.state.current_version() {
+                this.notifier
+                    .send(BlockchainEvent::ProtocolUpgrade(
+                        block_hash,
+                        this.state.current_version(),
+                    ))
+                    .ok();
+            }
         } else {
             this.notifier
                 .send(BlockchainEvent::Finalized(block_hash))
