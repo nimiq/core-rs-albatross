@@ -8,7 +8,7 @@ use nimiq_keys::{
 };
 use nimiq_primitives::{
     networks::NetworkId,
-    policy::Policy,
+    policy::{upgrades, Policy},
     slots_allocation::{Validator, Validators},
     TendermintIdentifier, TendermintProposal, TendermintStep, TendermintVote,
 };
@@ -121,10 +121,21 @@ impl EquivocationProof {
         }
     }
 
-    /// Check if an equivocation proof is valid at a given block height. Equivocation proofs are
-    /// valid only until the end of the reporting window.
-    pub fn is_valid_at(&self, block_number: u32) -> bool {
-        block_number <= Policy::last_block_of_reporting_window(self.block_number())
+    /// Check if an equivocation proof is valid at a given block height, given the protocol
+    /// `version` of the reporting block. From `upgrades::v2::EQUIVOCATION_REPORTING_WINDOW` onward
+    /// proofs are valid only until the end of the equivocation reporting window (bounded by the
+    /// transaction validity window) so a proof can never be re-included after it has aged out of the
+    /// validity-store dedup; before that version the legacy one-epoch window applies.
+    pub fn is_valid_at(&self, block_number: u32, version: u16) -> bool {
+        // From the v2 fork onward the equivocation reporting window is bounded by the transaction
+        // validity window; before that it was a full epoch. Gating on the reporting block's version
+        // makes the consensus change activate atomically at the upgrade.
+        let last_reportable_block = if version >= upgrades::v2::EQUIVOCATION_REPORTING_WINDOW {
+            Policy::last_block_of_equivocation_reporting_window(self.block_number())
+        } else {
+            Policy::last_block_of_collateral_lockup(self.block_number())
+        };
+        block_number <= last_reportable_block
             && Policy::batch_at(block_number) >= Policy::batch_at(self.block_number())
     }
 
@@ -727,6 +738,59 @@ mod test {
         assert_eq!(proof1.sort_key(), proof2.sort_key());
         assert_eq!(proof1.sort_key(), proof3.sort_key());
         assert_ne!(proof1.sort_key(), proof4.sort_key());
+    }
+
+    #[test]
+    fn is_valid_at_is_version_gated() {
+        let key = KeyPair::from(
+            PrivateKey::from_bytes(
+                &hex::decode("8a535c4be49186007503231c8569f873eb512eae308d9be7e7de20af1ddc1663")
+                    .unwrap(),
+            )
+            .unwrap(),
+        );
+
+        let offense_block = Policy::genesis_block_number();
+        let header1 = MicroHeader {
+            network: NetworkId::UnitAlbatross,
+            version: 1,
+            block_number: offense_block,
+            timestamp: 0,
+            parent_hash: Blake2bHash::default(),
+            seed: VrfSeed::default(),
+            extra_data: vec![],
+            state_root: Blake2bHash::default(),
+            body_root: Blake2sHash::default(),
+            diff_root: Blake2bHash::default(),
+            history_root: Blake2bHash::default(),
+            ..Default::default()
+        };
+        let mut header2 = header1.clone();
+        header2.timestamp = 1;
+
+        let justification1 = key.sign(header1.hash().as_bytes());
+        let justification2 = key.sign(header2.hash().as_bytes());
+        let proof: EquivocationProof = ForkProof::new(
+            Address::burn_address(),
+            header1,
+            justification1,
+            header2,
+            justification2,
+        )
+        .into();
+        assert_eq!(proof.block_number(), offense_block);
+
+        // A block past the (short) equivocation window but still within the legacy one-epoch window.
+        let block = Policy::last_block_of_equivocation_reporting_window(offense_block) + 1;
+        assert!(block <= Policy::last_block_of_collateral_lockup(offense_block));
+
+        // Legacy versions still accept it; from version 2 on it is rejected.
+        assert!(proof.is_valid_at(block, 1));
+        assert!(!proof.is_valid_at(block, 2));
+
+        // At the equivocation window edge it remains valid under the new rules.
+        let edge = Policy::last_block_of_equivocation_reporting_window(offense_block);
+        assert!(proof.is_valid_at(edge, 2));
     }
 
     #[test]

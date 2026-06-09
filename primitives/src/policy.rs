@@ -543,19 +543,57 @@ impl Policy {
         Self::epoch_index_at(block_number) < Self::blocks_per_batch()
     }
 
-    /// Returns the block height for the last block of the reporting window of a given block number.
-    /// Note: This window is meant for reporting malicious behaviour (aka `jailable` behaviour).
+    /// Returns the last block height of the collateral lock-up window of a given block number.
+    ///
+    /// This governs the collateral lock-up: a deactivated validator's funds (and its stakers')
+    /// stay locked until this block so they remain slashable while offenses could still be reported.
+    /// It is kept at one epoch and must always be `>=` the equivocation reporting window
+    /// (`last_block_of_equivocation_reporting_window`), so collateral is always present while an
+    /// offense is still reportable.
     #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = lastBlockOfReportingWindow))]
-    pub fn last_block_of_reporting_window(block_number: u32) -> u32 {
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = lastBlockOfCollateralLockup))]
+    pub fn last_block_of_collateral_lockup(block_number: u32) -> u32 {
         block_number.saturating_add(Self::blocks_per_epoch())
     }
 
-    /// Returns the first block after the reporting window of a given block number has ended.
+    /// Returns the first block after the collateral lock-up window of a given block number has ended.
+    #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = blockAfterCollateralLockup))]
+    pub fn block_after_collateral_lockup(block_number: u32) -> u32 {
+        Self::last_block_of_collateral_lockup(block_number).saturating_add(1)
+    }
+
+    /// @deprecated Renamed to `lastBlockOfCollateralLockup`. This window never governed
+    /// equivocation *reporting* (that is `lastBlockOfEquivocationReportingWindow`); it has always
+    /// been the collateral lock-up window. Kept for API backwards compatibility.
+    #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = lastBlockOfReportingWindow))]
+    pub fn last_block_of_reporting_window(block_number: u32) -> u32 {
+        Self::last_block_of_collateral_lockup(block_number)
+    }
+
+    /// @deprecated Renamed to `blockAfterCollateralLockup`. Kept for API backwards compatibility;
+    /// see `lastBlockOfCollateralLockup`.
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = blockAfterReportingWindow))]
     pub fn block_after_reporting_window(block_number: u32) -> u32 {
-        Self::last_block_of_reporting_window(block_number).saturating_add(1)
+        Self::block_after_collateral_lockup(block_number)
+    }
+
+    /// Returns the last block height at which an equivocation that happened at `block_number` can
+    /// still be reported (i.e. included in a block via an equivocation proof).
+    ///
+    /// This is intentionally bounded by the transaction validity window so it stays within the
+    /// validity-store dedup retention (`transaction_validity_window_blocks + blocks_per_batch`).
+    /// Equivocation proofs are deduplicated against the validity store; if this window were longer,
+    /// a genuine proof could be re-included after the dedup forgot it, re-jailing the validator and
+    /// re-burning rewards. The collateral lock-up (`last_block_of_collateral_lockup`) is kept
+    /// longer (one epoch) and must always be `>=` this window. See the invariant test
+    /// `reporting_window_stays_within_dedup_retention`.
+    #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = lastBlockOfEquivocationReportingWindow))]
+    pub fn last_block_of_equivocation_reporting_window(block_number: u32) -> u32 {
+        block_number.saturating_add(Self::transaction_validity_window_blocks())
     }
 
     /// Returns the first block after the jail period of a given block number has ended.
@@ -866,6 +904,26 @@ mod tests {
         assert_eq!(
             Policy::batch_at(Policy::blocks_per_batch() + Policy::genesis_block_number() + 1),
             2
+        );
+    }
+
+    /// Invariant: the equivocation reporting window must stay within the validity-store dedup
+    /// retention (`transaction_validity_window_blocks + blocks_per_batch`). If the reporting window
+    /// were longer, a genuine equivocation proof could be re-included after the dedup store forgot
+    /// it, re-jailing the validator and re-burning rewards. Keep this satisfied if the reporting
+    /// window definition is ever changed.
+    #[test]
+    fn reporting_window_stays_within_dedup_retention() {
+        initialize_policy();
+        let block_number = Policy::genesis_block_number();
+        let reporting_window =
+            Policy::last_block_of_equivocation_reporting_window(block_number) - block_number;
+        let dedup_retention =
+            Policy::transaction_validity_window_blocks() + Policy::blocks_per_batch();
+        assert!(
+            reporting_window <= dedup_retention,
+            "equivocation reporting window ({reporting_window}) must be <= validity-store dedup \
+             retention ({dedup_retention}); a longer window would allow aged-proof replay"
         );
     }
 

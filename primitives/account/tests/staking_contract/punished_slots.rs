@@ -478,11 +478,11 @@ fn jail_and_revert_twice(config: JailConfig) {
         "Can only report event after it happened"
     );
     assert!(
-        config.reporting_block <= Policy::last_block_of_reporting_window(config.event_block1),
+        config.reporting_block <= Policy::last_block_of_collateral_lockup(config.event_block1),
         "Can only report event up until reporting window"
     );
     assert!(
-        config.reporting_block <= Policy::last_block_of_reporting_window(config.event_block2),
+        config.reporting_block <= Policy::last_block_of_collateral_lockup(config.event_block2),
         "Can only report event up until reporting window"
     );
 

@@ -959,7 +959,7 @@ fn cannot_retire_active_stake() {
     // Cannot retire funds from active.
     let tx = make_retire_stake_transaction(Policy::MINIMUM_STAKE);
     let block_state = BlockState::new(
-        Policy::block_after_reporting_window(Policy::election_block_after(2)),
+        Policy::block_after_collateral_lockup(Policy::election_block_after(2)),
         2,
         Policy::max_supported_version(),
     );
@@ -1896,7 +1896,7 @@ fn remove_stake_works() {
     // -----------------------------------
     // Doesn't work if the value is greater than the balance.
     let block_state = BlockState::new(
-        Policy::block_after_reporting_window(Policy::election_block_after(2)),
+        Policy::block_after_collateral_lockup(Policy::election_block_after(2)),
         2,
         Policy::max_supported_version(),
     );
@@ -1930,7 +1930,7 @@ fn remove_stake_works() {
     let tx = make_remove_stake_transaction(Policy::MINIMUM_STAKE * 2);
 
     let block_state = BlockState::new(
-        Policy::block_after_reporting_window(Policy::election_block_after(2)),
+        Policy::block_after_collateral_lockup(Policy::election_block_after(2)),
         3,
         Policy::max_supported_version(),
     );

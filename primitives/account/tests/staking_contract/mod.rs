@@ -314,7 +314,7 @@ impl ValidatorSetup {
             protocol_version,
         );
         let after_cooldown =
-            Policy::block_after_reporting_window(effective_state_block_state.number);
+            Policy::block_after_collateral_lockup(effective_state_block_state.number);
         let after_cooldown = BlockState::new(after_cooldown, 1000, protocol_version);
         let before_cooldown = BlockState::new(after_cooldown.number - 1, 9000, protocol_version);
 
@@ -508,7 +508,7 @@ impl StakerSetup {
             protocol_version,
         );
         let release_block_state = BlockState::new(
-            Policy::block_after_reporting_window(effective_block_state.number),
+            Policy::block_after_collateral_lockup(effective_block_state.number),
             2,
             protocol_version,
         );

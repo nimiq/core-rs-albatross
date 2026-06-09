@@ -896,7 +896,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     &mut store,
                     &Address::from(&staker_key_pair),
                     Coin::from_u64_unchecked(Policy::MINIMUM_STAKE * 2),
-                    Policy::block_after_reporting_window(Policy::election_block_after(0)),
+                    Policy::block_after_collateral_lockup(Policy::election_block_after(0)),
                     &mut TransactionLog::empty(),
                 )
                 .expect("Failed to deactivate stake");

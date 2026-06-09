@@ -137,11 +137,19 @@ impl PolicyInterface for PolicyDispatcher {
         Ok(Policy::first_batch_of_epoch(block_number).into())
     }
 
+    async fn get_block_after_collateral_lockup(
+        &self,
+        block_number: u32,
+    ) -> RPCResult<u32, (), Self::Error> {
+        Ok(Policy::block_after_collateral_lockup(block_number).into())
+    }
+
+    // Deprecated alias of `get_block_after_collateral_lockup`, kept for API backwards compatibility.
     async fn get_block_after_reporting_window(
         &self,
         block_number: u32,
     ) -> RPCResult<u32, (), Self::Error> {
-        Ok(Policy::block_after_reporting_window(block_number).into())
+        self.get_block_after_collateral_lockup(block_number).await
     }
 
     async fn get_block_after_jail(&self, block_number: u32) -> RPCResult<u32, (), Self::Error> {

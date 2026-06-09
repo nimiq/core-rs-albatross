@@ -1089,12 +1089,12 @@ fn it_can_consume_all_validator_deposit() {
         Ok(PushResult::Extended)
     );
 
-    let last_block_of_reporting_window = Policy::last_block_of_reporting_window(
+    let last_block_of_collateral_lockup = Policy::last_block_of_collateral_lockup(
         Policy::election_block_after(1 + Policy::genesis_block_number()),
     );
 
     // Use the genesis block number as an offset
-    let macro_blocks_to_produce = last_block_of_reporting_window - Policy::genesis_block_number();
+    let macro_blocks_to_produce = last_block_of_collateral_lockup - Policy::genesis_block_number();
 
     produce_macro_blocks(
         &producer,
@@ -1308,12 +1308,12 @@ fn it_can_revert_failed_delete_validator() {
         Ok(PushResult::Extended)
     );
 
-    let last_block_of_reporting_window = Policy::last_block_of_reporting_window(
+    let last_block_of_collateral_lockup = Policy::last_block_of_collateral_lockup(
         Policy::election_block_after(1 + Policy::genesis_block_number()),
     );
 
     // Here we need to take into consideration the genesis block number as an offset
-    let macro_blocks_to_produce = last_block_of_reporting_window - Policy::genesis_block_number();
+    let macro_blocks_to_produce = last_block_of_collateral_lockup - Policy::genesis_block_number();
 
     produce_macro_blocks(
         &producer,

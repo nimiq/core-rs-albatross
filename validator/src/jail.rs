@@ -32,13 +32,18 @@ impl EquivocationProofPool {
                 }
             }
             Block::Macro(MacroBlock {
-                header: MacroHeader { block_number, .. },
+                header:
+                    MacroHeader {
+                        block_number,
+                        version,
+                        ..
+                    },
                 ..
             }) => {
                 // After a macro block, remove all equivocation proofs that would not be valid anymore
                 // from now on.
                 self.equivocation_proofs
-                    .retain(|proof| proof.is_valid_at(*block_number + 1));
+                    .retain(|proof| proof.is_valid_at(*block_number + 1, *version));
             }
             _ => {}
         }

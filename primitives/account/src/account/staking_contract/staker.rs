@@ -127,7 +127,7 @@ impl Staker {
         if let Some(validator_address) = &self.delegation {
             // Funds are not released if release block height has not passed yet.
             if let Some(inactive_from) = self.inactive_from
-                && block_number < Policy::block_after_reporting_window(inactive_from)
+                && block_number < Policy::block_after_collateral_lockup(inactive_from)
             {
                 return false;
             }

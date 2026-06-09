@@ -903,7 +903,7 @@ fn can_revert_transactions() {
     );
 
     let block_state = BlockState::new(
-        Policy::block_after_reporting_window(Policy::election_block_after(0)),
+        Policy::block_after_collateral_lockup(Policy::election_block_after(0)),
         10,
         Policy::max_supported_version(),
     );

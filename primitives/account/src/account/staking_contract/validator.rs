@@ -146,7 +146,7 @@ impl Validator {
         let inactive_from = self
             .inactive_from
             .expect("Validator is retired so it must be inactive");
-        let wait_until = Policy::last_block_of_reporting_window(inactive_from);
+        let wait_until = Policy::last_block_of_collateral_lockup(inactive_from);
         if block_number <= wait_until {
             debug!(
                 ?self.address,

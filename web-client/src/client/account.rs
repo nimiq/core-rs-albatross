@@ -172,7 +172,7 @@ impl From<&nimiq_account::Staker> for PlainStaker {
             inactive_from: staker.inactive_from,
             inactive_release: staker
                 .inactive_from
-                .map(Policy::block_after_reporting_window),
+                .map(Policy::block_after_collateral_lockup),
             retired_balance: staker.retired_balance.into(),
         }
     }
@@ -233,7 +233,7 @@ impl From<&nimiq_account::Validator> for PlainValidator {
             inactive_from: validator.inactive_from,
             inactive_release: validator
                 .inactive_from
-                .map(Policy::block_after_reporting_window),
+                .map(Policy::block_after_collateral_lockup),
             retired: validator.retired,
             jailed_from: validator.jailed_from,
             jailed_release: validator.jailed_from.map(Policy::block_after_jail),

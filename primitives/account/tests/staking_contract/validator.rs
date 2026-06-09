@@ -1165,7 +1165,7 @@ fn delete_validator_works() {
             &mut TransactionLog::empty(),
         )
         .expect("Failed to commit transaction");
-    let inactive_release = Policy::block_after_reporting_window(effective_deactivation_block);
+    let inactive_release = Policy::block_after_collateral_lockup(effective_deactivation_block);
 
     // Doesn't work if the cooldown hasn't expired.
     assert_eq!(
@@ -3230,7 +3230,7 @@ fn commit_failed_delete_validator_works() {
             &mut TransactionLog::empty(),
         )
         .expect("Failed to commit transaction");
-    let inactive_release = Policy::block_after_reporting_window(effective_deactivation_block);
+    let inactive_release = Policy::block_after_collateral_lockup(effective_deactivation_block);
 
     // Doesn't work if the cooldown hasn't expired.
     assert_eq!(

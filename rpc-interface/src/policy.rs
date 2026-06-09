@@ -74,7 +74,15 @@ pub trait PolicyInterface {
     async fn get_first_batch_of_epoch(&self, block_number: u32)
         -> RPCResult<bool, (), Self::Error>;
 
-    /// Returns the first block after the reporting window of a given block number has ended.
+    /// Returns the first block after the collateral lock-up window of a given block number has ended.
+    async fn get_block_after_collateral_lockup(
+        &self,
+        block_number: u32,
+    ) -> RPCResult<u32, (), Self::Error>;
+
+    /// **Deprecated**: renamed to `getBlockAfterCollateralLockup`. This window never governed
+    /// equivocation reporting; it has always been the collateral lock-up window. Kept for API
+    /// backwards compatibility — prefer `getBlockAfterCollateralLockup` in new clients.
     async fn get_block_after_reporting_window(
         &self,
         block_number: u32,

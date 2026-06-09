@@ -271,7 +271,12 @@ impl MicroBody {
     }
 
     /// Verifies the micro block: size, proofs, transactions, etc.
-    pub(crate) fn verify(&self, is_skip: bool, block_number: u32) -> Result<(), BlockError> {
+    pub(crate) fn verify(
+        &self,
+        is_skip: bool,
+        block_number: u32,
+        version: u16,
+    ) -> Result<(), BlockError> {
         // Check that the maximum body size is not exceeded.
         let body_size = self.serialized_size();
         if body_size > Policy::MAX_SIZE_MICRO_BODY {
@@ -299,7 +304,7 @@ impl MicroBody {
         let mut previous_proof: Option<&EquivocationProof> = None;
         for proof in &self.equivocation_proofs {
             // Check reporting window.
-            if !proof.is_valid_at(block_number) {
+            if !proof.is_valid_at(block_number, version) {
                 return Err(BlockError::InvalidForkProof);
             }
 

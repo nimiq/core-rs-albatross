@@ -15,5 +15,7 @@ pub const VERSION: u16 = 2;
 /// via the cold-key `UpdateValidator` transaction.
 pub const WARM_KEY_SIGNALING: u16 = VERSION;
 
-// pub const HASH_CHANGE: u16 = VERSION;
-// pub const STAKING_CHANGE_XX: u16 = VERSION;
+/// Bound the equivocation reporting window to the transaction validity window
+/// so an aged proof can no longer be replayed past the validity-store dedup
+/// retention. See `EquivocationProof::is_valid_at`.
+pub const EQUIVOCATION_REPORTING_WINDOW: u16 = VERSION;

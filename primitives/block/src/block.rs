@@ -373,7 +373,7 @@ impl Block {
             // Perform block type specific body verification.
             if let Block::Micro(block) = self {
                 let body = block.body.as_ref().unwrap();
-                body.verify(self.is_skip(), self.block_number())?;
+                body.verify(self.is_skip(), self.block_number(), block.header.version)?;
             }
         }
 
