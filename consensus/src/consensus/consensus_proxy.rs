@@ -25,8 +25,8 @@ use nimiq_network_interface::{
 use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
-    historic_transaction::HistoricTransaction, ControlTransaction, ControlTransactionTopic,
-    Transaction, TransactionTopic,
+    historic_transaction::{HistoricTransaction, RawTransactionHash},
+    ControlTransaction, ControlTransactionTopic, Transaction, TransactionTopic,
 };
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::BroadcastStream;
@@ -311,6 +311,18 @@ impl<N: Network> ConsensusProxy<N> {
 
         let mut verified_transactions = HashMap::new();
 
+        // Map of the transaction hashes we are requesting to their (optionally) requested block
+        // number. This is used to ensure that a peer only answers with transactions that we
+        // actually asked for. A proof merely attests that a transaction is part of the chain
+        // history (it carries no notion of which hashes were requested), so without this check a
+        // malicious peer could answer a lookup for transaction A with a perfectly valid inclusion
+        // proof for an unrelated transaction B that genuinely is in the chain, and we would accept
+        // B as the result for A.
+        let requested_transactions: HashMap<RawTransactionHash, Option<u32>> = receipts
+            .iter()
+            .map(|(hash, block_number)| (RawTransactionHash::from(hash.clone()), *block_number))
+            .collect();
+
         let full_node_cutoff = election_head.block_number() - Policy::blocks_per_epoch() + 1;
         let can_query_full_nodes = receipts
             .iter()
@@ -490,7 +502,26 @@ impl<N: Network> ConsensusProxy<N> {
 
                         if verification_result {
                             for tx in response.proof.history {
-                                verified_transactions.insert(tx.tx_hash(), tx);
+                                let tx_hash = tx.tx_hash();
+
+                                // Only accept transactions that we actually requested. This
+                                // prevents a peer from substituting a valid proof for an unrelated
+                                // transaction in response to our lookup.
+                                let Some(&requested_block_number) =
+                                    requested_transactions.get(&tx_hash)
+                                else {
+                                    log::warn!(peer = %peer_id, tx_hash = %*tx_hash, "Peer returned a proof for a transaction we did not request; ignoring it");
+                                    continue;
+                                };
+
+                                // If the lookup was bound to a specific block number, the proven
+                                // transaction must have occurred in exactly that block.
+                                if requested_block_number.is_some_and(|bn| tx.block_number != bn) {
+                                    log::warn!(peer = %peer_id, tx_hash = %*tx_hash, expected = ?requested_block_number, got = tx.block_number, "Peer returned a proof for a requested transaction but in an unexpected block; ignoring it");
+                                    continue;
+                                }
+
+                                verified_transactions.insert(tx_hash, tx);
                             }
                         } else {
                             // The proof didn't verify so we continue with another peer
