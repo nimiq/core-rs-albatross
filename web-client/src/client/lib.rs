@@ -596,7 +596,8 @@ impl Client {
         &self,
         tx: Transaction,
     ) -> Result<PlainTransactionDetails, JsError> {
-        tx.verify(Some(self.network_id))?;
+        let protocol_version = self.inner.protocol_version();
+        tx.verify(Some(self.network_id), protocol_version)?;
 
         // First, check if the transaction is already included
 
@@ -695,8 +696,9 @@ impl Client {
             Ok(details)
         } else {
             // If the transaction did not get included, return it as `TransactionState::New`
-            let details =
+            let mut details =
                 PlainTransactionDetails::new(&tx, TransactionState::New, None, None, None, None);
+            details.transaction.valid = true; // we already verified it earlier
             Ok(details)
         }
     }
@@ -709,7 +711,7 @@ impl Client {
     ) -> Result<PlainTransactionDetailsType, JsError> {
         let hash =
             Blake2bHash::from_str(&hash).map_err(|_| JsError::new("Invalid transaction hash"))?;
-        let details = self
+        let mut details = self
             .inner
             .consensus_proxy()
             .prove_transactions_from_receipts(vec![(hash, None)], 1)
@@ -737,6 +739,7 @@ impl Client {
                 .expect("no non-reward inherent")
             })
             .ok_or_else(|| JsError::new("Transaction not found"))?;
+        details.transaction.valid = true;
         Ok(serde_wasm_bindgen::to_value(&details)?.into())
     }
 

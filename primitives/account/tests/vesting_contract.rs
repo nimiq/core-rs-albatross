@@ -10,6 +10,7 @@ use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
     networks::NetworkId,
+    policy::Policy,
     transaction::TransactionError,
 };
 use nimiq_serde::{Deserialize, Serialize};
@@ -110,7 +111,7 @@ fn it_can_serialize_a_vesting_contract() {
 fn it_can_create_contract_from_transaction() {
     let (accounts, _vesting_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Transaction 1
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 8);
@@ -311,7 +312,7 @@ fn it_can_create_contract_from_transaction() {
 fn it_does_not_support_incoming_transactions() {
     let (accounts, mut vesting_contract, key_1, key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     let mut tx = Transaction::new_basic(
         Address::from(&key_1),
@@ -340,7 +341,7 @@ fn it_does_not_support_incoming_transactions() {
 fn it_can_apply_and_revert_valid_transaction() {
     let (accounts, mut vesting_contract, key_1, key_2) = init_tree();
 
-    let block_state = BlockState::new(2, 200);
+    let block_state = BlockState::new(2, 200, Policy::max_supported_version());
 
     let mut tx = Transaction::new_basic(
         Address::from(&key_1),
@@ -384,7 +385,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         ]
     );
 
-    let block_state = BlockState::new(3, 400);
+    let block_state = BlockState::new(3, 400, Policy::max_supported_version());
 
     let mut tx_logger = TransactionLog::empty();
     let _ = accounts
@@ -419,7 +420,7 @@ fn it_refuses_invalid_transactions() {
     let signature_proof = SignatureProof::from_ed25519(key_1_alt.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
-    let block_state = BlockState::new(1, 200);
+    let block_state = BlockState::new(1, 200, Policy::max_supported_version());
 
     let mut tx_logger = TransactionLog::empty();
     let result = accounts.test_commit_outgoing_transaction(
@@ -438,7 +439,7 @@ fn it_refuses_invalid_transactions() {
     let signature_proof = SignatureProof::from_ed25519(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
-    let block_state = BlockState::new(100000, 100);
+    let block_state = BlockState::new(100000, 100, Policy::max_supported_version());
 
     let mut tx_logger = TransactionLog::empty();
     let result = accounts.test_commit_outgoing_transaction(
@@ -469,7 +470,7 @@ fn reserve_release_balance_works() {
     let sender_address = Address::from(&key_1);
     let data_store = accounts.data_store(&sender_address);
 
-    let block_state = BlockState::new(2, 200);
+    let block_state = BlockState::new(2, 200, Policy::max_supported_version());
 
     let mut reserved_balance = ReservedBalance::new(sender_address.clone());
     // -----------------------------------
@@ -581,7 +582,7 @@ fn total_amount_exceeds_balance_panics_on_reserve_balance() {
 
     // Block time 0 with time_step=MAX means 0 steps have elapsed, so
     // min_cap = total_amount = 2000 > balance = 1000.
-    let block_state = BlockState::new(1, 0);
+    let block_state = BlockState::new(1, 0, Policy::max_supported_version());
 
     let mut reserved_balance = ReservedBalance::new(sender_address.clone());
 
@@ -639,7 +640,7 @@ fn total_amount_exceeds_balance_panics_on_commit_outgoing() {
         ),
     ]);
 
-    let block_state = BlockState::new(1, 0);
+    let block_state = BlockState::new(1, 0, Policy::max_supported_version());
     let tx = make_signed_transaction(key_owner.clone(), key_recipient.clone(), 1);
 
     // This panics in can_change_balance during commit_outgoing_transaction.
@@ -690,7 +691,7 @@ fn max_start_time_does_not_panic_on_outgoing() {
         ),
     ]);
 
-    let block_state = BlockState::new(1, 1_700_000_000_000);
+    let block_state = BlockState::new(1, 1_700_000_000_000, Policy::max_supported_version());
     let tx = make_signed_transaction(key_owner.clone(), key_recipient.clone(), 1);
 
     let sender_address = Address::from(&key_owner);
@@ -736,7 +737,7 @@ fn can_reserve_balance_after_time_step() {
     let sender_address = Address::from(&key_1);
     let data_store = accounts.data_store(&sender_address);
 
-    let block_state = BlockState::new(2, 200);
+    let block_state = BlockState::new(2, 200, Policy::max_supported_version());
 
     let mut reserved_balance = ReservedBalance::new(sender_address.clone());
     // -----------------------------------
@@ -771,7 +772,7 @@ fn can_reserve_balance_after_time_step() {
     );
 
     // Advancing the block state should allow further reserve balance.
-    let block_state = BlockState::new(3, 300);
+    let block_state = BlockState::new(3, 300, Policy::max_supported_version());
 
     let tx = make_signed_transaction(key_1.clone(), key_2.clone(), 100);
     let result = vesting_contract.reserve_balance(

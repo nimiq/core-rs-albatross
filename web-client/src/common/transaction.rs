@@ -177,13 +177,15 @@ impl Transaction {
     /// **Throws with any transaction validity error.** Returns without exception if the transaction is valid.
     ///
     /// Throws when the given networkId is unknown.
-    pub fn verify(&self, network_id: Option<u8>) -> Result<(), JsError> {
+    pub fn verify(&self, network_id: Option<u8>, protocol_version: u16) -> Result<(), JsError> {
         let network_id = match network_id {
             Some(id) => to_network_id(id)?,
             None => self.inner.network_id,
         };
 
-        self.inner.verify(network_id).map_err(JsError::from)
+        self.inner
+            .verify(network_id, protocol_version)
+            .map_err(JsError::from)
     }
 
     /// Tests if the transaction is valid at the specified block height.
@@ -548,7 +550,7 @@ impl Transaction {
                 }
             },
             size: self.serialized_size(),
-            valid: self.verify(None).is_ok(),
+            valid: false,
         }
     }
 
@@ -861,7 +863,7 @@ pub struct PlainTransaction {
     /// Basic transactions are simple value transfers between two regular address types and cannot contain
     /// any extra data. Basic transactions can be serialized to less bytes, so take up less place on the
     /// blockchain. Extended transactions on the other hand are all other transactions: contract creations
-    /// and interactions, staking transactions, transactions with exta data, etc.
+    /// and interactions, staking transactions, transactions with extra data, etc.
     #[tsify(type = "\"basic\" | \"extended\"")]
     pub format: TransactionFormat,
     /// The transaction's sender address in human-readable IBAN format.
@@ -1136,6 +1138,7 @@ impl PlainTransactionDetails {
             confirmations,
         }
     }
+
     /// Creates a PlainTransactionDetails struct that can be serialized to JS from a native [HistoricTransaction].
     pub fn try_from_historic_transaction(
         hist_tx: HistoricTransaction,
@@ -1343,9 +1346,9 @@ mod tests {
 
     #[test]
     fn penalize_inherent_does_not_panic_on_conversion() {
-        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
+        let _ = Policy::get_or_init(nimiq_primitives::policy::MAINNET_POLICY);
         let hist_tx = make_penalize_historic_tx();
-        let current_block = 200;
+        let current_block = Policy::genesis_block_number() + 1;
 
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             PlainTransactionDetails::try_from_historic_transaction(
@@ -1365,9 +1368,9 @@ mod tests {
 
     #[test]
     fn jail_inherent_does_not_panic_on_conversion() {
-        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
+        let _ = Policy::get_or_init(nimiq_primitives::policy::MAINNET_POLICY);
         let hist_tx = make_jail_historic_tx();
-        let current_block = 200;
+        let current_block = Policy::genesis_block_number() + 1;
 
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             PlainTransactionDetails::try_from_historic_transaction(
@@ -1387,9 +1390,9 @@ mod tests {
 
     #[test]
     fn equivocation_inherent_does_not_panic_on_conversion() {
-        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
+        let _ = Policy::get_or_init(nimiq_primitives::policy::MAINNET_POLICY);
         let hist_tx = make_equivocation_historic_tx();
-        let current_block = 200;
+        let current_block = Policy::genesis_block_number() + 1;
 
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             PlainTransactionDetails::try_from_historic_transaction(

@@ -1,5 +1,7 @@
 use nimiq_keys::{Address, ES256PublicKey, ES256Signature, PublicKey, Signature};
-use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
+use nimiq_primitives::{
+    account::AccountType, networks::NetworkId, policy::Policy, transaction::TransactionError,
+};
 use nimiq_transaction::{account::AccountTransactionVerification, SignatureProof, Transaction};
 
 #[test]
@@ -19,7 +21,11 @@ fn it_does_not_allow_creation() {
     );
 
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
+        Err(TransactionError::InvalidForRecipient)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, 0),
         Err(TransactionError::InvalidForRecipient)
     );
 }
@@ -40,7 +46,11 @@ fn it_does_not_allow_signalling() {
     );
 
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Err(TransactionError::ZeroValue)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Err(TransactionError::ZeroValue)
     );
 }

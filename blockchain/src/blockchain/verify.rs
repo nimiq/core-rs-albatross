@@ -110,11 +110,12 @@ impl Blockchain {
     }
 
     fn verify_transactions(&self, block: &Block) -> Result<(), BlockError> {
+        let version = block.version();
         if let Some(transactions) = block.transactions() {
             for transaction in transactions {
                 let transaction = transaction.get_raw_transaction();
                 if !self.tx_verification_cache.is_known(&transaction.hash()) {
-                    transaction.verify(self.network_id)?;
+                    transaction.verify(self.network_id, version)?;
                 }
             }
         }

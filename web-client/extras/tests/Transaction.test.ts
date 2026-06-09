@@ -96,7 +96,9 @@ describe('Transaction', () => {
         const plain2 = tx.toPlain();
         expect(plain2.proof).toEqual(plain.proof);
         expect(plain2.size).toEqual(plain.size);
-        expect(plain2.valid).toEqual(plain.valid);
+        // `toPlain()` no longer self-verifies: a transaction's validity now depends on the
+        // protocol version and is established by consensus, so it defaults to `false` here.
+        expect(plain2.valid).toBe(false);
     });
 
     it('can deserialize PoW style plain transaction details', () => {
@@ -147,6 +149,8 @@ describe('Transaction', () => {
         // Cannot compare proof field yet, as re-serialization creates a PoS proof with a a leading 0x00-byte
         // expect(plain2.proof).toEqual(plain.proof);
         expect(plain2.size).toEqual(plain.size);
-        expect(plain2.valid).toEqual(plain.valid);
+        // `toPlain()` no longer self-verifies: a transaction's validity now depends on the
+        // protocol version and is established by consensus, so it defaults to `false` here.
+        expect(plain2.valid).toBe(false);
     });
 });

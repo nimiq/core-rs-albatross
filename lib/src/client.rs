@@ -614,6 +614,11 @@ impl Client {
         self.inner.blockchain.read().head().clone()
     }
 
+    /// Returns the blockchain protocol version
+    pub fn protocol_version(&self) -> u16 {
+        self.inner.blockchain.read().protocol_version()
+    }
+
     #[cfg(feature = "wallet")]
     pub fn wallet_store(&self) -> Arc<WalletStore> {
         Arc::clone(&self.inner.wallet_store)

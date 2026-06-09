@@ -36,7 +36,7 @@ impl Blockchain {
     ) -> Result<u64, PushError> {
         // Get the accounts from the state.
         let accounts = &self.state.accounts;
-        let block_state = BlockState::new(block.block_number(), block.timestamp());
+        let block_state = BlockState::new(block.block_number(), block.timestamp(), block.version());
 
         // Check the type of the block.
         match block {
@@ -181,7 +181,11 @@ impl Blockchain {
             .expect("Failed to revert - missing revert info");
 
         // Revert the block from AccountsTree.
-        let block_state = BlockState::new(block.block_number(), block.header.timestamp);
+        let block_state = BlockState::new(
+            block.block_number(),
+            block.header.timestamp,
+            block.header.version,
+        );
         let result = accounts.revert(
             txn,
             &body.get_raw_transactions(),

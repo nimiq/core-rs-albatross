@@ -162,7 +162,7 @@ impl BlockProducer {
         );
 
         // Update the state and calculate the state root.
-        let block_state = BlockState::new(block_number, timestamp);
+        let block_state = BlockState::new(block_number, timestamp, blockchain.head().version());
         let (state_root, diff_root, executed_txns) = blockchain
             .state
             .accounts
@@ -339,12 +339,14 @@ impl BlockProducer {
             .punished_slots
             .next_batch_initial_punished_set(block_number, &staking_contract.active_validators);
 
+        let version = version.unwrap_or_else(|| blockchain.state().current_version());
+
         // Create the header for the macro block without the state root and the transactions root.
         // We need several fields of this header in order to calculate the transactions and the
         // state.
         let mut header = MacroHeader {
             network,
-            version: version.unwrap_or_else(|| blockchain.state().current_version()),
+            version,
             block_number,
             round,
             timestamp,
@@ -380,7 +382,7 @@ impl BlockProducer {
         // Update the state and add the state root to the header.
         let mut txn = blockchain.write_transaction();
 
-        let block_state = BlockState::new(block_number, timestamp);
+        let block_state = BlockState::new(block_number, timestamp, version);
         let (state_root, diff_root, _) = blockchain
             .state
             .accounts

@@ -5,7 +5,7 @@ use nimiq_keys::{
     multisig::{commitment::CommitmentPair, CommitmentsBuilder},
     Address, KeyPair, PrivateKey,
 };
-use nimiq_primitives::{coin::Coin, networks::NetworkId};
+use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_wallet::MultiSigAccount;
 
 static PRIVATE_KEYS: &[&str] = &[
@@ -75,7 +75,10 @@ pub fn it_can_create_valid_transactions() {
         )
         .unwrap();
 
-    assert!(tx.verify(NetworkId::UnitAlbatross).is_ok())
+    assert!(tx.verify(NetworkId::UnitAlbatross, 0).is_ok());
+    assert!(tx
+        .verify(NetworkId::UnitAlbatross, Policy::max_supported_version())
+        .is_ok())
 }
 
 #[test]

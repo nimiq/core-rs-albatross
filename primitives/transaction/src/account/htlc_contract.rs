@@ -18,7 +18,10 @@ use crate::{
 pub struct HashedTimeLockedContractVerifier {}
 
 impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
-    fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_incoming_transaction(
+        transaction: &Transaction,
+        _protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         assert_eq!(transaction.recipient_type, AccountType::HTLC);
 
         if !transaction
@@ -70,7 +73,10 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
         }
     }
 
-    fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_outgoing_transaction(
+        transaction: &Transaction,
+        _protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::HTLC);
 
         if !transaction.sender_data.is_empty() {

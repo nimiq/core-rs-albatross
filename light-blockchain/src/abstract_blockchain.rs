@@ -39,6 +39,9 @@ impl AbstractBlockchain for LightBlockchain {
     fn accounts_complete(&self) -> bool {
         false
     }
+    fn protocol_version(&self) -> u16 {
+        self.head.version()
+    }
 
     fn current_validators(&self) -> Option<&Validators> {
         self.current_validators.as_ref()

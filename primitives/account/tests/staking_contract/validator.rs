@@ -155,7 +155,7 @@ fn it_can_de_serialize_a_staking_contract() {
 
 #[test]
 fn can_get_validator() {
-    let validator_setup = ValidatorSetup::new(Some(150_000_000));
+    let validator_setup = ValidatorSetup::new(Some(150_000_000), Policy::max_supported_version());
     let data_store = validator_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -187,7 +187,7 @@ fn create_validator_works() {
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
@@ -264,7 +264,7 @@ fn create_validator_works() {
     );
 
     // Doesn't work when the validator already exists.
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
     assert_eq!(
         staking_contract.commit_incoming_transaction(
             &tx,
@@ -315,14 +315,15 @@ fn update_validator_works() {
     // Test setup:
     // -----------------------------------
     let mut rng = test_rng(false);
-    let mut validator_setup = ValidatorSetup::new(Some(150_000_000));
+    let mut validator_setup =
+        ValidatorSetup::new(Some(150_000_000), Policy::max_supported_version());
     let data_store = validator_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = validator_setup.env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
     let new_voting_keypair = BlsKeyPair::generate(&mut rng);
     let new_reward_address = Some(Address::from([77u8; 20]));
@@ -485,13 +486,14 @@ fn deactivate_validator_works() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut validator_setup = ValidatorSetup::new(Some(150_000_000));
+    let mut validator_setup =
+        ValidatorSetup::new(Some(150_000_000), Policy::max_supported_version());
     let data_store = validator_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = validator_setup.env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
 
     let validator_address = validator_setup.validator_address;
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
@@ -667,13 +669,14 @@ fn retire_validator_works() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut validator_setup = ValidatorSetup::new(Some(150_000_000));
+    let mut validator_setup =
+        ValidatorSetup::new(Some(150_000_000), Policy::max_supported_version());
     let data_store = validator_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = validator_setup.env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
 
     let validator_address = validator_setup.validator_address;
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
@@ -820,13 +823,14 @@ fn delete_validator_works() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut validator_setup = ValidatorSetup::new(Some(150_000_000));
+    let mut validator_setup =
+        ValidatorSetup::new(Some(150_000_000), Policy::max_supported_version());
     let data_store = validator_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = validator_setup.env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
 
     let validator_address = validator_setup.validator_address;
 
@@ -870,7 +874,11 @@ fn delete_validator_works() {
     let effective_deactivation_block = Policy::election_block_after(block_state.number);
 
     // Doesn't work with a deactivated but not retired validator.
-    let block_state = BlockState::new(effective_deactivation_block + 1, 1000);
+    let block_state = BlockState::new(
+        effective_deactivation_block + 1,
+        1000,
+        Policy::max_supported_version(),
+    );
 
     assert_eq!(
         validator_setup
@@ -910,7 +918,7 @@ fn delete_validator_works() {
             .staking_contract
             .commit_outgoing_transaction(
                 &tx,
-                &BlockState::new(inactive_release - 1, 999),
+                &BlockState::new(inactive_release - 1, 999, Policy::max_supported_version()),
                 data_store.write(&mut db_txn),
                 &mut TransactionLog::empty()
             ),
@@ -924,7 +932,7 @@ fn delete_validator_works() {
     let reward_address = validator_address.clone();
     let staker_address = staker_address();
 
-    let block_state = BlockState::new(inactive_release, 1000);
+    let block_state = BlockState::new(inactive_release, 1000, Policy::max_supported_version());
 
     let mut tx_logger = TransactionLog::empty();
     let receipt = validator_setup
@@ -1065,7 +1073,7 @@ fn reward_inherents_not_allowed() {
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
@@ -1095,7 +1103,7 @@ fn jail_inherents_work() {
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let block_state = BlockState::new(2 + genesis_block_number, 2);
+    let block_state = BlockState::new(2 + genesis_block_number, 2, Policy::max_supported_version());
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
@@ -1170,7 +1178,11 @@ fn jail_inherents_work() {
     );
 
     // Works in current epoch, previous batch case.
-    let block_state = BlockState::new(Policy::blocks_per_batch() + 1 + genesis_block_number, 500);
+    let block_state = BlockState::new(
+        Policy::blocks_per_batch() + 1 + genesis_block_number,
+        500,
+        Policy::max_supported_version(),
+    );
 
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
@@ -1230,7 +1242,11 @@ fn jail_inherents_work() {
     );
 
     // Works in previous epoch, previous batch case.
-    let block_state = BlockState::new(Policy::blocks_per_epoch() + 1 + genesis_block_number, 1000);
+    let block_state = BlockState::new(
+        Policy::blocks_per_epoch() + 1 + genesis_block_number,
+        1000,
+        Policy::max_supported_version(),
+    );
     let slot = PenalizedSlot {
         slot: 0,
         validator_address: validator_address.clone(),
@@ -1304,6 +1320,7 @@ fn finalize_batch_inherents_works() {
     let block_state = BlockState::new(
         Policy::blocks_per_batch() + Policy::genesis_block_number(),
         500,
+        Policy::max_supported_version(),
     );
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
@@ -1371,6 +1388,7 @@ fn finalize_epoch_inherents_works() {
     let block_state = BlockState::new(
         Policy::blocks_per_epoch() + Policy::genesis_block_number(),
         1000,
+        Policy::max_supported_version(),
     );
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
@@ -1524,7 +1542,8 @@ fn reactivate_jail_interaction() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
+    let mut jailed_setup =
+        ValidatorSetup::setup_jailed_validator(None, Policy::max_supported_version());
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1571,7 +1590,8 @@ fn deactivate_jail_interaction() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
+    let mut jailed_setup =
+        ValidatorSetup::setup_jailed_validator(None, Policy::max_supported_version());
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1618,7 +1638,8 @@ fn delete_jail_interaction() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
+    let mut jailed_setup =
+        ValidatorSetup::setup_jailed_validator(None, Policy::max_supported_version());
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1670,7 +1691,7 @@ fn jail_and_revert() {
     // Test setup:
     // -----------------------------------
     let block_number: u32 = 2;
-    let block_state = BlockState::new(block_number, 1000);
+    let block_state = BlockState::new(block_number, 1000, Policy::max_supported_version());
 
     // 1. Create staking contract with validator
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
@@ -1772,7 +1793,7 @@ fn jail_inactive_and_revert() {
     // Test setup:
     // -----------------------------------
     let block_number: u32 = 2;
-    let block_state = BlockState::new(block_number, 1000);
+    let block_state = BlockState::new(block_number, 1000, Policy::max_supported_version());
 
     // 1. Create staking contract with validator
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
@@ -1883,7 +1904,8 @@ fn can_jail_twice() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
+    let mut jailed_setup =
+        ValidatorSetup::setup_jailed_validator(None, Policy::max_supported_version());
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1891,7 +1913,7 @@ fn can_jail_twice() {
     let mut db_txn = (&mut db_txn).into();
 
     // Prepare jail inherent.
-    let second_jail_block_state = BlockState::new(3, 200);
+    let second_jail_block_state = BlockState::new(3, 200, Policy::max_supported_version());
     let inherent = Inherent::Jail {
         jailed_validator: JailedValidator {
             validator_address: jailed_setup.validator_address.clone(),
@@ -2002,7 +2024,8 @@ fn can_retire_jailed_validator() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
+    let mut jailed_setup =
+        ValidatorSetup::setup_jailed_validator(None, Policy::max_supported_version());
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -2077,7 +2100,7 @@ fn penalize_and_revert_twice() {
     // Test setup:
     // -----------------------------------
     let block_number: u32 = 5;
-    let block_state = BlockState::new(block_number, 1000);
+    let block_state = BlockState::new(block_number, 1000, Policy::max_supported_version());
 
     // 1. Create staking contract with validator
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
@@ -2246,7 +2269,7 @@ fn penalize_inactive_and_revert() {
     // Test setup:
     // -----------------------------------
     let block_number: u32 = 2;
-    let block_state = BlockState::new(block_number, 1000);
+    let block_state = BlockState::new(block_number, 1000, Policy::max_supported_version());
 
     // 1. Create staking contract with validator
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
@@ -2354,7 +2377,7 @@ fn penalize_and_jail_and_revert_twice() {
     // Test setup:
     // -----------------------------------
     let block_number: u32 = 5;
-    let block_state = BlockState::new(block_number, 1000);
+    let block_state = BlockState::new(block_number, 1000, Policy::max_supported_version());
 
     // 1. Create staking contract with validator
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
@@ -2529,7 +2552,8 @@ fn jail_and_penalize_and_revert_twice() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
+    let mut jailed_setup =
+        ValidatorSetup::setup_jailed_validator(None, Policy::max_supported_version());
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -2537,7 +2561,7 @@ fn jail_and_penalize_and_revert_twice() {
     let mut db_txn = (&mut db_txn).into();
 
     // Prepare jail inherent.
-    let penalty_block_state = BlockState::new(2, 200);
+    let penalty_block_state = BlockState::new(2, 200, Policy::max_supported_version());
     let inherent = Inherent::Penalize {
         slot: PenalizedSlot {
             slot: 1,
@@ -2631,7 +2655,8 @@ fn can_reserve_and_release_balance() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let retired_setup = ValidatorSetup::setup_retired_validator(None);
+    let retired_setup =
+        ValidatorSetup::setup_retired_validator(None, Policy::max_supported_version());
     let data_store = retired_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -2706,7 +2731,8 @@ fn cannot_reserve_balance_if_value_different_than_validator_deposit() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let retired_setup = ValidatorSetup::setup_retired_validator(None);
+    let retired_setup =
+        ValidatorSetup::setup_retired_validator(None, Policy::max_supported_version());
     let data_store = retired_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -2753,7 +2779,8 @@ fn cannot_reserve_balance_if_not_released() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let retired_setup = ValidatorSetup::setup_retired_validator(None);
+    let retired_setup =
+        ValidatorSetup::setup_retired_validator(None, Policy::max_supported_version());
     let data_store = retired_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -2797,7 +2824,8 @@ fn cannot_reserve_balance_if_jailed() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_retired_setup = ValidatorSetup::setup_jailed_validator(None);
+    let mut jailed_retired_setup =
+        ValidatorSetup::setup_jailed_validator(None, Policy::max_supported_version());
     let data_store = jailed_retired_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -2860,13 +2888,18 @@ fn commit_failed_delete_validator_works() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut validator_setup = ValidatorSetup::new(Some(150_000_000));
+    let mut validator_setup =
+        ValidatorSetup::new(Some(150_000_000), Policy::max_supported_version());
     let data_store = validator_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = validator_setup.env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
-    let block_state = BlockState::new(Policy::genesis_block_number() + 2, 2);
+    let block_state = BlockState::new(
+        Policy::genesis_block_number() + 2,
+        2,
+        Policy::max_supported_version(),
+    );
 
     let validator_address = validator_setup.validator_address;
 
@@ -2908,7 +2941,11 @@ fn commit_failed_delete_validator_works() {
     let effective_deactivation_block = Policy::election_block_after(block_state.number);
 
     // Doesn't work with a deactivated but not retired validator.
-    let block_state = BlockState::new(effective_deactivation_block + 1, 1000);
+    let block_state = BlockState::new(
+        effective_deactivation_block + 1,
+        1000,
+        Policy::max_supported_version(),
+    );
 
     assert_eq!(
         validator_setup.staking_contract.commit_failed_transaction(
@@ -2944,7 +2981,7 @@ fn commit_failed_delete_validator_works() {
     assert_eq!(
         validator_setup.staking_contract.commit_failed_transaction(
             &tx,
-            &BlockState::new(inactive_release - 1, 999),
+            &BlockState::new(inactive_release - 1, 999, Policy::max_supported_version()),
             data_store.write(&mut db_txn),
             &mut TransactionLog::empty()
         ),
@@ -2957,7 +2994,7 @@ fn commit_failed_delete_validator_works() {
     let reward_address = validator_address.clone();
     let staker_address = staker_address();
 
-    let block_state = BlockState::new(inactive_release, 1000);
+    let block_state = BlockState::new(inactive_release, 1000, Policy::max_supported_version());
 
     let mut tx_1 = tx.clone();
     tx_1.value = Coin::ZERO;
@@ -3203,7 +3240,8 @@ fn commit_failed_delete_validator_does_not_work_if_jailed() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_retired_setup = ValidatorSetup::setup_jailed_validator(None);
+    let mut jailed_retired_setup =
+        ValidatorSetup::setup_jailed_validator(None, Policy::max_supported_version());
     let data_store = jailed_retired_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -3306,6 +3344,7 @@ fn version_upgrade_works() {
     let block_state = BlockState::new(
         Policy::blocks_per_epoch() + Policy::genesis_block_number(),
         1000,
+        Policy::max_supported_version(),
     );
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();

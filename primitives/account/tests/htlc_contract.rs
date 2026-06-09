@@ -11,6 +11,7 @@ use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
     networks::NetworkId,
+    policy::Policy,
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
@@ -198,7 +199,7 @@ fn it_can_create_contract_from_transaction() {
 
     // Create contract from transaction.
     let (accounts, _key_1, _key_2) = init_tree();
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     let mut tx_logger = TransactionLog::empty();
     let htlc = accounts
@@ -239,7 +240,7 @@ fn it_can_create_contract_from_transaction() {
 #[test]
 fn it_does_not_support_incoming_transactions() {
     let (accounts, _key_1, _key_2) = init_tree();
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     let (mut htlc, ..) = prepare_outgoing_transaction();
 
@@ -269,7 +270,7 @@ fn it_does_not_support_incoming_transactions() {
 #[test]
 fn it_can_apply_and_revert_regular_transfer() {
     let (accounts, _key_1, _key_2) = init_tree();
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     let (mut htlc, mut tx, pre_image, _sender_signature_proof, recipient_signature_proof) =
         prepare_outgoing_transaction();
@@ -314,7 +315,7 @@ fn it_can_apply_and_revert_regular_transfer() {
 #[test]
 fn it_can_apply_and_revert_early_resolve() {
     let (accounts, _key_1, _key_2) = init_tree();
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     let (mut htlc, mut tx, _pre_image, sender_signature_proof, recipient_signature_proof) =
         prepare_outgoing_transaction();
@@ -365,7 +366,7 @@ fn it_can_apply_and_revert_timeout_resolve() {
     };
     tx.proof = proof.serialize_to_vec();
 
-    let block_state = BlockState::new(1, 101);
+    let block_state = BlockState::new(1, 101, Policy::max_supported_version());
 
     let mut tx_logger = TransactionLog::empty();
     let _ = accounts
@@ -411,7 +412,7 @@ fn it_refuses_invalid_transactions() {
 
     let mut htlc = htlc.clone();
 
-    let block_state = BlockState::new(1, 101);
+    let block_state = BlockState::new(1, 101, Policy::max_supported_version());
 
     let mut tx_logger = TransactionLog::empty();
     let result = accounts.test_commit_outgoing_transaction(
@@ -433,7 +434,7 @@ fn it_refuses_invalid_transactions() {
     };
     tx.proof = proof.serialize_to_vec();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     let mut tx_logger = TransactionLog::empty();
     let result = accounts.test_commit_outgoing_transaction(
@@ -533,7 +534,7 @@ fn it_refuses_invalid_transactions() {
     };
     tx.proof = proof.serialize_to_vec();
 
-    let block_state = BlockState::new(1, 101);
+    let block_state = BlockState::new(1, 101, Policy::max_supported_version());
 
     let mut tx_logger = TransactionLog::empty();
     let result = accounts.test_commit_outgoing_transaction(
@@ -568,7 +569,7 @@ fn reserve_release_balance_works() {
         signature_proof: recipient_signature_proof,
     };
     tx.proof = proof.serialize_to_vec();
-    let block_state = BlockState::new(2, 100);
+    let block_state = BlockState::new(2, 100, Policy::max_supported_version());
 
     let mut reserved_balance = ReservedBalance::new(sender_address.clone());
     // -----------------------------------

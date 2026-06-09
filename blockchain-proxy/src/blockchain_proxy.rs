@@ -115,6 +115,10 @@ impl AbstractBlockchain for BlockchainReadProxy<'_> {
         gen_blockchain_match!(self, BlockchainReadProxy, election_head)
     }
 
+    fn protocol_version(&self) -> u16 {
+        gen_blockchain_match!(self, BlockchainReadProxy, protocol_version)
+    }
+
     fn accounts_complete(&self) -> bool {
         gen_blockchain_match!(self, BlockchainReadProxy, accounts_complete)
     }

@@ -21,6 +21,8 @@ use nimiq_transaction::{
 
 mod punished_slots;
 mod staker;
+mod staker_add_stake_policy;
+mod staker_tombstone_interaction;
 mod validator;
 
 const VALIDATOR_ADDRESS: &str = "83fa05dbe31f85e719f4c4fd67ebdba2e444d9f8";
@@ -157,8 +159,20 @@ fn make_delete_validator_transaction() -> Transaction {
 }
 
 fn make_sample_contract(
+    data_store: DataStoreWrite,
+    staker_active_balance: Option<u64>,
+) -> (Address, Option<Address>, StakingContract) {
+    make_sample_contract_with_protocol_version(
+        data_store,
+        staker_active_balance,
+        Policy::max_supported_version(),
+    )
+}
+
+fn make_sample_contract_with_protocol_version(
     mut data_store: DataStoreWrite,
     staker_active_balance: Option<u64>,
+    _protocol_version: u16,
 ) -> (Address, Option<Address>, StakingContract) {
     let validator_address = validator_address();
     let staker_address = staker_address();
@@ -231,6 +245,7 @@ impl ValidatorSetup {
         before_state_release_block_state: BlockState,
         state_release_block_state: BlockState,
         staker_active_balance: Option<u64>,
+        _protocol_version: u16,
     ) -> ValidatorSetup {
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let accounts = Accounts::new(env.clone());
@@ -255,17 +270,18 @@ impl ValidatorSetup {
         }
     }
 
-    fn new(staker_active_balance: Option<u64>) -> ValidatorSetup {
+    fn new(staker_active_balance: Option<u64>, protocol_version: u16) -> ValidatorSetup {
         Self::setup(
             BlockState::default(),
             BlockState::default(),
             BlockState::default(),
             staker_active_balance,
+            protocol_version,
         )
     }
 
-    fn setup_retired_validator(staker_active_balance: Option<u64>) -> Self {
-        let mut validator_setup = ValidatorSetup::new(staker_active_balance);
+    fn setup_retired_validator(staker_active_balance: Option<u64>, protocol_version: u16) -> Self {
+        let mut validator_setup = ValidatorSetup::new(staker_active_balance, protocol_version);
         let data_store = validator_setup
             .accounts
             .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -281,7 +297,7 @@ impl ValidatorSetup {
             &ed25519_key_pair(VALIDATOR_PRIVATE_KEY),
         );
 
-        let block_state = BlockState::new(Policy::genesis_block_number() + 3, 3);
+        let block_state = BlockState::new(Policy::genesis_block_number() + 3, 3, protocol_version);
         validator_setup
             .staking_contract
             .commit_incoming_transaction(
@@ -292,12 +308,15 @@ impl ValidatorSetup {
             )
             .expect("Failed to commit transaction");
 
-        let effective_state_block_state =
-            BlockState::new(Policy::election_block_after(block_state.number), 2);
+        let effective_state_block_state = BlockState::new(
+            Policy::election_block_after(block_state.number),
+            2,
+            protocol_version,
+        );
         let after_cooldown =
             Policy::block_after_reporting_window(effective_state_block_state.number);
-        let after_cooldown = BlockState::new(after_cooldown, 1000);
-        let before_cooldown = BlockState::new(after_cooldown.number - 1, 9000);
+        let after_cooldown = BlockState::new(after_cooldown, 1000, protocol_version);
+        let before_cooldown = BlockState::new(after_cooldown.number - 1, 9000, protocol_version);
 
         db_txn_og.commit();
 
@@ -309,8 +328,9 @@ impl ValidatorSetup {
         validator_setup
     }
 
-    fn setup_deleted_validator(staker_active_balance: Option<u64>) -> Self {
-        let mut validator_setup = Self::setup_retired_validator(staker_active_balance);
+    fn setup_deleted_validator(staker_active_balance: Option<u64>, protocol_version: u16) -> Self {
+        let mut validator_setup =
+            Self::setup_retired_validator(staker_active_balance, protocol_version);
         let data_store = validator_setup
             .accounts
             .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -320,7 +340,11 @@ impl ValidatorSetup {
         // Delete the validator.
         let delete_tx = make_delete_validator_transaction();
 
-        let block_state = BlockState::new(validator_setup.state_release_block_state.number, 4);
+        let block_state = BlockState::new(
+            validator_setup.state_release_block_state.number,
+            4,
+            protocol_version,
+        );
         validator_setup
             .staking_contract
             .commit_outgoing_transaction(
@@ -337,10 +361,14 @@ impl ValidatorSetup {
         validator_setup
     }
 
-    fn setup_jailed_validator(staker_active_balance: Option<u64>) -> ValidatorSetup {
-        let jailing_inherent_block_state = BlockState::new(Policy::genesis_block_number() + 2, 2);
+    fn setup_jailed_validator(
+        staker_active_balance: Option<u64>,
+        protocol_version: u16,
+    ) -> ValidatorSetup {
+        let jailing_inherent_block_state =
+            BlockState::new(Policy::genesis_block_number() + 2, 2, protocol_version);
 
-        let mut validator_setup = ValidatorSetup::new(staker_active_balance);
+        let mut validator_setup = ValidatorSetup::new(staker_active_balance, protocol_version);
         let data_store = validator_setup
             .accounts
             .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -362,12 +390,15 @@ impl ValidatorSetup {
 
         db_txn_og.commit();
 
-        let effective_state_block_state = BlockState::new(jailing_inherent_block_state.number, 2);
+        let effective_state_block_state =
+            BlockState::new(jailing_inherent_block_state.number, 2, protocol_version);
         let jail_release_block_state = BlockState::new(
             Policy::block_after_jail(effective_state_block_state.number),
             2,
+            protocol_version,
         );
-        let before_release_block_state = BlockState::new(jail_release_block_state.number - 1, 2);
+        let before_release_block_state =
+            BlockState::new(jail_release_block_state.number - 1, 2, protocol_version);
 
         validator_setup.set_block_state(
             effective_state_block_state,
@@ -412,29 +443,49 @@ impl StakerSetup {
         inactive_stake: u64,
         retired_stake: u64,
     ) -> Self {
+        Self::setup_staker_with_inactive_retired_balance_and_protocol(
+            validator_state,
+            active_stake,
+            inactive_stake,
+            retired_stake,
+            Policy::max_supported_version(),
+        )
+    }
+
+    fn setup_staker_with_inactive_retired_balance_and_protocol(
+        validator_state: ValidatorState,
+        active_stake: u64,
+        inactive_stake: u64,
+        retired_stake: u64,
+        protocol_version: u16,
+    ) -> Self {
         // Setup jailed validator
         let mut validator_state_release = None;
         let mut validator_setup = match validator_state {
-            ValidatorState::Active => {
-                ValidatorSetup::new(Some(active_stake + inactive_stake + retired_stake))
-            }
+            ValidatorState::Active => ValidatorSetup::new(
+                Some(active_stake + inactive_stake + retired_stake),
+                protocol_version,
+            ),
             ValidatorState::Jailed => {
-                let validator_setup = ValidatorSetup::setup_jailed_validator(Some(
-                    active_stake + inactive_stake + retired_stake,
-                ));
+                let validator_setup = ValidatorSetup::setup_jailed_validator(
+                    Some(active_stake + inactive_stake + retired_stake),
+                    protocol_version,
+                );
                 validator_state_release = Some(validator_setup.state_release_block_state.number);
                 validator_setup
             }
             ValidatorState::Retired => {
-                let validator_setup = ValidatorSetup::setup_retired_validator(Some(
-                    active_stake + inactive_stake + retired_stake,
-                ));
+                let validator_setup = ValidatorSetup::setup_retired_validator(
+                    Some(active_stake + inactive_stake + retired_stake),
+                    protocol_version,
+                );
                 validator_state_release = Some(validator_setup.state_release_block_state.number);
                 validator_setup
             }
-            ValidatorState::Deleted => ValidatorSetup::setup_deleted_validator(Some(
-                active_stake + inactive_stake + retired_stake,
-            )),
+            ValidatorState::Deleted => ValidatorSetup::setup_deleted_validator(
+                Some(active_stake + inactive_stake + retired_stake),
+                protocol_version,
+            ),
         };
 
         let data_store = validator_setup
@@ -451,13 +502,18 @@ impl StakerSetup {
         let staker_address = validator_setup.staker_address.unwrap();
         let deactivation_block = Policy::genesis_block_number() + 2;
 
-        let effective_block_state =
-            BlockState::new(Policy::election_block_after(deactivation_block), 2);
+        let effective_block_state = BlockState::new(
+            Policy::election_block_after(deactivation_block),
+            2,
+            protocol_version,
+        );
         let release_block_state = BlockState::new(
             Policy::block_after_reporting_window(effective_block_state.number),
             2,
+            protocol_version,
         );
-        let before_release_block_state = BlockState::new(release_block_state.number - 1, 2);
+        let before_release_block_state =
+            BlockState::new(release_block_state.number - 1, 2, protocol_version);
         let mut retire_stake_block_state = BlockState::default();
 
         // Deactivate part of the stake.
@@ -478,7 +534,7 @@ impl StakerSetup {
             } else {
                 release_block_state.number
             };
-            retire_stake_block_state = BlockState::new(retire_block, 3);
+            retire_stake_block_state = BlockState::new(retire_block, 3, protocol_version);
 
             // Retire part of the stake.
             validator_setup

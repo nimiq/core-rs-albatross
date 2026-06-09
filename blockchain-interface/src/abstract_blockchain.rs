@@ -46,6 +46,8 @@ pub trait AbstractBlockchain {
         self.election_head().hash()
     }
 
+    fn protocol_version(&self) -> u16;
+
     /// Returns the block number at the head of the main chain.
     fn block_number(&self) -> u32 {
         self.head().block_number()

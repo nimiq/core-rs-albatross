@@ -14,13 +14,15 @@ use crate::{
 pub struct BlockState {
     pub number: u32,
     pub time: u64,
+    pub protocol_version: u16,
 }
 
 impl BlockState {
-    pub fn new(block_number: u32, block_time: u64) -> Self {
+    pub fn new(block_number: u32, block_time: u64, protocol_version: u16) -> Self {
         Self {
             number: block_number,
             time: block_time,
+            protocol_version,
         }
     }
 }

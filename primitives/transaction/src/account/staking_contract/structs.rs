@@ -105,7 +105,11 @@ impl IncomingStakingTransactionData {
         Ok(Self::deserialize_all(&transaction.recipient_data)?)
     }
 
-    pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
+    pub fn verify(
+        &self,
+        transaction: &Transaction,
+        _protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         match self {
             IncomingStakingTransactionData::CreateValidator {
                 voting_key,

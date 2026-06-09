@@ -1,6 +1,7 @@
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
-    account::AccountType, coin::Coin, networks::NetworkId, transaction::TransactionError,
+    account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
+    transaction::TransactionError,
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_transaction::{
@@ -39,7 +40,11 @@ fn it_can_verify_creation_transaction() {
 
     // Invalid data
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Err(TransactionError::InvalidData)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Err(TransactionError::InvalidData)
     );
     CreationTransactionData::parse_data(&data, transaction.value).unwrap();
@@ -47,14 +52,22 @@ fn it_can_verify_creation_transaction() {
 
     // Invalid recipient
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Err(TransactionError::InvalidForRecipient)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Err(TransactionError::InvalidForRecipient)
     );
     transaction.recipient = transaction.contract_creation_address();
 
     // Valid
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Ok(())
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Ok(())
     );
 
@@ -62,7 +75,11 @@ fn it_can_verify_creation_transaction() {
     transaction.flags = TransactionFlags::empty();
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Err(TransactionError::InvalidForRecipient)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Err(TransactionError::InvalidForRecipient)
     );
     transaction.flags = TransactionFlags::CONTRACT_CREATION;
@@ -78,7 +95,11 @@ fn it_can_verify_creation_transaction() {
     transaction.recipient_data = data;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Ok(())
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Ok(())
     );
 
@@ -94,7 +115,11 @@ fn it_can_verify_creation_transaction() {
     transaction.recipient_data = data;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Ok(())
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Ok(())
     );
 
@@ -109,7 +134,11 @@ fn it_can_verify_creation_transaction() {
     transaction.recipient_data = data.to_tx_data();
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Err(TransactionError::InvalidData)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Err(TransactionError::InvalidData)
     );
 }
@@ -202,7 +231,13 @@ fn it_can_verify_outgoing_transactions() {
     tx.sender_type = AccountType::Vesting;
 
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidSerialization(
+            DeserializeError::unexpected_end()
+        ))
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidSerialization(
             DeserializeError::unexpected_end()
         ))
@@ -212,18 +247,30 @@ fn it_can_verify_outgoing_transactions() {
     let signature_proof = SignatureProof::from_ed25519(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx, 0), Ok(()));
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
+        Ok(())
+    );
 
     tx.proof[22] = tx.proof[22] % 250 + 1;
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidProof)
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidProof)
     );
 
     tx.proof[22] = tx.proof[22] % 251 + 3;
     // Proof is not a valid point, so Deserialize will result in an error.
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidProof)
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidProof)
     );
 }

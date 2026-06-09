@@ -1,6 +1,8 @@
 use nimiq_hash::{sha512::Sha512Hasher, Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
+use nimiq_primitives::{
+    account::AccountType, networks::NetworkId, policy::Policy, transaction::TransactionError,
+};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_transaction::{
     account::{
@@ -78,21 +80,33 @@ fn it_can_verify_creation_transaction() {
 
     // Invalid data
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Err(TransactionError::InvalidData)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Err(TransactionError::InvalidData)
     );
     transaction.recipient_data = data.serialize_to_vec();
 
     // Invalid recipient
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Err(TransactionError::InvalidForRecipient)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Err(TransactionError::InvalidForRecipient)
     );
     transaction.recipient = transaction.contract_creation_address();
 
     // Valid
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Ok(())
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Ok(())
     );
 
@@ -100,7 +114,11 @@ fn it_can_verify_creation_transaction() {
     transaction.flags = TransactionFlags::empty();
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Err(TransactionError::InvalidForRecipient)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Err(TransactionError::InvalidForRecipient)
     );
     transaction.flags = TransactionFlags::CONTRACT_CREATION;
@@ -109,7 +127,13 @@ fn it_can_verify_creation_transaction() {
     transaction.recipient_data[40] = 200;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Err(TransactionError::InvalidSerialization(
+            DeserializeError::serde_custom()
+        ))
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Err(TransactionError::InvalidSerialization(
             DeserializeError::serde_custom()
         ))
@@ -120,7 +144,11 @@ fn it_can_verify_creation_transaction() {
     transaction.recipient_data[73] = 0;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
-        AccountType::verify_incoming_transaction(&transaction),
+        AccountType::verify_incoming_transaction(&transaction, 0),
+        Err(TransactionError::InvalidData)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction, Policy::max_supported_version()),
         Err(TransactionError::InvalidData)
     );
 }
@@ -137,7 +165,11 @@ fn it_can_verify_regular_transfer() {
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx, 0), Ok(()));
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
+        Ok(())
+    );
 
     // regular: valid SHA-512
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
@@ -147,7 +179,11 @@ fn it_can_verify_regular_transfer() {
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx, 0), Ok(()));
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
+        Ok(())
+    );
 
     // regular: valid SHA-256
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
@@ -157,13 +193,21 @@ fn it_can_verify_regular_transfer() {
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx, 0), Ok(()));
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
+        Ok(())
+    );
 
     // regular: invalid hash
     let bak = tx.proof[36];
     tx.proof[36] = bak % 250 + 1;
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidProof)
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidProof)
     );
     tx.proof[36] = bak;
@@ -171,7 +215,13 @@ fn it_can_verify_regular_transfer() {
     // regular: invalid algorithm
     tx.proof[2] = 99;
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidSerialization(
+            DeserializeError::serde_custom()
+        ))
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidSerialization(
             DeserializeError::serde_custom()
         ))
@@ -182,14 +232,22 @@ fn it_can_verify_regular_transfer() {
     // Proof is not a valid point, so Deserialize will result in an error.
     tx.proof[73] = tx.proof[73] % 250 + 1;
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidProof)
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidProof)
     );
 
     // regular: invalid signature
     tx.proof[73] = tx.proof[73] % 250 + 2;
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidProof)
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidProof)
     );
 
@@ -204,7 +262,13 @@ fn it_can_verify_regular_transfer() {
     tx.proof.push(0);
 
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidSerialization(
+            DeserializeError::extra_data()
+        )),
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidSerialization(
             DeserializeError::extra_data()
         )),
@@ -223,14 +287,22 @@ fn it_can_verify_early_resolve() {
     };
     tx.proof = proof.serialize_to_vec();
 
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx, 0), Ok(()));
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
+        Ok(())
+    );
 
     // early resolve: invalid signature 1
     // Proof is not a valid point, so Deserialize will result in an error.
     let bak = tx.proof[4];
     tx.proof[4] = tx.proof[4] % 250 + 1;
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidProof)
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidProof)
     );
     tx.proof[4] = bak;
@@ -239,7 +311,11 @@ fn it_can_verify_early_resolve() {
     let bak = tx.proof.len() - 2;
     tx.proof[bak] = tx.proof[bak] % 250 + 1;
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidProof)
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidProof)
     );
 
@@ -252,7 +328,13 @@ fn it_can_verify_early_resolve() {
     tx.proof.push(0);
 
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidSerialization(
+            DeserializeError::extra_data()
+        )),
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidSerialization(
             DeserializeError::extra_data()
         )),
@@ -269,12 +351,20 @@ fn it_can_verify_timeout_resolve() {
     };
     tx.proof = proof.serialize_to_vec();
 
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx, 0), Ok(()));
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
+        Ok(())
+    );
 
     // timeout resolve: invalid signature
     tx.proof[4] = tx.proof[4] % 250 + 1;
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidProof)
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidProof)
     );
 
@@ -286,7 +376,13 @@ fn it_can_verify_timeout_resolve() {
     tx.proof.push(0);
 
     assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
+        AccountType::verify_outgoing_transaction(&tx, 0),
+        Err(TransactionError::InvalidSerialization(
+            DeserializeError::extra_data()
+        )),
+    );
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, Policy::max_supported_version()),
         Err(TransactionError::InvalidSerialization(
             DeserializeError::extra_data()
         )),

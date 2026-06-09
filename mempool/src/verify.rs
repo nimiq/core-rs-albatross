@@ -41,11 +41,11 @@ pub(crate) fn verify_tx(
     filter: Arc<RwLock<MempoolFilter>>,
     priority: TxPriority,
 ) -> Result<(), VerifyErr> {
-    // 1. Verify transaction signature (and other stuff)
-    transaction.verify_mut(network_id)?;
-
-    // 2. Acquire blockchain read lock
+    // 1. Acquire blockchain read lock
     let blockchain = blockchain.read();
+
+    // 2. Verify transaction signature (and other stuff)
+    transaction.verify_mut(network_id, blockchain.state.current_version())?;
 
     // 3. Check validity window and already included
     let block_number = blockchain.block_number() + 1;

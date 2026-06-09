@@ -37,6 +37,7 @@ impl HtlcProofBuilder {
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     /// use nimiq_primitives::account::AccountType;
+    /// use nimiq_primitives::policy::Policy;
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// # let key_pair_sender = KeyPair::generate_default_csprng();
@@ -62,7 +63,9 @@ impl HtlcProofBuilder {
     ///
     /// let final_transaction = htlc_proof_builder.generate();
     /// assert!(final_transaction.is_some());
-    /// assert!(final_transaction.unwrap().verify(NetworkId::MainAlbatross).is_ok());
+    /// let final_transaction = final_transaction.unwrap();
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, 0).is_ok());
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, Policy::max_supported_version()).is_ok());
     /// ```
     pub fn signature_with_key_pair(&self, key_pair: &KeyPair) -> SignatureProof {
         let signature = key_pair.sign(&self.transaction.serialize_content());
@@ -83,6 +86,7 @@ impl HtlcProofBuilder {
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     /// use nimiq_primitives::account::AccountType;
+    /// use nimiq_primitives::policy::Policy;
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// # let key_pair = KeyPair::generate_default_csprng();
@@ -106,7 +110,9 @@ impl HtlcProofBuilder {
     ///
     /// let final_transaction = htlc_proof_builder.generate();
     /// assert!(final_transaction.is_some());
-    /// assert!(final_transaction.unwrap().verify(NetworkId::MainAlbatross).is_ok());
+    /// let final_transaction = final_transaction.unwrap();
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, 0).is_ok());
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, Policy::max_supported_version()).is_ok());
     /// ```
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
@@ -131,6 +137,7 @@ impl HtlcProofBuilder {
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     /// use nimiq_primitives::account::AccountType;
+    /// use nimiq_primitives::policy::Policy;
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// # let key_pair_sender = KeyPair::generate_default_csprng();
@@ -156,7 +163,9 @@ impl HtlcProofBuilder {
     ///
     /// let final_transaction = htlc_proof_builder.generate();
     /// assert!(final_transaction.is_some());
-    /// assert!(final_transaction.unwrap().verify(NetworkId::MainAlbatross).is_ok());
+    /// let final_transaction = final_transaction.unwrap();
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, 0).is_ok());
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, Policy::max_supported_version()).is_ok());
     /// ```
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
@@ -218,6 +227,7 @@ impl HtlcProofBuilder {
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     /// use nimiq_primitives::account::AccountType;
+    /// use nimiq_primitives::policy::Policy;
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// # let key_pair = KeyPair::generate_default_csprng();
@@ -252,7 +262,9 @@ impl HtlcProofBuilder {
     ///
     /// let final_transaction = htlc_proof_builder.generate();
     /// assert!(final_transaction.is_some());
-    /// assert!(final_transaction.unwrap().verify(NetworkId::MainAlbatross).is_ok());
+    /// let final_transaction = final_transaction.unwrap();
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, 0).is_ok());
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, Policy::max_supported_version()).is_ok());
     /// ```
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
@@ -290,6 +302,7 @@ impl HtlcProofBuilder {
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     /// use nimiq_primitives::account::AccountType;
+    /// use nimiq_primitives::policy::Policy;
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// # let key_pair = KeyPair::generate_default_csprng();
@@ -324,7 +337,9 @@ impl HtlcProofBuilder {
     ///
     /// let final_transaction = htlc_proof_builder.generate();
     /// assert!(final_transaction.is_some());
-    /// assert!(final_transaction.unwrap().verify(NetworkId::MainAlbatross).is_ok());
+    /// let final_transaction = final_transaction.unwrap();
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, 0).is_ok());
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, Policy::max_supported_version()).is_ok());
     /// ```
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair

@@ -6,7 +6,7 @@ use nimiq_account::{
 };
 use nimiq_database::traits::Database;
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
-use nimiq_primitives::{account::AccountError, coin::Coin, networks::NetworkId};
+use nimiq_primitives::{account::AccountError, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -83,7 +83,7 @@ fn basic_transfer_works() {
     // Works in the normal case.
     let tx = make_signed_transaction(100, sender_address.clone(), recipient_address.clone());
 
-    let block_state = BlockState::new(1, 2);
+    let block_state = BlockState::new(1, 2, Policy::max_supported_version());
 
     let mut tx_logger = TransactionLog::empty();
     let receipt = accounts
@@ -176,7 +176,7 @@ fn create_and_prune_works() {
     // Can create a new account and prune an empty account.
     let tx = make_signed_transaction(999, sender_address, recipient_address.clone());
 
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
     let mut block_logger = BlockLogger::empty();
 
     // This tests the account pruning implicitly by asserting that the accounts root hash is back
@@ -216,7 +216,7 @@ fn reserve_release_balance_works() {
     let sender_account = accounts.get_complete(&sender_address, Some(&db_txn));
     let data_store = accounts.data_store(&sender_address);
 
-    let block_state = BlockState::new(1, 2);
+    let block_state = BlockState::new(1, 2, Policy::max_supported_version());
 
     let mut reserved_balance = ReservedBalance::new(sender_address.clone());
     // -----------------------------------

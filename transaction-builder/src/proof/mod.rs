@@ -74,6 +74,7 @@ impl TransactionProofBuilder {
     /// use nimiq_keys::Address;
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
+    /// use nimiq_primitives::policy::Policy;
     ///
     /// let sender = Sender::new_basic(Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap());
     /// let recipient = Recipient::new_basic(
@@ -152,6 +153,7 @@ impl TransactionProofBuilder {
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     /// use nimiq_primitives::account::AccountType;
+    /// use nimiq_primitives::policy::Policy;
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// # let key_pair = KeyPair::generate_default_csprng();
@@ -186,7 +188,9 @@ impl TransactionProofBuilder {
     ///
     /// let final_transaction = htlc_proof_builder.generate();
     /// assert!(final_transaction.is_some());
-    /// assert!(final_transaction.unwrap().verify(NetworkId::MainAlbatross).is_ok());
+    /// let final_transaction = final_transaction.unwrap();
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, 0).is_ok());
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, Policy::max_supported_version()).is_ok());
     /// ```
     ///
     /// [`HtlcProofBuilder`]: htlc_contract/struct.HtlcProofBuilder.html
@@ -210,6 +214,7 @@ impl TransactionProofBuilder {
     /// use nimiq_transaction_builder::{Recipient, TransactionBuilder, Sender};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
+    /// use nimiq_primitives::policy::Policy;
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// # let cold_key_pair = KeyPair::generate_default_csprng();
@@ -241,7 +246,9 @@ impl TransactionProofBuilder {
     ///
     /// let final_transaction = basic_proof_builder.generate();
     /// assert!(final_transaction.is_some());
-    /// assert!(final_transaction.unwrap().verify(NetworkId::MainAlbatross).is_ok());
+    /// let final_transaction = final_transaction.unwrap();
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, 0).is_ok());
+    /// assert!(final_transaction.verify(NetworkId::MainAlbatross, Policy::max_supported_version()).is_ok());
     /// ```
     ///
     /// [`StakingDataBuilder`]: staking_contract/struct.StakingDataBuilder.html
@@ -266,7 +273,6 @@ impl TransactionProofBuilder {
     /// use nimiq_primitives::networks::NetworkId;
     /// use nimiq_primitives::account::{AccountType};
     /// # use nimiq_utils::key_rng::SecureGenerate;
-    /// use nimiq_primitives::policy::Policy;
     ///
     /// # let key_pair = KeyPair::generate_default_csprng();
     /// # let recipient_address = Address::from(&key_pair.public);

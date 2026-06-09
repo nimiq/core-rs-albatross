@@ -143,7 +143,7 @@ fn accounts_tree_populate(
             for _blocks in 0..Policy::blocks_per_batch() {
                 let block_start = Instant::now();
 
-                let block_state = BlockState::new(block_index, 1);
+                let block_state = BlockState::new(block_index, 1, Policy::max_supported_version());
                 let result = accounts.commit(
                     &mut (&mut txn).into(),
                     &txns_per_block[block_index as usize],

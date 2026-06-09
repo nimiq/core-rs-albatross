@@ -17,39 +17,58 @@ pub mod vesting_contract;
 /// This is used, for example, to check signatures etc.
 /// This particularly does not require an account to exist.
 pub trait AccountTransactionVerification: Sized {
-    fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError>;
-    fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError>;
+    fn verify_incoming_transaction(
+        transaction: &Transaction,
+        protocol_version: u16,
+    ) -> Result<(), TransactionError>;
+
+    fn verify_outgoing_transaction(
+        transaction: &Transaction,
+        protocol_version: u16,
+    ) -> Result<(), TransactionError>;
 }
 
 impl AccountTransactionVerification for AccountType {
     /// Verifies the incoming part of a transaction only using the static data available in the transaction.
-    fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_incoming_transaction(
+        transaction: &Transaction,
+        protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         match transaction.recipient_type {
-            AccountType::Basic => BasicAccountVerifier::verify_incoming_transaction(transaction),
+            AccountType::Basic => {
+                BasicAccountVerifier::verify_incoming_transaction(transaction, protocol_version)
+            }
             AccountType::Vesting => {
-                VestingContractVerifier::verify_incoming_transaction(transaction)
+                VestingContractVerifier::verify_incoming_transaction(transaction, protocol_version)
             }
-            AccountType::HTLC => {
-                HashedTimeLockedContractVerifier::verify_incoming_transaction(transaction)
-            }
+            AccountType::HTLC => HashedTimeLockedContractVerifier::verify_incoming_transaction(
+                transaction,
+                protocol_version,
+            ),
             AccountType::Staking => {
-                StakingContractVerifier::verify_incoming_transaction(transaction)
+                StakingContractVerifier::verify_incoming_transaction(transaction, protocol_version)
             }
         }
     }
 
     /// Verifies the outgoing part of a transaction only using the static data available in the transaction.
-    fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_outgoing_transaction(
+        transaction: &Transaction,
+        protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         match transaction.sender_type {
-            AccountType::Basic => BasicAccountVerifier::verify_outgoing_transaction(transaction),
+            AccountType::Basic => {
+                BasicAccountVerifier::verify_outgoing_transaction(transaction, protocol_version)
+            }
             AccountType::Vesting => {
-                VestingContractVerifier::verify_outgoing_transaction(transaction)
+                VestingContractVerifier::verify_outgoing_transaction(transaction, protocol_version)
             }
-            AccountType::HTLC => {
-                HashedTimeLockedContractVerifier::verify_outgoing_transaction(transaction)
-            }
+            AccountType::HTLC => HashedTimeLockedContractVerifier::verify_outgoing_transaction(
+                transaction,
+                protocol_version,
+            ),
             AccountType::Staking => {
-                StakingContractVerifier::verify_outgoing_transaction(transaction)
+                StakingContractVerifier::verify_outgoing_transaction(transaction, protocol_version)
             }
         }
     }

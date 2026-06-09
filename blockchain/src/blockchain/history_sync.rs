@@ -196,8 +196,7 @@ impl Blockchain {
         // We know it comes sorted because we already checked it against the history root and
         // historic transactions in the history tree come sorted by block number and type.
         // Ignore the historic transactions that were already added in past macro blocks.
-        let mut block_numbers = vec![];
-        let mut block_timestamps = vec![];
+        let mut block_state = vec![];
         let mut block_transactions = vec![];
         let mut block_inherents = vec![];
 
@@ -209,20 +208,19 @@ impl Blockchain {
                 // If a macro block does not have any history items, we need to add it here so that
                 // we always commit FinalizeBatch/FinalizeEpoch inherents.
                 // FIXME We're missing the block timestamp to do this correctly.
-                //  Also, this works only if a single macro block is missing between history items.
+                // Also, this works only if a single macro block is missing between history items.
                 let batch_number = Policy::batch_at(hist_tx.block_number);
                 if batch_number > prev_batch
-                    && block_numbers
-                        .last()
-                        .map(|block_number| !Policy::is_macro_block_at(*block_number))
-                        .unwrap_or(false)
+                    && block_state.last().is_some_and(|block_state: &BlockState| {
+                        !Policy::is_macro_block_at(block_state.number)
+                    })
                 {
                     debug!(
                         history_item_block_number = hist_tx.block_number,
                         prev_block,
                         history_item_batch = batch_number,
                         prev_batch,
-                        last_block_number = ?block_numbers.last(),
+                        last_block = ?block_state.last(),
                         "Inserting macro block"
                     );
                     if batch_number != prev_batch + 1 {
@@ -240,14 +238,20 @@ impl Blockchain {
                         return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
                     }
 
-                    block_numbers.push(Policy::macro_block_of(prev_batch).unwrap());
-                    block_timestamps.push(0); // FIXME
+                    block_state.push(BlockState {
+                        number: Policy::macro_block_of(prev_batch).unwrap(),
+                        time: 0,                                        // FIXME
+                        protocol_version: this.state.current_version(), // Cannot change, protocol version upgrades only on election blocks.
+                    });
                     block_transactions.push(vec![]);
                     block_inherents.push(vec![]);
                 }
 
-                block_numbers.push(hist_tx.block_number);
-                block_timestamps.push(hist_tx.block_time);
+                block_state.push(BlockState {
+                    number: hist_tx.block_number,
+                    time: hist_tx.block_time,
+                    protocol_version: this.state.current_version(), // Cannot change, protocol version upgrades only on election blocks.
+                });
                 block_transactions.push(vec![]);
                 block_inherents.push(vec![]);
 
@@ -293,17 +297,20 @@ impl Blockchain {
         }
 
         // Add the final macro block (the one we're proving against) if it's not included yet.
-        if block_numbers
+        if block_state
             .last()
-            .map(|block_number| *block_number != block.block_number())
+            .map(|block_state| block_state.number != block.block_number())
             .unwrap_or(true)
         {
             debug!(
                 block_number = block.block_number(),
                 "Inserting final macro block"
             );
-            block_numbers.push(block.block_number());
-            block_timestamps.push(block.timestamp());
+            block_state.push(BlockState {
+                number: block.block_number(),
+                time: block.timestamp(),
+                protocol_version: block.version(),
+            });
             block_transactions.push(vec![]);
             block_inherents.push(vec![]);
         }
@@ -311,19 +318,19 @@ impl Blockchain {
         // We go over the blocks one more time and add the FinalizeBatch and FinalizeEpoch inherents
         // to the macro blocks. This is necessary because the History Store doesn't store those inherents
         // so we need to add them again in order to correctly sync.
-        for (i, block_number) in block_numbers.iter().enumerate() {
-            if Policy::is_macro_block_at(*block_number) {
+        for (i, block_state) in block_state.iter().enumerate() {
+            if Policy::is_macro_block_at(block_state.number) {
                 block_inherents
                     .get_mut(i)
                     .unwrap()
                     .push(Inherent::FinalizeBatch);
 
-                if Policy::is_election_block_at(*block_number) {
-                    if *block_number != block.block_number() {
+                if Policy::is_election_block_at(block_state.number) {
+                    if block_state.number != block.block_number() {
                         warn!(
                             %block,
                             reason = "foreign election block in history",
-                            history_block_number = *block_number,
+                            history_block_number = block_state.number,
                             "Rejecting block",
                         );
                         txn.abort();
@@ -364,7 +371,7 @@ impl Blockchain {
         }
 
         // Update the accounts tree, one block at a time.
-        for i in 0..block_numbers.len() {
+        for i in 0..block_state.len() {
             // Extract the transactions from the block
             let txns: Vec<Transaction> = block_transactions[i]
                 .iter()
@@ -372,12 +379,11 @@ impl Blockchain {
                 .collect();
 
             // Commit block to AccountsTree and create the receipts.
-            let block_state = BlockState::new(block_numbers[i], block_timestamps[i]);
             let receipts = this.state.accounts.commit_batch(
                 &mut (&mut txn).into(),
                 &txns,
                 &block_inherents[i],
-                &block_state,
+                &block_state[i],
                 &mut BlockLogger::empty(),
             );
 
@@ -386,7 +392,7 @@ impl Blockchain {
                 warn!(
                     %block,
                     reason = "commit of block failed",
-                    block_no = block_numbers[i],
+                    block_no = block_state[i].number,
                     num_transactions = block_transactions[i].len(),
                     num_inherents = block_inherents[i].len(),
                     error = &e as &dyn Error,

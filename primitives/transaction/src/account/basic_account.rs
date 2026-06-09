@@ -10,7 +10,10 @@ use crate::{
 pub struct BasicAccountVerifier {}
 
 impl AccountTransactionVerification for BasicAccountVerifier {
-    fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_incoming_transaction(
+        transaction: &Transaction,
+        _protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         assert_eq!(transaction.recipient_type, AccountType::Basic);
 
         if transaction.value.is_zero() {
@@ -44,7 +47,10 @@ impl AccountTransactionVerification for BasicAccountVerifier {
         Ok(())
     }
 
-    fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_outgoing_transaction(
+        transaction: &Transaction,
+        _protocol_version: u16,
+    ) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::Basic);
 
         if !transaction.sender_data.is_empty() {

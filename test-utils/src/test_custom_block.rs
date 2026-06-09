@@ -116,7 +116,7 @@ pub fn next_micro_block(
         None,
     );
 
-    let block_state = BlockState::new(block_number, timestamp);
+    let block_state = BlockState::new(block_number, timestamp, Policy::max_supported_version());
 
     let (state_root, diff_root, executed_txns) = blockchain
         .state
@@ -220,7 +220,7 @@ pub fn next_skip_block(
     let inherents =
         blockchain.create_punishment_inherents(block_number, &[], Some(skip_block_info), None);
 
-    let block_state = BlockState::new(block_number, timestamp);
+    let block_state = BlockState::new(block_number, timestamp, Policy::max_supported_version());
 
     let (real_state_root, real_diff_root, _) = blockchain
         .state
@@ -371,7 +371,7 @@ pub fn next_macro_block_proposal(
 
     let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(&macro_block);
 
-    let block_state = BlockState::new(block_number, timestamp);
+    let block_state = BlockState::new(block_number, timestamp, Policy::max_supported_version());
 
     let mut txn = blockchain.write_transaction();
 

@@ -13,6 +13,7 @@ mod primitives;
 
 #[cfg(test)]
 mod tests {
+    use nimiq_primitives::policy::Policy;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -43,7 +44,12 @@ mod tests {
         .unwrap();
 
         tx.do_sign(&keypair, None).map_err(JsValue::from).unwrap();
-        assert_eq!(tx.verify(None).map_err(JsValue::from), Ok(()))
+        assert_eq!(tx.verify(None, 0).map_err(JsValue::from), Ok(()));
+        assert_eq!(
+            tx.verify(None, Policy::max_supported_version())
+                .map_err(JsValue::from),
+            Ok(())
+        )
     }
 
     #[wasm_bindgen_test]
@@ -64,6 +70,11 @@ mod tests {
         .unwrap();
 
         tx.do_sign(&keypair, None).map_err(JsValue::from).unwrap();
-        assert_eq!(tx.verify(None).map_err(JsValue::from), Ok(()))
+        assert_eq!(tx.verify(None, 0).map_err(JsValue::from), Ok(()));
+        assert_eq!(
+            tx.verify(None, Policy::max_supported_version())
+                .map_err(JsValue::from),
+            Ok(())
+        )
     }
 }

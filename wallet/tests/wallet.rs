@@ -1,5 +1,5 @@
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::{coin::Coin, networks::NetworkId};
+use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_wallet::WalletAccount;
@@ -27,7 +27,11 @@ fn test_create_transaction() {
         0,
         NetworkId::MainAlbatross,
     );
-    assert_eq!(Ok(()), transaction.verify(NetworkId::MainAlbatross));
+    assert_eq!(Ok(()), transaction.verify(NetworkId::MainAlbatross, 0));
+    assert_eq!(
+        Ok(()),
+        transaction.verify(NetworkId::MainAlbatross, Policy::max_supported_version())
+    );
 }
 
 #[test]

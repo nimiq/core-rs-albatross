@@ -53,7 +53,7 @@ fn it_can_commit_and_revert_a_block_body() {
         Account::default(),
     );
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     let receipts = accounts
         .commit_and_test(
@@ -94,7 +94,7 @@ fn it_can_commit_and_revert_a_block_body() {
         Account::default()
     );
 
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
 
     let receipts = accounts
         .commit_and_test(
@@ -169,7 +169,7 @@ fn it_correctly_rewards_validators() {
         value: Coin::from_u64_unchecked(10000),
     };
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     assert!(accounts
         .commit_and_test(&[], &[reward], &block_state, &mut BlockLogger::empty())
@@ -216,7 +216,7 @@ fn it_correctly_rewards_validators() {
         value: Coin::from_u64_unchecked(10000) + fee1 + fee2,
     };
 
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
 
     assert!(accounts
         .commit_and_test(
@@ -284,7 +284,7 @@ fn it_checks_for_sufficient_funds() {
 
     // Fails as sender address does not exist.
     // Note this kind of transaction would be rejected by the mempool.
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
     assert!(accounts
         .commit_and_test(
             &[tx.clone()],
@@ -329,7 +329,7 @@ fn it_checks_for_sufficient_funds() {
     // FIXME Adjust commit behaviour to fail entirely if the funds are insufficient?
     //  The mempool should reject such transactions, therefore they should not be allowed in a block.
     tx.value = Coin::from_u64_unchecked(1000000);
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
     {
         let mut txn = accounts.env.write_transaction();
 
@@ -481,7 +481,7 @@ fn accounts_performance() {
     println!("Done adding accounts to genesis {}", txns.len());
 
     let mut txn = env.write_transaction();
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
     let start = Instant::now();
     let result = accounts.commit(
         &mut (&mut txn).into(),
@@ -611,7 +611,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
         let batch_start = Instant::now();
 
         for _blocks in 0..Policy::blocks_per_batch() {
-            let block_state = BlockState::new(block_index, 1);
+            let block_state = BlockState::new(block_index, 1, Policy::max_supported_version());
             let result = accounts.commit_batch(
                 &mut (&mut txn).into(),
                 &block_transactions[block_index as usize],
@@ -738,7 +738,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
         let batch_start = Instant::now();
 
         for _blocks in 0..Policy::blocks_per_batch() {
-            let block_state = BlockState::new(block_index, 1);
+            let block_state = BlockState::new(block_index, 1, Policy::max_supported_version());
             let result = accounts.commit_batch(
                 &mut (&mut txn).into(),
                 &block_transactions[block_index as usize],
@@ -811,7 +811,7 @@ fn it_commits_valid_and_failing_txns() {
     let signature_proof = SignatureProof::from_ed25519(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
-    let block_state = BlockState::new(1, 200);
+    let block_state = BlockState::new(1, 200, Policy::max_supported_version());
     let receipts = accounts
         .commit_and_test(&[tx], &[], &block_state, &mut BlockLogger::empty())
         .unwrap();
@@ -905,6 +905,7 @@ fn can_revert_transactions() {
     let block_state = BlockState::new(
         Policy::block_after_reporting_window(Policy::election_block_after(0)),
         10,
+        Policy::max_supported_version(),
     );
 
     for sender in [
@@ -986,7 +987,11 @@ fn can_revert_transactions() {
                         fail_recipient,
                         "Testing transaction"
                     );
-                    assert_eq!(tx.verify(NetworkId::UnitAlbatross), Ok(()));
+                    assert_eq!(tx.verify(NetworkId::UnitAlbatross, 0), Ok(()));
+                    assert_eq!(
+                        tx.verify(NetworkId::UnitAlbatross, Policy::max_supported_version()),
+                        Ok(())
+                    );
 
                     let receipts = accounts.test(&[tx], &[], &block_state);
                     if fail_sender || fail_recipient {
@@ -1018,6 +1023,7 @@ fn can_revert_inherents() {
     let block_state = BlockState::new(
         Policy::blocks_per_epoch() + Policy::blocks_per_batch() + 1,
         10,
+        Policy::max_supported_version(),
     );
 
     let mut rng = test_rng(false);

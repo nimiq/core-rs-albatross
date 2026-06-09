@@ -50,6 +50,10 @@ impl AbstractBlockchain for Blockchain {
         self.state.accounts.is_complete(None)
     }
 
+    fn protocol_version(&self) -> u16 {
+        self.state.current_version()
+    }
+
     fn can_enforce_validity_window(&self) -> bool {
         // If we are at the genesis block, we can enforce the validity window
         if self.block_number() == Policy::genesis_block_number() {
