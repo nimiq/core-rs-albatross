@@ -36,16 +36,17 @@ pub enum VerifyErr {
 pub(crate) fn verify_tx(
     mut transaction: Transaction,
     blockchain: Arc<RwLock<Blockchain>>,
+    protocol_version: u16,
     network_id: NetworkId,
     mempool_state: &Arc<RwLock<MempoolState>>,
     filter: Arc<RwLock<MempoolFilter>>,
     priority: TxPriority,
 ) -> Result<(), VerifyErr> {
-    // 1. Acquire blockchain read lock
-    let blockchain = blockchain.read();
+    // 1. Verify transaction signature (and other stuff) using the cached protocol version.
+    transaction.verify_mut(network_id, protocol_version)?;
 
-    // 2. Verify transaction signature (and other stuff)
-    transaction.verify_mut(network_id, blockchain.state.current_version())?;
+    // 2. Acquire blockchain read lock for state-dependent checks.
+    let blockchain = blockchain.read();
 
     // 3. Check validity window and already included
     let block_number = blockchain.block_number() + 1;

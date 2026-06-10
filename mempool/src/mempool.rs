@@ -1,6 +1,9 @@
 use std::{
     collections::HashSet,
-    sync::{atomic::AtomicU32, Arc},
+    sync::{
+        atomic::{AtomicU16, AtomicU32, Ordering},
+        Arc,
+    },
 };
 
 use futures::{
@@ -40,6 +43,9 @@ pub struct Mempool {
     /// Blockchain reference
     blockchain: Arc<RwLock<Blockchain>>,
 
+    /// Cached protocol version used for transaction verification.
+    protocol_version: Arc<AtomicU16>,
+
     /// The mempool state: the data structure where the transactions are stored
     pub(crate) state: Arc<RwLock<MempoolState>>,
 
@@ -68,6 +74,7 @@ impl Mempool {
 
     /// Creates a new mempool
     pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Self {
+        let protocol_version = blockchain.read().protocol_version();
         let state = Arc::new(RwLock::new(MempoolState::new(
             config.size_limit,
             config.control_size_limit,
@@ -76,6 +83,7 @@ impl Mempool {
 
         Self {
             blockchain,
+            protocol_version: Arc::new(AtomicU16::new(protocol_version)),
             state: Arc::clone(&state),
             filter: Arc::new(RwLock::new(MempoolFilter::new(
                 config.filter_rules,
@@ -104,6 +112,7 @@ impl Mempool {
         // Create the executor for the Topic T
         let executor = MempoolExecutor::<N, T>::new(
             Arc::clone(&self.blockchain),
+            Arc::clone(&self.protocol_version),
             Arc::clone(&self.state),
             Arc::clone(&self.filter),
             Arc::clone(&network),
@@ -144,7 +153,7 @@ impl Mempool {
         let control_executor_handle = self.control_executor_handle.lock().await;
 
         if executor_handle.is_some() && control_executor_handle.is_some() {
-            // If we already have both executors running dont do anything
+            // If we already have both executors running don't do anything
             return;
         }
 
@@ -394,6 +403,38 @@ impl Mempool {
         Mempool::recompute_sender_balances(affected_senders, &blockchain, &mut mempool_state);
     }
 
+    /// After a protocol upgrade there might be transactions that are no longer valid because of new rules introduced by the
+    /// protocol upgrade.
+    /// This revalidates all transactions in the mempool and removes the ones that are no longer valid.
+    pub fn revalidate_transactions(&self) {
+        let mut state = self.state.write();
+        let protocol_version = self.protocol_version();
+        let MempoolState {
+            regular_transactions,
+            control_transactions,
+            ..
+        } = &mut *state;
+
+        // Find transactions that no longer pass verification under the new protocol version.
+        let invalid: Vec<Blake2bHash> = regular_transactions
+            .transactions
+            .values_mut()
+            .chain(control_transactions.transactions.values_mut())
+            .filter_map(|tx| {
+                tx.reset_verification_state();
+                tx.verify_mut(tx.network_id, protocol_version)
+                    .err()
+                    .map(|_| tx.hash())
+            })
+            .collect();
+
+        // Remove them; `remove()` releases each sender's reserved balance and prunes empty sender state.
+        let blockchain = self.blockchain.read();
+        for hash in invalid {
+            state.remove(&blockchain, &hash, EvictionReason::Invalid);
+        }
+    }
+
     /// Get the mempool into a consistent and up-to-date state.
     /// Needed after the consensus was lost and the mempool didn't receive any information during that time
     /// - Removes transactions that expired, that were included in a block already or for which the sender is lacking funds by now.
@@ -629,11 +670,23 @@ impl Mempool {
         verify_tx(
             transaction,
             blockchain,
+            self.protocol_version(),
             network_id,
             &mempool_state,
             filter,
             tx_priority.unwrap_or(TxPriority::Medium),
         )
+    }
+
+    /// Returns the protocol version currently used for transaction verification.
+    pub fn protocol_version(&self) -> u16 {
+        self.protocol_version.load(Ordering::Relaxed)
+    }
+
+    /// Updates the protocol version used for transaction verification.
+    pub fn set_protocol_version(&self, protocol_version: u16) {
+        self.protocol_version
+            .store(protocol_version, Ordering::Relaxed);
     }
 
     /// Checks whether a transaction has been filtered

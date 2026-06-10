@@ -161,6 +161,21 @@ impl<N: Network> MempoolTask<N> {
             {
                 self.mempool.update(new_chain, old_chain);
             }
+            BlockchainEvent::ProtocolUpgrade(_, version) => {
+                self.mempool.set_protocol_version(*version);
+                if !self.consensus.is_ready_for_validation() {
+                    return;
+                }
+                debug!(
+                    "Clear and readd mempool transactions after protocol upgrade to version {}",
+                    version
+                );
+                self.mempool.revalidate_transactions();
+                debug!(
+                    "Reset all mempool transactions after protocol upgrade to version {}",
+                    version
+                );
+            }
             _ => {
                 // Nothing to do here.
             }

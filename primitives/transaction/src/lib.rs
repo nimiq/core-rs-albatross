@@ -328,6 +328,10 @@ impl Transaction {
         TransactionFormat::Extended
     }
 
+    pub fn reset_verification_state(&mut self) {
+        self.valid = false;
+    }
+
     pub fn verify_mut(
         &mut self,
         network_id: NetworkId,

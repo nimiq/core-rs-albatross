@@ -48,8 +48,7 @@ async fn mempool_task_readds_transactions_after_protocol_upgrade() {
 
     let genesis_info = genesis_builder.generate(env).unwrap();
     let mut hub = Some(MockHub::default());
-    let mut node =
-        Node::<MockNetwork>::history_with_genesis_info(0, genesis_info, &mut hub, false).await;
+    let mut node = Node::<MockNetwork>::history_with_genesis_info(0, genesis_info, &mut hub).await;
 
     let blockchain = Arc::clone(&node.blockchain);
     let mut consensus = node.consensus.take().unwrap();
@@ -120,6 +119,7 @@ async fn mempool_task_readds_transactions_after_protocol_upgrade() {
             BlockchainEvent::Extended(_) | BlockchainEvent::EpochFinalized(_) => {}
             BlockchainEvent::ProtocolUpgrade(_, version) => {
                 assert_eq!(version, upgrade_version);
+                assert_eq!(mempool_task.mempool.protocol_version(), upgrade_version);
                 break;
             }
             other => panic!("unexpected event while waiting for protocol upgrade: {other:?}"),
