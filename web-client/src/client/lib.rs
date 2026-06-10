@@ -30,7 +30,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::policy::Policy;
 use nimiq_time::timeout;
-use nimiq_utils::spawn_local;
+use nimiq_utils::{spawn_local, CARGO_VERSION};
 use tokio::sync::oneshot;
 use tsify::Tsify;
 use wasm_bindgen::{prelude::*, JsCast};
@@ -361,6 +361,13 @@ impl Client {
                 });
             }
         }
+    }
+
+    /// Returns the version of the web client, including a `+dirty` build-metadata
+    /// suffix when it was built from a Git work tree with uncommitted changes.
+    #[wasm_bindgen(js_name = getVersion)]
+    pub async fn get_version(&self) -> String {
+        CARGO_VERSION.to_string()
     }
 
     /// Returns the network ID that the client is connecting to.
