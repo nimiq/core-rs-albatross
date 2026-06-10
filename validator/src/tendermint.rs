@@ -232,46 +232,30 @@ where
         // Check if we want to upgrade the version.
         // This assumes we only ever upgrade to the latest version
         // and don't queue multiple upgrades.
-        let version = if blockchain.state().current_version() + 1 == Policy::max_supported_version()
+        // The version can only ever increase at election blocks (see `Block::verify_immediate_successor`),
+        // so we must not bump it on checkpoint macro blocks, which would be rejected by the network
+        let version = if Policy::is_election_block_at(self.block_height)
+            && blockchain.state().current_version() + 1 == Policy::max_supported_version()
         {
+            let new_version = blockchain.state().current_version() + 1;
             let staking_contract = blockchain
                 .get_staking_contract_if_complete(None)
                 .expect("Staking Contract must be complete to create a macro proposal");
             let data_store = blockchain.get_staking_contract_store();
             let txn = blockchain.read_transaction();
             let data_store_read = &data_store.read(&txn);
+            let validators = blockchain
+                .current_validators()
+                .expect("There need to be validators present");
 
-            // Calculate support for upgrade.
-            let support_check =
-                |data| Policy::supports_upgrade(data, blockchain.state().current_version() + 1);
-            let supporting_stake =
-                staking_contract.get_supporting_stake(data_store_read, support_check);
-            let total_active_stake = staking_contract.get_active_stake();
-            let supporting_slots = staking_contract.get_supporting_slots(
-                data_store_read,
-                blockchain
-                    .current_validators()
-                    .expect("There need to be validators present"),
-                support_check,
-            );
-
-            // We propose an upgraded block version only if:
-            // - `Policy::UPGRADE_MIN_SUPPORT` of the stake supports the upgrade.
-            // - `Policy::UPGRADE_MIN_SUPPORT` slots support the upgrade.
-            if supporting_slots * 100 >= Policy::SLOTS * Policy::UPGRADE_MIN_SUPPORT as u16
-                && u64::from(supporting_stake) * 100
-                    >= u64::from(total_active_stake) * Policy::UPGRADE_MIN_SUPPORT
-            {
-                info!(
-                    supporting_slots,
-                    %supporting_stake, %total_active_stake, "Triggering version upgrade"
-                );
-                Some(blockchain.state().current_version() + 1)
+            // We propose an upgraded block version only if the upgrade has enough support.
+            // The same predicate is enforced on the validation side (see
+            // `Blockchain::verify_block_state_pre_commit`), keeping both sides symmetric.
+            if staking_contract.supports_version_upgrade(data_store_read, validators, new_version) {
+                info!(new_version, "Triggering version upgrade");
+                Some(new_version)
             } else {
-                info!(
-                    supporting_slots,
-                    %supporting_stake, %total_active_stake, "Version upgrade does not have enough support"
-                );
+                info!(new_version, "Version upgrade does not have enough support");
                 None
             }
         } else {

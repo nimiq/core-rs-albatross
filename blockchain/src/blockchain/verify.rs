@@ -276,6 +276,44 @@ impl Blockchain {
             return Ok(());
         }
 
+        // If this block triggers a version upgrade, it must be an election block with enough
+        // support. The support check mirrors the proposer-side check in
+        // `TendermintProtocol::create_proposal` and gates the same `VersionUpgrade` inherent applied
+        // during `commit_accounts`: without it a malicious proposer could bump the version with
+        // insufficient support and thereby deactivate most of the active validators.
+        let new_version = macro_block.header.version;
+        if Some(new_version) == self.state.current_version().checked_add(1) {
+            // The network only accepts a version increase on election blocks: proposing one on a
+            // checkpoint block would halt the chain. Reject it here too as defense in depth, even
+            // though `Block::verify_immediate_successor` already rejects a version bump on a
+            // non-election block.
+            if !macro_block.is_election() {
+                warn!(
+                    %macro_block,
+                    new_version,
+                    reason = "Version upgrade on a non-election block",
+                    "Rejecting block"
+                );
+                return Err(PushError::InvalidBlock(BlockError::InvalidVersionUpgrade));
+            }
+
+            let validators = self
+                .current_validators()
+                .expect("Current validators must be present");
+            let data_store = self.get_staking_contract_store();
+            let data_store_read = data_store.read(txn);
+            if !staking_contract.supports_version_upgrade(&data_store_read, validators, new_version)
+            {
+                warn!(
+                    %macro_block,
+                    new_version,
+                    reason = "Version upgrade lacks sufficient support",
+                    "Rejecting block"
+                );
+                return Err(PushError::InvalidBlock(BlockError::InvalidVersionUpgrade));
+            }
+        }
+
         let reward_transactions =
             self.create_reward_transactions(&macro_block.header, &staking_contract);
 

@@ -3389,6 +3389,13 @@ fn version_upgrade_works() {
         "Supporting slots are counted correctly"
     );
 
+    // Only half of the active stake supports version 2, so the upgrade is not supported even though
+    // some slots back it.
+    assert!(
+        !staking_contract.supports_version_upgrade(&data_store_read, &validators, 2),
+        "Version 2 upgrade lacks the required stake support"
+    );
+
     // Check that the inherent correctly deactivates unsupporting validators.
     let inherent = Inherent::VersionUpgrade { new_version: 2 };
     let mut logs = vec![];

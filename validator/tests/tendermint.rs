@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use nimiq_account::{Account, StakingContractStoreWrite, TransactionLog};
-use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_block::BlockError;
+use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::traits::WriteTransaction;
 use nimiq_hash::Blake2bHash;
@@ -393,17 +394,135 @@ async fn it_triggers_version_upgrades() {
         .expect("Should have created proposal");
     assert_eq!(proposal.0.proposal.0.version, 1);
 
-    // Case 2: Elected validator threshold reached, but stake threshold not.
+    // Case 2: The elected slots support the upgrade (validator1 holds them all), but only half of
+    // the active stake does, so the stake threshold is not reached.
     signal_support(&temp_producer, &validator1, Some(2));
     let proposal = interface
         .create_proposal(0)
         .expect("Should have created proposal");
     assert_eq!(proposal.0.proposal.0.version, 1);
 
-    // Case 3: Both thresholds reached.
+    // Case 3: Both the elected slots and the active stake support the upgrade.
     signal_support(&temp_producer, &validator2, Some(2));
     let proposal = interface
         .create_proposal(0)
         .expect("Should have created proposal");
     assert_eq!(proposal.0.proposal.0.version, 2);
+}
+
+#[test(tokio::test)]
+async fn it_does_not_trigger_version_upgrades_on_checkpoint_blocks() {
+    // Move to just before the first checkpoint (non-election) macro block
+    let temp_producer = TemporaryBlockProducer::default();
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        let block = temp_producer.next_block(vec![], false);
+        temp_producer
+            .push(block)
+            .expect("Should be able to push block");
+    }
+
+    // Initialize a TendermintProtocol.
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+    let current_validators = blockchain.read().current_validators().unwrap().clone();
+    let proposal_height = blockchain.read().head().block_number() + 1;
+    assert!(
+        Policy::is_macro_block_at(proposal_height)
+            && !Policy::is_election_block_at(proposal_height),
+        "Test setup assumes the next macro block is a checkpoint block"
+    );
+    assert_eq!(
+        current_validators.num_validators(),
+        1,
+        "Test setup assumes one validator"
+    );
+    assert_eq!(
+        blockchain.read().state().current_version(),
+        1,
+        "Test assumes current version"
+    );
+    assert_eq!(
+        Policy::max_supported_version(),
+        2,
+        "Test assumes max supported version"
+    );
+    let validator1 = current_validators.validators[0].address.clone();
+    let hub = MockHub::default();
+    let nw: Arc<Network> = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
+    let interface = TendermintProtocol::new(
+        Arc::clone(&blockchain),
+        val_net,
+        temp_producer.producer.clone(),
+        current_validators,
+        0,
+        NetworkId::UnitAlbatross,
+        proposal_height,
+    );
+
+    // Setup second validator with same stake and signal full support from both
+    let validator2 = create_validator(&temp_producer);
+    signal_support(&temp_producer, &validator1, Some(2));
+    signal_support(&temp_producer, &validator2, Some(2));
+
+    // Even with both thresholds reached, a checkpoint block must keep the current version,
+    // since the network only accepts version increases on election blocks
+    let proposal = interface
+        .create_proposal(0)
+        .expect("Should have created proposal");
+    assert_eq!(proposal.0.proposal.0.version, 1);
+}
+
+/// The validation side must reject an election block that bumps the version without sufficient
+/// support, mirroring the proposer-side check (otherwise a malicious proposer could force the
+/// upgrade and deactivate most of the active validators).
+#[test(tokio::test)]
+async fn it_rejects_unsupported_version_upgrade_blocks() {
+    // Move to before the next election block.
+    let temp_producer = TemporaryBlockProducer::default();
+    for _ in 0..Policy::blocks_per_epoch() - 1 {
+        let block = temp_producer.next_block(vec![], false);
+        temp_producer
+            .push(block)
+            .expect("Should be able to push block");
+    }
+
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+    let validator1 = blockchain.read().current_validators().unwrap().validators[0]
+        .address
+        .clone();
+
+    // Add a second validator with the same stake and let only the elected validator1 signal
+    // support. This yields full slot support but only half of the active stake, below the
+    // `UPGRADE_MIN_SUPPORT` threshold, so the upgrade is not supported.
+    let _validator2 = create_validator(&temp_producer);
+    signal_support(&temp_producer, &validator1, Some(2));
+
+    // Forcefully craft an election block that bumps the version despite the missing support.
+    let proposal = {
+        let bc = blockchain.read();
+        temp_producer
+            .producer
+            .next_macro_block_proposal(
+                &bc,
+                bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                0,
+                vec![],
+                Some(2),
+            )
+            .expect("Should have created proposal")
+    };
+    assert!(proposal.is_election());
+    assert_eq!(proposal.header.version, 2);
+
+    // The network must reject the proposal because the upgrade lacks sufficient support.
+    let result = blockchain
+        .read()
+        .verify_macro_block_proposal(proposal, 0, None);
+    assert!(
+        matches!(
+            result,
+            Err(PushError::InvalidBlock(BlockError::InvalidVersionUpgrade))
+        ),
+        "Expected InvalidVersionUpgrade, got {result:?}"
+    );
 }

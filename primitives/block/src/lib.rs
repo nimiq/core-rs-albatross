@@ -87,6 +87,9 @@ pub enum BlockError {
     #[error("Incorrect reward transactions")]
     InvalidRewardTransactions,
 
+    #[error("Version upgrade lacks sufficient support")]
+    InvalidVersionUpgrade,
+
     #[error("Skip block contains a non empty body")]
     InvalidSkipBlockBody,
 
