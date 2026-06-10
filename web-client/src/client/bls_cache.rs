@@ -82,8 +82,8 @@ impl BlsCache {
             {
                 let mut keys = self.keys.borrow_mut();
                 for js_key in &js_keys {
-                    let value: BlsKeyEntry =
-                        serde_wasm_bindgen::from_value(js_key.clone()).unwrap();
+                    let value: BlsKeyEntry = serde_wasm_bindgen::from_value(js_key.clone())
+                        .map_err(|e| Error::UnexpectedJsType("BlsKeyEntry", e.into()))?;
                     let public_key = PublicKey::trusted_deserialize(&value.public_key);
                     keys.push(LazyPublicKey::from(public_key));
                 }

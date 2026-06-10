@@ -11,9 +11,11 @@ use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::policy;
+use nimiq_web_client::common::client_configuration::ClientConfiguration;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -103,4 +105,28 @@ async fn gossipsub_web_env() {
     log::info!("Received Gossipsub message: {:?}", received_message);
 
     assert_eq!(received_message, test_message);
+}
+
+#[wasm_bindgen_test]
+fn seed_nodes_rejects_non_string_entries() {
+    let mut config = ClientConfiguration::new();
+
+    let bad: Box<[JsValue]> = Box::new([
+        JsValue::from_str("/dns4/x.example/tcp/443/wss"),
+        JsValue::from(42_u32),
+    ]);
+    assert!(config.seed_nodes(bad).is_err());
+
+    let good: Box<[JsValue]> = Box::new([
+        JsValue::from_str("/dns4/x.example/tcp/443/wss"),
+        JsValue::from_str("/dns4/y.example/tcp/443/wss"),
+    ]);
+    assert!(config.seed_nodes(good).is_ok());
+    assert_eq!(
+        config.seed_nodes,
+        vec![
+            "/dns4/x.example/tcp/443/wss".to_string(),
+            "/dns4/y.example/tcp/443/wss".to_string(),
+        ]
+    );
 }

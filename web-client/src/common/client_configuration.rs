@@ -128,13 +128,17 @@ impl ClientConfiguration {
     /// Sets the list of seed nodes that are used to connect to the Nimiq Albatross network.
     ///
     /// Each array entry must be a proper Multiaddr format string.
+    ///
+    /// Throws when an entry cannot be deserialized as a string.
     #[wasm_bindgen(js_name = seedNodes)]
     #[allow(clippy::boxed_local)]
-    pub fn seed_nodes(&mut self, seeds: Box<[JsValue]>) {
+    pub fn seed_nodes(&mut self, seeds: Box<[JsValue]>) -> Result<(), JsError> {
         self.seed_nodes = seeds
             .iter()
-            .map(|seed| serde_wasm_bindgen::from_value(seed.clone()).unwrap())
-            .collect::<Vec<String>>();
+            .map(|seed| serde_wasm_bindgen::from_value::<String>(seed.clone()))
+            .collect::<Result<Vec<String>, _>>()
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(())
     }
 
     /// Sets the log level that is used when logging to the console.
