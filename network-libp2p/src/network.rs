@@ -54,6 +54,8 @@ pub struct Network {
     /// If the peer is interesting, i.e.: it provides services that are interested to us,
     /// we store an entry with the peer contact itself.
     connected_peers: Arc<RwLock<HashMap<PeerId, PeerInfo>>>,
+    /// User-agent strings announced by connected peers via libp2p identify.
+    peer_user_agents: Arc<RwLock<HashMap<PeerId, String>>>,
     /// Stream used to send event messages
     events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
     /// Stream used to send action messages
@@ -112,6 +114,7 @@ impl Network {
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
         let connected_peers = Arc::new(RwLock::new(HashMap::new()));
+        let peer_user_agents = Arc::new(RwLock::new(HashMap::new()));
 
         let events_tx = broadcast::Sender::new(64);
         let (action_tx, action_rx) = mpsc::channel(64);
@@ -128,6 +131,7 @@ impl Network {
             action_rx,
             validate_rx,
             Arc::clone(&connected_peers),
+            Arc::clone(&peer_user_agents),
             update_scores,
             Arc::clone(&contacts),
             #[cfg(feature = "kad")]
@@ -142,6 +146,7 @@ impl Network {
             contacts,
             local_peer_id,
             connected_peers,
+            peer_user_agents,
             events_tx,
             action_tx,
             validate_tx,
@@ -160,6 +165,15 @@ impl Network {
     /// If that peer has multiple associated addresses all but the first are omitted.
     pub fn get_address_book(&self) -> Vec<(PeerId, PeerInfo)> {
         self.contacts.read().known_peers()
+    }
+
+    /// Retrieves user-agent strings announced by connected peers via libp2p identify.
+    pub fn get_peer_user_agents(&self) -> Vec<(PeerId, String)> {
+        self.peer_user_agents
+            .read()
+            .iter()
+            .map(|(peer_id, user_agent)| (*peer_id, user_agent.clone()))
+            .collect()
     }
 
     /// Gets the network information

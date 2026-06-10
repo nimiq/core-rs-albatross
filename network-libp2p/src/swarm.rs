@@ -12,7 +12,7 @@ use libp2p::{
         muxing::StreamMuxerBox,
         transport::{Boxed, MemoryTransport},
     },
-    gossipsub,
+    gossipsub, identify,
     identity::Keypair,
     kad::{
         self, store::RecordStore, BootstrapError, BootstrapOk, GetRecordError, GetRecordOk,
@@ -63,6 +63,7 @@ struct EventInfo<'a> {
     swarm: &'a mut NimiqSwarm,
     state: &'a mut TaskState,
     connected_peers: &'a RwLock<HashMap<PeerId, PeerInfo>>,
+    peer_user_agents: &'a RwLock<HashMap<PeerId, String>>,
     rate_limiting: &'a mut RateLimits,
     #[cfg(feature = "kad")]
     dht_verifier: &'a dyn dht::Verifier,
@@ -154,6 +155,7 @@ pub(crate) async fn swarm_task(
     mut action_rx: mpsc::Receiver<NetworkAction>,
     mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
     connected_peers: Arc<RwLock<HashMap<PeerId, PeerInfo>>>,
+    peer_user_agents: Arc<RwLock<HashMap<PeerId, String>>>,
     mut update_scores: Interval,
     contacts: Arc<RwLock<PeerContactBook>>,
     #[cfg(feature = "kad")] dht_verifier: impl dht::Verifier,
@@ -198,6 +200,7 @@ pub(crate) async fn swarm_task(
                                 swarm: &mut swarm,
                                 state: &mut task_state,
                                 connected_peers: &connected_peers,
+                                peer_user_agents: &peer_user_agents,
                                 rate_limiting: &mut rate_limiting,
                                 #[cfg(feature = "kad")]
                                 dht_verifier: &dht_verifier,
@@ -397,6 +400,7 @@ fn handle_event(event: SwarmEvent<behaviour::BehaviourEvent>, event_info: EventI
             // Remove Peer
             if num_established == 0 {
                 event_info.connected_peers.write().remove(&peer_id);
+                event_info.peer_user_agents.write().remove(&peer_id);
                 event_info.swarm.behaviour_mut().remove_peer(peer_id);
 
                 // Removes or marks to remove the respective rate limits.
@@ -490,6 +494,7 @@ fn handle_behaviour_event(event: behaviour::BehaviourEvent, event_info: EventInf
         behaviour::BehaviourEvent::Dht(event) => handle_dht_event(event, event_info),
         behaviour::BehaviourEvent::Discovery(event) => handle_discovery_event(event, event_info),
         behaviour::BehaviourEvent::Gossipsub(event) => handle_gossipsub_event(event, event_info),
+        behaviour::BehaviourEvent::Identify(event) => handle_identify_event(event, event_info),
         behaviour::BehaviourEvent::Ping(event) => handle_ping_event(event, event_info),
         behaviour::BehaviourEvent::RequestResponse(event) => {
             handle_request_response_event(event, event_info)
@@ -513,6 +518,32 @@ fn handle_autonat_client_event(event: autonat::v2::client::Event, event_info: Ev
 
 fn handle_autonat_server_event(event: autonat::v2::server::Event, _event_info: EventInfo) {
     log::trace!(?event, "AutoNAT inbound probe");
+}
+
+fn handle_identify_event(event: identify::Event, event_info: EventInfo) {
+    match event {
+        identify::Event::Received { peer_id, info, .. } => {
+            debug!(
+                %peer_id,
+                user_agent = %info.agent_version,
+                protocol_version = %info.protocol_version,
+                "Identify info received",
+            );
+            event_info
+                .peer_user_agents
+                .write()
+                .insert(peer_id, info.agent_version);
+        }
+        identify::Event::Error { peer_id, error, .. } => {
+            debug!(%peer_id, %error, "Identify error");
+        }
+        identify::Event::Sent { peer_id, .. } => {
+            trace!(%peer_id, "Identify info sent");
+        }
+        identify::Event::Pushed { peer_id, .. } => {
+            trace!(%peer_id, "Identify info pushed");
+        }
+    }
 }
 
 #[cfg(feature = "kad")]
