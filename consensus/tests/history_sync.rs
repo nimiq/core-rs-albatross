@@ -30,7 +30,7 @@ use nimiq_time::sleep;
 use nimiq_utils::time::OffsetTime;
 use parking_lot::{Mutex, RwLock};
 
-use crate::sync_utils::{sync_two_peers, SyncMode};
+use crate::sync_utils::{sync_two_peers, sync_two_peers_across_protocol_upgrade, SyncMode};
 
 mod sync_utils;
 
@@ -92,6 +92,11 @@ async fn two_peers_can_sync_two_epochs() {
         SyncMode::History,
     )
     .await
+}
+
+#[test(tokio::test)]
+async fn protocol_upgrade_event_is_emitted_during_history_sync() {
+    sync_two_peers_across_protocol_upgrade(SyncMode::History).await
 }
 
 #[test(tokio::test)]

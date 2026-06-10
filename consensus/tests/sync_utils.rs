@@ -1,8 +1,11 @@
-use std::sync::{atomic::AtomicU32, Arc};
+use std::{
+    ops::Add,
+    sync::{atomic::AtomicU32, Arc},
+};
 
 use futures::{future, StreamExt};
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction};
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::{
     consensus::Consensus,
@@ -18,11 +21,16 @@ use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::{
-    blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
+    blockchain::{
+        fill_micro_blocks_with_txns, produce_macro_blocks_with_txns,
+        signal_next_protocol_version_via_tx, signing_key, voting_key,
+    },
+    test_custom_block::{next_macro_block, BlockConfig},
     test_network::TestNetwork,
 };
 use nimiq_utils::{spawn, time::OffsetTime};
 use parking_lot::{Mutex, RwLock};
+use tokio::time::{timeout, Duration};
 
 #[allow(dead_code)]
 #[derive(PartialEq)]
@@ -264,4 +272,123 @@ pub async fn sync_two_peers(
         }
         BlockchainProxy::Light(_) => {}
     }
+}
+
+pub async fn sync_two_peers_across_protocol_upgrade(sync_mode: SyncMode) {
+    let hub = MockHub::default();
+    let mut networks = vec![];
+
+    let env1 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let time = Arc::new(OffsetTime::new());
+    let blockchain1 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env1,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks_with_txns(
+        &producer,
+        &blockchain1,
+        (Policy::batches_per_epoch() - 1) as usize,
+        1,
+        2,
+    );
+    let b1_init_version = blockchain1.read().protocol_version();
+
+    let upgrade_version = signal_next_protocol_version_via_tx(&producer, &blockchain1);
+    fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 2);
+    let upgrade_block = {
+        let blockchain = blockchain1.read();
+        next_macro_block(
+            &producer.signing_key,
+            &producer.voting_key,
+            &blockchain,
+            &BlockConfig {
+                version: Some(upgrade_version),
+                ..Default::default()
+            },
+        )
+    };
+    let upgrade_hash = upgrade_block.hash();
+    assert_eq!(
+        Blockchain::push(blockchain1.upgradable_read(), upgrade_block),
+        Ok(PushResult::Extended)
+    );
+
+    let net1: Arc<Network> =
+        TestNetwork::build_network(40, Default::default(), &mut Some(hub)).await;
+    networks.push(Arc::clone(&net1));
+    let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
+    let syncer1 = SyncerProxy::new_history(
+        blockchain1_proxy.clone(),
+        Arc::clone(&net1),
+        Arc::new(Mutex::new(BlsCache::new_test())),
+        net1.subscribe_events(),
+    )
+    .await;
+    let _consensus1 = Consensus::from_network(blockchain1_proxy, Arc::clone(&net1), syncer1);
+
+    let time = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain2_proxy = match sync_mode {
+        SyncMode::History | SyncMode::Full => {
+            let blockchain2 = Arc::new(RwLock::new(
+                Blockchain::new(
+                    env2,
+                    BlockchainConfig::default(),
+                    NetworkId::UnitAlbatross,
+                    time,
+                )
+                .unwrap(),
+            ));
+            BlockchainProxy::from(blockchain2)
+        }
+        SyncMode::Light | SyncMode::Pico => {
+            let blockchain2 = Arc::new(RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross)));
+            BlockchainProxy::from(blockchain2)
+        }
+    };
+    let b2_init_version = blockchain2_proxy.read().protocol_version();
+
+    let events = blockchain2_proxy.read().notifier_as_stream();
+    let mut upgrade_events = events
+        .filter(|event| future::ready(matches!(event, BlockchainEvent::ProtocolUpgrade(_, _))));
+
+    let net2: Arc<Network> =
+        TestNetwork::build_network(41, Default::default(), &mut Some(MockHub::default())).await;
+    networks.push(Arc::clone(&net2));
+
+    let mut syncer2 = syncer(&sync_mode, &net2, &blockchain2_proxy).await;
+
+    Network::connect_networks(&networks, 41).await;
+
+    let macro_sync_result = match syncer2 {
+        SyncerProxy::History(ref mut syncer) => syncer.macro_sync.next().await,
+        SyncerProxy::Light(ref mut syncer) => syncer.macro_sync.next().await,
+        SyncerProxy::Full(ref mut syncer) => syncer.macro_sync.next().await,
+        SyncerProxy::Pico(ref mut syncer) => syncer.macro_sync.next().await,
+    };
+
+    assert_eq!(
+        macro_sync_result,
+        Some(MacroSyncReturn::Good(net1.get_local_peer_id()))
+    );
+
+    match timeout(Duration::from_secs(10), upgrade_events.next()).await {
+        Ok(Some(BlockchainEvent::ProtocolUpgrade(block_hash, version))) => {
+            assert_eq!(block_hash, upgrade_hash);
+            assert_eq!(version, upgrade_version);
+        }
+        Ok(event) => panic!("expected ProtocolUpgrade event, got {event:?}"),
+        Err(_) => panic!("timed out waiting for ProtocolUpgrade event"),
+    }
+    assert_eq!(b1_init_version, b2_init_version);
+    assert_eq!(b2_init_version.add(1), upgrade_version);
+    assert_eq!(blockchain2_proxy.read().election_head_hash(), upgrade_hash);
+    assert_eq!(blockchain2_proxy.read().protocol_version(), upgrade_version);
 }

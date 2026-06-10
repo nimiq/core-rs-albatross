@@ -627,7 +627,11 @@ fn it_rejects_staking_transaction_with_default_signer() {
         &keypair,
         None,
     );
-    assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
+    assert_eq!(AccountType::verify_incoming_transaction(&tx, 0), Ok(()));
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx, Policy::max_supported_version()),
+        Ok(())
+    );
 
     // Replacing the embedded staking proof with the all-zero default proof models the
     // transaction a malicious block producer would forge to create a staker owned by the
@@ -640,7 +644,11 @@ fn it_rejects_staking_transaction_with_default_signer() {
     .unwrap();
 
     assert_eq!(
-        AccountType::verify_incoming_transaction(&forged),
+        AccountType::verify_incoming_transaction(&forged, 0),
+        Err(TransactionError::InvalidProof)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&forged, Policy::max_supported_version()),
         Err(TransactionError::InvalidProof)
     );
 }

@@ -3,7 +3,7 @@ mod sync_utils;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 
-use crate::sync_utils::{sync_two_peers, SyncMode};
+use crate::sync_utils::{sync_two_peers, sync_two_peers_across_protocol_upgrade, SyncMode};
 
 #[test(tokio::test)]
 async fn two_peers_can_sync_empty_chain() {
@@ -63,4 +63,9 @@ async fn two_peers_can_sync_two_epochs() {
         SyncMode::Light,
     )
     .await
+}
+
+#[test(tokio::test)]
+async fn protocol_upgrade_event_is_emitted_during_light_sync() {
+    sync_two_peers_across_protocol_upgrade(SyncMode::Light).await
 }

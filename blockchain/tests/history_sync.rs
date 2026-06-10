@@ -2,19 +2,37 @@ use std::sync::Arc;
 
 use nimiq_block::BlockError;
 use nimiq_blockchain::{interface::HistoryInterface, BlockProducer, Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, PushError, PushResult};
 use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{
-    fill_micro_blocks_with_txns, produce_macro_blocks, produce_macro_blocks_with_txns, signing_key,
-    voting_key,
+use nimiq_test_utils::{
+    blockchain::{
+        fill_micro_blocks_with_txns, produce_macro_blocks, produce_macro_blocks_with_txns,
+        signal_next_protocol_version_via_tx, signing_key, voting_key,
+    },
+    test_custom_block::{next_macro_block, BlockConfig},
 };
 use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
+use tokio::sync::broadcast::error::TryRecvError;
+
+fn collect_blockchain_events(
+    receiver: &mut tokio::sync::broadcast::Receiver<BlockchainEvent>,
+) -> Vec<BlockchainEvent> {
+    let mut events = Vec::new();
+
+    loop {
+        match receiver.try_recv() {
+            Ok(event) => events.push(event),
+            Err(TryRecvError::Empty) => return events,
+            Err(error) => panic!("unexpected broadcast error: {error:?}"),
+        }
+    }
+}
 
 // Test that when we try to adopt an empty batch through history sync, while the preceding batch has transactions, reverting the history is not
 // necessary based on the history we already have locally. Part of pushing something through history sync is to find a common state
@@ -265,6 +283,86 @@ fn history_sync_works() {
             &checkpoint_txs_3_1
         ),
         Ok(PushResult::Extended)
+    );
+}
+
+#[test]
+fn history_sync_emits_protocol_upgrade_event_when_version_changes() {
+    let time1 = Arc::new(OffsetTime::new());
+    let env1 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+
+    let blockchain1 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env1,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time1,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks_with_txns(
+        &producer,
+        &blockchain1,
+        (Policy::batches_per_epoch() - 1) as usize,
+        1,
+        0,
+    );
+    let upgrade_version = signal_next_protocol_version_via_tx(&producer, &blockchain1);
+    fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 0);
+    let upgrade_block = {
+        let blockchain = blockchain1.read();
+        next_macro_block(
+            &producer.signing_key,
+            &producer.voting_key,
+            &blockchain,
+            &BlockConfig {
+                version: Some(upgrade_version),
+                ..Default::default()
+            },
+        )
+    };
+    let upgrade_hash = upgrade_block.hash();
+
+    assert_eq!(
+        Blockchain::push(blockchain1.upgradable_read(), upgrade_block.clone()),
+        Ok(PushResult::Extended)
+    );
+
+    let upgrade_history = blockchain1
+        .read()
+        .history_store
+        .get_epoch_transactions(1, None);
+
+    let time2 = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time2,
+        )
+        .unwrap(),
+    ));
+    let mut receiver = blockchain2.read().notifier.subscribe();
+
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            upgrade_block,
+            &upgrade_history
+        ),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(
+        collect_blockchain_events(&mut receiver),
+        vec![
+            BlockchainEvent::HistoryAdopted(upgrade_hash.clone()),
+            BlockchainEvent::EpochFinalized(upgrade_hash.clone()),
+            BlockchainEvent::ProtocolUpgrade(upgrade_hash, upgrade_version),
+        ],
     );
 }
 

@@ -1,8 +1,10 @@
+use std::ops::Add;
+
 use nimiq_block::{
     Block, BlockError, DoubleProposalProof, DoubleVoteProof, EquivocationProofError, ForkProof,
 };
 use nimiq_blockchain_interface::{
-    PushError,
+    AbstractBlockchain, BlockchainEvent, PushError,
     PushError::{InvalidBlock, InvalidEquivocationProof},
     PushResult,
 };
@@ -15,12 +17,30 @@ use nimiq_primitives::{
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
-    blockchain::validator_address,
+    blockchain::{
+        fill_micro_blocks_with_txns, produce_macro_blocks_with_txns,
+        signal_all_validators_support_for_next_version, validator_address,
+    },
     test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
     test_rng,
 };
 use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_vrf::VrfSeed;
+use tokio::sync::broadcast::error::TryRecvError;
+
+fn collect_blockchain_events(
+    receiver: &mut tokio::sync::broadcast::Receiver<BlockchainEvent>,
+) -> Vec<BlockchainEvent> {
+    let mut events = Vec::new();
+
+    loop {
+        match receiver.try_recv() {
+            Ok(event) => events.push(event),
+            Err(TryRecvError::Empty) => return events,
+            Err(error) => panic!("unexpected broadcast error: {error:?}"),
+        }
+    }
+}
 
 pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushResult, PushError>) {
     if config.test_micro {
@@ -237,6 +257,88 @@ fn simply_push_election_block(config: &BlockConfig, expected_res: &Result<PushRe
     };
 
     assert_eq!(&temp_producer.push(block), expected_res);
+}
+
+#[test]
+fn it_emits_protocol_upgrade_event_for_election_push() {
+    let temp_producer = TemporaryBlockProducer::new();
+    let init_version = temp_producer.blockchain.read().protocol_version();
+    produce_macro_blocks_with_txns(
+        &temp_producer.producer,
+        &temp_producer.blockchain,
+        (Policy::batches_per_epoch() - 1) as usize,
+        1,
+        0,
+    );
+    fill_micro_blocks_with_txns(&temp_producer.producer, &temp_producer.blockchain, 1, 0);
+
+    let mut receiver = temp_producer.blockchain.read().notifier.subscribe();
+    let upgrade_version = signal_all_validators_support_for_next_version(&temp_producer.blockchain);
+    let upgrade_block = {
+        let blockchain = temp_producer.blockchain.read();
+        next_macro_block(
+            &temp_producer.producer.signing_key,
+            &temp_producer.producer.voting_key,
+            &blockchain,
+            &BlockConfig {
+                version: Some(upgrade_version),
+                ..Default::default()
+            },
+        )
+    };
+    let upgrade_hash = upgrade_block.hash();
+
+    assert_eq!(temp_producer.push(upgrade_block), Ok(PushResult::Extended));
+    assert_eq!(
+        collect_blockchain_events(&mut receiver),
+        vec![
+            BlockchainEvent::Extended(upgrade_hash.clone()),
+            BlockchainEvent::EpochFinalized(upgrade_hash.clone()),
+            BlockchainEvent::ProtocolUpgrade(upgrade_hash, upgrade_version),
+        ],
+    );
+    let blockchain = temp_producer.blockchain.read();
+    assert_eq!(init_version.add(1), upgrade_version);
+    assert_eq!(blockchain.protocol_version(), upgrade_version);
+}
+
+#[test]
+fn it_does_not_emit_protocol_upgrade_event_without_version_change() {
+    let temp_producer = TemporaryBlockProducer::new();
+    let init_version = temp_producer.blockchain.read().protocol_version();
+    produce_macro_blocks_with_txns(
+        &temp_producer.producer,
+        &temp_producer.blockchain,
+        (Policy::batches_per_epoch() - 1) as usize,
+        1,
+        0,
+    );
+    fill_micro_blocks_with_txns(&temp_producer.producer, &temp_producer.blockchain, 1, 0);
+
+    let mut receiver = temp_producer.blockchain.read().notifier.subscribe();
+    let election_block = {
+        let blockchain = temp_producer.blockchain.read();
+        next_macro_block(
+            &temp_producer.producer.signing_key,
+            &temp_producer.producer.voting_key,
+            &blockchain,
+            &BlockConfig::default(),
+        )
+    };
+    let election_hash = election_block.hash();
+
+    assert_eq!(temp_producer.push(election_block), Ok(PushResult::Extended));
+    assert_eq!(
+        collect_blockchain_events(&mut receiver),
+        vec![
+            BlockchainEvent::Extended(election_hash.clone()),
+            BlockchainEvent::EpochFinalized(election_hash),
+        ],
+    );
+    assert_eq!(
+        init_version,
+        temp_producer.blockchain.read().protocol_version()
+    );
 }
 
 #[test]

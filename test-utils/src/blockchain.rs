@@ -1,5 +1,6 @@
 use std::{str::FromStr, sync::Arc, time::Instant};
 
+use nimiq_account::{Account, StakingContractStoreWrite, TransactionLog};
 use nimiq_block::{
     Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
     SkipBlockProof, TendermintProof,
@@ -8,12 +9,15 @@ use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
+use nimiq_database::traits::WriteTransaction;
 use nimiq_genesis::NetworkId;
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, KeyPair, PrivateKey as SchnorrPrivateKey, PrivateKey,
 };
 use nimiq_primitives::{
-    coin::Coin, policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote,
+    coin::Coin, key_nibbles::KeyNibbles, policy::Policy, TendermintIdentifier, TendermintStep,
+    TendermintVote,
 };
 use nimiq_serde::Deserialize;
 use nimiq_transaction::Transaction;
@@ -257,6 +261,99 @@ pub fn validator_key() -> SchnorrKeyPair {
 
 pub fn validator_address() -> Address {
     Address::from(&validator_key())
+}
+
+pub fn signal_all_validators_support_for_next_version(blockchain: &Arc<RwLock<Blockchain>>) -> u16 {
+    let blockchain_read = blockchain.read();
+    let next_version = blockchain_read.state.current_version() + 1;
+    let current_validators = blockchain_read
+        .current_validators()
+        .expect("Current validator set must exist")
+        .clone();
+    let mut staking_contract = blockchain_read.get_staking_contract();
+
+    let mut raw_txn = blockchain_read.write_transaction();
+    let data_store = blockchain_read
+        .state()
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut txn = (&mut raw_txn).into();
+    let mut data_store_write = data_store.write(&mut txn);
+    let mut store = StakingContractStoreWrite::new(&mut data_store_write);
+
+    let version_bytes = next_version.to_be_bytes();
+    let mut signal_data = [0; 32];
+    signal_data[..2].copy_from_slice(&version_bytes);
+    let signal_data = Blake2bHash(signal_data);
+
+    for validator in current_validators.iter() {
+        staking_contract
+            .update_validator(
+                &mut store,
+                &validator.address,
+                None,
+                None,
+                None,
+                Some(Some(signal_data.clone())),
+                &mut TransactionLog::empty(),
+            )
+            .expect("Failed to update validator");
+    }
+
+    blockchain_read
+        .state()
+        .accounts
+        .tree
+        .put(
+            &mut txn,
+            &KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS),
+            Account::Staking(staking_contract),
+        )
+        .expect("Failed to persist staking contract");
+
+    raw_txn.commit();
+
+    next_version
+}
+
+pub fn signal_next_protocol_version_via_tx(
+    producer: &BlockProducer,
+    blockchain: &Arc<RwLock<Blockchain>>,
+) -> u16 {
+    let next_version = blockchain.read().state.current_version() + 1;
+    let version_bytes = next_version.to_be_bytes();
+    let mut signal_data = [0; 32];
+    signal_data[..2].copy_from_slice(&version_bytes);
+
+    let tx = TransactionBuilder::new_update_validator(
+        &validator_key(),
+        &validator_key(),
+        None,
+        None,
+        None,
+        Some(Some(Blake2bHash(signal_data))),
+        Coin::ZERO,
+        blockchain.read().block_number(),
+        NetworkId::UnitAlbatross,
+    );
+
+    let block = producer
+        .next_micro_block(
+            &blockchain.read(),
+            blockchain.read().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![tx],
+            vec![0x42],
+            None,
+        )
+        .expect("Failed to create signal transaction block");
+
+    assert_eq!(
+        Blockchain::push(blockchain.upgradable_read(), Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    next_version
 }
 
 pub fn voting_key() -> BlsKeyPair {

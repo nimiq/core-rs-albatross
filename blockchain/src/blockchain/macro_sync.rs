@@ -104,10 +104,11 @@ impl Blockchain {
         block.verify_validators(this.current_validators().unwrap())?;
 
         // At this point we know that the block is correct. We just have to push it.
-
-        // Create the chain info for the new block.
         let block_hash = block.hash();
         let block_number = block.block_number();
+        let is_election_block = Policy::is_election_block_at(block_number);
+        let is_protocol_upgrade =
+            is_election_block && block.version() > this.state.current_version();
         let chain_info = ChainInfo::new(block, true);
 
         read_txn.close();
@@ -116,8 +117,6 @@ impl Blockchain {
         this.state
             .accounts
             .reinitialize_as_incomplete(&mut (&mut txn).into());
-
-        let is_election_block = Policy::is_election_block_at(block_number);
 
         this.chain_store
             .put_chain_info(&mut txn, &block_hash, &chain_info, true);
@@ -195,8 +194,16 @@ impl Blockchain {
 
         if is_election_block {
             this.notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash))
+                .send(BlockchainEvent::EpochFinalized(block_hash.clone()))
                 .ok();
+            if is_protocol_upgrade {
+                this.notifier
+                    .send(BlockchainEvent::ProtocolUpgrade(
+                        block_hash,
+                        this.state.current_version(),
+                    ))
+                    .ok();
+            }
         } else {
             this.notifier
                 .send(BlockchainEvent::Finalized(block_hash))

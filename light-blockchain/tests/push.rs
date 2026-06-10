@@ -1,9 +1,9 @@
-use std::sync::Arc;
+use std::{ops::Add, sync::Arc};
 
 use nimiq_block::{Block, BlockError, SkipBlockProof};
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{
-    AbstractBlockchain, PushError, PushError::InvalidBlock, PushResult,
+    AbstractBlockchain, BlockchainEvent, PushError, PushError::InvalidBlock, PushResult,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -12,10 +12,48 @@ use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
+    blockchain::{
+        fill_micro_blocks_with_txns, produce_macro_blocks_with_txns,
+        signal_all_validators_support_for_next_version,
+    },
     test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
 };
 use nimiq_vrf::VrfSeed;
 use parking_lot::RwLock;
+use tokio::sync::broadcast::error::TryRecvError;
+
+fn collect_blockchain_events(
+    receiver: &mut tokio::sync::broadcast::Receiver<BlockchainEvent>,
+) -> Vec<BlockchainEvent> {
+    let mut events = Vec::new();
+
+    loop {
+        match receiver.try_recv() {
+            Ok(event) => events.push(event),
+            Err(TryRecvError::Empty) => return events,
+            Err(error) => panic!("unexpected broadcast error: {error:?}"),
+        }
+    }
+}
+
+fn push_source_chain_to_light(
+    source: &TemporaryBlockProducer,
+    light_blockchain: &Arc<RwLock<LightBlockchain>>,
+) {
+    let source = source.blockchain.read();
+
+    for block_number in (Policy::genesis_block_number() + 1)..=source.block_number() {
+        let block = source
+            .chain_store
+            .get_block_at(block_number, true, None)
+            .unwrap();
+
+        assert_eq!(
+            LightBlockchain::push(light_blockchain.upgradable_read(), remove_micro_body(block)),
+            Ok(PushResult::Extended),
+        );
+    }
+}
 
 fn remove_micro_body(block: Block) -> Block {
     match block {
@@ -277,6 +315,107 @@ fn simply_push_macro_block(config: &BlockConfig, expected_res: &Result<PushResul
     };
 
     assert_eq!(&temp_producer.push(block), expected_res);
+}
+
+#[test]
+fn it_emits_protocol_upgrade_event_for_election_push() {
+    let source = TemporaryBlockProducer::new();
+    produce_macro_blocks_with_txns(
+        &source.producer,
+        &source.blockchain,
+        (Policy::batches_per_epoch() - 1) as usize,
+        1,
+        0,
+    );
+    fill_micro_blocks_with_txns(&source.producer, &source.blockchain, 1, 0);
+
+    let light_blockchain = Arc::new(RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross)));
+    let initial_version = light_blockchain.read().current_version();
+    push_source_chain_to_light(&source, &light_blockchain);
+
+    let mut receiver = light_blockchain.read().notifier.subscribe();
+    let upgrade_version = signal_all_validators_support_for_next_version(&source.blockchain);
+    assert_eq!(
+        initial_version.add(1),
+        upgrade_version,
+        "Initial blockchain should be one version bellow the targeted upgrade version"
+    );
+    let upgrade_block = {
+        let blockchain = source.blockchain.read();
+        next_macro_block(
+            &source.producer.signing_key,
+            &source.producer.voting_key,
+            &blockchain,
+            &BlockConfig {
+                version: Some(upgrade_version),
+                ..Default::default()
+            },
+        )
+    };
+    let upgrade_hash = upgrade_block.hash();
+
+    assert_eq!(
+        LightBlockchain::push(
+            light_blockchain.upgradable_read(),
+            remove_micro_body(upgrade_block),
+        ),
+        Ok(PushResult::Extended),
+    );
+    assert_eq!(
+        collect_blockchain_events(&mut receiver),
+        vec![
+            BlockchainEvent::Extended(upgrade_hash.clone()),
+            BlockchainEvent::EpochFinalized(upgrade_hash.clone()),
+            BlockchainEvent::ProtocolUpgrade(upgrade_hash, upgrade_version),
+        ],
+    );
+    assert_eq!(light_blockchain.read().current_version(), upgrade_version);
+}
+
+#[test]
+fn it_does_not_emit_protocol_upgrade_event_without_version_change() {
+    let source = TemporaryBlockProducer::new();
+    produce_macro_blocks_with_txns(
+        &source.producer,
+        &source.blockchain,
+        (Policy::batches_per_epoch() - 1) as usize,
+        1,
+        0,
+    );
+    fill_micro_blocks_with_txns(&source.producer, &source.blockchain, 1, 0);
+
+    let light_blockchain = Arc::new(RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross)));
+    let initial_version = light_blockchain.read().current_version();
+    push_source_chain_to_light(&source, &light_blockchain);
+
+    let mut receiver = light_blockchain.read().notifier.subscribe();
+    let election_block = {
+        let blockchain = source.blockchain.read();
+        next_macro_block(
+            &source.producer.signing_key,
+            &source.producer.voting_key,
+            &blockchain,
+            &BlockConfig::default(),
+        )
+    };
+    let election_hash = election_block.hash();
+
+    assert_eq!(
+        LightBlockchain::push(
+            light_blockchain.upgradable_read(),
+            remove_micro_body(election_block),
+        ),
+        Ok(PushResult::Extended),
+    );
+    assert_eq!(
+        collect_blockchain_events(&mut receiver),
+        vec![
+            BlockchainEvent::Extended(election_hash.clone()),
+            BlockchainEvent::EpochFinalized(election_hash),
+        ],
+    );
+
+    assert_eq!(light_blockchain.read().current_version(), initial_version);
 }
 
 #[test]
