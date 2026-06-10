@@ -222,6 +222,10 @@ impl<H: HashOutput> IncrementalMerkleProof<H> {
         chunk_hashes: &[H],
         previous_result: Option<&IncrementalMerkleProofResult<H>>,
     ) -> Result<IncrementalMerkleProofResult<H>, IncrementalMerkleProofError> {
+        if chunk_hashes.is_empty() {
+            return Err(IncrementalMerkleProofError::InvalidChunkSize);
+        }
+
         let index_offset = previous_result.map(|r| r.next_index).unwrap_or(0);
         let empty_vec = Vec::new();
         let helper_nodes = previous_result
