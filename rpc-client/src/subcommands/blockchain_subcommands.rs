@@ -296,12 +296,12 @@ impl HandleSubcommand for BlockchainCommand {
                 if previous_penalized {
                     println!(
                         "{:#?}",
-                        client.blockchain.get_current_penalized_slots().await?
+                        client.blockchain.get_previous_penalized_slots().await?
                     )
                 } else {
                     println!(
                         "{:#?}",
-                        client.blockchain.get_previous_penalized_slots().await?
+                        client.blockchain.get_current_penalized_slots().await?
                     )
                 }
             }
