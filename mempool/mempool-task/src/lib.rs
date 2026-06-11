@@ -151,8 +151,23 @@ impl<N: Network> MempoolTask<N> {
                         .read()
                         .get_block(hash, true)
                         .expect("Head block not found");
+                    let is_election = block.is_election();
+                    let version = block.version();
 
                     self.mempool.update(&[(hash.clone(), block)], [].as_ref());
+
+                    // If we upgraded we must revalidate all transactions.
+                    if is_election && self.mempool.set_protocol_version(version) < version {
+                        debug!(
+                            "Revalidate mempool transactions after protocol upgrade to version {}",
+                            version
+                        );
+                        self.mempool.revalidate_transactions();
+                        debug!(
+                            "Revalidate mempool transactions after protocol upgrade to version {}",
+                            version
+                        );
+                    }
                 }
             }
             // Mempool updates are only done once we are synced.
@@ -160,21 +175,6 @@ impl<N: Network> MempoolTask<N> {
                 if self.consensus.is_ready_for_validation() =>
             {
                 self.mempool.update(new_chain, old_chain);
-            }
-            BlockchainEvent::ProtocolUpgrade(_, version) => {
-                self.mempool.set_protocol_version(*version);
-                if !self.consensus.is_ready_for_validation() {
-                    return;
-                }
-                debug!(
-                    "Clear and readd mempool transactions after protocol upgrade to version {}",
-                    version
-                );
-                self.mempool.revalidate_transactions();
-                debug!(
-                    "Reset all mempool transactions after protocol upgrade to version {}",
-                    version
-                );
             }
             _ => {
                 // Nothing to do here.

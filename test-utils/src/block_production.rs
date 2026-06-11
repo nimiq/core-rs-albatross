@@ -61,6 +61,7 @@ impl TemporaryBlockProducer {
         producer
     }
 
+    /// Creates the temporary block producer with the unit tests default version of 1.
     pub fn new_merged() -> Self {
         Self::new_merged_with_protocol_version(unit_genesis_block().version())
     }
@@ -348,6 +349,7 @@ impl TemporaryBlockProducer {
     }
 }
 
+/// Creates the temporary block producer with the unit tests default version of 1.
 fn unit_genesis_block() -> Block {
     NetworkInfo::from_network_id(NetworkId::UnitAlbatross).genesis_block()
 }

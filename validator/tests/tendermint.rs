@@ -415,8 +415,11 @@ async fn it_triggers_version_upgrades() {
 
 #[test(tokio::test)]
 async fn it_does_not_trigger_version_upgrades_on_checkpoint_blocks() {
+    let initial_version = Policy::max_supported_version() - 1;
+    let next_version = Policy::max_supported_version();
+
     // Move to just before the first checkpoint (non-election) macro block
-    let temp_producer = TemporaryBlockProducer::default();
+    let temp_producer = TemporaryBlockProducer::new_with_protocol_version(initial_version);
     for _ in 0..Policy::blocks_per_batch() - 1 {
         let block = temp_producer.next_block(vec![], false);
         temp_producer
@@ -440,12 +443,12 @@ async fn it_does_not_trigger_version_upgrades_on_checkpoint_blocks() {
     );
     assert_eq!(
         blockchain.read().state().current_version(),
-        1,
+        initial_version,
         "Test assumes current version"
     );
     assert_eq!(
         Policy::max_supported_version(),
-        2,
+        next_version,
         "Test assumes max supported version"
     );
     let validator1 = current_validators.validators[0].address.clone();
@@ -464,15 +467,15 @@ async fn it_does_not_trigger_version_upgrades_on_checkpoint_blocks() {
 
     // Setup second validator with same stake and signal full support from both
     let validator2 = create_validator(&temp_producer);
-    signal_support(&temp_producer, &validator1, Some(2));
-    signal_support(&temp_producer, &validator2, Some(2));
+    signal_support(&temp_producer, &validator1, Some(next_version));
+    signal_support(&temp_producer, &validator2, Some(next_version));
 
     // Even with both thresholds reached, a checkpoint block must keep the current version,
     // since the network only accepts version increases on election blocks
     let proposal = interface
         .create_proposal(0)
         .expect("Should have created proposal");
-    assert_eq!(proposal.0.proposal.0.version, 1);
+    assert_eq!(proposal.0.proposal.0.version, initial_version);
 }
 
 /// The validation side must reject an election block that bumps the version without sufficient
@@ -480,8 +483,11 @@ async fn it_does_not_trigger_version_upgrades_on_checkpoint_blocks() {
 /// upgrade and deactivate most of the active validators).
 #[test(tokio::test)]
 async fn it_rejects_unsupported_version_upgrade_blocks() {
+    let initial_version = Policy::max_supported_version() - 1;
+    let next_version = Policy::max_supported_version();
+
     // Move to before the next election block.
-    let temp_producer = TemporaryBlockProducer::default();
+    let temp_producer = TemporaryBlockProducer::new_with_protocol_version(initial_version);
     for _ in 0..Policy::blocks_per_epoch() - 1 {
         let block = temp_producer.next_block(vec![], false);
         temp_producer
@@ -498,7 +504,7 @@ async fn it_rejects_unsupported_version_upgrade_blocks() {
     // support. This yields full slot support but only half of the active stake, below the
     // `UPGRADE_MIN_SUPPORT` threshold, so the upgrade is not supported.
     let _validator2 = create_validator(&temp_producer);
-    signal_support(&temp_producer, &validator1, Some(2));
+    signal_support(&temp_producer, &validator1, Some(next_version));
 
     // Forcefully craft an election block that bumps the version despite the missing support.
     let proposal = {
@@ -510,12 +516,12 @@ async fn it_rejects_unsupported_version_upgrade_blocks() {
                 bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
                 0,
                 vec![],
-                Some(2),
+                Some(next_version),
             )
             .expect("Should have created proposal")
     };
     assert!(proposal.is_election());
-    assert_eq!(proposal.header.version, 2);
+    assert_eq!(proposal.header.version, next_version);
 
     // The network must reject the proposal because the upgrade lacks sufficient support.
     let result = blockchain

@@ -1,9 +1,6 @@
 use std::{
     collections::HashSet,
-    sync::{
-        atomic::{AtomicU16, AtomicU32, Ordering},
-        Arc,
-    },
+    sync::{atomic::AtomicU32, Arc},
 };
 
 use futures::{
@@ -44,7 +41,7 @@ pub struct Mempool {
     blockchain: Arc<RwLock<Blockchain>>,
 
     /// Cached protocol version used for transaction verification.
-    protocol_version: Arc<AtomicU16>,
+    protocol_version: Arc<RwLock<u16>>,
 
     /// The mempool state: the data structure where the transactions are stored
     pub(crate) state: Arc<RwLock<MempoolState>>,
@@ -83,7 +80,7 @@ impl Mempool {
 
         Self {
             blockchain,
-            protocol_version: Arc::new(AtomicU16::new(protocol_version)),
+            protocol_version: Arc::new(RwLock::new(protocol_version)),
             state: Arc::clone(&state),
             filter: Arc::new(RwLock::new(MempoolFilter::new(
                 config.filter_rules,
@@ -407,8 +404,9 @@ impl Mempool {
     /// protocol upgrade.
     /// This revalidates all transactions in the mempool and removes the ones that are no longer valid.
     pub fn revalidate_transactions(&self) {
+        let blockchain = self.blockchain.read();
         let mut state = self.state.write();
-        let protocol_version = self.protocol_version();
+        let protocol_version = blockchain.protocol_version();
         let MempoolState {
             regular_transactions,
             control_transactions,
@@ -429,7 +427,6 @@ impl Mempool {
             .collect();
 
         // Remove them; `remove()` releases each sender's reserved balance and prunes empty sender state.
-        let blockchain = self.blockchain.read();
         for hash in invalid {
             state.remove(&blockchain, &hash, EvictionReason::Invalid);
         }
@@ -666,11 +663,14 @@ impl Mempool {
         let blockchain = Arc::clone(&self.blockchain);
         let mempool_state = Arc::clone(&self.state);
         let filter = Arc::clone(&self.filter);
-        let network_id = blockchain.read().network_id;
+        let (network_id, protocol_version) = {
+            let blockchain = blockchain.read();
+            (blockchain.network_id, blockchain.protocol_version())
+        };
         verify_tx(
             transaction,
             blockchain,
-            self.protocol_version(),
+            protocol_version,
             network_id,
             &mempool_state,
             filter,
@@ -680,23 +680,20 @@ impl Mempool {
 
     /// Returns the protocol version currently used for transaction verification.
     pub fn protocol_version(&self) -> u16 {
-        self.protocol_version.load(Ordering::Relaxed)
+        *self.protocol_version.read()
     }
 
     /// Updates the protocol version used for transaction verification.
-    pub fn set_protocol_version(&self, protocol_version: u16) {
-        self.protocol_version
-            .store(protocol_version, Ordering::Relaxed);
+    pub fn set_protocol_version(&self, protocol_version: u16) -> u16 {
+        let mut current_protocol_version = self.protocol_version.write();
+        let old_protocol_version = *current_protocol_version;
+        *current_protocol_version = protocol_version;
+        old_protocol_version
     }
 
     /// Checks whether a transaction has been filtered
     pub fn is_filtered(&self, hash: &Blake2bHash) -> bool {
         self.filter.read().blacklisted(hash)
-    }
-
-    /// Adds a transaction hash to the mempool blacklist.
-    pub fn blacklist_transaction_hash(&self, hash: Blake2bHash) {
-        self.filter.write().blacklist(hash);
     }
 
     /// Returns the rules for the mempool.

@@ -431,6 +431,9 @@ impl Blockchain {
 }
 
 pub trait TransactionVerificationCache: Send + Sync {
+    // Implementations are keyed by transaction hash only. This is sound only while transaction
+    // verification remains protocol-version invariant, otherwise the cache key must include the
+    // protocol version (or equivalent upgrade boundary).
     fn is_known(&self, tx_hash: &Blake2bHash) -> bool;
 }
 

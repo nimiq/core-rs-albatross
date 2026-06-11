@@ -79,7 +79,6 @@ describe('Transaction', () => {
                 'pathLength': 0,
             },
             'size': 171,
-            'valid': true,
             'state': 'confirmed',
             'executionResult': true,
             'blockHeight': 3592909,
@@ -96,9 +95,6 @@ describe('Transaction', () => {
         const plain2 = tx.toPlain();
         expect(plain2.proof).toEqual(plain.proof);
         expect(plain2.size).toEqual(plain.size);
-        // `toPlain()` no longer self-verifies: a transaction's validity now depends on the
-        // protocol version and is established by consensus, so it defaults to `false` here.
-        expect(plain2.valid).toBe(false);
     });
 
     it('can deserialize PoW style plain transaction details', () => {
@@ -129,7 +125,6 @@ describe('Transaction', () => {
                     '4490c883a95fc7c44e45043108436973b071851ed2a203111ddb2f088056f0fc0098be457841e99d998cc54e96306a82e106bc5306271cd2194eba1d8e7653baff6e5e3b3344c11da401d4f42ab5763e4f3147662f07ac4c32addd3e15da469707',
             },
             'size': 200,
-            'valid': true,
             'state': 'confirmed',
             'blockHash': 'f8a0d2a34352368bbb07590434b58f1c23c31b12b8b6368eb92cb84928968575',
             'blockHeight': 3388464,
@@ -149,8 +144,5 @@ describe('Transaction', () => {
         // Cannot compare proof field yet, as re-serialization creates a PoS proof with a a leading 0x00-byte
         // expect(plain2.proof).toEqual(plain.proof);
         expect(plain2.size).toEqual(plain.size);
-        // `toPlain()` no longer self-verifies: a transaction's validity now depends on the
-        // protocol version and is established by consensus, so it defaults to `false` here.
-        expect(plain2.valid).toBe(false);
     });
 });

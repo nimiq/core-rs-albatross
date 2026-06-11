@@ -8,28 +8,17 @@ use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{
-    fill_micro_blocks_with_txns, next_election_block_with_version, produce_macro_blocks,
-    produce_macro_blocks_with_txns, signal_next_protocol_version_via_tx, signing_key, voting_key,
+use nimiq_test_utils::{
+    blockchain::{
+        fill_micro_blocks_with_txns, next_election_block_with_version, produce_macro_blocks,
+        produce_macro_blocks_with_txns, signal_next_protocol_version_via_tx, signing_key,
+        voting_key,
+    },
+    blockchain_events_broadcast::{assert_events_eq_unordered, try_collect_events},
 };
 use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
-use tokio::sync::broadcast::error::TryRecvError;
-
-fn collect_blockchain_events(
-    receiver: &mut tokio::sync::broadcast::Receiver<BlockchainEvent>,
-) -> Vec<BlockchainEvent> {
-    let mut events = Vec::new();
-
-    loop {
-        match receiver.try_recv() {
-            Ok(event) => events.push(event),
-            Err(TryRecvError::Empty) => return events,
-            Err(error) => panic!("unexpected broadcast error: {error:?}"),
-        }
-    }
-}
 
 // Test that when we try to adopt an empty batch through history sync, while the preceding batch has transactions, reverting the history is not
 // necessary based on the history we already have locally. Part of pushing something through history sync is to find a common state
@@ -342,8 +331,8 @@ fn history_sync_emits_protocol_upgrade_event_when_version_changes() {
         ),
         Ok(PushResult::Extended)
     );
-    assert_eq!(
-        collect_blockchain_events(&mut receiver),
+    assert_events_eq_unordered(
+        try_collect_events(&mut receiver).unwrap(),
         vec![
             BlockchainEvent::HistoryAdopted(upgrade_hash.clone()),
             BlockchainEvent::EpochFinalized(upgrade_hash.clone()),

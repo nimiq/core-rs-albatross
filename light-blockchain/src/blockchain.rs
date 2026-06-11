@@ -98,7 +98,7 @@ impl LightBlockchain {
     }
 
     pub fn current_version(&self) -> u16 {
-        self.election_head.header.version
+        self.head.version()
     }
 
     /// Gets the active validators for a given epoch.

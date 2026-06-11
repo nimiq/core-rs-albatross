@@ -44,9 +44,9 @@ mod tests {
         .unwrap();
 
         tx.do_sign(&keypair, None).map_err(JsValue::from).unwrap();
-        assert_eq!(tx.verify(None, 0).map_err(JsValue::from), Ok(()));
+        assert_eq!(tx.verify(0, None).map_err(JsValue::from), Ok(()));
         assert_eq!(
-            tx.verify(None, Policy::max_supported_version())
+            tx.verify(Policy::max_supported_version(), None)
                 .map_err(JsValue::from),
             Ok(())
         )
@@ -70,9 +70,9 @@ mod tests {
         .unwrap();
 
         tx.do_sign(&keypair, None).map_err(JsValue::from).unwrap();
-        assert_eq!(tx.verify(None, 0).map_err(JsValue::from), Ok(()));
+        assert_eq!(tx.verify(0, None).map_err(JsValue::from), Ok(()));
         assert_eq!(
-            tx.verify(None, Policy::max_supported_version())
+            tx.verify(Policy::max_supported_version(), None)
                 .map_err(JsValue::from),
             Ok(())
         )

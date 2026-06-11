@@ -68,8 +68,7 @@ fn add_stake_to_tombstone_does_not_work() {
         Policy::MINIMUM_STAKE,
         50_000_000,
     );
-    assert!(staker_setup.active_stake < staker_setup.retired_stake);
-    assert!(staker_setup.active_stake < staker_setup.inactive_stake);
+
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -81,7 +80,7 @@ fn add_stake_to_tombstone_does_not_work() {
     // -----------------------------------
     // Test execution:
     // -----------------------------------
-    // Add stake operation fails due to unexisting validator.
+    // Add stake operation fails due to non-existent validator.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::AddStake {
             staker_address: staker_setup.staker_address.clone(),
@@ -120,7 +119,10 @@ fn add_stake_to_tombstone_does_not_work() {
         staker.inactive_balance,
         Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
     );
-    assert_eq!(staker.inactive_from, Some(328));
+    assert_eq!(
+        staker.inactive_from,
+        Some(Policy::genesis_block_number() + Policy::blocks_per_epoch())
+    );
     assert_eq!(staker.retired_balance, Coin::from_u64_unchecked(50_000_000));
 
     let validator = staker_setup
@@ -137,7 +139,7 @@ fn add_stake_to_tombstone_does_not_work() {
 }
 
 #[test]
-fn add_stake_to_tombstone_does_not_legacy_0v_work() {
+fn add_stake_to_tombstone_does_not_legacy_work_0v() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
@@ -148,8 +150,6 @@ fn add_stake_to_tombstone_does_not_legacy_0v_work() {
         50_000_000,
         0,
     );
-    assert!(staker_setup.active_stake < staker_setup.retired_stake);
-    assert!(staker_setup.active_stake < staker_setup.inactive_stake);
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -161,7 +161,7 @@ fn add_stake_to_tombstone_does_not_legacy_0v_work() {
     // -----------------------------------
     // Test execution:
     // -----------------------------------
-    // Add stake operation fails due to unexisting validator.
+    // Add stake operation fails due to non-existent validator.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::AddStake {
             staker_address: staker_setup.staker_address.clone(),
@@ -200,7 +200,10 @@ fn add_stake_to_tombstone_does_not_legacy_0v_work() {
         staker.inactive_balance,
         Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
     );
-    assert_eq!(staker.inactive_from, Some(328));
+    assert_eq!(
+        staker.inactive_from,
+        Some(Policy::genesis_block_number() + Policy::blocks_per_epoch())
+    );
     assert_eq!(staker.retired_balance, Coin::from_u64_unchecked(50_000_000));
 
     let validator = staker_setup

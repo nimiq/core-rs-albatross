@@ -63,6 +63,8 @@ impl LightBlockchain {
         // Store the block chain info.
         this.chain_store.put_chain_info(chain_info);
 
+        let previous_version = this.current_version();
+
         // Update the blockchain.
         this.head = block.clone();
 
@@ -81,7 +83,7 @@ impl LightBlockchain {
                 &block_hash,
             );
 
-            let is_protocol_upgrade: bool = block.version() > this.current_version();
+            let is_protocol_upgrade = block.version() > previous_version;
             this.election_head = block.unwrap_macro_ref().clone();
             this.current_validators = block.validators();
 
@@ -89,18 +91,17 @@ impl LightBlockchain {
             this.chain_store.put_election(block.unwrap_macro().header);
 
             // We shouldn't log errors if there are no listeners.
-            this.notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash.clone()))
-                .ok();
-
             if is_protocol_upgrade {
                 this.notifier
                     .send(BlockchainEvent::ProtocolUpgrade(
-                        block_hash,
+                        block_hash.clone(),
                         this.current_version(),
                     ))
                     .ok();
             }
+            this.notifier
+                .send(BlockchainEvent::EpochFinalized(block_hash))
+                .ok();
         } else {
             // We shouldn't log errors if there are no listeners.
             this.notifier
@@ -155,6 +156,8 @@ impl LightBlockchain {
         // Store the block chain info.
         this.chain_store.put_chain_info(chain_info);
 
+        let previous_version = this.current_version();
+
         // Update the blockchain.
         this.head = block.clone();
 
@@ -164,7 +167,7 @@ impl LightBlockchain {
             .send(BlockchainEvent::Extended(block_hash.clone()))
             .ok();
 
-        let is_protocol_upgrade = block.version() > this.current_version();
+        let is_protocol_upgrade = block.version() > previous_version;
         this.election_head = block.unwrap_macro_ref().clone();
         this.current_validators = block.validators();
 
@@ -172,17 +175,17 @@ impl LightBlockchain {
         this.chain_store.put_election(block.unwrap_macro().header);
 
         // We shouldn't log errors if there are no listeners.
-        this.notifier
-            .send(BlockchainEvent::EpochFinalized(block_hash.clone()))
-            .ok();
         if is_protocol_upgrade {
             this.notifier
                 .send(BlockchainEvent::ProtocolUpgrade(
-                    block_hash,
+                    block_hash.clone(),
                     this.current_version(),
                 ))
                 .ok();
         }
+        this.notifier
+            .send(BlockchainEvent::EpochFinalized(block_hash))
+            .ok();
         Ok(PushResult::Extended)
     }
 }

@@ -426,17 +426,17 @@ impl Blockchain {
             .send(BlockchainEvent::Extended(block_hash.clone()))
             .ok();
         if is_election_block {
-            this.notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash.clone()))
-                .ok();
             if is_protocol_upgrade {
                 this.notifier
                     .send(BlockchainEvent::ProtocolUpgrade(
-                        block_hash,
+                        block_hash.clone(),
                         this.state.current_version(),
                     ))
                     .ok();
             }
+            this.notifier
+                .send(BlockchainEvent::EpochFinalized(block_hash))
+                .ok();
         } else if is_macro_block {
             this.notifier
                 .send(BlockchainEvent::Finalized(block_hash))
@@ -577,11 +577,6 @@ impl Blockchain {
             .send(BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks))
             .ok();
         if this.state.main_chain.head.is_election() {
-            this.notifier
-                .send(BlockchainEvent::EpochFinalized(
-                    this.state.head_hash.clone(),
-                ))
-                .ok();
             if is_protocol_upgrade {
                 this.notifier
                     .send(BlockchainEvent::ProtocolUpgrade(
@@ -590,6 +585,11 @@ impl Blockchain {
                     ))
                     .ok();
             }
+            this.notifier
+                .send(BlockchainEvent::EpochFinalized(
+                    this.state.head_hash.clone(),
+                ))
+                .ok();
         } else if this.state.main_chain.head.is_macro() {
             this.notifier
                 .send(BlockchainEvent::Finalized(this.state.head_hash.clone()))

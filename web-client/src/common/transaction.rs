@@ -1,9 +1,7 @@
 use std::str::FromStr;
 
 use nimiq_hash::{Blake2bHash, Hash};
-#[cfg(feature = "client")]
-use nimiq_primitives::policy::Policy;
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
+use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     account::staking_contract::OutgoingStakingTransactionData, PoWSignatureProof, TransactionFormat,
@@ -171,13 +169,15 @@ impl Transaction {
         hash.to_hex()
     }
 
-    /// Verifies that a transaction has valid properties and a valid signature proof.
+    /// Verifies that a transaction has valid properties and a valid signature proof for the
+    /// provided `protocol_version`.
     /// Optionally checks if the transaction is valid on the provided network.
     ///
     /// **Throws with any transaction validity error.** Returns without exception if the transaction is valid.
     ///
+    /// A `protocol_version` of `0` is accepted for backwards-compatible pre-upgrade validation.
     /// Throws when the given networkId is unknown.
-    pub fn verify(&self, network_id: Option<u8>, protocol_version: u16) -> Result<(), JsError> {
+    pub fn verify(&self, protocol_version: u16, network_id: Option<u8>) -> Result<(), JsError> {
         let network_id = match network_id {
             Some(id) => to_network_id(id)?,
             None => self.inner.network_id,
@@ -550,7 +550,6 @@ impl Transaction {
                 }
             },
             size: self.serialized_size(),
-            valid: false,
         }
     }
 
@@ -908,9 +907,6 @@ pub struct PlainTransaction {
     /// The transaction's serialized size in bytes. It is used to determine the fee-per-byte that this
     /// transaction pays.
     pub size: usize,
-    /// Encodes if the transaction is valid, meaning the signature is valid and the `data` and `proof` fields
-    /// follow the correct format for the transaction's recipient and sender type, respectively.
-    pub valid: bool,
 }
 
 #[cfg(feature = "client")]
@@ -943,7 +939,6 @@ impl PlainTransaction {
             }),
             proof: PlainTransactionProof::Raw(PlainRawProof::default()),
             size,
-            valid: true,
         }
     }
 
@@ -974,7 +969,6 @@ impl PlainTransaction {
             }),
             proof: PlainTransactionProof::Raw(PlainRawProof::default()),
             size,
-            valid: true,
         }
     }
 
@@ -1107,7 +1101,6 @@ impl serde::Serialize for PlainTransactionDetails {
         plain.serialize_field("data", &self.transaction.data)?;
         plain.serialize_field("proof", &self.transaction.proof)?;
         plain.serialize_field("size", &self.transaction.size)?;
-        plain.serialize_field("valid", &self.transaction.valid)?;
 
         plain.serialize_field("state", &self.state)?;
         plain.serialize_field("executionResult", &self.execution_result)?;
@@ -1346,7 +1339,7 @@ mod tests {
 
     #[test]
     fn penalize_inherent_does_not_panic_on_conversion() {
-        let _ = Policy::get_or_init(nimiq_primitives::policy::MAINNET_POLICY);
+        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
         let hist_tx = make_penalize_historic_tx();
         let current_block = Policy::genesis_block_number() + 1;
 
@@ -1368,7 +1361,7 @@ mod tests {
 
     #[test]
     fn jail_inherent_does_not_panic_on_conversion() {
-        let _ = Policy::get_or_init(nimiq_primitives::policy::MAINNET_POLICY);
+        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
         let hist_tx = make_jail_historic_tx();
         let current_block = Policy::genesis_block_number() + 1;
 
@@ -1390,7 +1383,7 @@ mod tests {
 
     #[test]
     fn equivocation_inherent_does_not_panic_on_conversion() {
-        let _ = Policy::get_or_init(nimiq_primitives::policy::MAINNET_POLICY);
+        let _ = Policy::get_or_init(nimiq_primitives::policy::TEST_POLICY);
         let hist_tx = make_equivocation_historic_tx();
         let current_block = Policy::genesis_block_number() + 1;
 

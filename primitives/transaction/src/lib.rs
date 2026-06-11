@@ -349,6 +349,9 @@ impl Transaction {
         network_id: NetworkId,
         protocol_version: u16,
     ) -> Result<(), TransactionError> {
+        // `valid` only records that this transaction has passed verification before. This fast
+        // path is sound only while verification rules remain protocol-version invariant, or when
+        // callers clear the cached state across protocol upgrades.
         if self.valid {
             return Ok(());
         }

@@ -15,25 +15,11 @@ use nimiq_test_utils::{
     blockchain::{
         fill_micro_blocks_with_txns, next_protocol_upgrade_block, produce_macro_blocks_with_txns,
     },
+    blockchain_events_broadcast::{assert_events_eq_unordered, try_collect_events},
     test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
 };
 use nimiq_vrf::VrfSeed;
 use parking_lot::RwLock;
-use tokio::sync::broadcast::error::TryRecvError;
-
-fn collect_blockchain_events(
-    receiver: &mut tokio::sync::broadcast::Receiver<BlockchainEvent>,
-) -> Vec<BlockchainEvent> {
-    let mut events = Vec::new();
-
-    loop {
-        match receiver.try_recv() {
-            Ok(event) => events.push(event),
-            Err(TryRecvError::Empty) => return events,
-            Err(error) => panic!("unexpected broadcast error: {error:?}"),
-        }
-    }
-}
 
 fn push_source_chain_to_light(
     source: &TemporaryBlockProducer,
@@ -343,14 +329,11 @@ fn it_emits_protocol_upgrade_event_for_election_push() {
     let upgrade_hash = upgrade_block.hash();
 
     assert_eq!(
-        LightBlockchain::push(
-            light_blockchain.upgradable_read(),
-            remove_micro_body(upgrade_block),
-        ),
+        LightBlockchain::push(light_blockchain.upgradable_read(), upgrade_block,),
         Ok(PushResult::Extended),
     );
-    assert_eq!(
-        collect_blockchain_events(&mut receiver),
+    assert_events_eq_unordered(
+        try_collect_events(&mut receiver).unwrap(),
         vec![
             BlockchainEvent::Extended(upgrade_hash.clone()),
             BlockchainEvent::EpochFinalized(upgrade_hash.clone()),
@@ -389,14 +372,11 @@ fn it_does_not_emit_protocol_upgrade_event_without_version_change() {
     let election_hash = election_block.hash();
 
     assert_eq!(
-        LightBlockchain::push(
-            light_blockchain.upgradable_read(),
-            remove_micro_body(election_block),
-        ),
+        LightBlockchain::push(light_blockchain.upgradable_read(), election_block,),
         Ok(PushResult::Extended),
     );
-    assert_eq!(
-        collect_blockchain_events(&mut receiver),
+    assert_events_eq_unordered(
+        try_collect_events(&mut receiver).unwrap(),
         vec![
             BlockchainEvent::Extended(election_hash.clone()),
             BlockchainEvent::EpochFinalized(election_hash),

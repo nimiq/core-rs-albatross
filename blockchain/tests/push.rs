@@ -21,26 +21,12 @@ use nimiq_test_utils::{
         fill_micro_blocks_with_txns, next_protocol_upgrade_block, produce_macro_blocks_with_txns,
         validator_address,
     },
+    blockchain_events_broadcast::{assert_events_eq_unordered, try_collect_events},
     test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
     test_rng,
 };
 use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_vrf::VrfSeed;
-use tokio::sync::broadcast::error::TryRecvError;
-
-fn collect_blockchain_events(
-    receiver: &mut tokio::sync::broadcast::Receiver<BlockchainEvent>,
-) -> Vec<BlockchainEvent> {
-    let mut events = Vec::new();
-
-    loop {
-        match receiver.try_recv() {
-            Ok(event) => events.push(event),
-            Err(TryRecvError::Empty) => return events,
-            Err(error) => panic!("unexpected broadcast error: {error:?}"),
-        }
-    }
-}
 
 pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushResult, PushError>) {
     if config.test_micro {
@@ -278,8 +264,8 @@ fn it_emits_protocol_upgrade_event_for_election_push() {
     let upgrade_hash = upgrade_block.hash();
 
     assert_eq!(temp_producer.push(upgrade_block), Ok(PushResult::Extended));
-    assert_eq!(
-        collect_blockchain_events(&mut receiver),
+    assert_events_eq_unordered(
+        try_collect_events(&mut receiver).unwrap(),
         vec![
             BlockchainEvent::Extended(upgrade_hash.clone()),
             BlockchainEvent::EpochFinalized(upgrade_hash.clone()),
@@ -317,8 +303,8 @@ fn it_does_not_emit_protocol_upgrade_event_without_version_change() {
     let election_hash = election_block.hash();
 
     assert_eq!(temp_producer.push(election_block), Ok(PushResult::Extended));
-    assert_eq!(
-        collect_blockchain_events(&mut receiver),
+    assert_events_eq_unordered(
+        try_collect_events(&mut receiver).unwrap(),
         vec![
             BlockchainEvent::Extended(election_hash.clone()),
             BlockchainEvent::EpochFinalized(election_hash),

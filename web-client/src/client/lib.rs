@@ -373,6 +373,12 @@ impl Client {
         self.network_id
     }
 
+    /// Returns the blockchain protocol version the client currently uses to verify transactions.
+    #[wasm_bindgen(js_name = getProtocolVersion)]
+    pub async fn get_protocol_version(&self) -> u16 {
+        self.inner.protocol_version()
+    }
+
     /// Returns if the client currently has consensus with the network.
     #[wasm_bindgen(js_name = isConsensusEstablished)]
     pub async fn is_consensus_established(&self) -> bool {
@@ -597,7 +603,7 @@ impl Client {
         tx: Transaction,
     ) -> Result<PlainTransactionDetails, JsError> {
         let protocol_version = self.inner.protocol_version();
-        tx.verify(Some(self.network_id), protocol_version)?;
+        tx.verify(protocol_version, Some(self.network_id))?;
 
         // First, check if the transaction is already included
 
@@ -696,9 +702,8 @@ impl Client {
             Ok(details)
         } else {
             // If the transaction did not get included, return it as `TransactionState::New`
-            let mut details =
+            let details =
                 PlainTransactionDetails::new(&tx, TransactionState::New, None, None, None, None);
-            details.transaction.valid = true; // we already verified it earlier
             Ok(details)
         }
     }
@@ -711,7 +716,7 @@ impl Client {
     ) -> Result<PlainTransactionDetailsType, JsError> {
         let hash =
             Blake2bHash::from_str(&hash).map_err(|_| JsError::new("Invalid transaction hash"))?;
-        let mut details = self
+        let details = self
             .inner
             .consensus_proxy()
             .prove_transactions_from_receipts(vec![(hash, None)], 1)
@@ -739,7 +744,6 @@ impl Client {
                 .expect("no non-reward inherent")
             })
             .ok_or_else(|| JsError::new("Transaction not found"))?;
-        details.transaction.valid = true;
         Ok(serde_wasm_bindgen::to_value(&details)?.into())
     }
 

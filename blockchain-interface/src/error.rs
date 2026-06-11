@@ -13,7 +13,8 @@ pub enum ForkEvent {
 }
 
 /// Events from the blockchain.
-/// Note that `Finalized`, `EpochFinalized`, and `ProtocolUpgrade` will be sent **in addition** to `Extended` events.
+/// Note that `Finalized`, `EpochFinalized`, and `ProtocolUpgrade` will be emitted alongside
+/// `Extended` (or `HistoryAdopted`) for the same block.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlockchainEvent {
     Extended(Blake2bHash),

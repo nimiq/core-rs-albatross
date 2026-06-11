@@ -4,6 +4,7 @@ import {
     CommitmentPair,
     KeyPair,
     PartialSignature,
+    Policy,
     PublicKey,
     SignatureProof,
     TransactionBuilder,
@@ -113,7 +114,7 @@ describe('MuSig2', async () => {
 
         // Verify that everything worked correctly
         expect(tx.toHex()).toEqual(_signed_transaction);
-        expect(() => tx.verify()).not.toThrow();
+        expect(() => tx.verify(Policy.MAX_SUPPORTED_VERSION, tx.networkId)).not.toThrow();
     });
 
     it('rejects empty public keys and commitment groups', () => {

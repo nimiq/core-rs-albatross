@@ -553,7 +553,10 @@ impl<N: Network> Stream for StateQueue<N> {
                         self.diff_queue.set_diff_needed(true);
                     }
                 }
-                BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => {
+                BlockchainEvent::Finalized(_) => {
+                    // Nothing to do for finalized batches since macro block pushes emit the `Extended` event as well.
+                }
+                BlockchainEvent::EpochFinalized(_) => {
                     // Nothing to do for finalized batches since macro block pushes emit the `Extended` event as well.
                 }
                 BlockchainEvent::HistoryAdopted(_) => {
@@ -563,7 +566,7 @@ impl<N: Network> Stream for StateQueue<N> {
                     // Block has not been applied so nothing to do here.
                 }
                 BlockchainEvent::ProtocolUpgrade(..) => {
-                    // Nothing todo for protocol upgrade.
+                    // Nothing to do for protocol upgrade.
                 }
             }
         }

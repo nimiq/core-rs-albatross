@@ -275,6 +275,12 @@ pub async fn sync_two_peers(
 }
 
 pub async fn sync_two_peers_across_protocol_upgrade(sync_mode: SyncMode) {
+    sync_two_peers_across_protocol_upgrades(sync_mode, 1).await;
+}
+
+pub async fn sync_two_peers_across_protocol_upgrades(sync_mode: SyncMode, num_upgrades: usize) {
+    assert!(num_upgrades > 0);
+
     let hub = MockHub::default();
     let mut networks = vec![];
 
@@ -291,23 +297,34 @@ pub async fn sync_two_peers_across_protocol_upgrade(sync_mode: SyncMode) {
     ));
 
     let producer = BlockProducer::new(signing_key(), voting_key());
-    produce_macro_blocks_with_txns(
-        &producer,
-        &blockchain1,
-        (Policy::batches_per_epoch() - 1) as usize,
-        1,
-        2,
-    );
     let b1_init_version = blockchain1.read().protocol_version();
-
-    let upgrade_version = signal_next_protocol_version_via_tx(&producer, &blockchain1);
-    fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 2);
-    let upgrade_block = next_election_block_with_version(&producer, &blockchain1, upgrade_version);
-    let upgrade_hash = upgrade_block.hash();
-    assert_eq!(
-        Blockchain::push(blockchain1.upgradable_read(), upgrade_block),
-        Ok(PushResult::Extended)
+    let expected_final_version = b1_init_version.add(num_upgrades as u16);
+    assert!(
+        expected_final_version <= Policy::max_supported_version(),
+        "cannot stage {num_upgrades} upgrades from version {b1_init_version} with max supported version {}",
+        Policy::max_supported_version(),
     );
+
+    let mut expected_upgrades = Vec::with_capacity(num_upgrades);
+    for _ in 0..num_upgrades {
+        produce_macro_blocks_with_txns(
+            &producer,
+            &blockchain1,
+            (Policy::batches_per_epoch() - 1) as usize,
+            1,
+            2,
+        );
+        let upgrade_version = signal_next_protocol_version_via_tx(&producer, &blockchain1);
+        fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 2);
+        let upgrade_block =
+            next_election_block_with_version(&producer, &blockchain1, upgrade_version);
+        let upgrade_hash = upgrade_block.hash();
+        assert_eq!(
+            Blockchain::push(blockchain1.upgradable_read(), upgrade_block),
+            Ok(PushResult::Extended)
+        );
+        expected_upgrades.push((upgrade_hash, upgrade_version));
+    }
 
     let net1: Arc<Network> =
         TestNetwork::build_network(40, Default::default(), &mut Some(hub)).await;
@@ -368,16 +385,33 @@ pub async fn sync_two_peers_across_protocol_upgrade(sync_mode: SyncMode) {
         Some(MacroSyncReturn::Good(net1.get_local_peer_id()))
     );
 
-    match timeout(Duration::from_secs(10), upgrade_events.next()).await {
-        Ok(Some(BlockchainEvent::ProtocolUpgrade(block_hash, version))) => {
-            assert_eq!(block_hash, upgrade_hash);
-            assert_eq!(version, upgrade_version);
+    for (expected_hash, expected_version) in expected_upgrades.iter() {
+        match timeout(Duration::from_secs(10), upgrade_events.next()).await {
+            Ok(Some(BlockchainEvent::ProtocolUpgrade(block_hash, version))) => {
+                assert_eq!(block_hash, *expected_hash);
+                assert_eq!(version, *expected_version);
+            }
+            Ok(event) => panic!("expected ProtocolUpgrade event, got {event:?}"),
+            Err(_) => panic!("timed out waiting for ProtocolUpgrade event"),
         }
-        Ok(event) => panic!("expected ProtocolUpgrade event, got {event:?}"),
-        Err(_) => panic!("timed out waiting for ProtocolUpgrade event"),
     }
+    if let Ok(Some(event)) = timeout(Duration::from_millis(100), upgrade_events.next()).await {
+        panic!("expected no further ProtocolUpgrade events, got {event:?}");
+    }
+
+    let (final_upgrade_hash, final_upgrade_version) = expected_upgrades.last().unwrap();
     assert_eq!(b1_init_version, b2_init_version);
-    assert_eq!(b2_init_version.add(1), upgrade_version);
-    assert_eq!(blockchain2_proxy.read().election_head_hash(), upgrade_hash);
-    assert_eq!(blockchain2_proxy.read().protocol_version(), upgrade_version);
+    assert_eq!(
+        b2_init_version.add(num_upgrades as u16),
+        expected_final_version
+    );
+    assert_eq!(*final_upgrade_version, expected_final_version);
+    assert_eq!(
+        blockchain2_proxy.read().election_head_hash(),
+        *final_upgrade_hash
+    );
+    assert_eq!(
+        blockchain2_proxy.read().protocol_version(),
+        *final_upgrade_version
+    );
 }

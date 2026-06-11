@@ -1,6 +1,8 @@
 use nimiq_account::*;
 use nimiq_database::{mdbx::MdbxDatabase, traits::Database};
-use nimiq_primitives::{coin::Coin, policy::Policy, transaction::TransactionError};
+use nimiq_primitives::{
+    account::AccountError, coin::Coin, policy::Policy, transaction::TransactionError,
+};
 use nimiq_test_log::test;
 use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
 
@@ -15,7 +17,11 @@ fn add_stake(protocol_version: u16) {
     let mut db_txn = (&mut db_txn).into();
 
     let (validator_address, staker_address, mut staking_contract) =
-        make_sample_contract(data_store.write(&mut db_txn), Some(150_000_000));
+        make_sample_contract_with_protocol_version(
+            data_store.write(&mut db_txn),
+            Some(150_000_000),
+            protocol_version,
+        );
     let staker_address = staker_address.unwrap();
     let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
 
@@ -132,23 +138,23 @@ fn add_stake(protocol_version: u16) {
 
 #[test]
 fn add_stake_works() {
-    add_stake(Policy::max_supported_version());
+    for v in 1..=Policy::max_supported_version() {
+        add_stake(v);
+    }
 }
 
 #[test]
-fn add_stake_priority_works() {
+fn add_stake_does_not_touch_inactive_or_retired_balances() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
     let mut staker_setup = StakerSetup::setup_staker_with_inactive_retired_balance_and_protocol(
         ValidatorState::Active,
         0,
-        50_000_000,
+        Policy::MINIMUM_STAKE,
         Policy::MINIMUM_STAKE + 1,
         Policy::max_supported_version(),
     );
-    assert!(staker_setup.active_stake < staker_setup.retired_stake);
-    assert!(staker_setup.active_stake < staker_setup.inactive_stake);
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -205,9 +211,12 @@ fn add_stake_priority_works() {
     );
     assert_eq!(
         staker.inactive_balance,
-        Coin::from_u64_unchecked(50_000_000)
+        Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
     );
-    assert_eq!(staker.inactive_from, Some(328));
+    assert_eq!(
+        staker.inactive_from,
+        Some(Policy::genesis_block_number() + Policy::blocks_per_epoch())
+    );
     assert_eq!(
         staker.retired_balance,
         Coin::from_u64_unchecked(Policy::MINIMUM_STAKE + 1)
@@ -226,7 +235,7 @@ fn add_stake_priority_works() {
     assert_eq!(
         staker_setup.staking_contract.balance,
         Coin::from_u64_unchecked(
-            Policy::VALIDATOR_DEPOSIT + 50_000_000 + Policy::MINIMUM_STAKE * 2 + 1
+            Policy::VALIDATOR_DEPOSIT + Policy::MINIMUM_STAKE + Policy::MINIMUM_STAKE * 2 + 1
         )
     );
 
@@ -271,7 +280,7 @@ fn add_stake_priority_works() {
     assert_eq!(
         staker_setup.staking_contract.balance,
         Coin::from_u64_unchecked(
-            Policy::VALIDATOR_DEPOSIT + 50_000_000 + Policy::MINIMUM_STAKE + 1
+            Policy::VALIDATOR_DEPOSIT + Policy::MINIMUM_STAKE + Policy::MINIMUM_STAKE + 1
         )
     );
 }
@@ -298,6 +307,26 @@ fn add_stake_enforces_minimum_stake_works() {
     // -----------------------------------
     // Test execution:
     // -----------------------------------
+    // Cannot add less than minimum stake here because it would violate
+    // invariant 1 - minimum stake for non-retired funds.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::AddStake {
+            staker_address: staker_setup.staker_address.clone(),
+        },
+        Policy::MINIMUM_STAKE - 1,
+        &staker_keypair,
+    );
+    let mut tx_logs = TransactionLog::empty();
+    assert_eq!(
+        staker_setup.staking_contract.commit_incoming_transaction(
+            &tx,
+            &staker_setup.before_release_block_state,
+            data_store.write(&mut db_txn),
+            &mut tx_logs,
+        ),
+        Err(AccountError::InvalidCoinValue)
+    );
+
     // Can add in the valid case.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::AddStake {
@@ -389,7 +418,7 @@ fn add_stake_enforces_greater_than_zero_works() {
         &staker_keypair,
     );
     assert_eq!(
-        tx.verify(NetworkId::UnitAlbatross, 0),
+        tx.verify(NetworkId::UnitAlbatross, 1),
         Err(TransactionError::ZeroValue)
     );
 

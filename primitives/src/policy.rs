@@ -33,7 +33,9 @@ pub struct Policy {
     /// Genesis block number
     #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub genesis_block_number: u32,
-    /// Maximum supported protocol version
+    /// Maximum supported protocol version.
+    // This should only be increased when a new hard fork code is released.
+    // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
     #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub max_supported_version: u16,
 }
@@ -706,6 +708,8 @@ pub const MAINNET_POLICY: Policy = Policy {
     transaction_validity_window: 120,
     // As defined in the `main` network genesis file
     genesis_block_number: 3456000,
+    // This should only be increased when a new hard fork code is released.
+    // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
     max_supported_version: 1,
 };
 
@@ -717,6 +721,8 @@ pub const TESTNET_POLICY: Policy = Policy {
     transaction_validity_window: 120,
     // As defined in the `test` network genesis file
     genesis_block_number: 3032010,
+    // This should only be increased when a new hard fork code is released.
+    // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
     max_supported_version: 1,
 };
 
@@ -728,6 +734,8 @@ pub const TEST_POLICY: Policy = Policy {
     transaction_validity_window: 2,
     // This number should match the one that is defined in the `unit` network genesis file which is the genesis used for unit testing
     genesis_block_number: 200,
+    // This should only be increased when a new hard fork code is released.
+    // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
     max_supported_version: 5,
 };
 

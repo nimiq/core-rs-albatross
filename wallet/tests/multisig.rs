@@ -75,10 +75,9 @@ pub fn it_can_create_valid_transactions() {
         )
         .unwrap();
 
-    assert!(tx.verify(NetworkId::UnitAlbatross, 0).is_ok());
-    assert!(tx
-        .verify(NetworkId::UnitAlbatross, Policy::max_supported_version())
-        .is_ok())
+    for v in 0..=Policy::max_supported_version() {
+        assert!(tx.verify(NetworkId::UnitAlbatross, v).is_ok());
+    }
 }
 
 #[test]

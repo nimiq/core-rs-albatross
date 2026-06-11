@@ -3,7 +3,7 @@ use std::{
     marker::PhantomData,
     pin::Pin,
     sync::{
-        atomic::{AtomicU16, AtomicU32, Ordering as AtomicOrdering},
+        atomic::{AtomicU32, Ordering as AtomicOrdering},
         Arc,
     },
     task::{Context, Poll},
@@ -31,7 +31,7 @@ pub(crate) struct MempoolExecutor<N: Network, T: Topic + Unpin + Sync> {
     blockchain: Arc<RwLock<Blockchain>>,
 
     // Cached protocol version, updated by the mempool task on protocol upgrades.
-    protocol_version: Arc<AtomicU16>,
+    protocol_version: Arc<RwLock<u16>>,
 
     // The mempool state: the data structure where the transactions are stored
     state: Arc<RwLock<MempoolState>>,
@@ -58,7 +58,7 @@ pub(crate) struct MempoolExecutor<N: Network, T: Topic + Unpin + Sync> {
 impl<N: Network, T: Topic + Unpin + Sync> MempoolExecutor<N, T> {
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
-        protocol_version: Arc<AtomicU16>,
+        protocol_version: Arc<RwLock<u16>>,
         state: Arc<RwLock<MempoolState>>,
         filter: Arc<RwLock<MempoolFilter>>,
         network: Arc<N>,
@@ -113,7 +113,7 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
                 let verify_tx_ret = verify_tx(
                     tx,
                     blockchain,
-                    protocol_version.load(AtomicOrdering::Relaxed),
+                    *protocol_version.read(),
                     network_id,
                     &mempool_state,
                     filter,

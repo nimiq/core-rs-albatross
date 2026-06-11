@@ -25,6 +25,8 @@ pub enum BlockProducerError {
     HistoryError,
     #[error("Accounts are incomplete")]
     AccountsIncomplete,
+    #[error("Invalid protocol version")]
+    InvalidProtocolVersion,
 }
 
 impl BlockProducerError {
@@ -161,8 +163,10 @@ impl BlockProducer {
             None,
         );
 
+        let version = blockchain.state().current_version();
+
         // Update the state and calculate the state root.
-        let block_state = BlockState::new(block_number, timestamp, blockchain.head().version());
+        let block_state = BlockState::new(block_number, timestamp, version);
         let (state_root, diff_root, executed_txns) = blockchain
             .state
             .accounts
@@ -211,7 +215,7 @@ impl BlockProducer {
         // Create the micro block header.
         let header = MicroHeader {
             network,
-            version: blockchain.state().current_version(),
+            version,
             block_number,
             timestamp,
             parent_hash,
@@ -340,7 +344,12 @@ impl BlockProducer {
             .next_batch_initial_punished_set(block_number, &staking_contract.active_validators);
 
         let version = version.unwrap_or_else(|| blockchain.state().current_version());
-
+        if blockchain.state().current_version() != version
+            && blockchain.state().current_version() + 1 != version
+        {
+            // error as this will be a bigger version bump than 1.
+            return Err(BlockProducerError::InvalidProtocolVersion);
+        }
         // Create the header for the macro block without the state root and the transactions root.
         // We need several fields of this header in order to calculate the transactions and the
         // state.

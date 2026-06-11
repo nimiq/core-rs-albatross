@@ -270,6 +270,8 @@ pub fn validator_address() -> Address {
 pub fn signal_all_validators_support_for_next_version(blockchain: &Arc<RwLock<Blockchain>>) -> u16 {
     let blockchain_read = blockchain.read();
     let next_version = blockchain_read.state.current_version() + 1;
+    assert!(next_version <= Policy::max_supported_version());
+
     let current_validators = blockchain_read
         .current_validators()
         .expect("Current validator set must exist")
@@ -353,6 +355,8 @@ pub fn signal_next_protocol_version_via_tx(
     blockchain: &Arc<RwLock<Blockchain>>,
 ) -> u16 {
     let next_version = blockchain.read().state.current_version() + 1;
+    assert!(next_version <= Policy::max_supported_version());
+
     let version_bytes = next_version.to_be_bytes();
     let mut signal_data = [0; 32];
     signal_data[..2].copy_from_slice(&version_bytes);
