@@ -56,7 +56,7 @@ pub struct NetworkInfo {
     network_id: NetworkId,
     name: &'static str,
     genesis: GenesisData,
-    // This should only be increased when a new hard fork code is released
+    // This should only be increased when a new hard fork code is released.
     // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
     max_supported_version: u16,
 }
@@ -316,7 +316,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                     env!("OUT_DIR"),
                     "/genesis/unit-albatross/genesis.rs"
                 )),
-                max_supported_version: 5, // This should only be increased when a new hard fork code is released
+                max_supported_version: 5, // This should only be increased when a new hard fork code is released.
                                           // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
             };
             &INFO

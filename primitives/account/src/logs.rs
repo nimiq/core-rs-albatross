@@ -10,6 +10,8 @@ use nimiq_transaction::{
     Transaction,
 };
 
+use crate::BalanceType;
+
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 // Renaming affects only the struct names and thus their tag, the "type" field.
 #[serde(rename_all = "kebab-case", tag = "type")]
@@ -113,6 +115,7 @@ pub enum Log {
         staker_address: Address,
         validator_address: Option<Address>,
         value: Coin,
+        credited_balance: BalanceType,
     },
 
     #[serde(rename_all = "camelCase")]

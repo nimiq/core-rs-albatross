@@ -58,165 +58,90 @@ fn create_staker_with_tombstone_delegation_does_not_work() {
 }
 
 #[test]
-fn add_stake_to_tombstone_does_not_work() {
-    // -----------------------------------
-    // Test setup:
-    // -----------------------------------
-    let mut staker_setup = StakerSetup::setup_staker_with_inactive_retired_balance(
-        ValidatorState::Deleted,
-        1,
-        Policy::MINIMUM_STAKE,
-        50_000_000,
-    );
+fn add_stake_to_tombstone_does_not_work_all_version() {
+    fn add_stake_to_tombstone_does_not_work(version: u16) {
+        // -----------------------------------
+        // Test setup:
+        // -----------------------------------
+        let mut staker_setup = StakerSetup::setup_staker_with_inactive_retired_balance_and_protocol(
+            ValidatorState::Deleted,
+            1,
+            Policy::MINIMUM_STAKE,
+            50_000_000,
+            version,
+        );
 
-    let data_store = staker_setup
-        .accounts
-        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut db_txn = staker_setup.env.write_transaction();
-    let mut db_txn = (&mut db_txn).into();
-    let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
-    let initial_staking_contract_balance = staker_setup.staking_contract.balance;
+        let data_store = staker_setup
+            .accounts
+            .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut db_txn = staker_setup.env.write_transaction();
+        let mut db_txn = (&mut db_txn).into();
+        let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+        let initial_staking_contract_balance = staker_setup.staking_contract.balance;
 
-    // -----------------------------------
-    // Test execution:
-    // -----------------------------------
-    // Add stake operation fails due to non-existent validator.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::AddStake {
-            staker_address: staker_setup.staker_address.clone(),
-        },
-        Policy::MINIMUM_STAKE,
-        &staker_keypair,
-    );
+        // -----------------------------------
+        // Test execution:
+        // -----------------------------------
+        // Add stake operation fails due to non-existent validator.
+        let tx = make_signed_incoming_transaction(
+            IncomingStakingTransactionData::AddStake {
+                staker_address: staker_setup.staker_address.clone(),
+            },
+            Policy::MINIMUM_STAKE,
+            &staker_keypair,
+        );
 
-    let mut tx_logs = TransactionLog::empty();
-    let receipt = staker_setup.staking_contract.commit_incoming_transaction(
-        &tx,
-        &staker_setup.before_release_block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logs,
-    );
-    assert_eq!(
-        Err(AccountError::NonExistentAddress {
-            address: staker_setup.validator_address.clone()
-        }),
-        receipt
-    );
+        let mut tx_logs = TransactionLog::empty();
+        let receipt = staker_setup.staking_contract.commit_incoming_transaction(
+            &tx,
+            &staker_setup.before_release_block_state,
+            data_store.write(&mut db_txn),
+            &mut tx_logs,
+        );
+        assert_eq!(
+            Err(AccountError::NonExistentAddress {
+                address: staker_setup.validator_address.clone()
+            }),
+            receipt
+        );
 
-    assert_eq!(tx_logs.logs, vec![]);
+        assert_eq!(tx_logs.logs, vec![]);
 
-    let staker = staker_setup
-        .staking_contract
-        .get_staker(&data_store.read(&db_txn), &staker_setup.staker_address)
-        .expect("Staker should exist");
+        let staker = staker_setup
+            .staking_contract
+            .get_staker(&data_store.read(&db_txn), &staker_setup.staker_address)
+            .expect("Staker should exist");
 
-    assert_eq!(
-        staker.delegation,
-        Some(staker_setup.validator_address.clone())
-    );
-    assert_eq!(staker.active_balance, Coin::from_u64_unchecked(1));
-    assert_eq!(
-        staker.inactive_balance,
-        Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
-    );
-    assert_eq!(
-        staker.inactive_from,
-        Some(Policy::genesis_block_number() + Policy::blocks_per_epoch())
-    );
-    assert_eq!(staker.retired_balance, Coin::from_u64_unchecked(50_000_000));
+        assert_eq!(
+            staker.delegation,
+            Some(staker_setup.validator_address.clone())
+        );
+        assert_eq!(staker.active_balance, Coin::from_u64_unchecked(1));
+        assert_eq!(
+            staker.inactive_balance,
+            Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
+        );
+        assert_eq!(
+            staker.inactive_from,
+            Some(Policy::genesis_block_number() + Policy::blocks_per_epoch())
+        );
+        assert_eq!(staker.retired_balance, Coin::from_u64_unchecked(50_000_000));
 
-    let validator = staker_setup
-        .staking_contract
-        .get_tombstone(&data_store.read(&db_txn), &staker_setup.validator_address)
-        .unwrap();
+        let validator = staker_setup
+            .staking_contract
+            .get_tombstone(&data_store.read(&db_txn), &staker_setup.validator_address)
+            .unwrap();
 
-    assert_eq!(validator.num_remaining_stakers, 1);
-    assert_eq!(validator.remaining_stake, Coin::from_u64_unchecked(1));
-    assert_eq!(
-        staker_setup.staking_contract.balance,
-        initial_staking_contract_balance
-    );
-}
-
-#[test]
-fn add_stake_to_tombstone_does_not_legacy_work_0v() {
-    // -----------------------------------
-    // Test setup:
-    // -----------------------------------
-    let mut staker_setup = StakerSetup::setup_staker_with_inactive_retired_balance_and_protocol(
-        ValidatorState::Deleted,
-        1,
-        Policy::MINIMUM_STAKE,
-        50_000_000,
-        0,
-    );
-    let data_store = staker_setup
-        .accounts
-        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut db_txn = staker_setup.env.write_transaction();
-    let mut db_txn = (&mut db_txn).into();
-    let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
-    let initial_staking_contract_balance = staker_setup.staking_contract.balance;
-
-    // -----------------------------------
-    // Test execution:
-    // -----------------------------------
-    // Add stake operation fails due to non-existent validator.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::AddStake {
-            staker_address: staker_setup.staker_address.clone(),
-        },
-        Policy::MINIMUM_STAKE,
-        &staker_keypair,
-    );
-
-    let mut tx_logs = TransactionLog::empty();
-    let receipt = staker_setup.staking_contract.commit_incoming_transaction(
-        &tx,
-        &staker_setup.before_release_block_state,
-        data_store.write(&mut db_txn),
-        &mut tx_logs,
-    );
-    assert_eq!(
-        Err(AccountError::NonExistentAddress {
-            address: staker_setup.validator_address.clone()
-        }),
-        receipt
-    );
-
-    assert_eq!(tx_logs.logs, vec![]);
-
-    let staker = staker_setup
-        .staking_contract
-        .get_staker(&data_store.read(&db_txn), &staker_setup.staker_address)
-        .expect("Staker should exist");
-
-    assert_eq!(
-        staker.delegation,
-        Some(staker_setup.validator_address.clone())
-    );
-    assert_eq!(staker.active_balance, Coin::from_u64_unchecked(1));
-    assert_eq!(
-        staker.inactive_balance,
-        Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
-    );
-    assert_eq!(
-        staker.inactive_from,
-        Some(Policy::genesis_block_number() + Policy::blocks_per_epoch())
-    );
-    assert_eq!(staker.retired_balance, Coin::from_u64_unchecked(50_000_000));
-
-    let validator = staker_setup
-        .staking_contract
-        .get_tombstone(&data_store.read(&db_txn), &staker_setup.validator_address)
-        .unwrap();
-
-    assert_eq!(validator.num_remaining_stakers, 1);
-    assert_eq!(validator.remaining_stake, Coin::from_u64_unchecked(1));
-    assert_eq!(
-        staker_setup.staking_contract.balance,
-        initial_staking_contract_balance
-    );
+        assert_eq!(validator.num_remaining_stakers, 1);
+        assert_eq!(validator.remaining_stake, Coin::from_u64_unchecked(1));
+        assert_eq!(
+            staker_setup.staking_contract.balance,
+            initial_staking_contract_balance
+        );
+    }
+    for v in 1..=Policy::max_supported_version() {
+        add_stake_to_tombstone_does_not_work(v);
+    }
 }
 
 #[test]

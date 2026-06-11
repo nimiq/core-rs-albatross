@@ -169,8 +169,14 @@ impl AccountTransactionInteraction for StakingContract {
                 .map(|_| None)
             }
             IncomingStakingTransactionData::AddStake { staker_address } => self
-                .add_stake(&mut store, &staker_address, transaction.value, tx_logger)
-                .map(|_| None),
+                .add_stake(
+                    &mut store,
+                    &staker_address,
+                    transaction.value,
+                    block_state.protocol_version,
+                    tx_logger,
+                )
+                .map(|receipt| Some(receipt.into())),
             IncomingStakingTransactionData::UpdateStaker {
                 new_delegation,
                 reactivate_all_stake,
@@ -293,7 +299,15 @@ impl AccountTransactionInteraction for StakingContract {
                 self.revert_create_staker(&mut store, &staker_address, transaction.value, tx_logger)
             }
             IncomingStakingTransactionData::AddStake { staker_address } => {
-                self.revert_add_stake(&mut store, &staker_address, transaction.value, tx_logger)
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
+
+                self.revert_add_stake(
+                    &mut store,
+                    &staker_address,
+                    transaction.value,
+                    receipt,
+                    tx_logger,
+                )
             }
             IncomingStakingTransactionData::UpdateStaker { proof, .. } => {
                 // Get the staker address from the proof.

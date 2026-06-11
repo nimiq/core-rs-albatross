@@ -120,6 +120,21 @@ pub struct DeleteValidatorReceipt {
 }
 convert_receipt!(DeleteValidatorReceipt);
 
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
+pub enum BalanceType {
+    Active,
+    Inactive,
+}
+
+/// Receipt for add stake transactions. Stores which balance the stake was
+/// credited to, which is necessary to be able to revert the transaction.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct AddStakeReceipt {
+    /// the balance which the stake was attributed to.
+    pub credited_balance: BalanceType,
+}
+convert_receipt!(AddStakeReceipt);
+
 /// Receipt for most staker-related transactions. This is necessary to be able to revert
 /// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
