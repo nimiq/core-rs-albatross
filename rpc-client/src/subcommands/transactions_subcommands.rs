@@ -525,7 +525,6 @@ impl HandleSubcommand for TransactionCommand {
                 retire_stake,
                 tx_commons,
             } => {
-                eprintln! {"a {sender_wallet:?}\n{staker_wallet:?}\n{retire_stake:?}\n{tx_commons:?}"};
                 if tx_commons.dry {
                     let tx = client
                         .consensus
