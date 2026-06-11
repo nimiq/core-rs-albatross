@@ -345,7 +345,9 @@ fn signal_support(
 #[test(tokio::test)]
 async fn it_triggers_version_upgrades() {
     // Move to before the next election block.
-    let temp_producer = TemporaryBlockProducer::default();
+    let initial_version = Policy::max_supported_version() - 1;
+    let next_version = Policy::max_supported_version();
+    let temp_producer = TemporaryBlockProducer::new_with_protocol_version(initial_version);
     for _ in 0..Policy::blocks_per_epoch() - 1 {
         let block = temp_producer.next_block(vec![], false);
         temp_producer
@@ -363,12 +365,12 @@ async fn it_triggers_version_upgrades() {
     );
     assert_eq!(
         blockchain.read().state().current_version(),
-        1,
-        "Test assumes current version"
+        initial_version,
+        "Test assumes current version is one below the maximum supported version"
     );
     assert_eq!(
         Policy::max_supported_version(),
-        2,
+        next_version,
         "Test assumes max supported version"
     );
     let validator1 = current_validators.validators[0].address.clone();
@@ -392,22 +394,23 @@ async fn it_triggers_version_upgrades() {
     let proposal = interface
         .create_proposal(0)
         .expect("Should have created proposal");
-    assert_eq!(proposal.0.proposal.0.version, 1);
+    assert_eq!(proposal.0.proposal.0.version, initial_version);
 
     // Case 2: The elected slots support the upgrade (validator1 holds them all), but only half of
     // the active stake does, so the stake threshold is not reached.
-    signal_support(&temp_producer, &validator1, Some(2));
+    signal_support(&temp_producer, &validator1, Some(next_version));
     let proposal = interface
         .create_proposal(0)
         .expect("Should have created proposal");
-    assert_eq!(proposal.0.proposal.0.version, 1);
+    assert_eq!(proposal.0.proposal.0.version, initial_version);
 
     // Case 3: Both the elected slots and the active stake support the upgrade.
-    signal_support(&temp_producer, &validator2, Some(2));
+    signal_support(&temp_producer, &validator2, Some(next_version));
+
     let proposal = interface
         .create_proposal(0)
         .expect("Should have created proposal");
-    assert_eq!(proposal.0.proposal.0.version, 2);
+    assert_eq!(proposal.0.proposal.0.version, next_version);
 }
 
 #[test(tokio::test)]

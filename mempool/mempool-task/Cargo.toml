@@ -35,3 +35,17 @@ nimiq-utils = { workspace = true, features = ["time"] }
 
 [features]
 metrics = ["nimiq-mempool/metrics", "tokio-metrics"]
+
+[dev-dependencies]
+tokio = { version = "1.52", features = ["macros", "rt", "time"] }
+
+nimiq-database = { workspace = true }
+nimiq-genesis-builder = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-network-mock = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["coin", "networks"] }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-transaction-builder = { workspace = true }

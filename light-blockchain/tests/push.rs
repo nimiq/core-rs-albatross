@@ -13,8 +13,7 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     blockchain::{
-        fill_micro_blocks_with_txns, produce_macro_blocks_with_txns,
-        signal_all_validators_support_for_next_version,
+        fill_micro_blocks_with_txns, next_protocol_upgrade_block, produce_macro_blocks_with_txns,
     },
     test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
 };
@@ -334,24 +333,13 @@ fn it_emits_protocol_upgrade_event_for_election_push() {
     push_source_chain_to_light(&source, &light_blockchain);
 
     let mut receiver = light_blockchain.read().notifier.subscribe();
-    let upgrade_version = signal_all_validators_support_for_next_version(&source.blockchain);
+    let (upgrade_block, upgrade_version) =
+        next_protocol_upgrade_block(&source.producer, &source.blockchain);
     assert_eq!(
         initial_version.add(1),
         upgrade_version,
         "Initial blockchain should be one version bellow the targeted upgrade version"
     );
-    let upgrade_block = {
-        let blockchain = source.blockchain.read();
-        next_macro_block(
-            &source.producer.signing_key,
-            &source.producer.voting_key,
-            &blockchain,
-            &BlockConfig {
-                version: Some(upgrade_version),
-                ..Default::default()
-            },
-        )
-    };
     let upgrade_hash = upgrade_block.hash();
 
     assert_eq!(

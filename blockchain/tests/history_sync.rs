@@ -8,12 +8,9 @@ use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
-use nimiq_test_utils::{
-    blockchain::{
-        fill_micro_blocks_with_txns, produce_macro_blocks, produce_macro_blocks_with_txns,
-        signal_next_protocol_version_via_tx, signing_key, voting_key,
-    },
-    test_custom_block::{next_macro_block, BlockConfig},
+use nimiq_test_utils::blockchain::{
+    fill_micro_blocks_with_txns, next_election_block_with_version, produce_macro_blocks,
+    produce_macro_blocks_with_txns, signal_next_protocol_version_via_tx, signing_key, voting_key,
 };
 use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_utils::time::OffsetTime;
@@ -311,18 +308,7 @@ fn history_sync_emits_protocol_upgrade_event_when_version_changes() {
     );
     let upgrade_version = signal_next_protocol_version_via_tx(&producer, &blockchain1);
     fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 0);
-    let upgrade_block = {
-        let blockchain = blockchain1.read();
-        next_macro_block(
-            &producer.signing_key,
-            &producer.voting_key,
-            &blockchain,
-            &BlockConfig {
-                version: Some(upgrade_version),
-                ..Default::default()
-            },
-        )
-    };
+    let upgrade_block = next_election_block_with_version(&producer, &blockchain1, upgrade_version);
     let upgrade_hash = upgrade_block.hash();
 
     assert_eq!(

@@ -641,6 +641,11 @@ impl Mempool {
         self.filter.read().blacklisted(hash)
     }
 
+    /// Adds a transaction hash to the mempool blacklist.
+    pub fn blacklist_transaction_hash(&self, hash: Blake2bHash) {
+        self.filter.write().blacklist(hash);
+    }
+
     /// Returns the rules for the mempool.
     pub fn get_rules(&self) -> MempoolRules {
         self.filter.read().rules.clone()

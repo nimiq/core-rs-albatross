@@ -25,7 +25,11 @@ use nimiq_transaction_builder::TransactionBuilder;
 use parking_lot::RwLock;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use crate::{blockchain_with_rng::*, test_rng};
+use crate::{
+    blockchain_with_rng::*,
+    test_custom_block::{next_macro_block, BlockConfig},
+    test_rng,
+};
 
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 pub const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
@@ -314,6 +318,34 @@ pub fn signal_all_validators_support_for_next_version(blockchain: &Arc<RwLock<Bl
     raw_txn.commit();
 
     next_version
+}
+
+pub fn next_election_block_with_version(
+    producer: &BlockProducer,
+    blockchain: &Arc<RwLock<Blockchain>>,
+    version: u16,
+) -> Block {
+    let blockchain = blockchain.read();
+    next_macro_block(
+        &producer.signing_key,
+        &producer.voting_key,
+        &blockchain,
+        &BlockConfig {
+            version: Some(version),
+            ..Default::default()
+        },
+    )
+}
+
+pub fn next_protocol_upgrade_block(
+    producer: &BlockProducer,
+    blockchain: &Arc<RwLock<Blockchain>>,
+) -> (Block, u16) {
+    let next_version = signal_all_validators_support_for_next_version(blockchain);
+    (
+        next_election_block_with_version(producer, blockchain, next_version),
+        next_version,
+    )
 }
 
 pub fn signal_next_protocol_version_via_tx(

@@ -22,10 +22,10 @@ use nimiq_network_mock::MockHub;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::{
     blockchain::{
-        fill_micro_blocks_with_txns, produce_macro_blocks_with_txns,
-        signal_next_protocol_version_via_tx, signing_key, voting_key,
+        fill_micro_blocks_with_txns, next_election_block_with_version,
+        produce_macro_blocks_with_txns, signal_next_protocol_version_via_tx, signing_key,
+        voting_key,
     },
-    test_custom_block::{next_macro_block, BlockConfig},
     test_network::TestNetwork,
 };
 use nimiq_utils::{spawn, time::OffsetTime};
@@ -302,18 +302,7 @@ pub async fn sync_two_peers_across_protocol_upgrade(sync_mode: SyncMode) {
 
     let upgrade_version = signal_next_protocol_version_via_tx(&producer, &blockchain1);
     fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 2);
-    let upgrade_block = {
-        let blockchain = blockchain1.read();
-        next_macro_block(
-            &producer.signing_key,
-            &producer.voting_key,
-            &blockchain,
-            &BlockConfig {
-                version: Some(upgrade_version),
-                ..Default::default()
-            },
-        )
-    };
+    let upgrade_block = next_election_block_with_version(&producer, &blockchain1, upgrade_version);
     let upgrade_hash = upgrade_block.hash();
     assert_eq!(
         Blockchain::push(blockchain1.upgradable_read(), upgrade_block),

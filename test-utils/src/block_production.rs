@@ -13,7 +13,7 @@ use nimiq_bls::{
 };
 use nimiq_collections::BitSet;
 use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction};
-use nimiq_genesis::NetworkId;
+use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_hash::Blake2sHash;
 use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::{
@@ -62,15 +62,23 @@ impl TemporaryBlockProducer {
     }
 
     pub fn new_merged() -> Self {
+        Self::new_merged_with_protocol_version(unit_genesis_block().version())
+    }
+
+    pub fn new_merged_with_protocol_version(initial_protocol_version: u16) -> Self {
         let time = Arc::new(OffsetTime::new());
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let pre_genesis_env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let blockchain = Blockchain::new_merged(
+        let (genesis_block, genesis_accounts) =
+            unit_genesis_with_protocol_version(initial_protocol_version);
+        let blockchain = Blockchain::with_genesis_merged(
             env,
             Some(pre_genesis_env),
             BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
             time,
+            NetworkId::UnitAlbatross,
+            genesis_block,
+            genesis_accounts,
         )
         .unwrap();
 
@@ -78,13 +86,21 @@ impl TemporaryBlockProducer {
     }
 
     pub fn new() -> Self {
+        Self::new_with_protocol_version(unit_genesis_block().version())
+    }
+
+    pub fn new_with_protocol_version(initial_protocol_version: u16) -> Self {
         let time = Arc::new(OffsetTime::new());
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let blockchain = Blockchain::new(
+        let (genesis_block, genesis_accounts) =
+            unit_genesis_with_protocol_version(initial_protocol_version);
+        let blockchain = Blockchain::with_genesis(
             env,
             BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
             time,
+            NetworkId::UnitAlbatross,
+            genesis_block,
+            genesis_accounts,
         )
         .unwrap();
 
@@ -329,5 +345,56 @@ impl TemporaryBlockProducer {
         SkipBlockProof {
             sig: MultiSignature::new(signature, signers),
         }
+    }
+}
+
+fn unit_genesis_block() -> Block {
+    NetworkInfo::from_network_id(NetworkId::UnitAlbatross).genesis_block()
+}
+
+fn unit_genesis_with_protocol_version(
+    initial_protocol_version: u16,
+) -> (Block, Option<Vec<nimiq_primitives::trie::TrieItem>>) {
+    let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
+    assert!(
+        initial_protocol_version <= Policy::max_supported_version(),
+        "initial protocol version {} exceeds max supported version {}",
+        initial_protocol_version,
+        Policy::max_supported_version(),
+    );
+
+    let mut genesis_block = network_info.genesis_block();
+    let header = &mut genesis_block.unwrap_macro_ref_mut().header;
+    header.version = initial_protocol_version;
+    header.cached_hash = None;
+    let genesis_hash = header.hash();
+    genesis_block.populate_cached_hash(genesis_hash);
+
+    (genesis_block, network_info.genesis_accounts())
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_primitives::policy::TEST_POLICY;
+
+    use super::*;
+
+    #[test]
+    fn can_create_blockchain_with_custom_initial_protocol_version() {
+        let _ = Policy::get_or_init(TEST_POLICY);
+        let producer = TemporaryBlockProducer::new_with_protocol_version(3);
+
+        assert_eq!(producer.blockchain.read().protocol_version(), 3);
+        assert_eq!(producer.blockchain.read().head().version(), 3);
+    }
+
+    #[test]
+    fn produces_blocks_with_custom_initial_protocol_version() {
+        let _ = Policy::get_or_init(TEST_POLICY);
+        let producer = TemporaryBlockProducer::new_with_protocol_version(3);
+
+        let block = producer.next_block_no_push(vec![], false);
+
+        assert_eq!(block.version(), 3);
     }
 }

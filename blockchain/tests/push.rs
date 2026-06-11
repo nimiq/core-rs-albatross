@@ -18,8 +18,8 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     blockchain::{
-        fill_micro_blocks_with_txns, produce_macro_blocks_with_txns,
-        signal_all_validators_support_for_next_version, validator_address,
+        fill_micro_blocks_with_txns, next_protocol_upgrade_block, produce_macro_blocks_with_txns,
+        validator_address,
     },
     test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
     test_rng,
@@ -273,19 +273,8 @@ fn it_emits_protocol_upgrade_event_for_election_push() {
     fill_micro_blocks_with_txns(&temp_producer.producer, &temp_producer.blockchain, 1, 0);
 
     let mut receiver = temp_producer.blockchain.read().notifier.subscribe();
-    let upgrade_version = signal_all_validators_support_for_next_version(&temp_producer.blockchain);
-    let upgrade_block = {
-        let blockchain = temp_producer.blockchain.read();
-        next_macro_block(
-            &temp_producer.producer.signing_key,
-            &temp_producer.producer.voting_key,
-            &blockchain,
-            &BlockConfig {
-                version: Some(upgrade_version),
-                ..Default::default()
-            },
-        )
-    };
+    let (upgrade_block, upgrade_version) =
+        next_protocol_upgrade_block(&temp_producer.producer, &temp_producer.blockchain);
     let upgrade_hash = upgrade_block.hash();
 
     assert_eq!(temp_producer.push(upgrade_block), Ok(PushResult::Extended));

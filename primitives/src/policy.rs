@@ -728,7 +728,7 @@ pub const TEST_POLICY: Policy = Policy {
     transaction_validity_window: 2,
     // This number should match the one that is defined in the `unit` network genesis file which is the genesis used for unit testing
     genesis_block_number: 200,
-    max_supported_version: 2,
+    max_supported_version: 5,
 };
 
 #[cfg(test)]

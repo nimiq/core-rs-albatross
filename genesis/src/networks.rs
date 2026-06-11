@@ -311,7 +311,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                     env!("OUT_DIR"),
                     "/genesis/unit-albatross/genesis.rs"
                 )),
-                max_supported_version: 2,
+                max_supported_version: 5,
             };
             &INFO
         }
