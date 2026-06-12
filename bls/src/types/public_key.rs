@@ -54,9 +54,19 @@ impl PublicKey {
         if self.public_key.is_zero() {
             return false;
         }
-        let lhs = MNT6_753::pairing(signature.signature, G2Projective::generator());
-        let rhs = MNT6_753::pairing(hash_curve, self.public_key);
-        lhs == rhs
+        // We verify the pairing equation `e(sig, g2) == e(H(m), pk)`. Instead of
+        // computing two separate pairings and comparing them, we check the
+        // algebraically equivalent form `e(sig, g2) * e(-H(m), pk) == 1` with a
+        // single multi-Miller-loop followed by *one* final exponentiation. The
+        // final exponentiation is the most expensive part of a pairing, so doing
+        // it once instead of twice is a meaningful speed-up. This is a pure
+        // algebraic rewrite: it accepts/rejects exactly the same signatures as
+        // the two-pairing form for every input.
+        MNT6_753::multi_pairing(
+            [signature.signature, -hash_curve],
+            [G2Projective::generator(), self.public_key],
+        )
+        .is_zero()
     }
 
     /// Transforms a public key into a serialized compressed form.
