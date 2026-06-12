@@ -46,8 +46,8 @@ impl ValidatorInterface for ValidatorDispatcher {
         &self,
         automatic_reactivate: bool,
     ) -> RPCResult<(), (), Self::Error> {
-        let validator = self.validator.write();
-        let old = mem::replace(&mut &validator.automatic_reactivate, &automatic_reactivate);
+        let mut validator = self.validator.write();
+        let old = mem::replace(&mut validator.automatic_reactivate, automatic_reactivate);
 
         log::debug!(
             "Automatic reactivation set to {} (from {}).",
