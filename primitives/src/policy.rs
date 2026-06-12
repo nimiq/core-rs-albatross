@@ -31,7 +31,7 @@ pub struct Policy {
     /// Genesis block number
     #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub genesis_block_number: u32,
-    /// Maximum supported version
+    /// Maximum supported protocol version
     #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub max_supported_version: u16,
 }
@@ -261,7 +261,7 @@ impl Policy {
             .genesis_block_number
     }
 
-    /// Genesis block number
+    /// Maximum supported protocol version
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MAX_SUPPORTED_VERSION))]
     pub fn max_supported_version() -> u16 {
