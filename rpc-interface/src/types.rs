@@ -66,7 +66,7 @@ impl ValidityStartHeight {
     pub fn block_number(self, current_block_number: u32) -> u32 {
         match self {
             Self::Absolute(n) => n,
-            Self::Relative(n) => n + current_block_number,
+            Self::Relative(n) => n.saturating_add(current_block_number),
         }
     }
 }
