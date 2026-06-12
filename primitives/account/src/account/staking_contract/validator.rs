@@ -501,10 +501,13 @@ impl StakingContract {
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
-        tx_logger.push_log(Log::DeactivateValidator {
-            validator_address: validator_address.clone(),
-            inactive_from: inactive_from.expect("must have inactivation block number"),
-        });
+        // Mirror the conditional log emission in `jail_validator`.
+        if receipt.newly_deactivated {
+            tx_logger.push_log(Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+                inactive_from: inactive_from.expect("must have inactivation block number"),
+            });
+        }
         tx_logger.push_log(Log::JailValidator {
             validator_address: validator_address.clone(),
             event_block: jailed_from,

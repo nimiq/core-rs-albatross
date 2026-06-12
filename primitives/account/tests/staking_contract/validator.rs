@@ -1957,6 +1957,8 @@ fn can_jail_twice() {
         .contains_key(&jailed_setup.validator_address));
 
     // Revert the second jail.
+    let mut revert_logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut revert_logs);
     jailed_setup
         .staking_contract
         .revert_inherent(
@@ -1964,9 +1966,20 @@ fn can_jail_twice() {
             &second_jail_block_state,
             receipt,
             data_store.write(&mut db_txn),
-            &mut InherentLogger::empty(),
+            &mut inherent_logger,
         )
         .expect("Failed to revert inherent");
+
+    // The revert must mirror the commit logs: since the validator was already
+    // inactive, no `DeactivateValidator` log is emitted on either side.
+    assert_eq!(
+        revert_logs,
+        vec![Log::JailValidator {
+            validator_address: jailed_setup.validator_address.clone(),
+            event_block: second_jail_block_state.number,
+            newly_jailed: false
+        },]
+    );
 
     let validator = jailed_setup
         .staking_contract
