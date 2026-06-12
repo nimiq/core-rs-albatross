@@ -1,13 +1,14 @@
 //! Microbenchmark + equivalence check for the BLS signature verification
-//! optimization (Option 1): replacing the two-pairing check in
-//! `PublicKey::verify_g1` with a single multi-pairing (one final exponentiation
-//! instead of two).
+//! optimizations: the original two-pairing check, the single multi-pairing
+//! rewrite (one final exponentiation instead of two) and the current
+//! `PublicKey::verify_g1` (single multi-Miller loop with the Miller loop
+//! coefficients of the fixed `g2` generator cached).
 //!
 //! Run with:
 //!   cargo run --release --example bench_verify_g1 -p nimiq-bls
 //!
-//! The numbers are native, but the *ratio* between the two methods carries over
-//! to WASM, since both do the same MNT6-753 field arithmetic.
+//! The numbers are native, but the *ratio* between the methods carries over
+//! to WASM, since they all do the same MNT6-753 field arithmetic.
 
 use std::{
     hint::black_box,
@@ -69,7 +70,9 @@ fn main() {
     // Valid signature: both must accept, and must agree with the real impl.
     assert!(verify_old(hash_curve, pk, sig));
     assert!(verify_new(hash_curve, pk, sig));
-    assert!(keypair.public_key.verify_g1(hash_curve, &keypair.sign(&message)));
+    assert!(keypair
+        .public_key
+        .verify_g1(hash_curve, &keypair.sign(&message)));
 
     // Tampered signature: both must reject.
     let bad_sig = keypair.sign(&"other message".to_string()).signature;
@@ -104,23 +107,30 @@ fn main() {
     }
     println!("equivalence: OK (valid, tampered, point-at-infinity, 200 random cases)\n");
 
-    // ---- Timing: the pairing verification (what Option 1 changes) ----
+    // ---- Timing: the pairing verification ----
     let verify_iters = 200u32;
 
+    let signature = keypair.sign(&message);
     let t_old = time(verify_iters, || verify_old(hash_curve, pk, sig));
     let t_new = time(verify_iters, || verify_new(hash_curve, pk, sig));
+    let t_cur = time(verify_iters, || {
+        keypair.public_key.verify_g1(hash_curve, &signature)
+    });
 
     let old_ms = t_old.as_secs_f64() * 1e3 / verify_iters as f64;
     let new_ms = t_new.as_secs_f64() * 1e3 / verify_iters as f64;
+    let cur_ms = t_cur.as_secs_f64() * 1e3 / verify_iters as f64;
 
     println!("verify (pairing check), {verify_iters} iters each:");
-    println!("  old (2 pairings):     {old_ms:8.3} ms/op");
-    println!("  new (1 multipairing): {new_ms:8.3} ms/op");
+    println!("  old (2 pairings):                  {old_ms:8.3} ms/op");
     println!(
-        "  speedup: {:.2}x   ({:.1}% faster, saves {:.3} ms/block on the pairing step)\n",
-        old_ms / new_ms,
-        (1.0 - new_ms / old_ms) * 100.0,
-        old_ms - new_ms
+        "  new (1 multipairing):              {new_ms:8.3} ms/op  ({:.2}x vs old)",
+        old_ms / new_ms
+    );
+    println!(
+        "  current (cached g2 prep, verify_g1): {cur_ms:6.3} ms/op  ({:.2}x vs old, {:.2}x vs multipairing)\n",
+        old_ms / cur_ms,
+        new_ms / cur_ms
     );
 
     // ---- Timing: aggregation of ~342 signer slots (unchanged by Option 1) ----
@@ -145,12 +155,14 @@ fn main() {
     // ---- Per-election-block extrapolation ----
     let block_old = agg_ms + old_ms;
     let block_new = agg_ms + new_ms;
+    let block_cur = agg_ms + cur_ms;
     println!("per election block (aggregation + verification), native:");
-    println!("  old: {block_old:8.3} ms");
-    println!("  new: {block_new:8.3} ms");
+    println!("  old:     {block_old:8.3} ms");
+    println!("  new:     {block_new:8.3} ms");
+    println!("  current: {block_cur:8.3} ms");
     println!(
-        "  whole-block speedup: {:.2}x ({:.1}% faster)",
-        block_old / block_new,
-        (1.0 - block_new / block_old) * 100.0
+        "  whole-block speedup (old -> current): {:.2}x ({:.1}% faster)",
+        block_old / block_cur,
+        (1.0 - block_cur / block_old) * 100.0
     );
 }
