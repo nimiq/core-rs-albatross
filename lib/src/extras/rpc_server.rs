@@ -65,8 +65,6 @@ pub fn initialize_rpc_server(
     }
     dispatcher.add(wallet_dispatcher);
 
-    dispatcher.add(ZKPComponentDispatcher::new(client.zkp_component()));
-
     // Eth interface dispatchers
     dispatcher.add(GossipDispatcher::new(
         client.consensus_proxy(),

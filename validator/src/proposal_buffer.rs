@@ -562,7 +562,6 @@ mod test {
     use nimiq_time::{sleep, timeout};
     use nimiq_utils::spawn;
     use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
-    use nimiq_zkp_component::ZKPComponent;
     use parking_lot::{Mutex, RwLock};
     use tokio::select;
 
@@ -575,10 +574,6 @@ mod test {
         net: Arc<N>,
     ) -> Consensus<N> {
         let blockchain_proxy = BlockchainProxy::from(&blockchain);
-
-        let zkp_proxy = ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&net), None)
-            .await
-            .proxy();
 
         let syncer = SyncerProxy::new_history(
             blockchain_proxy.clone(),
@@ -593,7 +588,6 @@ mod test {
             net,
             syncer,
             0,
-            zkp_proxy,
             Arc::new(AtomicU32::new(0)),
         )
     }

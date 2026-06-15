@@ -27,7 +27,6 @@ use nimiq_utils::key_rng::SecureGenerate;
 #[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
 use nimiq_utils::Credentials;
 use nimiq_utils::{file_store::FileStore, Sensitive};
-use nimiq_zkp_circuits::DEFAULT_PROVER_KEYS_PATH;
 
 #[cfg(feature = "metrics-server")]
 use crate::config::config_file::MetricsServerSettings;
@@ -44,7 +43,6 @@ use crate::{
         command_line::CommandLine,
         config_file::{
             ConfigFile, ConsensusSettings, DatabaseSettings, NetworkSettings, Seed, TlsSettings,
-            ZKProverSettings,
         },
         paths,
         user_agent::UserAgent,
@@ -721,11 +719,6 @@ pub struct ClientConfig {
     #[builder(default)]
     pub validator: Option<ValidatorConfig>,
 
-    /// The optional zk prover configuration
-    ///
-    #[builder(default)]
-    pub zk_prover: Option<ZKProverConfig>,
-
     /// The optional rpc-server configuration
     ///
     #[cfg(feature = "rpc-server")]
@@ -820,11 +813,9 @@ impl ClientConfigBuilder {
         let ConfigFile {
             network,
             consensus,
-            zk_prover,
             rpc_server,
             metrics_server,
-            log: _,        // Note: log settings are handled elsewhere in the application
-            prover_log: _, // Note: prover log settings are handled elsewhere in the application
+            log: _, // Note: log settings are handled elsewhere in the application
             database,
             #[cfg(feature = "nimiq-mempool")]
             mempool,
@@ -986,17 +977,6 @@ impl ClientConfigBuilder {
         #[cfg(feature = "database-storage")]
         self.database(database.clone());
 
-        // Configure the zk prover
-        if let Some(zkp_settings) = zk_prover {
-            let ZKProverSettings { prover_keys_path } = zkp_settings;
-
-            let prover_keys_path = prover_keys_path
-                .as_ref()
-                .map_or(PathBuf::from(DEFAULT_PROVER_KEYS_PATH), PathBuf::from);
-
-            self.zk_prover = Some(Some(ZKProverConfig { prover_keys_path }));
-        }
-
         // Configure RPC server
         #[cfg(feature = "rpc-server")]
         {
@@ -1125,11 +1105,4 @@ impl ClientConfigBuilder {
         // NOTE: We're always return `Ok(_)`, but we might want to introduce errors later.
         Ok(self)
     }
-}
-
-/// Contains the configurations for the ZK proof generation.
-#[derive(Debug, Clone, Builder)]
-pub struct ZKProverConfig {
-    /// Prover keys path for the zkp prover.
-    pub prover_keys_path: PathBuf,
 }

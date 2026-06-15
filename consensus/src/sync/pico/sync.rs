@@ -11,7 +11,6 @@ use nimiq_network_interface::{
     request::RequestError,
 };
 use nimiq_utils::{spawn, stream::FuturesUnordered};
-use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
 use crate::{
     messages::{BlockError, ResponseHead},
@@ -49,10 +48,6 @@ pub struct PicoMacroSync<TNetwork: Network> {
     >,
     /// Collection of peers we are currently pico macro syncing with
     pub(crate) syncing_peers: HashSet<TNetwork::PeerId>,
-    /// Reference to the ZKP proxy used to interact with the ZKP component
-    /// It is not used by the pico consensus itself, but we need the reference
-    /// as part of the fallback mechanism
-    pub(crate) zkp_component_proxy: ZKPComponentProxy<TNetwork>,
 }
 
 impl<TNetwork: Network> PicoMacroSync<TNetwork> {
@@ -60,7 +55,6 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
         blockchain: BlockchainProxy,
         network: Arc<TNetwork>,
         network_event_rx: SubscribeEvents<TNetwork::PeerId>,
-        zkp_component_proxy: ZKPComponentProxy<TNetwork>,
     ) -> Self {
         Self {
             blockchain,
@@ -70,7 +64,6 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
             head_stream: FuturesUnordered::new(),
             block_headers: Default::default(),
             syncing_peers: HashSet::new(),
-            zkp_component_proxy,
         }
     }
 

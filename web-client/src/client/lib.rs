@@ -197,9 +197,6 @@ impl Client {
         log::info!("Spawning consensus");
         spawn_local(consensus);
 
-        let zkp_component = client.take_zkp_component().unwrap();
-        spawn_local(zkp_component);
-
         let bls_cache = BlsCache::new().await;
 
         let client = Client {

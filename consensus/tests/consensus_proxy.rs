@@ -20,7 +20,6 @@ use nimiq_transaction::{
     historic_transaction::HistoricTransactionData, ExecutedTransaction, TransactionFormat,
 };
 use nimiq_utils::time::OffsetTime;
-use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 
 #[test(tokio::test)]
@@ -45,10 +44,6 @@ async fn test_request_transactions_by_address() {
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
     let net1 = Arc::new(hub.new_network());
-    let zkp_prover1 =
-        ZKPComponent::new(BlockchainProxy::from(&blockchain1), Arc::clone(&net1), None)
-            .await
-            .proxy();
     let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
 
     let syncer1 = SyncerProxy::new_history(
@@ -59,12 +54,8 @@ async fn test_request_transactions_by_address() {
     )
     .await;
 
-    let _consensus1 = Consensus::from_network(
-        blockchain1_proxy.clone(),
-        Arc::clone(&net1),
-        syncer1,
-        zkp_prover1.clone(),
-    );
+    let _consensus1 =
+        Consensus::from_network(blockchain1_proxy.clone(), Arc::clone(&net1), syncer1);
 
     // Setup another node that will sync with the previous one.
     let net2 = Arc::new(hub.new_network());
@@ -75,12 +66,7 @@ async fn test_request_transactions_by_address() {
         net2.subscribe_events(),
     )
     .await;
-    let consensus2 = Consensus::from_network(
-        blockchain1_proxy.clone(),
-        Arc::clone(&net2),
-        syncer2,
-        zkp_prover1,
-    );
+    let consensus2 = Consensus::from_network(blockchain1_proxy.clone(), Arc::clone(&net2), syncer2);
     let consensus_proxy = consensus2.proxy();
     net1.dial_mock(&net2);
 
@@ -200,9 +186,6 @@ async fn test_rejects_proof_for_unrequested_transaction() {
     // malicious peer.
     let victim_net = Arc::new(hub.new_network());
     let blockchain_proxy = BlockchainProxy::from(&blockchain);
-    let zkp_prover = ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&victim_net), None)
-        .await
-        .proxy();
     let syncer = SyncerProxy::new_history(
         blockchain_proxy.clone(),
         Arc::clone(&victim_net),
@@ -210,12 +193,8 @@ async fn test_rejects_proof_for_unrequested_transaction() {
         victim_net.subscribe_events(),
     )
     .await;
-    let consensus = Consensus::from_network(
-        blockchain_proxy.clone(),
-        Arc::clone(&victim_net),
-        syncer,
-        zkp_prover,
-    );
+    let consensus =
+        Consensus::from_network(blockchain_proxy.clone(), Arc::clone(&victim_net), syncer);
     let consensus_proxy = consensus.proxy();
     malicious_net.dial_mock(&victim_net);
 

@@ -5,7 +5,6 @@ pub use network_subcommands::NetworkCommand;
 pub use policy_subcommands::PolicyCommand;
 pub use transactions_subcommands::TransactionCommand;
 pub use validator_subcommands::ValidatorCommand;
-pub use zkp_component_subcommands::ZKPComponentCommand;
 
 mod accounts_subcommands;
 mod blockchain_subcommands;
@@ -14,4 +13,3 @@ mod network_subcommands;
 mod policy_subcommands;
 mod transactions_subcommands;
 mod validator_subcommands;
-mod zkp_component_subcommands;

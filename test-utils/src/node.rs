@@ -1,7 +1,4 @@
-use std::{
-    path::PathBuf,
-    sync::{atomic::AtomicU32, Arc},
-};
+use std::sync::{atomic::AtomicU32, Arc};
 
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -13,16 +10,9 @@ use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, trie::TrieItem};
 use nimiq_utils::{spawn, time::OffsetTime};
-use nimiq_zkp_component::{
-    proof_store::{DBProofStore, ProofStore},
-    ZKPComponent,
-};
 use parking_lot::{Mutex, RwLock};
 
-use crate::{
-    test_network::TestNetwork,
-    zkp_test_data::{zkp_test_exe, ZKP_TEST_KEYS_PATH},
-};
+use crate::test_network::TestNetwork;
 
 pub struct Node<N: NetworkInterface + TestNetwork> {
     pub network: Arc<N>,
@@ -36,14 +26,12 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         peer_id: u64,
         genesis_info: GenesisInfo,
         hub: &mut Option<MockHub>,
-        is_prover_active: bool,
     ) -> Self {
         Self::new_history(
             peer_id,
             genesis_info.block,
             genesis_info.accounts.expect("history nodes need accounts"),
             hub,
-            is_prover_active,
         )
         .await
     }
@@ -53,7 +41,6 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         block: Block,
         accounts: Vec<TrieItem>,
         hub: &mut Option<MockHub>,
-        is_prover_active: bool,
     ) -> Self {
         let block_hash = block.hash();
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
@@ -71,23 +58,6 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         ));
 
         let network = N::build_network(peer_id, block_hash, hub).await;
-        let zkp_storage: Option<Box<dyn ProofStore>> =
-            Some(Box::new(DBProofStore::new(env.clone())));
-
-        let prover_path = if is_prover_active {
-            Some(zkp_test_exe())
-        } else {
-            None
-        };
-        let zkp_proxy = ZKPComponent::with_prover(
-            BlockchainProxy::from(&blockchain),
-            Arc::clone(&network),
-            is_prover_active,
-            prover_path,
-            PathBuf::from(ZKP_TEST_KEYS_PATH),
-            zkp_storage,
-        )
-        .await;
 
         let blockchain_proxy = BlockchainProxy::Full(Arc::clone(&blockchain));
         let syncer = SyncerProxy::new_history(
@@ -102,7 +72,6 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             Arc::clone(&network),
             syncer,
             1,
-            zkp_proxy.proxy(),
             Arc::new(AtomicU32::new(0)),
         );
 

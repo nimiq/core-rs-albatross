@@ -1184,29 +1184,6 @@ pub fn is_of_log_type_and_related_to_addresses(
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct ZKPState {
-    latest_block: Block,
-    latest_proof: Option<String>,
-}
-
-impl ZKPState {
-    pub fn with_zkp_state(zkp_state: &nimiq_zkp_component::types::ZKPState) -> Self {
-        let latest_block =
-            Block::from_macro_block(None, zkp_state.latest_block.clone(), true).unwrap();
-        let latest_proof = zkp_state
-            .latest_proof
-            .as_ref()
-            .map(|latest_proof| format!("{latest_proof:?}"));
-
-        Self {
-            latest_block,
-            latest_proof,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MempoolInfo {
     #[serde(skip_serializing_if = "Option::is_none")]

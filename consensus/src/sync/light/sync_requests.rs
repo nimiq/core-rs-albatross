@@ -7,15 +7,9 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::{CloseReason, Network},
-    request::{
-        InboundRequestError::SenderFutureDropped, RequestError, RequestError::InboundRequest,
-    },
+    request::RequestError,
 };
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_component::{
-    types::{Error, ZKPRequestEvent},
-    zkp_component::ZKPComponentProxy,
-};
 
 use crate::{
     messages::{BlockError, MacroChain, MacroChainError, RequestMacroChain},
@@ -26,28 +20,6 @@ use crate::{
 };
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
-    /// Sends a ZKP request to a specific peer.
-    /// Returns the result and the peer ID, handling any communication errors.
-    pub(crate) async fn request_zkps(
-        zkp_component: ZKPComponentProxy<TNetwork>,
-        peer_id: TNetwork::PeerId,
-    ) -> (Result<ZKPRequestEvent, Error>, TNetwork::PeerId) {
-        let zkp_result = zkp_component.request_zkp_from_peer(peer_id, true).await;
-
-        let (zkp_result, peer_id) = match zkp_result {
-            (Ok(zkp_result), peer_id) => (zkp_result, peer_id),
-            (Err(error), peer_id) => {
-                log::debug!(?error, %peer_id, "Error from channel");
-
-                (
-                    Err(Error::Request(InboundRequest(SenderFutureDropped))),
-                    peer_id,
-                )
-            }
-        };
-        (zkp_result, peer_id)
-    }
-
     /// Requests epoch IDs from a peer by sending a macro chain request.
     /// Performs basic validation on the result and may ban the peer on invalid responses.
     pub(crate) async fn request_epoch_ids(
@@ -155,7 +127,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
     }
 
     /// Adds a request for a single macro block to the block headers queue.
-    /// This is useful for fetching a specific block during sync when the latest zkp is not ready yet.
+    /// This is useful for fetching a specific block during sync.
     #[cfg(feature = "full")]
     pub(crate) fn request_single_macro_block(
         &mut self,

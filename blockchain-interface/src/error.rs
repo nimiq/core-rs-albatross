@@ -97,8 +97,6 @@ pub enum PushResult {
 pub enum PushError {
     #[error("Orphan block")]
     Orphan,
-    #[error("Invalid zk proof")]
-    InvalidZKP,
     #[error("Invalid block: {0}")]
     InvalidBlock(#[from] BlockError),
     #[error("Invalid successor")]

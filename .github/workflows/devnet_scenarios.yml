@@ -29,7 +29,7 @@ jobs:
         - test: FourValidatorsReconnectSpammer
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -ut 250 -dt 30
         - test: MacroBlockProduction
-          # The number of blocks per epoch needs to stay the same (because of the ZKP keys)
+          # Keep the total number of blocks per epoch unchanged while making batches shorter.
           pre: "grep 'blocks_per_batch: 60,' primitives/src/policy.rs &&
                 grep 'batches_per_epoch: 720,' primitives/src/policy.rs &&
                 sed -i 's/blocks_per_batch: 60,/blocks_per_batch: 60 \\/ 30,/g' primitives/src/policy.rs &&

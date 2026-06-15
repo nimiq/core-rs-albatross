@@ -339,9 +339,6 @@ impl fmt::Display for MacroHeader {
     }
 }
 
-// This needs to be kept in sync with `MacroBlockGadget::hash` of
-// `nimiq-zkp-circuits`. Whenever this is changed, `MacroBlockGadget::hash`
-// also needs to be adjusted.
 impl SerializeContent for MacroHeader {
     fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
         self.network.serialize_to_writer(writer)?;
@@ -478,8 +475,8 @@ mod test {
     }
 
     /// Verifies that the raw-bytes hash produces the same output as the old
-    /// decompress-reserialize path for valid keys. This ensures ZKP circuit
-    /// compatibility is maintained.
+    /// decompress-reserialize path for valid keys. This ensures the macro block
+    /// hash (which is consensus-critical and used for BLS signing) is unchanged.
     #[test]
     fn hash_output_unchanged_for_valid_keys() {
         use ark_ec::CurveGroup;
@@ -533,7 +530,7 @@ mod test {
     ///
     /// Regression test for the election-macro-block crash (finding C1): on the
     /// sync/request paths (`Blockchain::push`, `LightBlockchain::push`,
-    /// `push_history_sync`, `push_zkp`) the block hash is computed *before*
+    /// `push_history_sync`, `push_macro`) the block hash is computed *before*
     /// verification, so an unconditional assertion in `hash()` would crash the node
     /// on a single malformed block. Before the fix, `hash()` asserted
     /// `total_slots == Policy::SLOTS` and would panic here.

@@ -12,7 +12,6 @@ use nimiq_network_interface::network::{Network, Topic};
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::policy;
 use nimiq_web_client::common::client_configuration::ClientConfiguration;
-use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsValue;
@@ -33,9 +32,6 @@ pub async fn it_can_initialize_with_mock_network() {
 
     let blockchain_proxy = BlockchainProxy::from(&blockchain);
 
-    let zkp_component =
-        ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&mock_network), None).await;
-
     let bls_cache = Arc::new(Mutex::new(BlsCache::default()));
 
     let network_events = mock_network.subscribe_events();
@@ -44,7 +40,6 @@ pub async fn it_can_initialize_with_mock_network() {
         blockchain_proxy.clone(),
         Arc::clone(&mock_network),
         bls_cache,
-        zkp_component.proxy(),
         network_events,
     )
     .await;
@@ -55,7 +50,6 @@ pub async fn it_can_initialize_with_mock_network() {
         Arc::clone(&mock_network),
         syncer,
         3,
-        zkp_component.proxy(),
         Arc::new(AtomicU32::new(0)),
     );
 

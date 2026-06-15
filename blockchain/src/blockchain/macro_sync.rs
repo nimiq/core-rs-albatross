@@ -1,4 +1,4 @@
-use std::{cmp, mem};
+use std::cmp;
 
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{
@@ -6,157 +6,12 @@ use nimiq_blockchain_interface::{
 };
 use nimiq_database::traits::{ReadTransaction, WriteTransaction};
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_DATA};
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use crate::{interface::HistoryInterface, Blockchain};
 
-/// Implements methods to sync a full node via ZKP.
+/// Implements methods to sync a full node via macro blocks.
 impl Blockchain {
-    /// Syncs using a zero-knowledge proof. It receives an election block and a proof that there is
-    /// a valid chain between the genesis block and that block.
-    /// This brings the node from the genesis block all the way to the most recent election block.
-    /// It is the default way to sync for a full node.
-    ///
-    /// When we get a ZKP from the ZKP component, it is already verified.
-    /// We can then set the `trusted_proof` flag to avoid the additional verification.
-    pub fn push_zkp(
-        this: RwLockUpgradableReadGuard<Self>,
-        block: Block,
-        proof: NanoProof,
-        trusted_proof: bool,
-    ) -> Result<PushResult, PushError> {
-        // Must be an election block.
-        assert!(block.is_election());
-
-        let block_hash_blake2b = block.hash();
-
-        let read_txn = this.read_transaction();
-
-        // Check if we already know this block.
-        if this
-            .chain_store
-            .get_chain_info(&block_hash_blake2b, false, Some(&read_txn))
-            .is_ok()
-        {
-            return Ok(PushResult::Known);
-        }
-
-        if block.block_number() <= this.state.macro_info.head.block_number() {
-            return Ok(PushResult::Ignored);
-        }
-
-        // Perform block intrinsic checks.
-        let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
-        block.verify(this.network_id, max_timestamp)?;
-
-        // Prepare the inputs to verify the proof.
-        let genesis_block = this
-            .chain_store
-            .get_block_at(Policy::genesis_block_number(), true, Some(&read_txn))
-            .unwrap();
-        let genesis_macro_block = genesis_block.unwrap_macro_ref();
-        let genesis_hash_blake2s = genesis_macro_block.hash_blake2s();
-        let genesis_hash_blake2b = genesis_macro_block.hash();
-
-        // Verify the zk proof.
-        if !trusted_proof {
-            let verify_result = verify(
-                genesis_hash_blake2s,
-                block.unwrap_macro_ref().hash_blake2s(),
-                proof,
-                &ZKP_VERIFYING_DATA,
-            );
-
-            if verify_result.is_err() || !verify_result.unwrap() {
-                return Err(PushError::InvalidZKP);
-            }
-        }
-
-        // At this point we know that the block is correct. We just have to push it.
-
-        // Create the chain info for the new block.
-        let chain_info = ChainInfo::new(block, true);
-
-        read_txn.close();
-        let mut txn = this.write_transaction();
-
-        this.state
-            .accounts
-            .reinitialize_as_incomplete(&mut (&mut txn).into());
-
-        // Since it's a macro block, we have to clear the ChainStore. If we are syncing for the first
-        // time, this should be empty. But we clear it just in case it's not our first time.
-        // Prune the History Store, full nodes will only keep just one epoch of history
-        this.history_store.clear(&mut txn);
-        // Prune the Chain Store.
-        this.chain_store.clear(&mut txn);
-
-        // Restore genesis block.
-        let genesis_info = ChainInfo::new(genesis_block, true);
-        this.chain_store
-            .put_chain_info(&mut txn, &genesis_hash_blake2b, &genesis_info, true);
-
-        this.chain_store
-            .put_chain_info(&mut txn, &block_hash_blake2b, &chain_info, true);
-        this.chain_store.set_head(&mut txn, &block_hash_blake2b);
-
-        txn.commit();
-
-        // Upgrade the lock as late as possible.
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
-
-        if let Block::Macro(ref macro_block) = chain_info.head {
-            this.state.macro_info = chain_info.clone();
-            this.state.macro_head_hash = block_hash_blake2b.clone();
-
-            this.state.election_head = macro_block.clone();
-            let old_election_head_hash = mem::replace(
-                &mut this.state.election_head_hash,
-                block_hash_blake2b.clone(),
-            );
-
-            // If we coincidentally know the previous election block, we remember its slots.
-            if old_election_head_hash == macro_block.header.parent_election_hash {
-                let old_slots = this.state.current_slots.take().unwrap();
-                this.state.previous_slots.replace(old_slots);
-            } else {
-                this.state.previous_slots = None;
-            }
-
-            let new_slots = macro_block.get_validators().unwrap();
-            this.state.current_slots.replace(new_slots);
-        }
-
-        this.state.main_chain = chain_info;
-        this.state.head_hash = block_hash_blake2b.clone();
-
-        // Downgrade the lock again as the notify listeners might want to acquire read access themselves.
-        let this = RwLockWriteGuard::downgrade_to_upgradable(this);
-
-        #[cfg(feature = "metrics")]
-        this.metrics.note_extend(&this.state.main_chain.head);
-        debug!(
-            block = %this.state.main_chain.head,
-            num_transactions = this.state.main_chain.head.num_transactions(),
-            kind = "push_zkp",
-            "Accepted block",
-        );
-
-        // We shouldn't log errors if there are no listeners.
-        this.notifier
-            .send(BlockchainEvent::Extended(block_hash_blake2b.clone()))
-            .ok();
-
-        this.notifier
-            .send(BlockchainEvent::EpochFinalized(block_hash_blake2b))
-            .ok();
-
-        // We don't have any block logs, so we do not notify the block log stream.
-
-        Ok(PushResult::Extended)
-    }
-
     /// Pushes an election block backwards into the chain.
     /// This is used to update the `previous_slots` if needed.
     pub fn update_previous_slots(
@@ -205,7 +60,7 @@ impl Blockchain {
 
         debug!(
             block_number = %this.state.main_chain.head.block_number(),
-            kind = "zkp_update_slots",
+            kind = "update_previous_slots",
             "Updated previous slots",
         );
 

@@ -36,7 +36,7 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
                 Ok(NetworkEvent::PeerJoined(peer_id, _)) => {
                     // Query if that peer provides the necessary services for syncing
                     if self.network.peer_provides_required_services(peer_id) {
-                        // Request zkps and start the macro sync process
+                        // Start the macro sync process
                         self.add_peer(peer_id);
                     } else {
                         // We can't sync with this peer as it doesn't provide the services that we need.

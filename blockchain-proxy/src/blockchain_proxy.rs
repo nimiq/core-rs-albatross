@@ -30,7 +30,7 @@ pub enum BlockchainProxy {
     #[cfg(feature = "full")]
     /// Full Blockchain, stores the full history, transactions, and full blocks.
     Full(Arc<RwLock<Blockchain>>),
-    /// Light Blockchain, stores only ZKPs, election macro blocks, and block header and their justification.
+    /// Light Blockchain, stores only election macro blocks, and block header and their justification.
     Light(Arc<RwLock<LightBlockchain>>),
 }
 

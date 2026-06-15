@@ -44,7 +44,6 @@ nimiq = { workspace = true, features = [
     "signal-handling",
     "validator",
     "wallet",
-    "zkp-prover",
     "parallel",
 ] }
 nimiq-primitives = { workspace = true, features = ["policy"] }

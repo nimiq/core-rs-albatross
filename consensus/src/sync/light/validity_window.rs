@@ -496,7 +496,6 @@ mod tests {
     use nimiq_primitives::{networks::NetworkId, policy::Policy};
     use nimiq_test_log::test;
     use nimiq_utils::time::OffsetTime;
-    use nimiq_zkp_component::ZKPComponent;
     use parking_lot::RwLock;
 
     use crate::{
@@ -528,14 +527,10 @@ mod tests {
         let mut hub = MockHub::default();
         let network = Arc::new(hub.new_network());
 
-        let zkp_component = ZKPComponent::new(blockchain.clone(), Arc::clone(&network), None).await;
-        let zkp_component_proxy = zkp_component.proxy();
-
         let mut sync = LightMacroSync::<MockNetwork>::new(
             blockchain.clone(),
             Arc::clone(&network),
             network.subscribe_events(),
-            zkp_component_proxy,
             0,
         );
 

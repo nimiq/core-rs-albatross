@@ -50,7 +50,8 @@ use crate::{
 // There are two distinct signatures for any given proposal.
 // The first one is a Schnorr signature from the proposer of any given round over the header hash.
 //     This hash does NOT include the pk_tree_root and this signature is not the one being aggregated.
-// The other one is a BLS signature over the zkp_hash, which is defined as Blake2S(Blake2b(header_hash).append(pk_tree_root))
+// The other one is a BLS signature over the block's Blake2s hash (`hash_blake2s`), which is defined as
+// Blake2S(Blake2b(header_hash).append(pk_tree_root)).
 //     This one is being aggregated, and contains the pk_tree_root, so the body is necessary for the verification of the signature.
 
 struct NetworkWrapper<TValidatorNetwork: ValidatorNetwork> {

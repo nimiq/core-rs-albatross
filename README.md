@@ -58,11 +58,6 @@ Nimiq has also two specific node types with specialized roles in maintaining the
     - **Memory**: 16GB RAM minimum
     - **CPU**: 4 vCPUs recommended
 
-- **Prover nodes** for zero-knowledge proof generation:
-    - **PoS Node Type**: Full or History
-    - **Memory**: 64GB RAM minimum
-    - **CPU**: 8vCPUs recommended
-
 ## Installation
 
 1. Install the latest version of Rust by following  the instructions on the [Rust website](https://www.rust-lang.org/learn/get-started#installing-rust) and following packages to be able to compile the source code:
@@ -143,9 +138,8 @@ After downloading the file, run `NIMIQ_OVERRIDE_MAINNET_CONFIG=/path/to/nimiq-ge
 This process is required **only for the first start** of the history node. For later restarts, neither the environment variable nor the file are needed. You can even delete the file after the initial setup.
 
 ### Service Nodes Guides
-You can also choose to run a validator or a prover node. Check our guides with the full step-by-step description:
+You can also choose to run a validator. Check our guide with the full step-by-step description:
 - [Validators](https://www.nimiq.com/developers/nodes/validators/becoming-a-validator#become-a-validator)
-- [Prover nodes](https://www.nimiq.com/developers/nodes/prover-node-guide#prover-node)
 
 ## Docker
 

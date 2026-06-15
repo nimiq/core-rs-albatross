@@ -151,7 +151,6 @@ async fn main_inner() -> Result<(), Error> {
         passive: false,
         sync_mode: None,
         network: None,
-        prove: false,
     };
 
     // Parse config file - this will obey the `--config` command line option.
@@ -262,9 +261,6 @@ async fn main_inner() -> Result<(), Error> {
     } else {
         panic!("Could not start spammer");
     };
-
-    let zkp_component = client.take_zkp_component().unwrap();
-    spawn(zkp_component);
 
     let rolling_window = Policy::blocks_per_batch() as usize;
 

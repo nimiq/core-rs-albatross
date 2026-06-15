@@ -5,7 +5,6 @@ pub use network::NetworkDispatcher;
 pub use policy::PolicyDispatcher;
 pub use validator::ValidatorDispatcher;
 pub use wallet::WalletDispatcher;
-pub use zkp_component::ZKPComponentDispatcher;
 
 mod blockchain;
 mod consensus;
@@ -14,4 +13,3 @@ mod network;
 mod policy;
 mod validator;
 mod wallet;
-mod zkp_component;

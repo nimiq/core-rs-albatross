@@ -18,8 +18,6 @@ use nimiq_consensus::{
 };
 #[cfg(feature = "full-consensus")]
 use nimiq_dht::Verifier;
-#[cfg(feature = "zkp-prover")]
-use nimiq_genesis::NetworkId;
 use nimiq_genesis::NetworkInfo;
 use nimiq_light_blockchain::LightBlockchain;
 #[cfg(feature = "validator")]
@@ -48,21 +46,7 @@ use nimiq_validator::validator::ValidatorState as AbstractValidatorState;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
-use nimiq_zkp::ZKP_VERIFYING_DATA;
-#[cfg(feature = "zkp-prover")]
-use nimiq_zkp_circuits::setup::{all_files_created, load_verifying_data, setup, DEVELOPMENT_SEED};
-#[cfg(feature = "database-storage")]
-use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
-use nimiq_zkp_component::zkp_component::{
-    ZKPComponent as AbstractZKPComponent, ZKPComponentProxy as AbstractZKPComponentProxy,
-};
-#[cfg(feature = "zkp-prover")]
-use nimiq_zkp_primitives::NanoZKPError;
 use parking_lot::{Mutex, RwLock};
-#[cfg(feature = "zkp-prover")]
-use rand::SeedableRng;
-#[cfg(feature = "zkp-prover")]
-use rand_chacha::ChaCha20Rng;
 use rustls_pemfile::Item;
 
 use crate::{
@@ -77,9 +61,6 @@ pub type ConsensusProxy = AbstractConsensusProxy<Network>;
 pub type Validator = AbstractValidator<ValidatorNetworkImpl<Network>>;
 #[cfg(feature = "validator")]
 pub type ValidatorState = AbstractValidatorState;
-
-pub type ZKPComponent = AbstractZKPComponent<Network>;
-pub type ZKPComponentProxy = AbstractZKPComponentProxy<Network>;
 
 #[cfg(feature = "validator")]
 pub type MempoolTask = AbstractMempoolTask<Network>;
@@ -113,8 +94,6 @@ pub(crate) struct ClientInner {
     /// Wallet that stores key pairs for transaction signing
     #[cfg(feature = "wallet")]
     wallet_store: Arc<WalletStore>,
-
-    zkp_component: ZKPComponentProxy,
 }
 
 /// This function is used to generate the services flags (provided, needed) based upon the configured sync mode
@@ -182,53 +161,6 @@ impl ClientInner {
             return Err(Error::config_error(
                 "There is a genesis block number configuration mismatch",
             ));
-        }
-
-        // Load the correct verifying key.
-        ZKP_VERIFYING_DATA.init_with_network_id(config.network_id);
-
-        #[cfg(not(feature = "zkp-prover"))]
-        if config.zk_prover.is_some() {
-            panic!("Can't build a prover node without the zkp-prover feature enabled")
-        }
-
-        #[cfg(feature = "zkp-prover")]
-        // If the Prover is active we need to ensure that the proving keys are present.
-        if let Some(ref zk_prover_config) = config.zk_prover
-            && !all_files_created(&zk_prover_config.prover_keys_path, true)
-        {
-            match config.network_id {
-                NetworkId::DevAlbatross => {
-                    log::info!("Setting up zero-knowledge prover keys for devnet.");
-                    log::info!("This task only needs to be run once and might take about an hour.");
-                    log::info!(
-                        "Alternatively, you can place the proving keys in this folder: {:?}.",
-                        zk_prover_config.prover_keys_path
-                    );
-                    setup(
-                        &mut ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
-                        &zk_prover_config.prover_keys_path,
-                        config.network_id,
-                        true,
-                    )?;
-                    log::info!("Setting the verification key.");
-                    let vk = load_verifying_data(&zk_prover_config.prover_keys_path)?;
-                    if vk != *ZKP_VERIFYING_DATA {
-                        return Err(Error::NanoZKP(NanoZKPError::InvalidMetadata));
-                    }
-                    log::debug!("Finished ZKP setup.");
-                }
-                NetworkId::TestAlbatross | NetworkId::MainAlbatross => {
-                    log::error!(
-                        "Proving keys missing, please place them in this folder: {:?}.",
-                        zk_prover_config.prover_keys_path
-                    );
-                    return Err(Error::NanoZKP(NanoZKPError::Filesystem(io::Error::other(
-                        "Proving keys do not exist.",
-                    ))));
-                }
-                _ => {}
-            }
         }
 
         #[cfg(feature = "full-consensus")]
@@ -391,12 +323,6 @@ impl ClientInner {
             ..Default::default()
         };
 
-        #[cfg(feature = "database-storage")]
-        let zkp_storage: Option<Box<dyn ProofStore>> =
-            Some(Box::new(DBProofStore::new(environment.clone())));
-        #[cfg(not(feature = "database-storage"))]
-        let zkp_storage = None;
-
         let blockchain_proxy = match config.consensus.sync_mode {
             #[cfg(not(feature = "full-consensus"))]
             SyncMode::History => {
@@ -448,7 +374,7 @@ impl ClientInner {
 
         let syncer_tracker = Arc::new(AtomicU32::new(0));
 
-        let (syncer_proxy, zkp_component) = match config.consensus.sync_mode {
+        let syncer_proxy = match config.consensus.sync_mode {
             #[cfg(not(feature = "full-consensus"))]
             SyncMode::History => {
                 panic!("Can't build a history node without the full-consensus feature enabled")
@@ -459,95 +385,43 @@ impl ClientInner {
             }
             #[cfg(feature = "full-consensus")]
             SyncMode::History => {
-                #[cfg(feature = "zkp-prover")]
-                let zkp_component = if let Some(zk_prover_config) = config.zk_prover {
-                    ZKPComponent::with_prover(
-                        blockchain_proxy.clone(),
-                        Arc::clone(&network),
-                        true,
-                        None,
-                        zk_prover_config.prover_keys_path,
-                        zkp_storage,
-                    )
-                    .await
-                } else {
-                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
-                        .await
-                };
-                #[cfg(not(feature = "zkp-prover"))]
-                let zkp_component =
-                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
-                        .await;
-                let syncer = SyncerProxy::new_history(
+                SyncerProxy::new_history(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     bls_cache,
                     network_events,
                 )
-                .await;
-                (syncer, zkp_component)
+                .await
             }
             #[cfg(feature = "full-consensus")]
             SyncMode::Full => {
-                #[cfg(feature = "zkp-prover")]
-                let zkp_component = if let Some(zk_prover_config) = config.zk_prover {
-                    ZKPComponent::with_prover(
-                        blockchain_proxy.clone(),
-                        Arc::clone(&network),
-                        true,
-                        None,
-                        zk_prover_config.prover_keys_path,
-                        zkp_storage,
-                    )
-                    .await
-                } else {
-                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
-                        .await
-                };
-                #[cfg(not(feature = "zkp-prover"))]
-                let zkp_component =
-                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
-                        .await;
-
-                let syncer = SyncerProxy::new_full(
+                SyncerProxy::new_full(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     bls_cache,
-                    zkp_component.proxy(),
                     network_events,
                     config.consensus.full_sync_threshold,
                     Arc::clone(&syncer_tracker),
                 )
-                .await;
-                (syncer, zkp_component)
+                .await
             }
             SyncMode::Light => {
-                let zkp_component =
-                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
-                        .await;
-                let syncer = SyncerProxy::new_light(
+                SyncerProxy::new_light(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     bls_cache,
-                    zkp_component.proxy(),
                     network_events,
                 )
-                .await;
-                (syncer, zkp_component)
+                .await
             }
             SyncMode::Pico => {
-                let zkp_component =
-                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
-                        .await;
-                let syncer = SyncerProxy::new_pico(
+                SyncerProxy::new_pico(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     bls_cache,
-                    zkp_component.proxy(),
                     network_events,
                 )
-                .await;
-                (syncer, zkp_component)
+                .await
             }
         };
 
@@ -561,7 +435,6 @@ impl ClientInner {
             Arc::clone(&network),
             syncer_proxy,
             config.consensus.min_peers,
-            zkp_component.proxy(),
             syncer_tracker,
         );
 
@@ -679,12 +552,10 @@ impl ClientInner {
                 validator: validator_state,
                 #[cfg(feature = "wallet")]
                 wallet_store,
-                zkp_component: zkp_component.proxy(),
             }),
             consensus: Some(consensus),
             #[cfg(feature = "validator")]
             validator_or_mempool,
-            zkp_component: Some(zkp_component),
         })
     }
 }
@@ -712,7 +583,6 @@ pub struct Client {
     consensus: Option<Consensus>,
     #[cfg(feature = "validator")]
     validator_or_mempool: Option<ValidatorOrMempool>,
-    zkp_component: Option<ZKPComponent>,
 }
 
 impl Client {
@@ -805,15 +675,5 @@ impl Client {
             }
             None => None,
         }
-    }
-
-    /// Returns a reference to the *ZKP Component* or none.
-    pub fn take_zkp_component(&mut self) -> Option<ZKPComponent> {
-        self.zkp_component.take()
-    }
-
-    /// Returns a reference to the *ZKP Component Proxy*.
-    pub fn zkp_component(&self) -> ZKPComponentProxy {
-        self.inner.zkp_component.clone()
     }
 }

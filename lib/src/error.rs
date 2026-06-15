@@ -49,9 +49,6 @@ pub enum Error {
 
     #[error("Serializing Error: {0}")]
     Serializing(#[from] nimiq_serde::DeserializeError),
-
-    #[error("Nano ZKP Error: {0}")]
-    NanoZKP(#[from] nimiq_zkp_primitives::NanoZKPError),
 }
 
 impl Error {

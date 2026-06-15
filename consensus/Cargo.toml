@@ -50,7 +50,6 @@ nimiq-serde = { workspace = true }
 nimiq-time = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = ["futures", "merkle", "spawn", "time"] }
-nimiq-zkp-component = { workspace = true }
 
 [dev-dependencies]
 hex = "0.4"
@@ -68,7 +67,6 @@ nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
 nimiq-transaction-builder = { workspace = true }
 nimiq-trie = { workspace = true }
-nimiq-zkp-component = { workspace = true, features = ["zkp-prover", "parallel"] }
 
 [features]
 expensive-tests = []

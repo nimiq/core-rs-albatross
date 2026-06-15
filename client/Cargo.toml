@@ -44,6 +44,5 @@ features = [
     "tokio-websocket",
     "validator",
     "wallet",
-    "zkp-prover",
     "parallel",
 ]

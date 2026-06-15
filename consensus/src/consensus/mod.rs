@@ -25,10 +25,8 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
-use nimiq_primitives::policy::Policy;
 use nimiq_time::{interval, Interval};
 use nimiq_utils::{spawn, WakerExt};
-use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use tokio::sync::{
     broadcast,
     mpsc::{self, error::SendError},
@@ -177,8 +175,6 @@ pub struct Consensus<N: Network> {
         mpsc::Receiver<ConsensusRequest<N>>,
     ),
 
-    zkp_proxy: ZKPComponentProxy<N>,
-
     waker: Option<Waker>,
 }
 
@@ -197,14 +193,12 @@ impl<N: Network> Consensus<N> {
         blockchain: BlockchainProxy,
         network: Arc<N>,
         syncer: SyncerProxy<N>,
-        zkp_proxy: ZKPComponentProxy<N>,
     ) -> Self {
         Self::new(
             blockchain,
             network,
             syncer,
             Self::MIN_PEERS_ESTABLISHED,
-            zkp_proxy,
             Arc::new(AtomicU32::new(0)),
         )
     }
@@ -214,7 +208,6 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         syncer: SyncerProxy<N>,
         min_peers: usize,
-        zkp_proxy: ZKPComponentProxy<N>,
         syncer_tracker: Arc<AtomicU32>,
     ) -> Self {
         Self::init_network_request_receivers(&network, &blockchain);
@@ -254,7 +247,6 @@ impl<N: Network> Consensus<N> {
             min_peers,
             // Choose a small buffer as having a lot of items buffered here indicates a bigger problem.
             requests: mpsc::channel(10),
-            zkp_proxy,
             waker: None,
         }
     }
@@ -517,36 +509,6 @@ impl<N: Network> Consensus<N> {
         self.waker.wake();
     }
 
-    /// Requests zkps from connected peers.
-    fn request_zkps(&self) {
-        match self.sync {
-            #[cfg(feature = "full")]
-            // The syncing process of the history node does guarantee we have the most recent zkp proof. Thus,
-            // we may request it to our peers. This ensures the latest zkp replication across the different node types.
-            //
-            // Only request a proof when we are too far from the last election head.
-            // This avoids spam requests when the proof for the latest election block is still being generated.
-            SyncerProxy::History(_)
-                if self.zkp_proxy.get_zkp_state().latest_block.block_number()
-                    < Policy::election_block_before(
-                        self.blockchain.read().election_head().block_number(),
-                    ) =>
-            {
-                self.zkp_proxy
-                    .request_zkp_from_peers(self.sync.peers(), false);
-            }
-            _ => {
-                // The Full and Light sync ensure the latest proof is already pushed, there is no need to
-                // eagerly request them.
-                // For Pico sync we avoid zkp overhead as much as possible. The zkp component will
-                // lazily store zkps propagated by the network. In the case of fall back to full sync,
-                // the latest proof is ensured by the syncing mechanism itself.
-                // History sync also ends up here when it is already close enough to the last election head,
-                // in which case we skip the request to avoid spamming while the latest proof is generated.
-            }
-        }
-    }
-
     fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
         self.sync.resolve_block(request)
     }
@@ -640,7 +602,6 @@ impl<N: Network> Future for Consensus<N> {
         // Advance consensus and catch-up through head requests.
         if self.should_request_heads() {
             self.request_heads();
-            self.request_zkps();
         }
 
         self.waker.store_waker(cx);

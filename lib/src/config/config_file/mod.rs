@@ -35,14 +35,10 @@ pub struct ConfigFile {
     pub network: NetworkSettings,
     #[serde(default)]
     pub consensus: ConsensusSettings,
-    #[serde(default)]
-    pub zk_prover: Option<ZKProverSettings>,
     pub rpc_server: Option<RpcServerSettings>,
     pub metrics_server: Option<MetricsServerSettings>,
     #[serde(default)]
     pub log: LogSettings,
-    #[serde(default)]
-    pub prover_log: LogSettings,
     pub database: Option<DatabaseSettings>,
     #[cfg(feature = "nimiq-mempool")]
     pub mempool: Option<MempoolSettings>,
@@ -520,11 +516,4 @@ pub struct ValidatorSettings {
     pub dht_fallback_url: Option<Url>,
     #[serde(default)]
     pub automatic_reactivate: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub struct ZKProverSettings {
-    #[serde(default)]
-    pub prover_keys_path: Option<String>,
 }

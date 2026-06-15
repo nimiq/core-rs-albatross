@@ -80,7 +80,6 @@ nimiq-genesis = { workspace = true, default-features = false }
 nimiq-light-blockchain = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-network-mock = { workspace = true }
-nimiq-zkp-component = { workspace = true, default-features = false }
 
 [features]
 client = []

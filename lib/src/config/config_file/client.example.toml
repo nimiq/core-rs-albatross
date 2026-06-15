@@ -177,17 +177,6 @@ sync_mode = "full"
 #max_readers = 600
 
 ##############################################################################
-# ZK Prover configuration
-#
-# If the section header is uncommented, the prover is enabled.
-##############################################################################
-#[zk-prover]
-
-# The path for the proving keys folder.
-# Default: ".zkp"
-#prover_keys_path = "path/to/folder"
-
-##############################################################################
 # JSON-RPC server configuration
 #
 # If the section header is uncommented, the server is enabled.
@@ -288,19 +277,6 @@ level = "debug"
 
 # Extra fields added to each log message (e.g. to distinguish runs).
 #extra_fields = { run = "e2f8e044-0067-4902-914f-261b7f500ba7" }
-
-##############################################################################
-# Configure log output for the prover process.
-#
-# This section offers the same options as the [log] section.
-##############################################################################
-
-#[prover-log]
-
-# The prover log level.
-# Possible values: "trace", "debug", "info", "warn", "error"
-# Default: "info"
-#level = "debug"
 
 ##############################################################################
 # Mempool configuration

@@ -6,12 +6,12 @@ pub mod accounts;
 pub mod blockchain;
 pub mod history_sync;
 pub mod inherents;
+pub mod macro_sync;
 pub mod push;
 pub(super) mod rebranch_utils;
 pub mod slots;
 pub mod verify;
 pub mod wrappers;
-pub mod zkp_sync;
 
 /// A post-validation hook that can be registered with the blockchain to run after block validation.
 /// For `extend` and `rebranch` operations, this is called before a block is committed to the database.

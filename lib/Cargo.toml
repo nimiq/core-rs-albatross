@@ -47,7 +47,6 @@ log = { workspace = true }
 log-panics = { version = "2.1", features = ["with-backtrace"], optional = true }
 parking_lot = "0.12"
 rand = "0.10"
-rand_chacha = "0.10"
 rustls = { version = "0.23.40", default-features = false, optional = true }
 rustls-pemfile = "2.2"
 serde = "1.0"
@@ -94,17 +93,13 @@ nimiq-validator = { workspace = true, optional = true, features = [
 ] }
 nimiq-validator-network = { workspace = true, optional = true }
 nimiq-wallet = { workspace = true, optional = true, features = ["store"] }
-nimiq-zkp = { workspace = true }
-nimiq-zkp-circuits = { workspace = true }
-nimiq-zkp-component = { workspace = true }
-nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
 tokio = { version = "1.52", features = ["macros"] }
 nimiq-test-log = { workspace = true }
 
 [features]
-database-storage = ["nimiq-database", "nimiq-zkp-component/database-storage"]
+database-storage = ["nimiq-database"]
 deadlock = ["parking_lot/deadlock_detection"]
 default = ["full-consensus", "extended-metrics"]
 dht-fallback = [
@@ -135,10 +130,6 @@ metrics-server = [
 panic = ["log-panics"]
 parallel = [
     "nimiq-primitives/parallel",
-    "nimiq-zkp/parallel",
-    "nimiq-zkp-circuits/parallel",
-    "nimiq-zkp-component/parallel",
-    "nimiq-zkp-primitives/parallel",
 ]
 rpc-server = [
     "nimiq-jsonrpc-core",
@@ -164,11 +155,4 @@ web-logging = [
     "time/wasm-bindgen",
     "tracing-subscriber",
     "tracing-web",
-]
-zkp-prover = [
-    "nimiq-primitives/zkp-prover",
-    "nimiq-zkp/zkp-prover",
-    "nimiq-zkp-circuits/zkp-prover",
-    "nimiq-zkp-component/zkp-prover",
-    "nimiq-zkp-primitives/zkp-prover",
 ]

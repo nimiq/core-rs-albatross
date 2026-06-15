@@ -182,27 +182,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "ark-crypto-primitives"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f3a13b34da09176a8baba701233fdffbaa7c1b1192ce031a3da4e55ce1f1a56"
-dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-r1cs-std",
- "ark-relations",
- "ark-serialize",
- "ark-snark",
- "ark-std",
- "blake2",
- "derivative",
- "digest",
- "rayon",
- "sha2",
- "tracing",
-]
-
-[[package]]
 name = "ark-ec"
 version = "0.4.2"
 source = "git+https://github.com/paberr/algebra?branch=pb%2F0.4#1ab82cb767bc4e462cfd1a4b89e9d4996586fbf6"
@@ -234,7 +213,6 @@ dependencies = [
  "num-bigint 0.4.6",
  "num-traits",
  "paste",
- "rayon",
  "rustc_version",
  "zeroize",
 ]
@@ -263,25 +241,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-groth16"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20ceafa83848c3e390f1cbf124bc3193b3e639b3f02009e0e290809a501b95fc"
-dependencies = [
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
- "ark-poly",
- "ark-r1cs-std",
- "ark-relations",
- "ark-serialize",
- "ark-std",
- "derivative",
- "rayon",
- "tracing",
-]
-
-[[package]]
 name = "ark-mnt4-753"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -289,7 +248,6 @@ checksum = "d27256f8a5cfb4ac27f43cabfbadf45ab60a153a8f65a3474b4c89e48fd35e40"
 dependencies = [
  "ark-ec",
  "ark-ff",
- "ark-r1cs-std",
  "ark-std",
 ]
 
@@ -302,7 +260,6 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-mnt4-753",
- "ark-r1cs-std",
  "ark-std",
 ]
 
@@ -317,35 +274,6 @@ dependencies = [
  "ark-std",
  "derivative",
  "hashbrown 0.13.2",
- "rayon",
-]
-
-[[package]]
-name = "ark-r1cs-std"
-version = "0.4.0"
-source = "git+https://github.com/paberr/r1cs-std?branch=pb%2Ffix-pedersen#6eebca4dcab85efa6a855296137b2a9d4022a221"
-dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-relations",
- "ark-std",
- "derivative",
- "num-bigint 0.4.6",
- "num-integer",
- "num-traits",
- "tracing",
-]
-
-[[package]]
-name = "ark-relations"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00796b6efc05a3f48225e59cb6a2cda78881e7c390872d5786aaf112f31fb4f0"
-dependencies = [
- "ark-ff",
- "ark-std",
- "tracing",
- "tracing-subscriber 0.2.25",
 ]
 
 [[package]]
@@ -369,18 +297,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "ark-snark"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84d3cc6833a335bb8a600241889ead68ee89a3cf8448081fb7694c0fe503da63"
-dependencies = [
- "ark-ff",
- "ark-relations",
- "ark-serialize",
- "ark-std",
 ]
 
 [[package]]
@@ -685,12 +601,6 @@ name = "base64ct"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55248b47b0caf0546f7988906588779981c43bb1bc9d0c44087278f80cdb44ba"
-
-[[package]]
-name = "bencher"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dfdb4953a096c551ce9ace855a604d702e6e62d77fac690575ae347571717f5"
 
 [[package]]
 name = "bindgen"
@@ -1093,7 +1003,7 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-core",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3938,8 +3848,6 @@ dependencies = [
  "nimiq-trie",
  "nimiq-utils",
  "nimiq-vrf",
- "nimiq-zkp",
- "nimiq-zkp-primitives",
  "parking_lot",
  "prometheus-client 0.24.1",
  "rand 0.10.1",
@@ -3997,7 +3905,6 @@ version = "1.6.1"
 dependencies = [
  "ark-ec",
  "ark-ff",
- "ark-mnt4-753",
  "ark-mnt6-753",
  "ark-serialize",
  "ark-std",
@@ -4076,7 +3983,6 @@ dependencies = [
  "nimiq-transaction-builder",
  "nimiq-trie",
  "nimiq-utils",
- "nimiq-zkp-component",
  "parking_lot",
  "pin-project",
  "rand 0.10.1",
@@ -4160,7 +4066,7 @@ dependencies = [
  "nimiq-utils",
  "serde",
  "tracing",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -4186,7 +4092,7 @@ dependencies = [
  "time",
  "toml",
  "tracing",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -4397,13 +4303,8 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-wallet",
- "nimiq-zkp",
- "nimiq-zkp-circuits",
- "nimiq-zkp-component",
- "nimiq-zkp-primitives",
  "parking_lot",
  "rand 0.10.1",
- "rand_chacha 0.10.0",
  "rustls",
  "rustls-pemfile",
  "serde",
@@ -4415,7 +4316,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-loki",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
  "tracing-web",
  "url",
 ]
@@ -4436,7 +4337,6 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-utils",
  "nimiq-vrf",
- "nimiq-zkp",
  "parking_lot",
  "rand 0.10.1",
  "thiserror 2.0.18",
@@ -4453,7 +4353,7 @@ dependencies = [
  "time",
  "tracing",
  "tracing-log",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -4651,25 +4551,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nimiq-pedersen-generators"
-version = "1.6.1"
-dependencies = [
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
- "ark-mnt4-753",
- "ark-mnt6-753",
- "ark-std",
- "bencher",
- "hex",
- "nimiq-hash",
- "nimiq-primitives",
- "rand 0.10.1",
- "rand_chacha 0.10.0",
- "rand_core_compat",
-]
-
-[[package]]
 name = "nimiq-pow-migration"
 version = "1.6.1"
 dependencies = [
@@ -4758,7 +4639,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-utils",
  "tokio",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -4766,7 +4647,6 @@ dependencies = [
 name = "nimiq-rpc-interface"
 version = "1.6.1"
 dependencies = [
- "ark-groth16",
  "ark-mnt6-753",
  "async-trait",
  "clap",
@@ -4789,7 +4669,6 @@ dependencies = [
  "nimiq-serde",
  "nimiq-transaction",
  "nimiq-vrf",
- "nimiq-zkp-component",
  "parking_lot",
  "serde",
  "serde_json",
@@ -4831,7 +4710,6 @@ dependencies = [
  "nimiq-validator-network",
  "nimiq-vrf",
  "nimiq-wallet",
- "nimiq-zkp-component",
  "parking_lot",
  "serde",
  "serde_json",
@@ -4930,7 +4808,7 @@ dependencies = [
  "nimiq-test-log-proc-macro",
  "parking_lot",
  "tracing",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -4948,10 +4826,6 @@ dependencies = [
 name = "nimiq-test-utils"
 version = "1.6.1"
 dependencies = [
- "ark-ff",
- "ark-groth16",
- "ark-mnt6-753",
- "ark-serialize",
  "async-trait",
  "clap",
  "futures-util",
@@ -4985,20 +4859,16 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-vrf",
- "nimiq-zkp-circuits",
- "nimiq-zkp-component",
- "nimiq-zkp-primitives",
  "parking_lot",
  "paste",
  "rand 0.10.1",
- "rand_chacha 0.10.0",
  "rand_core_compat",
  "serde",
  "tempfile",
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -5174,7 +5044,6 @@ dependencies = [
  "nimiq-utils",
  "nimiq-validator-network",
  "nimiq-vrf",
- "nimiq-zkp-component",
  "parking_lot",
  "rand 0.10.1",
  "rayon",
@@ -5184,7 +5053,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-core",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -5277,7 +5146,6 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-transaction-builder",
  "nimiq-utils",
- "nimiq-zkp-component",
  "parking_lot",
  "rand 0.10.1",
  "serde",
@@ -5293,190 +5161,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
-]
-
-[[package]]
-name = "nimiq-zkp"
-version = "1.6.1"
-dependencies = [
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
- "ark-groth16",
- "ark-mnt4-753",
- "ark-mnt6-753",
- "ark-r1cs-std",
- "ark-relations",
- "ark-serialize",
- "ark-std",
- "nimiq-block",
- "nimiq-bls",
- "nimiq-genesis",
- "nimiq-hash",
- "nimiq-keys",
- "nimiq-log",
- "nimiq-primitives",
- "nimiq-serde",
- "nimiq-test-log",
- "nimiq-test-utils",
- "nimiq-zkp-circuits",
- "nimiq-zkp-primitives",
- "once_cell",
- "parking_lot",
- "rand 0.10.1",
- "rand_chacha 0.10.0",
- "rand_core_compat",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tracing",
- "tracing-subscriber 0.3.23",
-]
-
-[[package]]
-name = "nimiq-zkp-circuits"
-version = "1.6.1"
-dependencies = [
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
- "ark-groth16",
- "ark-mnt4-753",
- "ark-mnt6-753",
- "ark-poly",
- "ark-r1cs-std",
- "ark-relations",
- "ark-serialize",
- "ark-std",
- "clap",
- "hex",
- "nimiq-block",
- "nimiq-bls",
- "nimiq-collections",
- "nimiq-genesis",
- "nimiq-hash",
- "nimiq-keys",
- "nimiq-log",
- "nimiq-pedersen-generators",
- "nimiq-primitives",
- "nimiq-serde",
- "nimiq-tendermint",
- "nimiq-test-log",
- "nimiq-test-utils",
- "nimiq-transaction",
- "nimiq-utils",
- "nimiq-zkp-primitives",
- "rand 0.10.1",
- "rand_chacha 0.10.0",
- "rand_core_compat",
- "rayon",
- "serde",
- "serde_json",
- "tracing",
- "tracing-subscriber 0.3.23",
-]
-
-[[package]]
-name = "nimiq-zkp-component"
-version = "1.6.1"
-dependencies = [
- "ark-groth16",
- "ark-mnt4-753",
- "ark-mnt6-753",
- "ark-serialize",
- "async-trait",
- "futures-util",
- "hex",
- "nimiq-block",
- "nimiq-blockchain",
- "nimiq-blockchain-interface",
- "nimiq-blockchain-proxy",
- "nimiq-bls",
- "nimiq-database",
- "nimiq-database-value",
- "nimiq-database-value-derive",
- "nimiq-genesis",
- "nimiq-genesis-builder",
- "nimiq-hash",
- "nimiq-keys",
- "nimiq-log",
- "nimiq-network-interface",
- "nimiq-network-libp2p",
- "nimiq-network-mock",
- "nimiq-primitives",
- "nimiq-serde",
- "nimiq-test-log",
- "nimiq-test-utils",
- "nimiq-transaction",
- "nimiq-utils",
- "nimiq-zkp",
- "nimiq-zkp-circuits",
- "nimiq-zkp-primitives",
- "parking_lot",
- "serde",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tokio-stream",
- "tracing",
- "tracing-subscriber 0.3.23",
-]
-
-[[package]]
-name = "nimiq-zkp-primitives"
-version = "1.6.1"
-dependencies = [
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
- "ark-groth16",
- "ark-mnt4-753",
- "ark-mnt6-753",
- "ark-r1cs-std",
- "ark-relations",
- "ark-serialize",
- "ark-std",
- "hex",
- "nimiq-bls",
- "nimiq-collections",
- "nimiq-hash",
- "nimiq-keys",
- "nimiq-pedersen-generators",
- "nimiq-primitives",
- "nimiq-serde",
- "nimiq-utils",
- "rayon",
- "serde",
- "thiserror 2.0.18",
- "tracing",
-]
-
-[[package]]
-name = "nimiq-zkp-prove"
-version = "1.6.1"
-dependencies = [
- "clap",
- "hex",
- "nimiq-block",
- "nimiq-blockchain",
- "nimiq-blockchain-interface",
- "nimiq-blockchain-proxy",
- "nimiq-database",
- "nimiq-genesis",
- "nimiq-log",
- "nimiq-primitives",
- "nimiq-serde",
- "nimiq-test-utils",
- "nimiq-utils",
- "nimiq-zkp",
- "nimiq-zkp-circuits",
- "nimiq-zkp-component",
- "nimiq-zkp-primitives",
- "parking_lot",
- "serde",
- "tokio",
- "tracing",
- "tracing-subscriber 0.3.23",
 ]
 
 [[package]]
@@ -7527,7 +7211,6 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
- "signal-hook-registry",
  "socket2 0.6.3",
  "tokio-macros",
  "tracing",
@@ -7821,7 +7504,7 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -7832,15 +7515,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "704b1aeb7be0d0a84fc9828cae51dab5970fee5088f83d1dd7ee6f6246fc6ff1"
 dependencies = [
  "serde",
- "tracing-core",
-]
-
-[[package]]
-name = "tracing-subscriber"
-version = "0.2.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71"
-dependencies = [
  "tracing-core",
 ]
 
@@ -7872,7 +7546,7 @@ checksum = "b9e6a141feebd51f8d91ebfd785af50fca223c570b86852166caa3b141defe7c"
 dependencies = [
  "js-sys",
  "tracing-core",
- "tracing-subscriber 0.3.23",
+ "tracing-subscriber",
  "wasm-bindgen",
  "web-sys",
 ]

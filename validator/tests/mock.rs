@@ -50,7 +50,6 @@ async fn one_validator_can_create_micro_blocks() {
         fee_key,
         genesis.clone(),
         &mut Some(hub),
-        false,
     )
     .await;
 
@@ -75,13 +74,9 @@ async fn four_validators_can_create_micro_blocks() {
     let env =
         MdbxDatabase::new_volatile(Default::default()).expect("Could not open a volatile database");
 
-    let validators = build_validators::<MockNetwork>(
-        env,
-        &(1u64..=4u64).collect::<Vec<_>>(),
-        &mut Some(hub),
-        false,
-    )
-    .await;
+    let validators =
+        build_validators::<MockNetwork>(env, &(1u64..=4u64).collect::<Vec<_>>(), &mut Some(hub))
+            .await;
 
     let blockchain = Arc::clone(&validators.first().unwrap().blockchain);
 
@@ -119,8 +114,7 @@ async fn validators_can_do_skip_block() {
         MdbxDatabase::new_volatile(Default::default()).expect("Could not open a volatile database");
 
     let mut validators =
-        build_validators::<Network>(env, &(5u64..=10u64).collect::<Vec<_>>(), &mut None, false)
-            .await;
+        build_validators::<Network>(env, &(5u64..=10u64).collect::<Vec<_>>(), &mut None).await;
 
     // Disconnect the next block producer.
     let _validator = pop_validator_for_slot(

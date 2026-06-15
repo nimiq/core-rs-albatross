@@ -49,7 +49,6 @@ nimiq-transaction = { workspace = true }
 nimiq-trie = { workspace = true }
 nimiq-utils = { workspace = true, features = ["time"] }
 nimiq-vrf = { workspace = true }
-nimiq-zkp = { workspace = true }
 
 [dev-dependencies]
 rand_chacha = "0.10"
@@ -61,7 +60,6 @@ nimiq-transaction-builder = { workspace = true }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/14167
 nimiq-test-utils = { workspace = true }
-nimiq-zkp-primitives = { workspace = true }
 
 [features]
 expensive-tests = []

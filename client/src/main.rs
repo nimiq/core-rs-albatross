@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use futures::StreamExt as _;
 use log::info;
-use nimiq::prover::prover_main;
 pub use nimiq::{
     client::Client,
     config::{command_line::CommandLine, config::ClientConfig, config_file::ConfigFile},
@@ -30,26 +29,13 @@ async fn main_inner() -> Result<(), Error> {
     log::trace!("Config file: {:#?}", config_file);
 
     // Initialize logging with config values.
-    initialize_logging(
-        Some(&command_line),
-        if command_line.prove {
-            Some(&config_file.prover_log)
-        } else {
-            Some(&config_file.log)
-        },
-    )?;
+    initialize_logging(Some(&command_line), Some(&config_file.log))?;
 
     // Initialize panic hook.
     initialize_panic_reporting();
 
     // Initialize signal handler
     initialize_signal_handler();
-
-    // Early return in case of a proving process.
-    if command_line.prove {
-        info!("Starting proof generation. Waiting for input.");
-        return Ok(prover_main()?);
-    }
 
     // Create config builder and apply command line and config file.
     // You usually want the command line to override config settings, so the order is important.
@@ -96,9 +82,6 @@ async fn main_inner() -> Result<(), Error> {
     }
     let consensus = client.consensus_proxy();
     let mempool = client.mempool();
-
-    let zkp_component = client.take_zkp_component().unwrap();
-    spawn(zkp_component); //ITODO get metrics on this? ask JD
 
     // Start validator
     let val_metric_monitor = tokio_metrics::TaskMonitor::new();

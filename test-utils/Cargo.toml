@@ -27,10 +27,6 @@ name = "nimiq-performance-blockchain-push"
 path = "src/performance/blockchain-push/main.rs"
 
 [dependencies]
-ark-ff = "0.4"
-ark-groth16 = { version = "0.4", default-features = false }
-ark-mnt6-753 = "0.4"
-ark-serialize = "0.4"
 async-trait = "0.1"
 clap = { version = "4.6", features = ["derive"] }
 futures = { workspace = true }
@@ -40,7 +36,6 @@ log = { workspace = true }
 parking_lot = "0.12"
 paste = "1.0"
 rand = "0.10"
-rand_chacha = "0.10"
 rand_core_compat = { version = "0.1", features = ["rand_core_0_6", "rand_core_0_10"] }
 serde = "1.0"
 tempfile = "3.27"
@@ -76,6 +71,3 @@ nimiq-utils = { workspace = true }
 nimiq-validator = { workspace = true }
 nimiq-validator-network = { workspace = true }
 nimiq-vrf = { workspace = true }
-nimiq-zkp-circuits = { workspace = true, features = ["test-setup", "zkp-prover", "parallel"] }
-nimiq-zkp-component = { workspace = true, features = ["database-storage", "zkp-prover", "parallel"] }
-nimiq-zkp-primitives = { workspace = true, features = ["parallel", "zkp-prover", "parallel"] }

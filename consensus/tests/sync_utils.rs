@@ -22,7 +22,6 @@ use nimiq_test_utils::{
     test_network::TestNetwork,
 };
 use nimiq_utils::{spawn, time::OffsetTime};
-use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 
 #[allow(dead_code)]
@@ -38,7 +37,6 @@ async fn syncer(
     sync_mode: &SyncMode,
     network: &Arc<Network>,
     blockchain: &BlockchainProxy,
-    zkp_prover: &ZKPComponent<Network>,
 ) -> SyncerProxy<Network> {
     match sync_mode {
         SyncMode::History => {
@@ -55,7 +53,6 @@ async fn syncer(
                 blockchain.clone(),
                 Arc::clone(network),
                 Arc::new(Mutex::new(BlsCache::new_test())),
-                zkp_prover.proxy(),
                 network.subscribe_events(),
                 0,
                 Arc::new(AtomicU32::new(0)),
@@ -67,7 +64,6 @@ async fn syncer(
                 blockchain.clone(),
                 Arc::clone(network),
                 Arc::new(Mutex::new(BlsCache::new_test())),
-                zkp_prover.proxy(),
                 network.subscribe_events(),
             )
             .await
@@ -77,7 +73,6 @@ async fn syncer(
                 blockchain.clone(),
                 Arc::clone(network),
                 Arc::new(Mutex::new(BlsCache::new_test())),
-                zkp_prover.proxy(),
                 network.subscribe_events(),
             )
             .await
@@ -125,13 +120,10 @@ pub async fn sync_two_peers(
         net1.subscribe_events(),
     )
     .await;
-    let zkp_prover1 =
-        ZKPComponent::new(BlockchainProxy::from(&blockchain1), Arc::clone(&net1), None).await;
     let consensus1 = Consensus::from_network(
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
         syncer1,
-        zkp_prover1.proxy(),
     );
 
     // Setup second peer (not synced yet).
@@ -169,13 +161,9 @@ pub async fn sync_two_peers(
     .await;
     networks.push(Arc::clone(&net2));
 
-    let zkp_prover2 = ZKPComponent::new(blockchain2_proxy.clone(), Arc::clone(&net2), None).await;
-
-    let mut syncer2 = syncer(&sync_mode, &net2, &blockchain2_proxy, &zkp_prover2).await;
+    let mut syncer2 = syncer(&sync_mode, &net2, &blockchain2_proxy).await;
 
     Network::connect_networks(&networks, num_batches_macro_sync as u64 * 10 + 1).await;
-    let zkp_prover2_proxy = zkp_prover2.proxy();
-    spawn(zkp_prover2);
 
     let macro_sync_result = match syncer2 {
         SyncerProxy::History(ref mut syncer) => {
@@ -214,7 +202,6 @@ pub async fn sync_two_peers(
         Arc::clone(&net2),
         syncer2,
         1,
-        zkp_prover2_proxy,
         Arc::new(AtomicU32::new(0)),
     );
     let consensus2_proxy = consensus2.proxy();

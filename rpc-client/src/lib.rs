@@ -6,12 +6,11 @@ use nimiq_jsonrpc_client::{
 pub use nimiq_rpc_interface::{
     blockchain::BlockchainInterface, consensus::ConsensusInterface, mempool::MempoolInterface,
     network::NetworkInterface, policy::PolicyInterface, types, validator::ValidatorInterface,
-    wallet::WalletInterface, zkp_component::ZKPComponentInterface,
+    wallet::WalletInterface,
 };
 use nimiq_rpc_interface::{
     blockchain::BlockchainProxy, consensus::ConsensusProxy, mempool::MempoolProxy,
     network::NetworkProxy, policy::PolicyProxy, validator::ValidatorProxy, wallet::WalletProxy,
-    zkp_component::ZKPComponentProxy,
 };
 use url::Url;
 
@@ -35,8 +34,6 @@ pub struct Client {
     pub validator: ValidatorProxy<ArcClient<WebsocketClient>>,
     /// Network Proxy used to handle network requests
     pub network: NetworkProxy<ArcClient<WebsocketClient>>,
-    /// ZKP Proxy used to handle zkp requests
-    pub zkp_component: ZKPComponentProxy<ArcClient<WebsocketClient>>,
 }
 
 impl Client {
@@ -52,7 +49,6 @@ impl Client {
             wallet: WalletProxy::new(client.clone()),
             validator: ValidatorProxy::new(client.clone()),
             network: NetworkProxy::new(client.clone()),
-            zkp_component: ZKPComponentProxy::new(client.clone()),
             ws_client: client,
         })
     }

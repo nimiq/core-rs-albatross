@@ -5,7 +5,6 @@ use std::{
 };
 
 use futures::{FutureExt, Stream, StreamExt};
-use nimiq_block::Block;
 #[cfg(feature = "full")]
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
@@ -14,7 +13,6 @@ use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent};
 #[cfg(feature = "full")]
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_component::types::ZKPRequestEvent::{OutdatedProof, Proof};
 
 use crate::{
     messages::BlockError,
@@ -41,7 +39,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 Ok(NetworkEvent::PeerJoined(peer_id, _)) => {
                     // Query if that peer provides the necessary services for syncing
                     if self.network.peer_provides_required_services(peer_id) {
-                        // Request zkps and start the macro sync process
+                        // Start the macro sync process
                         self.add_peer(peer_id);
                     } else {
                         // We can't sync with this peer as it doesn't provide the services that we need.
@@ -51,116 +49,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 }
                 Ok(_) => {}
                 Err(_) => return Poll::Ready(None),
-            }
-        }
-
-        Poll::Pending
-    }
-
-    // Function that polls ZKP proofs, there can be several cases to be taken into consideration:
-    //   A) The peer never sends the proof or the request fails:
-    //         In this case we disconnect the peer
-    //   B) The peer does not have a newer proof than the one we already have:
-    //         In this case we request epoch ids from this peer
-    //   C) The peer has a more recent proof than the one we already have:
-    //         In this case we apply the proof to our blockchain and proceed to request epoch ids from this peer
-    fn poll_zkps(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
-        while let Poll::Ready(Some(zkp_request_result)) = self.zkp_requests.poll_next_unpin(cx) {
-            match zkp_request_result {
-                (Ok(zkp_event), peer_id) => match zkp_event {
-                    Proof { proof, block } => {
-                        // Apply a newer proof to the blockchain
-                        let result = match self.blockchain {
-                            #[cfg(feature = "full")]
-                            BlockchainProxy::Full(ref full_blockchain) => {
-                                let blockchain_urg = full_blockchain.upgradable_read();
-                                if block
-                                    .block_number()
-                                    .saturating_sub(blockchain_urg.block_number())
-                                    <= self.full_sync_threshold
-                                {
-                                    // We deem this too close to do a macro sync, thus we are not pushing the zkp. This would
-                                    // clear the state and history store. Instead, we request the epoch ids from this peer.
-                                    log::debug!(
-                                        peer_id = %peer_id,
-                                        "Peer is sufficiently close not to apply the zkp."
-                                    );
-
-                                    let future = Self::request_epoch_ids(
-                                        self.blockchain.clone(),
-                                        Arc::clone(&self.network),
-                                        peer_id,
-                                    )
-                                    .boxed();
-                                    self.epoch_ids_stream.push(future);
-
-                                    continue;
-                                }
-                                Blockchain::push_zkp(
-                                    blockchain_urg,
-                                    Block::Macro(block),
-                                    proof.proof.expect("Expected a zkp proof"),
-                                    true,
-                                )
-                            }
-                            BlockchainProxy::Light(ref light_blockchain) => {
-                                LightBlockchain::push_zkp(
-                                    light_blockchain.upgradable_read(),
-                                    Block::Macro(block),
-                                    proof.proof.expect("Expected a zkp proof"),
-                                    true,
-                                )
-                            }
-                        };
-
-                        match result {
-                            Ok(result) => {
-                                log::debug!(result = ?result, "Applied ZKP proof to the blockchain");
-                                // Request epoch ids with our updated state from this peer
-                                let future = Self::request_epoch_ids(
-                                    self.blockchain.clone(),
-                                    Arc::clone(&self.network),
-                                    peer_id,
-                                )
-                                .boxed();
-                                self.epoch_ids_stream.push(future);
-                            }
-                            Err(result) => {
-                                log::warn!(?result, %peer_id, "Banning peer because failed applying ZKP proof to the blockchain",);
-
-                                // Since it failed applying the ZKP from this peer, we disconnect
-                                self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
-
-                                return Poll::Ready(None);
-                            }
-                        }
-                    }
-                    OutdatedProof { block_height: _ } => {
-                        // We need to request epoch ids from this peer to know if it is outdated or not
-                        let future = Self::request_epoch_ids(
-                            self.blockchain.clone(),
-                            Arc::clone(&self.network),
-                            peer_id,
-                        )
-                        .boxed();
-                        self.epoch_ids_stream.push(future);
-
-                        continue;
-                    }
-                },
-                (Err(zkp_error), peer_id) => {
-                    // There was an error requesting a proof from this peer, so we disconnect it
-                    log::debug!(
-                        ?zkp_error,
-                        %peer_id,
-                        "Error requesting zkp from peer",
-                    );
-                    self.disconnect_peer(peer_id, CloseReason::Error);
-                    return Poll::Ready(None);
-                }
             }
         }
 
@@ -455,16 +343,11 @@ impl<TNetwork: Network> Stream for LightMacroSync<TNetwork> {
     /// This function implements the `Stream` trait for `LightMacroSync`, making it a driver that
     /// progresses syncing in steps. It checks for:
     /// - Peer join/leave events
-    /// - ZKP proofs
     /// - Epoch ID responses
     /// - Macro block headers
     /// - Validity window chunks
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Poll::Ready(o) = self.poll_network_events(cx) {
-            return Poll::Ready(o);
-        }
-
-        if let Poll::Ready(o) = self.poll_zkps(cx) {
             return Poll::Ready(o);
         }
 
@@ -564,76 +447,18 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn it_terminates_if_the_peer_does_not_answer_the_zkp_request() {
-        async fn test(chain1: BlockchainProxy, chain2: BlockchainProxy) {
-            let mut hub = MockHub::default();
-            let net1 = Arc::new(hub.new_network());
-            let net2 = Arc::new(hub.new_network());
-
-            let zkp_component =
-                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
-                    .await;
-
-            let zkp_component_proxy = zkp_component.proxy();
-
-            spawn(zkp_component);
-
-            let mut sync = LightMacroSync::<MockNetwork>::new(
-                chain1.clone(),
-                Arc::clone(&net1),
-                net1.subscribe_events(),
-                zkp_component_proxy,
-                0,
-            );
-
-            spawn_request_handlers(&net2, &chain2.clone());
-            net1.dial_mock(&net2);
-
-            match sync.next().await {
-                // The peer does not reply to the zkp request, so we disconnect from it and do not emit it
-                None => {
-                    assert_eq!(chain1.read().block_number(), Policy::genesis_block_number());
-                    // Verify the peer was removed
-                    assert_eq!(sync.peer_requests.len(), 0);
-                }
-                res => panic!("Unexpected MacroSyncReturn: {res:?}"),
-            }
-        }
-
-        test(light_blockchain(), light_blockchain()).await;
-        test(blockchain(), light_blockchain()).await;
-        test(light_blockchain(), blockchain()).await;
-        test(blockchain(), blockchain()).await;
-    }
-
-    #[test(tokio::test)]
     async fn it_terminates_if_there_is_nothing_to_sync() {
         async fn test(chain1: BlockchainProxy, chain2: BlockchainProxy) {
             let mut hub = MockHub::default();
             let net1 = Arc::new(hub.new_network());
             let net2 = Arc::new(hub.new_network());
 
-            let zkp_component =
-                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
-                    .await;
-
-            let zkp_component_proxy = zkp_component.proxy();
-
-            spawn(zkp_component);
-
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
                 Arc::clone(&net1),
                 net1.subscribe_events(),
-                zkp_component_proxy,
                 0,
             );
-
-            let zkp_component2 =
-                nimiq_zkp_component::ZKPComponent::new(chain2.clone(), Arc::clone(&net2), None)
-                    .await;
-
-            spawn(zkp_component2);
 
             spawn_request_handlers(&net2, &chain2.clone());
             net1.dial_mock(&net2);
@@ -677,27 +502,12 @@ mod tests {
                 Policy::blocks_per_epoch() + Policy::genesis_block_number()
             );
 
-            let zkp_component =
-                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
-                    .await;
-
-            let zkp_component_proxy = zkp_component.proxy();
-
-            spawn(zkp_component);
-
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
                 Arc::clone(&net1),
                 net1.subscribe_events(),
-                zkp_component_proxy,
                 0,
             );
-
-            let zkp_component2 =
-                nimiq_zkp_component::ZKPComponent::new(chain2.clone(), Arc::clone(&net2), None)
-                    .await;
-
-            spawn(zkp_component2);
 
             spawn_request_handlers(&net2, &chain2.clone());
             net1.dial_mock(&net2);
@@ -740,27 +550,12 @@ mod tests {
                     + Policy::genesis_block_number()
             );
 
-            let zkp_component =
-                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
-                    .await;
-
-            let zkp_component_proxy = zkp_component.proxy();
-
-            spawn(zkp_component);
-
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
                 Arc::clone(&net1),
                 net1.subscribe_events(),
-                zkp_component_proxy,
                 0,
             );
-
-            let zkp_component2 =
-                nimiq_zkp_component::ZKPComponent::new(chain2.clone(), Arc::clone(&net2), None)
-                    .await;
-
-            spawn(zkp_component2);
 
             spawn_request_handlers(&net2, &chain2.clone());
             net1.dial_mock(&net2);
@@ -796,27 +591,12 @@ mod tests {
                 num_batches as u32 * Policy::blocks_per_batch() + Policy::genesis_block_number()
             );
 
-            let zkp_component =
-                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
-                    .await;
-
-            let zkp_component_proxy = zkp_component.proxy();
-
-            spawn(zkp_component);
-
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
                 Arc::clone(&net1),
                 net1.subscribe_events(),
-                zkp_component_proxy,
                 0,
             );
-
-            let zkp_component2 =
-                nimiq_zkp_component::ZKPComponent::new(chain2.clone(), Arc::clone(&net2), None)
-                    .await;
-
-            spawn(zkp_component2);
 
             spawn_request_handlers(&net2, &chain2.clone());
             net1.dial_mock(&net2);
@@ -896,27 +676,12 @@ mod tests {
                 chain1_wg.state.previous_slots = None;
             }
 
-            let zkp_component =
-                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
-                    .await;
-
-            let zkp_component_proxy = zkp_component.proxy();
-
-            spawn(zkp_component);
-
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
                 Arc::clone(&net1),
                 net1.subscribe_events(),
-                zkp_component_proxy,
                 0,
             );
-
-            let zkp_component2 =
-                nimiq_zkp_component::ZKPComponent::new(chain2.clone(), Arc::clone(&net2), None)
-                    .await;
-
-            spawn(zkp_component2);
 
             spawn_request_handlers(&net2, &chain2.clone());
             net1.dial_mock(&net2);

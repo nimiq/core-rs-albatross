@@ -84,7 +84,7 @@ impl<T: SerializeContent> TendermintProposal<T> {
 // First of all to be able to create a block proof the signatures must be over a hash which includes:
 // * block-height
 // * tendermint round
-// * proposal hash (calculated using the `zkp_hash` function)
+// * proposal hash (the macro block's Blake2s hash)
 // * implicit: TendermintStep which also works as the prefix for the specific message which is signed (read purpose byte)
 //
 // In addition to that the correct assignment of specific contributions to their aggregations also needs part of this information.
@@ -114,10 +114,6 @@ pub struct TendermintVote {
 /// Custom Serialize Content, to make sure that
 /// * step byte, which is also the message prefix always comes first
 /// * options have the same byte length when they are None as when they are Some(x) to prevent overflowing one option into the other.
-//
-// This needs to be kept in sync with `MacroBlockGadget::tendermint_hash` of
-// `nimiq-zkp-circuits`. Whenever this is changed,
-// `MacroBlockGadget::tendermint_hash` also needs to be adjusted.
 impl SerializeContent for TendermintVote {
     fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
         // First of all serialize step as this also serves as the unique prefix for this message type.

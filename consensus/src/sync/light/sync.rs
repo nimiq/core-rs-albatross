@@ -12,10 +12,6 @@ use nimiq_network_interface::{
     request::RequestError,
 };
 use nimiq_utils::{spawn, stream::FuturesUnordered};
-use nimiq_zkp_component::{
-    types::{Error, ZKPRequestEvent},
-    zkp_component::ZKPComponentProxy,
-};
 #[cfg(feature = "full")]
 use parking_lot::RwLock;
 
@@ -51,9 +47,8 @@ const PENDING_SIZE: usize = 5;
 /// The LightMacroSync is one type of MacroSync and it is essentially a stream,
 /// that operates on a per peer basis, emitting peers either as Outdated or Good.
 /// To do this, it will:
-///   1. Request the latest ZKP from a peer
-///   2. Request epoch IDs from the peer
-///   3. Request the last (if any) election or checkpoint blocks
+///   1. Request epoch IDs from the peer
+///   2. Request the last (if any) election or checkpoint blocks
 ///
 /// If during the process, a peer is deemed as outdated, then it is emitted
 pub struct LightMacroSync<TNetwork: Network> {
@@ -68,11 +63,6 @@ pub struct LightMacroSync<TNetwork: Network> {
     /// The stream for epoch ids requests
     pub(crate) epoch_ids_stream:
         FuturesUnordered<BoxFuture<'static, Option<EpochIds<TNetwork::PeerId>>>>,
-    /// Reference to the ZKP proxy used to interact with the ZKP component
-    pub(crate) zkp_component_proxy: ZKPComponentProxy<TNetwork>,
-    /// ZKP related requests (proofs)
-    pub(crate) zkp_requests:
-        FuturesUnordered<BoxFuture<'static, (Result<ZKPRequestEvent, Error>, TNetwork::PeerId)>>,
     /// Block requests
     pub(crate) block_headers: FuturesUnordered<
         BoxFuture<
@@ -117,7 +107,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         blockchain: BlockchainProxy,
         network: Arc<TNetwork>,
         network_event_rx: SubscribeEvents<TNetwork::PeerId>,
-        zkp_component_proxy: ZKPComponentProxy<TNetwork>,
         full_sync_threshold: u32,
     ) -> Self {
         #[cfg(feature = "full")]
@@ -151,8 +140,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             network_event_rx,
             peer_requests: HashMap::new(),
             epoch_ids_stream: FuturesUnordered::new(),
-            zkp_component_proxy,
-            zkp_requests: FuturesUnordered::new(),
             #[cfg(feature = "full")]
             full_sync_threshold,
             block_headers: Default::default(),
@@ -188,9 +175,11 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for LightMacroSync<TNetwork>
     const MAX_REQUEST_EPOCHS: u16 = 1000; // TODO: Use other value
 
     fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
-        info!(%peer_id, "Requesting zkp from peer");
-        self.zkp_requests
-            .push(Self::request_zkps(self.zkp_component_proxy.clone(), peer_id).boxed());
+        info!(%peer_id, "Requesting epoch ids from peer");
+        let future =
+            Self::request_epoch_ids(self.blockchain.clone(), Arc::clone(&self.network), peer_id)
+                .boxed();
+        self.epoch_ids_stream.push(future);
     }
 
     fn fallback(&mut self, _peers: Vec<TNetwork::PeerId>) {

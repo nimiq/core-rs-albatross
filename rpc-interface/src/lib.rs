@@ -9,4 +9,3 @@ mod serde_helpers;
 pub mod types;
 pub mod validator;
 pub mod wallet;
-pub mod zkp_component;
