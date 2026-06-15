@@ -2169,6 +2169,9 @@ name = "hashbrown"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
+dependencies = [
+ "foldhash 0.2.0",
+]
 
 [[package]]
 name = "hashlink"
@@ -2181,11 +2184,11 @@ dependencies = [
 
 [[package]]
 name = "hashlink"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "824e001ac4f3012dd16a264bec811403a67ca9deb6c102fc5049b32c4574b35f"
+checksum = "a5081f264ed7adee96ea4b4778b6bb9da0a7228b084587aa3bd3ff05da7c5a3b"
 dependencies = [
- "hashbrown 0.16.0",
+ "hashbrown 0.17.0",
 ]
 
 [[package]]
@@ -3953,7 +3956,7 @@ version = "1.7.0"
 dependencies = [
  "async-trait",
  "futures-util",
- "hashlink 0.11.1",
+ "hashlink 0.12.0",
  "hex",
  "instant",
  "nimiq-account",
@@ -4100,7 +4103,7 @@ version = "1.7.0"
 dependencies = [
  "async-trait",
  "futures-util",
- "hashlink 0.11.1",
+ "hashlink 0.12.0",
  "instant",
  "nimiq-bls",
  "nimiq-collections",
@@ -4370,7 +4373,7 @@ name = "nimiq-mempool"
 version = "1.7.0"
 dependencies = [
  "futures-util",
- "hashlink 0.11.1",
+ "hashlink 0.12.0",
  "hex",
  "keyed_priority_queue",
  "nimiq-account",
@@ -5010,7 +5013,7 @@ dependencies = [
  "async-trait",
  "byteorder",
  "futures-util",
- "hashlink 0.11.1",
+ "hashlink 0.12.0",
  "hex",
  "instant",
  "nimiq-account",
