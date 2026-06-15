@@ -695,6 +695,16 @@ where
         &self.state
     }
 
+    /// Returns a handle to the cached macro block state. This is the same state
+    /// that is served in response to [`RequestProposal`] requests.
+    ///
+    /// Only available when the `test-accessors` feature is enabled, as it exposes
+    /// internal state that should not be reachable in production builds.
+    #[cfg(feature = "test-accessors")]
+    pub fn macro_state(&self) -> &Arc<RwLock<Option<MacroState>>> {
+        &self.macro_state
+    }
+
     #[cfg(feature = "metrics")]
     pub fn get_mempool_monitor(&self) -> TaskMonitor {
         self.mempool_task.get_mempool_monitor()

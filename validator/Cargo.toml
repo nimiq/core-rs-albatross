@@ -72,8 +72,16 @@ nimiq-test-log = { workspace = true }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/14167
 nimiq-test-utils = { workspace = true }
+# Self dev-dependency so that this crate's own tests are built with the
+# `test-accessors` feature enabled (which exposes test-only accessors). This does not
+# affect regular `cargo build`, where dev-dependencies are not compiled.
+nimiq-validator = { path = ".", features = ["test-accessors"] }
 
 [features]
 expensive-tests = []
 metrics = ["nimiq-mempool/metrics", "nimiq-mempool-task/metrics"]
+# Exposes additional accessors used only by tests (e.g. `Validator::macro_state`).
+# This feature is not meant to be enabled in production builds. It is turned on
+# automatically for this crate's own tests via the self dev-dependency above.
+test-accessors = []
 trusted_push = []

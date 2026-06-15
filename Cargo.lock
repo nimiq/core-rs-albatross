@@ -4901,6 +4901,7 @@ dependencies = [
  "nimiq-time",
  "nimiq-transaction-builder",
  "nimiq-utils",
+ "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-vrf",
  "parking_lot",
