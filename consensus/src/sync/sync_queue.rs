@@ -297,12 +297,10 @@ where
         true
     }
 
-    #[cfg(feature = "full")]
     pub fn add_peer(&mut self, peer_id: TNetwork::PeerId) -> bool {
         self.peers.write().add_peer(peer_id)
     }
 
-    #[cfg(feature = "full")]
     pub fn remove_peer(&mut self, peer_id: &TNetwork::PeerId) {
         self.peers.write().remove_peer(peer_id);
     }
@@ -336,7 +334,6 @@ where
     }
 
     /// Checks if there are no more items to request and all request responses have been processed and returned.
-    #[cfg(feature = "full")]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

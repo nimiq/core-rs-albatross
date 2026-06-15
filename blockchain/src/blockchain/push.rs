@@ -385,6 +385,10 @@ impl Blockchain {
             this.state.macro_head_hash = block_hash.clone();
 
             if is_election_block {
+                // The hardcoded checkpoint is intentionally not verified on this live extend path
+                // (nor on rebranch): checkpoints always reference a *past* election block, which
+                // full nodes verify during history-sync catch-up, and a live-tip election event
+                // cannot cross a past checkpoint. See `nimiq_genesis::verify_election_checkpoint`.
                 this.state.election_head = macro_block.clone();
                 this.state.election_head_hash = block_hash.clone();
 

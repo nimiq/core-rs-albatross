@@ -121,7 +121,7 @@ full-consensus = [
     "nimiq-network-libp2p/kad",
 ]
 logging = ["nimiq-log", "serde_json", "tokio", "tracing-subscriber"]
-loki = ["logging", "tracing-loki"]
+loki = ["logging", "tracing-loki", "nimiq-utils/spawn"]
 metrics-server = [
     "nimiq-metrics-server",
     "nimiq-network-libp2p/metrics",

@@ -475,6 +475,13 @@ impl Blockchain {
         // Check if this block is an election block.
         let is_election_block = macro_block.is_election();
         if is_election_block {
+            // Verify the hardcoded checkpoint (if any) against our own chain.
+            nimiq_genesis::verify_election_checkpoint(
+                this.network_id,
+                macro_block.block_number(),
+                &block_hash,
+            );
+
             this.state.election_head = macro_block.clone();
             this.state.election_head_hash = block_hash.clone();
             this.state.previous_slots = this.state.current_slots.take();

@@ -155,6 +155,13 @@ impl Blockchain {
             this.state.macro_head_hash = block_hash.clone();
 
             if is_election_block {
+                // Verify the hardcoded checkpoint (if any) against our own chain.
+                nimiq_genesis::verify_election_checkpoint(
+                    this.network_id,
+                    macro_block.block_number(),
+                    &block_hash,
+                );
+
                 this.state.election_head = macro_block.clone();
                 this.state.election_head_hash = block_hash.clone();
 

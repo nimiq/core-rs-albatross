@@ -108,6 +108,15 @@ pub fn start_metrics_server<TNetwork: Network>(
     ConsensusMetrics::register(nimiq_registry, consensus_proxy);
     NetworkMetrics::register(nimiq_registry, network);
 
+    // Checkpoint verification status (set by the blockchain checkpoint check in nimiq-genesis).
+    let checkpoint_mismatch =
+        NumericClosureMetric::new_gauge(Box::new(|| nimiq_genesis::checkpoint_mismatch() as i64));
+    nimiq_registry.register(
+        "checkpoint_mismatch",
+        "1 if the hardcoded checkpoint does not match the local chain, otherwise 0",
+        checkpoint_mismatch,
+    );
+
     if let Some(mempool) = mempool {
         MempoolMetrics::register(nimiq_registry, mempool);
     }

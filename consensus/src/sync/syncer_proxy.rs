@@ -17,7 +17,9 @@ use std::{
 
 use futures::{Stream, StreamExt};
 use nimiq_block::Block;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_genesis::NetworkInfo;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
 #[cfg(feature = "full")]
@@ -121,12 +123,18 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for EitherSyncer<TNetwork> {
             }
         }
 
+        // For the pico sync fallback, bootstrap from the hardcoded checkpoint (if the network has
+        // one) instead of re-syncing the whole election chain from genesis.
+        let checkpoint =
+            NetworkInfo::from_network_id(pico.blockchain.read().network_id()).checkpoint();
+
         log::info!("Initializing Light Macro Sync");
         let mut light_macro_sync = LightMacroSync::new(
             pico.blockchain.clone(),
             Arc::clone(&pico.network),
             network_event_rx,
             0, // Since the light sync does not keep state, we ignore the threshold.
+            checkpoint,
         );
 
         for peer_id in peers {
@@ -266,6 +274,7 @@ impl<N: Network> SyncerProxy<N> {
             Arc::clone(&network),
             network_event_rx,
             full_sync_threshold,
+            None, // Full nodes do not bootstrap from a checkpoint.
         );
 
         // Return the Full node variant of the SyncerProxy.
@@ -311,7 +320,8 @@ impl<N: Network> SyncerProxy<N> {
             blockchain_proxy.clone(),
             Arc::clone(&network),
             network_event_rx,
-            0, // Since the light sync does not keep state, we ignore the threshold.
+            0,    // Since the light sync does not keep state, we ignore the threshold.
+            None, // Light nodes sync the election chain from genesis; they only verify the checkpoint.
         );
 
         // Return the constructed Light node variant of the SyncerProxy.

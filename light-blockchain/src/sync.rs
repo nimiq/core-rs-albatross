@@ -74,6 +74,13 @@ impl LightBlockchain {
 
         // If it's an election block, you have more steps.
         if block.is_election() {
+            // Verify the hardcoded checkpoint (if any) against our own chain.
+            nimiq_genesis::verify_election_checkpoint(
+                this.network_id,
+                block.block_number(),
+                &block_hash,
+            );
+
             this.election_head = block.unwrap_macro_ref().clone();
 
             this.current_validators = block.validators();

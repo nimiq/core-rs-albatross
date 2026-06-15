@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use futures::FutureExt;
 use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -15,7 +14,7 @@ use crate::{
     messages::{BlockError, MacroChain, MacroChainError, RequestMacroChain},
     sync::{
         light::LightMacroSync,
-        sync_interface::{EpochIds, MacroSync, MacroSyncReturn, PeerMacroRequests},
+        sync_interface::{EpochIds, MacroSync, MacroSyncReturn},
     },
 };
 
@@ -126,32 +125,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         }
     }
 
-    /// Adds a request for a single macro block to the block headers queue.
-    /// This is useful for fetching a specific block during sync.
-    #[cfg(feature = "full")]
-    pub(crate) fn request_single_macro_block(
-        &mut self,
-        peer_id: TNetwork::PeerId,
-        block_hash: Blake2bHash,
-    ) {
-        let mut peer_requests = PeerMacroRequests::new();
-        let network = Arc::clone(&self.network);
-
-        peer_requests.push_request(block_hash.clone());
-
-        self.block_headers.push(
-            async move {
-                (
-                    Self::request_macro_block(network, peer_id, block_hash).await,
-                    peer_id,
-                )
-            }
-            .boxed(),
-        );
-
-        self.peer_requests.insert(peer_id, peer_requests);
-    }
-
     /// Creates block header requests for election blocks and an optional checkpoint
     /// received from a peer.
     pub(crate) fn request_macro_headers(
@@ -220,53 +193,48 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             return Some(MacroSyncReturn::Good(epoch_ids.sender));
         }
 
-        let mut peer_requests = PeerMacroRequests::new();
+        // The highest block this peer reports: once our head reaches it, the peer is fully synced
+        // from our side. Drives the tip-follow re-request in `poll_macro_block_queue`. A checkpoint
+        // (a later, non-election macro block) is always higher than the last election block.
+        //
+        // A peer reporting a nonsensically large epoch number yields a `u32::MAX` target it has no
+        // hope of reaching, so it just sits in `waiting_macro_peers` until it disconnects. Harmless:
+        // it never gets emitted, but it also wastes nothing (it is requested no blocks).
+        let target_block_number = if let Some(checkpoint) = &epoch_ids.checkpoint {
+            checkpoint.block_number
+        } else {
+            Policy::election_block_of(epoch_ids.last_epoch_number() as u32).unwrap_or(u32::MAX)
+        };
 
-        log::trace!(%epoch_ids.sender,
-            "Creating a new set of requests",
-        );
+        log::trace!(%epoch_ids.sender, "Queueing macro block requests");
 
-        // Request the election blocks
+        // Enqueue the election blocks (and optional checkpoint) into the shared, bounded,
+        // failover-capable macro block queue. Deduplicate against blocks already in flight so
+        // overlapping epoch_ids from multiple peers don't request the same block twice. The sender
+        // is passed as the preferred peer; the queue fails over to others on timeout.
+        let mut ids = Vec::new();
         for block_hash in epoch_ids.ids {
-            let network = Arc::clone(&self.network);
-            let peer_id = epoch_ids.sender;
-
-            log::trace!(
-                %block_hash,
-                "Pushing a new block request",
-            );
-
-            peer_requests.push_request(block_hash.clone());
-
-            self.block_headers.push(
-                async move {
-                    (
-                        Self::request_macro_block(network, peer_id, block_hash).await,
-                        peer_id,
-                    )
-                }
-                .boxed(),
-            );
+            if self.in_flight_macro_blocks.insert(block_hash.clone()) {
+                ids.push((block_hash, Some(epoch_ids.sender)));
+            }
         }
-
-        // Request the checkpoint (if any)
         if let Some(checkpoint) = &epoch_ids.checkpoint {
-            let block_hash = checkpoint.clone().hash;
-            let network = Arc::clone(&self.network);
-            let peer_id = epoch_ids.sender;
-            peer_requests.push_request(block_hash.clone());
-            self.block_headers.push(
-                async move {
-                    (
-                        Self::request_macro_block(network, peer_id, block_hash).await,
-                        peer_id,
-                    )
-                }
-                .boxed(),
-            );
+            let block_hash = checkpoint.hash.clone();
+            if self.in_flight_macro_blocks.insert(block_hash.clone()) {
+                ids.push((block_hash, Some(epoch_ids.sender)));
+            }
         }
 
-        self.peer_requests.insert(epoch_ids.sender, peer_requests);
+        // If everything this peer reported is already in flight (driven by another peer) and we
+        // have already reached its target, it is fully synced now: emit it as good. Otherwise wait
+        // until the queue advances our head to its target (see `poll_macro_block_queue`).
+        if ids.is_empty() && target_block_number <= our_block_number {
+            return Some(MacroSyncReturn::Good(epoch_ids.sender));
+        }
+
+        self.waiting_macro_peers
+            .insert(epoch_ids.sender, target_block_number);
+        self.macro_block_queue.add_ids(ids);
 
         None
     }

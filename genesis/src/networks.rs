@@ -1,6 +1,12 @@
 #[cfg(feature = "genesis-override")]
 use std::path::Path;
-use std::{env, sync::OnceLock};
+use std::{
+    env,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        OnceLock,
+    },
+};
 
 use nimiq_block::Block;
 use nimiq_bls::{LazyPublicKey as BlsLazyPublicKey, PublicKey as BlsPublicKey};
@@ -22,6 +28,28 @@ struct GenesisData {
     hash: Blake2bHash,
     accounts: Option<&'static [u8]>,
 }
+
+/// A hardcoded, per-network reference to a recent trusted election block.
+///
+/// Pico clients use it as a sync anchor on the sync fallback: they fetch the block by `hash` (the
+/// hash commits to the full election header, so a matching block is the trusted block) and seed
+/// their chain to it instead of re-syncing from genesis. Other clients (light/full/history) do not
+/// sync from it but verify it against their own chain.
+///
+/// This is intentionally distinct from `nimiq_consensus::messages::Checkpoint` (a transient
+/// macro-sync hint): this one is a release-time hardcoded anchor, and lives in this low-level
+/// crate to avoid a dependency cycle.
+#[derive(Clone, Debug)]
+pub struct HardcodedElection {
+    /// Block height of the checkpoint election block.
+    pub block_number: u32,
+    /// Blake2b hash of the checkpoint election block.
+    pub hash: Blake2bHash,
+}
+
+/// Set once if a hardcoded checkpoint has been found NOT to match the local chain.
+/// Surfaced as the `checkpoint_mismatch` metric.
+static CHECKPOINT_MISMATCH: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Debug)]
 pub struct NetworkInfo {
@@ -55,6 +83,12 @@ impl NetworkInfo {
         &self.genesis.hash
     }
 
+    /// The hardcoded checkpoint (a recent trusted election block) for this network, if any.
+    #[inline]
+    pub fn checkpoint(&self) -> Option<HardcodedElection> {
+        checkpoint_for_network(self.network_id)
+    }
+
     #[inline]
     pub fn genesis_accounts(&self) -> Option<Vec<TrieItem>> {
         self.genesis.accounts.as_ref().map(|accounts| {
@@ -70,6 +104,89 @@ impl NetworkInfo {
 
     pub fn from_network_id(network_id: NetworkId) -> &'static Self {
         network(network_id).unwrap_or_else(|| panic!("No such network ID: {network_id}"))
+    }
+}
+
+/// Returns the hardcoded checkpoint election block for a network, if one has been set.
+///
+/// Refreshed each release: paste the latest election block's `(block_number, hash)` from a
+/// trusted, fully-synced node. Networks with ephemeral genesis (dev/unit) or no checkpoint
+/// yet return `None`, in which case clients behave exactly as without checkpoints.
+fn checkpoint_for_network(network_id: NetworkId) -> Option<HardcodedElection> {
+    // The match is the scaffold real arms get added to per release; until then it only has the
+    // catch-all, which clippy would otherwise suggest collapsing away.
+    #[allow(clippy::match_single_binding)]
+    match network_id {
+        // Example (fill in per release):
+        // NetworkId::MainAlbatross => Some(HardcodedElection {
+        //     block_number: 3_456_000,
+        //     hash: "0000…".parse().expect("valid checkpoint hash"),
+        // }),
+        _ => None,
+    }
+}
+
+/// Whether a hardcoded checkpoint has been found NOT to match the local chain.
+pub fn checkpoint_mismatch() -> bool {
+    CHECKPOINT_MISMATCH.load(Ordering::Relaxed)
+}
+
+/// Outcome of comparing a just-committed election block against the hardcoded checkpoint.
+#[derive(Debug, PartialEq, Eq)]
+enum CheckpointCheck {
+    /// Block is at the checkpoint height and the hash matches.
+    Match,
+    /// Block is at the checkpoint height but the hash differs.
+    Mismatch,
+    /// Block is not at the checkpoint height; nothing to check.
+    NotApplicable,
+}
+
+/// Pure comparison of a committed election block against a checkpoint (no logging or metric
+/// side effects, so it can be unit-tested directly).
+fn check_against_checkpoint(
+    checkpoint: &HardcodedElection,
+    block_number: u32,
+    hash: &Blake2bHash,
+) -> CheckpointCheck {
+    if block_number != checkpoint.block_number {
+        CheckpointCheck::NotApplicable
+    } else if *hash == checkpoint.hash {
+        CheckpointCheck::Match
+    } else {
+        CheckpointCheck::Mismatch
+    }
+}
+
+/// Verifies a just-committed election block against the network's hardcoded checkpoint, if any.
+///
+/// Non-pico clients call this from the blockchain election-commit paths. When the committed
+/// block is at the checkpoint height but its hash differs, it logs an error and flags the
+/// `checkpoint_mismatch` metric — meaning either this client is on a different chain or the
+/// bundled checkpoint is wrong. It never panics; a missing checkpoint or a non-matching height
+/// is a no-op.
+pub fn verify_election_checkpoint(network_id: NetworkId, block_number: u32, hash: &Blake2bHash) {
+    let Some(checkpoint) = checkpoint_for_network(network_id) else {
+        return;
+    };
+    match check_against_checkpoint(&checkpoint, block_number, hash) {
+        CheckpointCheck::NotApplicable => {}
+        CheckpointCheck::Match => {
+            log::info!(
+                "Hardcoded checkpoint at block #{block_number} verified against the local chain"
+            );
+        }
+        CheckpointCheck::Mismatch => {
+            log::error!(
+                "Hardcoded checkpoint at block #{} does NOT match the local chain (expected {}, \
+                 got {}). This client may be on a different chain, or the bundled checkpoint is \
+                 incorrect.",
+                block_number,
+                checkpoint.hash,
+                hash,
+            );
+            CHECKPOINT_MISMATCH.store(true, Ordering::Relaxed);
+        }
     }
 }
 
@@ -230,4 +347,45 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
         }
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn checkpoint() -> HardcodedElection {
+        HardcodedElection {
+            block_number: 100,
+            hash: Blake2bHash::from([1u8; 32]),
+        }
+    }
+
+    #[test]
+    fn detects_matching_checkpoint() {
+        let cp = checkpoint();
+        assert_eq!(
+            check_against_checkpoint(&cp, cp.block_number, &cp.hash),
+            CheckpointCheck::Match
+        );
+    }
+
+    #[test]
+    fn detects_mismatched_checkpoint() {
+        let cp = checkpoint();
+        let other = Blake2bHash::from([2u8; 32]);
+        assert_eq!(
+            check_against_checkpoint(&cp, cp.block_number, &other),
+            CheckpointCheck::Mismatch
+        );
+    }
+
+    #[test]
+    fn ignores_other_heights() {
+        let cp = checkpoint();
+        // A different height is a no-op even if the hash happens to match.
+        assert_eq!(
+            check_against_checkpoint(&cp, cp.block_number + 1, &cp.hash),
+            CheckpointCheck::NotApplicable
+        );
+    }
 }

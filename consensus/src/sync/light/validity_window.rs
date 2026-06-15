@@ -532,6 +532,7 @@ mod tests {
             Arc::clone(&network),
             network.subscribe_events(),
             0,
+            None,
         );
 
         let peer_id = network.peer_id();
