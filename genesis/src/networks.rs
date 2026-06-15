@@ -113,15 +113,14 @@ impl NetworkInfo {
 /// trusted, fully-synced node. Networks with ephemeral genesis (dev/unit) or no checkpoint
 /// yet return `None`, in which case clients behave exactly as without checkpoints.
 fn checkpoint_for_network(network_id: NetworkId) -> Option<HardcodedElection> {
-    // The match is the scaffold real arms get added to per release; until then it only has the
-    // catch-all, which clippy would otherwise suggest collapsing away.
-    #[allow(clippy::match_single_binding)]
     match network_id {
-        // Example (fill in per release):
-        // NetworkId::MainAlbatross => Some(HardcodedElection {
-        //     block_number: 3_456_000,
-        //     hash: "0000…".parse().expect("valid checkpoint hash"),
-        // }),
+        // Election block #52401600 (2026-06-01), refreshed per release from a trusted node.
+        NetworkId::MainAlbatross => Some(HardcodedElection {
+            block_number: 52_401_600,
+            hash: "70fb730260deea0950e3f0f448d5eaadb252e36fe808ab2782dddaabdd3e6de5"
+                .parse()
+                .expect("valid checkpoint hash"),
+        }),
         _ => None,
     }
 }
