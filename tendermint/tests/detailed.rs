@@ -774,6 +774,55 @@ async fn it_progresses_with_no_proposal() {
     assert_eq!(update.current_round, 1);
 }
 
+#[test(tokio::test)]
+async fn late_known_precommit_polka_produces_decision() {
+    let (validator, mut observe_receiver) = create_validator(vec![false], vec![]);
+    let (mut proposal_sender, proposal_receiver) = mpsc::channel(10);
+
+    let mut tendermint = Tendermint::new(
+        validator.clone(),
+        None,
+        ReceiverStream::new(proposal_receiver).boxed(),
+        stream::iter(vec![]).boxed(),
+    );
+
+    let update = await_state(&mut tendermint).await;
+    assert_eq!(update.votes.get(&(0, Step::Prevote)), Some(&None));
+
+    let _update = expect_state(&mut tendermint);
+    expect_observe_aggregate(&mut observe_receiver);
+
+    aggregate(
+        &validator,
+        (0, Step::Prevote),
+        vec![(Some(99), 0..Validator::TWO_F_PLUS_ONE)],
+    );
+    let _update = expect_state(&mut tendermint);
+
+    let update = await_state(&mut tendermint).await;
+    assert_eq!(update.votes.get(&(0, Step::Precommit)), Some(&None));
+
+    let _update = expect_state(&mut tendermint);
+    expect_observe_aggregate(&mut observe_receiver);
+
+    aggregate(
+        &validator,
+        (0, Step::Precommit),
+        vec![(Some(99), 0..Validator::TWO_F_PLUS_ONE)],
+    );
+    let _update = expect_state(&mut tendermint);
+
+    send_proposal(&mut proposal_sender, 99, 0, None, true);
+    let proposal = expect_proposal(&mut tendermint, Acceptance::Accept);
+    assert_eq!(proposal.0, 99);
+
+    let decision = expect_decision(&mut tendermint);
+    assert_eq!(decision.round, 0);
+    assert_eq!(decision.proposal, TestProposal(99));
+    assert_eq!(decision.inherents, TestInherent(99));
+    assert_eq!(decision.sig.len(), Validator::TWO_F_PLUS_ONE);
+}
+
 // The first proposer does not send a proposal but the second one does.
 #[test(tokio::test)]
 async fn it_skips_ahead() {

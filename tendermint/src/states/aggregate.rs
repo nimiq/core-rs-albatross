@@ -42,12 +42,15 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             .state
             .round_proposals
             .entry(self.state.current_round)
-            .or_default();
+            .or_default()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
 
         // Go over the proposals known to the node for this round.
         // As they are the only ones that can result in an action all others can be ignored.
         // Those which bear any chance of reaching a result will be requested during aggregation acquisition.
-        for proposal_hash in proposals.keys().cloned() {
+        for proposal_hash in proposals {
             let proposal_contributor_count =
                 current_best.contributors_for(Some(&proposal_hash)).len();
             // If there are not enough votes, continue with the next
@@ -71,12 +74,33 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                 proposal = ?proposal_hash,
                 "Aggregation resulted in Block polka",
             );
-            self.on_polka(proposal_hash);
+            match round_and_step.1 {
+                Step::Prevote => {
+                    self.update_valid(round_and_step.0, proposal_hash.clone());
+                    self.on_polka(proposal_hash);
 
-            // Reset timeout.
-            self.timeout = None;
-            // Yield state.
-            return Some(Return::Update(self.state.clone()));
+                    // Reset timeout.
+                    self.timeout = None;
+                    // Yield state.
+                    return Some(Return::Update(self.state.clone()));
+                }
+                Step::Precommit => {
+                    let proposal = self
+                        .state
+                        .known_proposals
+                        .get(&proposal_hash)
+                        .expect("proposal must be known")
+                        .clone();
+                    let decision =
+                        self.build_decision(proposal, current_best.clone(), round_and_step.0);
+
+                    self.timeout = None;
+                    return Some(Return::Decision(decision));
+                }
+                Step::Propose => {
+                    panic!("current_step must not be Step::Propose when calling aggregate()")
+                }
+            }
         }
 
         // Also check the vote for None as it could be conclusive.
@@ -141,8 +165,9 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     /// action to advance to the next state while having seen 2f+1 votes for the known proposal with `proposal_hash`
     /// as its hash.
     ///
-    /// As precommit aggregations with 2f+1 votes result in a decision being produced and as those are produced
-    /// while polling ongoing aggregations that match arm is unreachable!() here.
+    /// As precommit aggregations with 2f+1 votes result in a decision being produced, this only handles
+    /// the prevote-to-precommit transition. Fresh precommit polkas are handled in `poll_aggregations`,
+    /// while cached ones are handled directly in `aggregate`.
     ///
     /// This cannot fail.
     fn on_polka(&mut self, proposal_hash: TProtocol::ProposalHash) {
