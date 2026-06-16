@@ -715,6 +715,103 @@ fn can_jail_and_revert_twice() {
     }
 }
 
+/// Jails a validator that is *not* re-elected in the epoch of the reporting block (so the jail
+/// inherent carries `new_epoch_slot_range == None`) and checks that reverting the jail restores
+/// the previous state instead of panicking.
+///
+/// `expected_previous` is the slot range we expect in the previous batch set after the jail: it
+/// is only punished when the offense happened in the same epoch as the previous batch, and is
+/// empty otherwise. The current batch set is never touched, since the validator has no slots in
+/// the reporting epoch
+fn jail_not_reelected_and_revert(
+    offense_event_block: u32,
+    reporting_block: u32,
+    expected_previous: Range<u16>,
+) {
+    // Only allow valid block combinations
+    assert!(
+        Policy::epoch_at(reporting_block) > Policy::epoch_at(offense_event_block),
+        "Reporting block must be in a later epoch than the offense"
+    );
+    assert!(
+        reporting_block <= Policy::last_block_of_reporting_window(offense_event_block),
+        "Can only report event up until the reporting window"
+    );
+
+    let mut punished_slots = PunishedSlots::default();
+    let jailed_validator = JailedValidator {
+        slots: 0..5,
+        validator_address: Address([1u8; 20]),
+        offense_event_block,
+    };
+
+    let mut expected_previous_batch = BitSet::default();
+    for slot in expected_previous {
+        expected_previous_batch.insert(slot as usize);
+    }
+
+    let current_batch_initial = punished_slots.current_batch_punished_slots();
+    let previous_batch_initial = punished_slots.previous_batch_punished_slots.clone();
+
+    // ----------------------
+    // Jail the unelected validator
+    // ----------------------
+    let (old_previous_batch_punished_slots, old_current_batch_punished_slots) =
+        punished_slots.register_jail(&jailed_validator, reporting_block, None);
+
+    // The current set is never touched (the validator is not elected this epoch), while the
+    // previous set is only punished when the offense falls into it
+    assert_eq!(
+        punished_slots.current_batch_punished_slots(),
+        current_batch_initial
+    );
+    assert_eq!(
+        punished_slots.previous_batch_punished_slots,
+        expected_previous_batch
+    );
+    assert!(old_current_batch_punished_slots.is_none());
+
+    // ----------------------
+    // Revert the jail
+    // ----------------------
+    punished_slots.revert_register_jail(
+        &jailed_validator,
+        old_previous_batch_punished_slots,
+        old_current_batch_punished_slots,
+    );
+    assert_eq!(
+        punished_slots.current_batch_punished_slots(),
+        current_batch_initial
+    );
+    assert_eq!(
+        punished_slots.previous_batch_punished_slots,
+        previous_batch_initial
+    );
+}
+
+#[test]
+fn jail_works_if_validator_is_not_reelected() {
+    // Case 1: the offense is in an earlier epoch than the previous batch of the reporting block,
+    // so neither set is punished (a pure no-op jail + revert)
+    jail_not_reelected_and_revert(
+        Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+        Policy::blocks_per_epoch()
+            + Policy::blocks_per_batch()
+            + 1
+            + Policy::genesis_block_number(),
+        0..0,
+    );
+
+    // Case 2: the offense is in the last batch of the previous epoch and is reported in the first
+    // batch of the next epoch. The previous batch set *is* punished even though the validator is
+    // not re-elected, so the jail has an effect there while the current set stays empty
+    jail_not_reelected_and_revert(
+        Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
+        Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
+        0..5,
+    );
+}
+
 fn penalize_and_revert_twice(event_block1: u32, event_block2: u32, reporting_block: u32) {
     // Only allow valid block combinations.
     assert!(

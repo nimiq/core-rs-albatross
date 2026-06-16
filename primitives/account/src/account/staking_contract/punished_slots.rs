@@ -97,7 +97,7 @@ impl PunishedSlots {
                     new_epoch_slot_range
                 };
 
-            // If the validator is wasn't elected for the corresponding epoch, then we don't punish.
+            // If the validator wasn't elected for the corresponding epoch, then we don't punish.
             if let Some(slots) = previous_batch_slot_range {
                 for slot in slots {
                     self.previous_batch_punished_slots.insert(slot as usize);
@@ -120,19 +120,11 @@ impl PunishedSlots {
     ) {
         self.previous_batch_punished_slots = old_previous_batch_punished_slots;
         if let Some(set) = old_current_batch_punished_slots {
-            assert!(
-                self.current_batch_punished_slots
-                    .insert(jailed_validator.validator_address.clone(), set)
-                    .is_some(),
-                "Missing jailed validator"
-            );
+            self.current_batch_punished_slots
+                .insert(jailed_validator.validator_address.clone(), set);
         } else {
-            assert!(
-                self.current_batch_punished_slots
-                    .remove(&jailed_validator.validator_address)
-                    .is_some(),
-                "Missing jailed validator"
-            );
+            self.current_batch_punished_slots
+                .remove(&jailed_validator.validator_address);
         }
     }
 
