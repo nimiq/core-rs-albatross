@@ -1,7 +1,7 @@
 use std::fmt;
 
 use ark_ff::Zero;
-use ark_mnt6_753::G2Projective;
+use ark_mnt6_753::{G1Projective, G2Projective};
 use nimiq_hash::Hash;
 
 use crate::{AggregateSignature, PublicKey, SigHash};
@@ -58,6 +58,13 @@ impl AggregatePublicKey {
     /// Verifies an aggregate signature, over the same message, given the hash of that message.
     pub fn verify_hash(&self, hash: SigHash, signature: &AggregateSignature) -> bool {
         self.0.verify_hash(hash, &signature.0)
+    }
+
+    /// Verifies an aggregate signature given the `G1` point the message hashes to. Verifying many
+    /// aggregates against the same message (e.g. Handel aggregation of a single vote) only needs
+    /// the hash-to-curve computed once, which can then be reused across all the verifications.
+    pub fn verify_g1(&self, hash_curve: G1Projective, signature: &AggregateSignature) -> bool {
+        self.0.verify_g1(hash_curve, &signature.0)
     }
 }
 
