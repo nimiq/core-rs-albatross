@@ -218,18 +218,25 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             "No micro block received within timeout, producing skip block"
         );
 
-        // Acquire a blockchain read lock and check if the state still matches to fetch active validators.
-        let active_validators = {
+        // Acquire a blockchain read lock and check if the state still matches to fetch the active
+        // validators as well as the deterministic state root and protocol version of the skip
+        // block we are about to produce. From `upgrades::v2::SKIP_BLOCK_STATE_ROOT_BINDING` on, the state
+        // root is part of the signed skip block message, so it must be known before aggregating.
+        let skip_block_inputs = {
             let blockchain = self.blockchain.read();
             if in_current_state(blockchain.head()) {
-                Some(blockchain.current_validators().unwrap().clone())
+                Some((
+                    blockchain.current_validators().unwrap().clone(),
+                    blockchain.next_skip_block_state_root(),
+                    blockchain.state().current_version(),
+                ))
             } else {
                 None
             }
         };
-        if active_validators.is_none() {
+        let Some((active_validators, state_root, protocol_version)) = skip_block_inputs else {
             return (None, self);
-        }
+        };
 
         let skip_block_info = SkipBlockInfo {
             network_id: self.blockchain.read().network_id,
@@ -239,9 +246,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
 
         let (_, skip_block_proof) = SkipBlockAggregation::start(
             skip_block_info.clone(),
+            state_root,
+            protocol_version,
             self.block_producer.voting_key.clone(),
             self.validator_slot_band,
-            active_validators.unwrap(),
+            active_validators,
             Arc::clone(&self.network),
         )
         .await;

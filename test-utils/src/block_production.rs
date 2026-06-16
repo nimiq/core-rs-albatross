@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use nimiq_block::{
-    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
-    SkipBlockProof, TendermintProof,
+    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SkipBlockInfo, SkipBlockProof,
+    TendermintProof,
 };
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{
@@ -321,21 +321,24 @@ impl TemporaryBlockProducer {
             BlsSecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap(),
         );
 
-        let skip_block_info = {
+        let (skip_block_info, state_root, protocol_version) = {
             let blockchain = self.blockchain.read();
-            SkipBlockInfo {
+            let skip_block_info = SkipBlockInfo {
                 network_id: blockchain.network_id,
                 block_number: blockchain.block_number() + 1,
                 vrf_entropy: blockchain.head().seed().entropy(),
-            }
+            };
+            (
+                skip_block_info,
+                blockchain.next_skip_block_state_root(),
+                blockchain.state().current_version(),
+            )
         };
 
-        // create signed skip block information
-        let skip_block_info =
-            SignedSkipBlockInfo::from_message(skip_block_info, &keypair.secret_key, 0);
-
-        let signature = AggregateSignature::from_signatures(&[skip_block_info
-            .signature
+        // Sign the (possibly state-root bound) skip block message.
+        let signature = AggregateSignature::from_signatures(&[keypair
+            .secret_key
+            .sign_hash(skip_block_info.signing_hash(&state_root, protocol_version))
             .multiply(Policy::SLOTS)]);
         let mut signers = BitSet::new();
         for i in 0..Policy::SLOTS {

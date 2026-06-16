@@ -29,3 +29,8 @@ pub const ELECTION_VALIDATOR_METADATA_COMMITMENT: u16 = VERSION;
 /// The `diff_root` is committed to the block header hash and verified against the block's actual
 /// state diff. Before this version the `diff_root` is neither hashed nor checked.
 pub const DIFF_ROOT_COMMITMENT: u16 = VERSION;
+
+/// A skip block's aggregate proof commits to the block's `state_root`. This binds the otherwise
+/// unauthenticated header commitment to the proof, so a valid proof can no longer be replayed onto
+/// a header carrying a forged `state_root`. See `nimiq_block::SkipBlockInfo::signing_hash`.
+pub const SKIP_BLOCK_STATE_ROOT_BINDING: u16 = VERSION;

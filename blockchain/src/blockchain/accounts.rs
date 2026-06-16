@@ -4,9 +4,11 @@ use nimiq_account::{
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
 use nimiq_database::{mdbx::MdbxReadTransaction, traits::Database};
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{
     key_nibbles::KeyNibbles,
+    policy::Policy,
     trie::{error::IncompleteTrie, trie_diff::TrieDiff, trie_proof::TrieProof},
 };
 use nimiq_serde::Deserialize;
@@ -131,6 +133,40 @@ impl Blockchain {
                 Ok(total_tx_size)
             }
         }
+    }
+
+    /// Computes the `state_root` that a skip block on top of the current head would commit to.
+    /// Every header field of that skip block is determined by the head block (see
+    /// `Block::verify_immediate_successor`): the block number is the successor's, the timestamp is
+    /// the head's plus [`Policy::MIN_PRODUCER_TIMEOUT`], the VRF seed is carried over and the
+    /// protocol version stays unchanged. Since a skip block has an empty body and applies a
+    /// single, deterministic `Penalize` inherent, the resulting state root is fully determined by
+    /// the current (head) state.
+    ///
+    /// Validators use this to bind the `state_root` into the skip block proof before aggregating it
+    pub fn next_skip_block_state_root(&self) -> Blake2bHash {
+        let head = &self.state.main_chain.head;
+        let block_number = head.block_number() + 1;
+        let timestamp = head.timestamp() + Policy::MIN_PRODUCER_TIMEOUT;
+
+        let skip_block_info = SkipBlockInfo {
+            network_id: self.network_id,
+            block_number,
+            vrf_entropy: head.seed().entropy(),
+        };
+
+        let inherents =
+            self.create_punishment_inherents(block_number, &[], Some(skip_block_info), None);
+
+        let block_state = BlockState::new(block_number, timestamp, self.state.current_version());
+
+        let (state_root, _, _) = self
+            .state
+            .accounts
+            .exercise_transactions(&[], &inherents, &block_state, None)
+            .expect("Failed to compute skip block state root");
+
+        state_root
     }
 
     /// Reverts the accounts given a block. This only applies to micro blocks and skip blocks, since

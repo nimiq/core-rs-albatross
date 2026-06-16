@@ -106,7 +106,16 @@ impl MicroBlock {
                     vrf_entropy: self.header.seed.entropy(),
                 };
 
-                if !proof.verify(&skip_block, validators) {
+                // From `upgrades::v2::SKIP_BLOCK_STATE_ROOT_BINDING` on, the proof also commits to
+                // the header `state_root`, so a forged `state_root` invalidates the proof. The header
+                // version cannot be decreased below the predecessor's (checked in
+                // `verify_immediate_successor`), preventing a downgrade to the legacy message.
+                if !proof.verify(
+                    &skip_block,
+                    &self.header.state_root,
+                    self.header.version,
+                    validators,
+                ) {
                     debug!(
                         block = %self,
                         reason = "Bad skip block proof",

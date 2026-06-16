@@ -8,6 +8,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::{AggregateSignature, KeyPair, LazyPublicKey as BlsLazyPublicKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::mdbx::MdbxDatabase;
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, Ed25519PublicKey};
 use nimiq_primitives::{
     networks::NetworkId,
@@ -61,7 +62,9 @@ fn test_skip_block_single_signature() {
         0..Policy::SLOTS,
     )]);
 
-    assert!(skip_block_proof.verify(&skip_block_info, &validators));
+    // The proof was signed over the legacy message (no state root), so it is verified against a
+    // pre-binding protocol version. The state root argument is therefore ignored.
+    assert!(skip_block_proof.verify(&skip_block_info, &Blake2bHash::default(), 1, &validators));
 }
 
 #[test]

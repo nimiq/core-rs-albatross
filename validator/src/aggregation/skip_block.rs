@@ -1,7 +1,7 @@
 use std::{fmt, future::Future, sync::Arc, time::Duration};
 
 use futures::{future, stream::StreamExt};
-use nimiq_block::{MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof};
+use nimiq_block::{MultiSignature, SkipBlockInfo, SkipBlockProof};
 use nimiq_bls::{AggregateSignature, KeyPair};
 use nimiq_collections::BitSet;
 use nimiq_handel::{
@@ -15,12 +15,12 @@ use nimiq_handel::{
     store::ReplaceStore,
     update::LevelUpdate,
 };
-use nimiq_hash::Blake2sHash;
+use nimiq_hash::{Blake2bHash, Blake2sHash};
 use nimiq_network_interface::{
     network::CloseReason,
     request::{MessageMarker, RequestCommon},
 };
-use nimiq_primitives::{policy::Policy, slots_allocation::Validators, Message};
+use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use nimiq_validator_network::ValidatorNetwork;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -206,6 +206,11 @@ pub struct SkipBlockAggregation {}
 impl SkipBlockAggregation {
     pub async fn start<N: ValidatorNetwork + 'static>(
         skip_block_info: SkipBlockInfo,
+        // The deterministic `state_root` of the skip block to be produced. It is bound into the
+        // signed message from `upgrades::v2::SKIP_BLOCK_STATE_ROOT_BINDING` on.
+        state_root: Blake2bHash,
+        // The protocol version of the skip block to be produced.
+        protocol_version: u16,
         voting_key: KeyPair,
         // TODO: This seems to be a SlotBand. Change this to a proper Validator ID.
         validator_id: u16,
@@ -219,20 +224,18 @@ impl SkipBlockAggregation {
             .slots
             .clone();
 
-        let message_hash = skip_block_info.hash_with_prefix();
+        let message_hash = skip_block_info.signing_hash(&state_root, protocol_version);
         trace!(
             %message_hash,
             ?skip_block_info,
+            %state_root,
+            protocol_version,
             "Starting skip block aggregation",
         );
-        let signed_skip_block_info = SignedSkipBlockInfo::from_message(
-            skip_block_info.clone(),
-            &voting_key.secret_key,
-            validator_id,
-        );
 
-        let signature = AggregateSignature::from_signatures(&[signed_skip_block_info
-            .signature
+        let signature = AggregateSignature::from_signatures(&[voting_key
+            .secret_key
+            .sign_hash(message_hash.clone())
             .multiply(slots.len() as u16)]);
 
         let mut signers = BitSet::new();

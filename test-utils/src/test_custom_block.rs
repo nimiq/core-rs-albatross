@@ -1,8 +1,8 @@
 use nimiq_account::BlockState;
 use nimiq_block::{
     Block, EquivocationProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody,
-    MicroHeader, MicroJustification, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
-    SkipBlockProof, TendermintProof,
+    MicroHeader, MicroJustification, MultiSignature, SkipBlockInfo, SkipBlockProof,
+    TendermintProof,
 };
 use nimiq_blockchain::{interface::HistoryInterface, Blockchain};
 use nimiq_blockchain_interface::AbstractBlockchain;
@@ -231,7 +231,13 @@ pub fn next_skip_block(
         .exercise_transactions(&[], &inherents, &block_state, None)
         .expect("Failed to compute accounts hash during block production");
 
-    let state_root = config.state_root.clone().unwrap_or(real_state_root);
+    // The proof is signed over the real (deterministic) state root, mirroring honest validators.
+    // `config.state_root` may override the header's state root to model a forgery; from
+    // `upgrades::v2::SKIP_BLOCK_STATE_ROOT_BINDING` on, such a mismatch invalidates the proof.
+    let state_root = config
+        .state_root
+        .clone()
+        .unwrap_or_else(|| real_state_root.clone());
     let diff_root = config.diff_root.clone().unwrap_or(real_diff_root);
 
     let hist_txs = HistoricTransaction::from(
@@ -260,11 +266,13 @@ pub fn next_skip_block(
         transactions: vec![],
     };
 
+    let version = config
+        .version
+        .unwrap_or(blockchain.state().current_version());
+
     let header = MicroHeader {
         network,
-        version: config
-            .version
-            .unwrap_or(blockchain.state().current_version()),
+        version,
         block_number,
         timestamp,
         parent_hash,
@@ -277,7 +285,8 @@ pub fn next_skip_block(
         ..Default::default()
     };
 
-    let skip_block_proof = create_skip_block_proof(voting_key, blockchain, config);
+    let skip_block_proof =
+        create_skip_block_proof(voting_key, blockchain, config, &real_state_root, version);
 
     MicroBlock {
         header,
@@ -493,6 +502,8 @@ fn create_skip_block_proof(
     voting_key_pair: &BlsKeyPair,
     blockchain: &Blockchain,
     config: &BlockConfig,
+    state_root: &Blake2bHash,
+    protocol_version: u16,
 ) -> SkipBlockProof {
     let seed = config
         .seed
@@ -505,11 +516,10 @@ fn create_skip_block_proof(
         vrf_entropy: seed.entropy(),
     };
 
-    let skip_block_info =
-        SignedSkipBlockInfo::from_message(skip_block_info, &voting_key_pair.secret_key, 0);
-
-    let signature =
-        AggregateSignature::from_signatures(&[skip_block_info.signature.multiply(Policy::SLOTS)]);
+    let signature = AggregateSignature::from_signatures(&[voting_key_pair
+        .secret_key
+        .sign_hash(skip_block_info.signing_hash(state_root, protocol_version))
+        .multiply(Policy::SLOTS)]);
     let mut signers = BitSet::new();
     for i in 0..Policy::SLOTS {
         signers.insert(i as usize);

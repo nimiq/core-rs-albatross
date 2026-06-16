@@ -54,6 +54,9 @@ pub const PREFIX_TENDERMINT_COMMIT: u8 = 0x04;
 pub const PREFIX_POKOSK: u8 = 0x05;
 /// prefix to sign a validator info
 pub const PREFIX_VALIDATOR_INFO: u8 = 0x06;
+/// prefix to sign skip block info messages that also bind the skip block's state root
+/// (used from `policy::upgrades::v2::SKIP_BLOCK_STATE_ROOT_BINDING` on)
+pub const PREFIX_SKIP_BLOCK_WITH_STATE_ROOT_INFO: u8 = 0x07;
 
 pub trait Message:
     Clone
