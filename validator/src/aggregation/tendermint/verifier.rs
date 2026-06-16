@@ -1,14 +1,15 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use nimiq_bls::AggregatePublicKey;
+use nimiq_bls::{AggregatePublicKey, G1Projective, Signature};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::{
     identity::IdentityRegistry,
     verifier::{VerificationResult, Verifier},
 };
-use nimiq_hash::Hash;
+use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_primitives::{TendermintIdentifier, TendermintVote};
+use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tokio::task;
 
@@ -18,6 +19,10 @@ use super::contribution::TendermintContribution;
 pub(crate) struct TendermintVerifier<I: IdentityRegistry> {
     identity_registry: Arc<I>,
     id: TendermintIdentifier,
+    /// Caches, per proposal hash, the `G1` point its vote hashes to. The `id` is fixed for the
+    /// verifier, so the same proposal recurs across the many contributions of a round and the
+    /// hash-to-curve only needs to be computed once per distinct proposal.
+    hash_curves: Mutex<HashMap<Option<Blake2sHash>, G1Projective>>,
 }
 
 impl<I: IdentityRegistry> TendermintVerifier<I> {
@@ -25,6 +30,7 @@ impl<I: IdentityRegistry> TendermintVerifier<I> {
         Self {
             identity_registry,
             id,
+            hash_curves: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -64,19 +70,26 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
                 }
             }
 
-            // create a thread that is allowed to block for this specific proposals hash contributions.
-            let vote = TendermintVote {
-                id: self.id.clone(),
-                proposal_hash: hash.clone(),
-            };
+            // Hash the vote to its `G1` point, reusing the cached point for this proposal hash.
+            let hash_curve = *self
+                .hash_curves
+                .lock()
+                .entry(hash.clone())
+                .or_insert_with(|| {
+                    let vote = TendermintVote {
+                        id: self.id.clone(),
+                        proposal_hash: hash.clone(),
+                    };
+                    Signature::hash_to_g1(vote.hash())
+                });
 
-            params.push((aggregated_public_key, vote, multi_sig.clone()));
+            params.push((aggregated_public_key, hash_curve, multi_sig.clone()));
         }
         let result = task::spawn_blocking(move || {
             params
                 .into_par_iter()
-                .map(|(aggregated_public_key, vote, contribution)| {
-                    if aggregated_public_key.verify_hash(vote.hash(), &contribution.signature) {
+                .map(|(aggregated_public_key, hash_curve, contribution)| {
+                    if aggregated_public_key.verify_g1(hash_curve, &contribution.signature) {
                         Ok(())
                     } else {
                         Err(())
