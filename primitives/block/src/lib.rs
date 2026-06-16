@@ -49,6 +49,8 @@ pub enum BlockError {
     BodyHashMismatch,
     #[error("Accounts hash mismatch")]
     AccountsHashMismatch,
+    #[error("Diff root mismatch")]
+    DiffRootMismatch,
     #[error("Invalid history root")]
     InvalidHistoryRoot,
 

@@ -124,6 +124,9 @@ pub fn next_micro_block(
         .exercise_transactions(&transactions, &inherents, &block_state, None)
         .expect("Failed to compute accounts hash during block production");
 
+    // Allow tests to inject a specific diff root (e.g. an incorrect one).
+    let diff_root = config.diff_root.clone().unwrap_or(diff_root);
+
     let hist_txs = HistoricTransaction::from(
         blockchain.network_id,
         block_number,
@@ -386,7 +389,8 @@ pub fn next_macro_block_proposal(
     };
 
     macro_block.header.state_root = state_root;
-    macro_block.header.diff_root = diff_root;
+    // Allow tests to inject a specific diff root (e.g. an incorrect one).
+    macro_block.header.diff_root = config.diff_root.clone().unwrap_or(diff_root);
 
     let hist_txs = HistoricTransaction::from(
         blockchain.network_id,

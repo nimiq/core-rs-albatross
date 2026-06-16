@@ -9,10 +9,12 @@ use nimiq_blockchain_interface::{
     PushResult,
 };
 use nimiq_bls::AggregateSignature;
-use nimiq_hash::{Blake2bHash, Blake2sHash, HashOutput};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
 use nimiq_keys::KeyPair;
 use nimiq_primitives::{
-    networks::NetworkId, policy::Policy, TendermintIdentifier, TendermintProposal, TendermintStep,
+    networks::NetworkId,
+    policy::{upgrades, Policy},
+    TendermintIdentifier, TendermintProposal, TendermintStep,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -24,6 +26,7 @@ use nimiq_test_utils::{
     blockchain_events_broadcast::{assert_events_eq_unordered, try_collect_events},
     test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
     test_rng,
+    versions::{assert_all_versions, bp},
 };
 use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_vrf::VrfSeed;
@@ -466,7 +469,7 @@ fn it_validates_state_root() {
         ..Default::default()
     };
 
-    // This does not fail since now the state root is properly calculated from strach
+    // This does not fail since now the state root is properly calculated from scratch
     push_micro_after_micro(&config, &Ok(PushResult::Extended));
 
     push_rebranch(&config, &Err(PushError::InvalidFork));
@@ -654,4 +657,138 @@ fn it_validates_double_vote_proofs() {
             EquivocationProofError::InvalidJustification,
         )),
     )
+}
+
+/// Seeds a chain at `version`, produces a micro block whose `diff_root` does not match its real
+/// state diff, and returns the push result.
+fn push_micro_block_with_wrong_diff_root(version: u16) -> Result<PushResult, PushError> {
+    let temp_producer = TemporaryBlockProducer::new_with_protocol_version(version);
+    let block = {
+        let blockchain = temp_producer.blockchain.read();
+        next_micro_block(
+            &temp_producer.producer.signing_key,
+            &blockchain,
+            &BlockConfig {
+                diff_root: Some("invalid diff root".hash()),
+                ..Default::default()
+            },
+        )
+    };
+    temp_producer.push(Block::Micro(block))
+}
+
+/// Seeds a chain at `version`, produces a skip block whose `diff_root` does not match its real
+/// state diff, and returns the push result.
+fn push_skip_block_with_wrong_diff_root(version: u16) -> Result<PushResult, PushError> {
+    let temp_producer = TemporaryBlockProducer::new_with_protocol_version(version);
+    let block = {
+        let blockchain = temp_producer.blockchain.read();
+        next_skip_block(
+            &temp_producer.producer.voting_key,
+            &blockchain,
+            &BlockConfig {
+                diff_root: Some("invalid diff root".hash()),
+                ..Default::default()
+            },
+        )
+    };
+    temp_producer.push(Block::Micro(block))
+}
+
+/// Seeds a chain at `version`, advances to the (checkpoint) macro block and produces it with a
+/// `diff_root` that does not match its real state diff, and returns the push result.
+fn push_macro_block_with_wrong_diff_root(version: u16) -> Result<PushResult, PushError> {
+    let temp_producer = TemporaryBlockProducer::new_with_protocol_version(version);
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        let block = temp_producer.next_block(vec![], false);
+        temp_producer.push(block).unwrap();
+    }
+    let block = {
+        let blockchain = temp_producer.blockchain.read();
+        next_macro_block(
+            &temp_producer.producer.signing_key,
+            &temp_producer.producer.voting_key,
+            &blockchain,
+            &BlockConfig {
+                diff_root: Some("invalid diff root".hash()),
+                ..Default::default()
+            },
+        )
+    };
+    temp_producer.push(block)
+}
+
+/// Seeds a chain at `version`, advances to the election block and produces it with a `diff_root`
+/// that does not match its real state diff, and returns the push result.
+fn push_election_block_with_wrong_diff_root(version: u16) -> Result<PushResult, PushError> {
+    let temp_producer = TemporaryBlockProducer::new_with_protocol_version(version);
+    for _ in 0..Policy::blocks_per_epoch() - 1 {
+        let block = temp_producer.next_block(vec![], false);
+        temp_producer.push(block).unwrap();
+    }
+    let block = {
+        let blockchain = temp_producer.blockchain.read();
+        next_macro_block(
+            &temp_producer.producer.signing_key,
+            &temp_producer.producer.voting_key,
+            &blockchain,
+            &BlockConfig {
+                diff_root: Some("invalid diff root".hash()),
+                ..Default::default()
+            },
+        )
+    };
+    temp_producer.push(block)
+}
+
+/// On push, a micro block carrying a wrong `diff_root` is accepted before
+/// `DIFF_ROOT_COMMITMENT` and rejected from it onward.
+#[test]
+fn it_verifies_the_micro_block_diff_root_from_the_commitment_version() {
+    assert_all_versions(
+        |v| push_micro_block_with_wrong_diff_root(v) == Ok(PushResult::Extended),
+        vec![bp(upgrades::v2::DIFF_ROOT_COMMITMENT, |v| {
+            push_micro_block_with_wrong_diff_root(v)
+                == Err(InvalidBlock(BlockError::DiffRootMismatch))
+        })],
+    );
+}
+
+/// On push, a skip block carrying a wrong `diff_root` is accepted before
+/// `DIFF_ROOT_COMMITMENT` and rejected from it onward.
+#[test]
+fn it_verifies_the_skip_block_diff_root_from_the_commitment_version() {
+    assert_all_versions(
+        |v| push_skip_block_with_wrong_diff_root(v) == Ok(PushResult::Extended),
+        vec![bp(upgrades::v2::DIFF_ROOT_COMMITMENT, |v| {
+            push_skip_block_with_wrong_diff_root(v)
+                == Err(InvalidBlock(BlockError::DiffRootMismatch))
+        })],
+    );
+}
+
+/// On push, a macro block carrying a wrong `diff_root` is accepted before
+/// `DIFF_ROOT_COMMITMENT` and rejected from it onward.
+#[test]
+fn it_verifies_the_macro_block_diff_root_from_the_commitment_version() {
+    assert_all_versions(
+        |v| push_macro_block_with_wrong_diff_root(v) == Ok(PushResult::Extended),
+        vec![bp(upgrades::v2::DIFF_ROOT_COMMITMENT, |v| {
+            push_macro_block_with_wrong_diff_root(v)
+                == Err(InvalidBlock(BlockError::DiffRootMismatch))
+        })],
+    );
+}
+
+/// On push, an election block carrying a wrong `diff_root` is accepted before
+/// `DIFF_ROOT_COMMITMENT` and rejected from it onward.
+#[test]
+fn it_verifies_the_election_block_diff_root_from_the_commitment_version() {
+    assert_all_versions(
+        |v| push_election_block_with_wrong_diff_root(v) == Ok(PushResult::Extended),
+        vec![bp(upgrades::v2::DIFF_ROOT_COMMITMENT, |v| {
+            push_election_block_with_wrong_diff_root(v)
+                == Err(InvalidBlock(BlockError::DiffRootMismatch))
+        })],
+    );
 }

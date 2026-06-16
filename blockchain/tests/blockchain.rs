@@ -4,12 +4,13 @@ use nimiq_block::{Block, BlockError};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::policy::{upgrades, Policy};
 use nimiq_tendermint::ProposalMessage;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     test_custom_block::{finalize_macro_block, next_macro_block_proposal},
+    versions::{assert_all_versions, bp},
 };
 
 fn produce_blocks(temp_producer: &TemporaryBlockProducer, count: u32) {
@@ -257,5 +258,42 @@ fn it_rejects_non_election_macro_block_proposals_with_superfluous_interlink() {
     assert_eq!(
         blockchain.verify_macro_block_proposal(proposal, 0, None),
         Err(PushError::InvalidBlock(BlockError::InvalidInterlink))
+    );
+}
+
+/// Seeds a chain at `version`, builds a macro block proposal whose `diff_root` does not match its
+/// real state diff, and returns the proposal verification result.
+fn verify_macro_proposal_with_wrong_diff_root(version: u16) -> Result<(), PushError> {
+    let temp_producer = TemporaryBlockProducer::new_with_protocol_version(version);
+    produce_blocks(&temp_producer, Policy::blocks_per_batch() - 1);
+
+    let blockchain = temp_producer.blockchain.upgradable_read();
+    let mut proposal = temp_producer
+        .producer
+        .next_macro_block_proposal(
+            &blockchain,
+            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            0,
+            vec![],
+            None,
+        )
+        .unwrap();
+    proposal.header.diff_root = "invalid diff root".hash();
+
+    blockchain
+        .verify_macro_block_proposal(proposal, 0, None)
+        .map(|_| ())
+}
+
+/// When a validator verifies a macro block proposal, a wrong `diff_root` verifies before
+/// `DIFF_ROOT_COMMITMENT` and is rejected from it onward (so honest validators won't sign it).
+#[test]
+fn it_verifies_the_diff_root_in_a_macro_block_proposal_from_the_commitment_version() {
+    assert_all_versions(
+        |v| verify_macro_proposal_with_wrong_diff_root(v).is_ok(),
+        vec![bp(upgrades::v2::DIFF_ROOT_COMMITMENT, |v| {
+            verify_macro_proposal_with_wrong_diff_root(v)
+                == Err(PushError::InvalidBlock(BlockError::DiffRootMismatch))
+        })],
     );
 }

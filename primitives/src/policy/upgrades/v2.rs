@@ -25,3 +25,7 @@ pub const EQUIVOCATION_REPORTING_WINDOW: u16 = VERSION;
 /// `Validators::commitment_hash`) — so a peer cannot swap them on an election block
 /// under an unchanged hash. Gated in `MacroHeader::serialize_payload_commitment`.
 pub const ELECTION_VALIDATOR_METADATA_COMMITMENT: u16 = VERSION;
+
+/// The `diff_root` is committed to the block header hash and verified against the block's actual
+/// state diff. Before this version the `diff_root` is neither hashed nor checked.
+pub const DIFF_ROOT_COMMITMENT: u16 = VERSION;

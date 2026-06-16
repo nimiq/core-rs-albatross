@@ -10,15 +10,25 @@ use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey, Ed25519Signature
 use nimiq_primitives::{
     coin::Coin,
     networks::NetworkId,
-    policy::Policy,
+    policy::{upgrades, Policy},
     slots_allocation::{Validator, Validators, ValidatorsBuilder},
 };
+use nimiq_serde::Deserialize;
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{generate_transactions, validator_address};
+use nimiq_test_utils::{
+    blockchain::{generate_transactions, validator_address},
+    versions::{assert_all_versions, bp},
+};
 use nimiq_transaction::{ExecutedTransaction, Transaction};
 
 /// Test blocks use timestamp 0; this allows up to 1 second into the future.
 const TEST_MAX_TIMESTAMP: u64 = 1000;
+
+/// A real micro block produced under a protocol version below `DIFF_ROOT_COMMITMENT`.
+const PRE_COMMITMENT_VERSION_MICRO_BLOCK: &str = "010701c90188cfe981cd2f4f8f18fcfe98ccacee0745b6aa69365cd28c836f962d577de57f04aa17fe54a18bb8c886fe96c5cff2a6a2f5e5587779c2a08b3bdccb68923aa30879b5169b238a0a6251c5a0e64a0809bd296d1bf1e9f9c75f07d546ce5b6f511d5da932e301a48c1c89b89fb46ac24d3e190fb72bd17d268407d36a48cd73ced4e870402e07006dd08f34183d089f3e95917e05ebdc11983aa6f433d99332af0cb74b0e299da2774f9018b4b2cdc08f8928e89b0d963ac388e537b003492c69aafeeab976e55303170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c11131481e47a19e6b29b0a65b9591762ce5143ed30d0261e5d24a3201752506b20f15c0100e873f12b712f8fe1c337fefb0bacd37dc9257846878386e71e15e05ce4f6fbc31b414ce0887c6a03dd34a36a40993c44aa11878883c0df683a1b415f47fa7a02010000";
+
+/// A real macro block produced under a protocol version below `DIFF_ROOT_COMMITMENT`.
+const PRE_COMMITMENT_VERSION_MACRO_BLOCK: &str = "000701e80100b8b9eb81cd2f2a59f22014aa9b1bf739abf71dbdb02eaa954e4febbc8fd4ffc43356e531e3804f8f18fcfe98ccacee0745b6aa69365cd28c836f962d577de57f04aa17fe54a1008090c81856fb3385f88ab330fbb222a1f776186011eab09980705585271ea04571c4042a747bfb7e3b4f089b0109968c9a2359abf18d8aa31258b9d8af68bf0f2aa3ae2fb99b75e24684d336cf50371888556cac228ec10c1ab32499df0b3505006dd08f34183d089f3e95917e05ebdc11983aa6f433d99332af0cb74b0e299da24f3ac8d1e747d2f46da2fef81f51cad8be2664acec4b30926083d11b7c811c6c03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c11131481e47a19e6b29b0a65b9591762ce5143ed30d0261e5d24a3201752506b20f15c000001000100a0caba01ff7b00f356b6e20ba6a297f2d7901042c460b4cb2502bb3478fcd8397ca6fc5fb28361938021b5fe69412074e646f17853dec44a17fb245c82f016f46c6068886a16fcf6e9da19280db7ed3d4632271ce4983970ec376ddd04258008ffffffffffffffffff01ffffffffffffffffff01ffffffffffffffffff01ffffffffffffffffff01ffffffffffffffffff01ffffffffffffffffff01ffffffffffffffffff01ffffffffffffffffff01";
 
 #[test]
 fn test_verify_header_network() {
@@ -819,5 +829,83 @@ fn test_verify_rejects_out_of_range_punished_set() {
     assert_eq!(
         block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
         Ok(())
+    );
+}
+
+/// Builds a header at `version` and reports whether changing only `diff_root` changes the header
+/// hash, i.e. whether the hash commits to `diff_root`.
+fn micro_header_hash_commits_to_diff_root(version: u16) -> bool {
+    let mut header = MicroHeader {
+        network: NetworkId::UnitAlbatross,
+        version,
+        block_number: 1,
+        timestamp: 0,
+        ..Default::default()
+    };
+    let header_hash = header.hash();
+    header.diff_root = "a different diff root".hash();
+    header_hash != header.hash()
+}
+
+fn macro_header_hash_commits_to_diff_root(version: u16) -> bool {
+    let mut header = MacroHeader {
+        network: NetworkId::UnitAlbatross,
+        version,
+        block_number: Policy::macro_block_after(1),
+        round: 0,
+        timestamp: 0,
+        ..Default::default()
+    };
+    let header_hash = header.hash();
+    header.diff_root = "a different diff root".hash();
+    header_hash != header.hash()
+}
+
+/// Micro block header hashes are not gated: they commit to `diff_root` in every version.
+#[test]
+fn it_commits_to_the_diff_root_in_the_micro_header_hash() {
+    assert_all_versions(micro_header_hash_commits_to_diff_root, vec![]);
+}
+
+/// The macro block header hash commits to `diff_root` from `DIFF_ROOT_COMMITMENT` onward;
+/// before that version it does not (so pre-commitment-version hashes stay unchanged).
+#[test]
+fn it_commits_to_the_diff_root_in_the_macro_header_hash_from_the_commitment_version() {
+    assert_all_versions(
+        |v| !macro_header_hash_commits_to_diff_root(v),
+        vec![bp(
+            upgrades::v2::DIFF_ROOT_COMMITMENT,
+            macro_header_hash_commits_to_diff_root,
+        )],
+    );
+}
+
+/// A real micro block from before `DIFF_ROOT_COMMITMENT` must keep its original hash: the
+/// gating must not retroactively change the hash of pre-commitment-version blocks.
+#[test]
+fn it_preserves_the_hash_of_a_pre_commitment_version_micro_block() {
+    let block =
+        Block::deserialize_from_vec(&hex::decode(PRE_COMMITMENT_VERSION_MICRO_BLOCK).unwrap())
+            .unwrap();
+
+    assert!(block.version() < upgrades::v2::DIFF_ROOT_COMMITMENT);
+    assert_eq!(
+        block.hash().to_string(),
+        "79ec03e9fc624a9ebffe66bc724349cf993104a24d6296bb13240174488046cb",
+    );
+}
+
+/// A real macro block from before `DIFF_ROOT_COMMITMENT` must keep its original hash: the
+/// gating must not retroactively change the hash of pre-commitment-version blocks.
+#[test]
+fn it_preserves_the_hash_of_a_pre_commitment_version_macro_block() {
+    let block =
+        Block::deserialize_from_vec(&hex::decode(PRE_COMMITMENT_VERSION_MACRO_BLOCK).unwrap())
+            .unwrap();
+
+    assert!(block.version() < upgrades::v2::DIFF_ROOT_COMMITMENT);
+    assert_eq!(
+        block.hash().to_string(),
+        "4aa3e0d454336e6dd28656318fd3290a62f91b5c66b4e5c5cc05646c9f58eb39",
     );
 }
