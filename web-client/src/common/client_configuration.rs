@@ -98,7 +98,7 @@ impl Default for ClientConfiguration {
             peer_count_max: 50,
             peer_count_per_ip_max: 10,
             peer_count_per_subnet_max: 10,
-            sync_mode: "light".to_string(),
+            sync_mode: "pico".to_string(),
             num_initial_connections: 4,
             network_buffer_size: 1024,
         }
@@ -195,9 +195,9 @@ impl ClientConfiguration {
         self.network_buffer_size = network_buffer_size;
     }
 
-    /// Sets the sync mode that shoud be used.
+    /// Sets the sync mode that should be used.
     /// Only "light" and "pico" are supported for web clients
-    /// Default is "light"
+    /// Default is "pico"
     #[wasm_bindgen(js_name = syncMode)]
     pub fn sync_mode(&mut self, sync_mode: String) {
         self.sync_mode = sync_mode.to_lowercase();
