@@ -1093,6 +1093,7 @@ pub enum LogType {
     ValidatorFeeDeduction,
     DeactivateValidator,
     ReactivateValidator,
+    SetSignalData,
 
     RetireValidator,
     DeleteValidator,
@@ -1146,6 +1147,7 @@ impl LogType {
             Log::UpdateValidator { .. } => Self::UpdateValidator,
             Log::DeactivateValidator { .. } => Self::DeactivateValidator,
             Log::ReactivateValidator { .. } => Self::ReactivateValidator,
+            Log::SetSignalData { .. } => Self::SetSignalData,
 
             Log::CreateStaker { .. } => Self::CreateStaker,
             Log::Stake { .. } => Self::Stake,

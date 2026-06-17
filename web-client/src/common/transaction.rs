@@ -578,6 +578,7 @@ impl Transaction {
                 PlainTransactionRecipientData::UpdateStaker(ref data) => &data.raw,
                 PlainTransactionRecipientData::SetActiveStake(ref data) => &data.raw,
                 PlainTransactionRecipientData::RetireStake(ref data) => &data.raw,
+                PlainTransactionRecipientData::SetSignalData(ref data) => &data.raw,
             })?),
             plain.value,
             plain.fee,
@@ -651,6 +652,7 @@ pub enum PlainTransactionRecipientData {
     UpdateStaker(PlainUpdateStakerData),
     SetActiveStake(PlainSetActiveStakeData),
     RetireStake(PlainRetireStakeData),
+    SetSignalData(PlainSetSignalDataData),
 }
 
 impl<'a> serde::Deserialize<'a> for PlainTransactionRecipientData {
@@ -765,6 +767,15 @@ pub struct PlainSetActiveStakeData {
 pub struct PlainRetireStakeData {
     pub raw: String,
     pub retire_stake: u64,
+}
+
+/// JSON-compatible and human-readable format of set signal data (warm-key) data.
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainSetSignalDataData {
+    pub raw: String,
+    pub validator: String,
+    pub new_signal_data: Option<String>,
 }
 
 /// Enum over all possible meanings of a transaction's proof.

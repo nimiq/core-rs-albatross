@@ -8,9 +8,9 @@ use crate::common::{
     signature_proof::SignatureProof,
     transaction::{
         PlainAddStakeData, PlainCreateStakerData, PlainCreateValidatorData, PlainRawData,
-        PlainRetireStakeData, PlainSetActiveStakeData, PlainTransactionProof,
-        PlainTransactionRecipientData, PlainUpdateStakerData, PlainUpdateValidatorData,
-        PlainValidatorData,
+        PlainRetireStakeData, PlainSetActiveStakeData, PlainSetSignalDataData,
+        PlainTransactionProof, PlainTransactionRecipientData, PlainUpdateStakerData,
+        PlainUpdateValidatorData, PlainValidatorData,
     },
 };
 
@@ -126,6 +126,15 @@ impl StakingContract {
             } => PlainTransactionRecipientData::RetireStake(PlainRetireStakeData {
                 raw: hex::encode(bytes),
                 retire_stake: retire_stake.into(),
+            }),
+            IncomingStakingTransactionData::SetSignalData {
+                validator_address,
+                new_signal_data,
+                proof: _proof,
+            } => PlainTransactionRecipientData::SetSignalData(PlainSetSignalDataData {
+                raw: hex::encode(bytes),
+                validator: validator_address.to_user_friendly_address(),
+                new_signal_data: new_signal_data.map(hex::encode),
             }),
         })
     }

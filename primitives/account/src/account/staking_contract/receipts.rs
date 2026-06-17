@@ -54,6 +54,15 @@ pub struct UpdateValidatorReceipt {
 }
 convert_receipt!(UpdateValidatorReceipt);
 
+/// Receipt for set signal data transactions (warm-key signalling). This is necessary to be
+/// able to revert these transactions.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct SetSignalDataReceipt {
+    /// the signal data before this transaction is applied
+    pub old_signal_data: Option<Blake2bHash>,
+}
+convert_receipt!(SetSignalDataReceipt);
+
 /// Receipt for jailing a validator. This is necessary to be able to revert
 /// a jail.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]

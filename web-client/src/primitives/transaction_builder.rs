@@ -410,6 +410,41 @@ impl TransactionBuilder {
         Ok(Transaction::from(tx))
     }
 
+    /// Sets the signal data of a validator in the staking contract. In contrast to
+    /// `newUpdateValidator`, this transaction is signed with the validator's *signing (warm) key*,
+    /// so the cold key is not required to signal protocol upgrades. Pass `undefined` as
+    /// `signalData` to clear the signal.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
+    #[wasm_bindgen(js_name = newSetSignalData)]
+    pub fn new_set_signal_data(
+        sender: &Address,
+        validator: &Address,
+        signal_data: Option<String>,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let native_signal_data = signal_data.map(|r| Blake2bHash::from_str(&r).unwrap());
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.set_signal_data(validator.native_cloned(), native_signal_data);
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_cloned()))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from(tx))
+    }
+
     // pub fn new_reactivate_validator()
 
     /// Deleted a validator the staking contract. The deposit is returned to the Sender

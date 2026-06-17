@@ -1071,6 +1071,113 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
+    async fn create_set_signal_data_transaction(
+        &self,
+        sender_wallet: Address,
+        validator_address: Address,
+        signing_secret_key: String,
+        new_signal_data: Option<String>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
+            .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
+        let signing_key_pair = KeyPair::from(secret_key);
+
+        // null = clear the signal data, "0x29a4b..." = set the signal data.
+        let new_signal_data: Option<Blake2bHash> = match new_signal_data {
+            None => None,
+            Some(string) => Some(
+                Blake2bHash::deserialize_from_vec(&hex::decode(string)?)
+                    .map_err(|_| Error::InvalidArgument("Signal Data".to_string()))?,
+            ),
+        };
+
+        let transaction = TransactionBuilder::new_set_signal_data(
+            &self.get_wallet_keypair(&sender_wallet)?,
+            validator_address,
+            &signing_key_pair,
+            new_signal_data,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    async fn send_set_signal_data_transaction(
+        &self,
+        sender_wallet: Address,
+        validator_address: Address,
+        signing_secret_key: String,
+        new_signal_data: Option<String>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        let raw_tx = self
+            .create_set_signal_data_transaction(
+                sender_wallet,
+                validator_address,
+                signing_secret_key,
+                new_signal_data,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    async fn create_signal_version_transaction(
+        &self,
+        sender_wallet: Address,
+        validator_address: Address,
+        signing_secret_key: String,
+        version: Option<u16>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
+            .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
+        let signing_key_pair = KeyPair::from(secret_key);
+
+        let transaction = TransactionBuilder::new_signal_version(
+            &self.get_wallet_keypair(&sender_wallet)?,
+            validator_address,
+            &signing_key_pair,
+            version,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    async fn send_signal_version_transaction(
+        &self,
+        sender_wallet: Address,
+        validator_address: Address,
+        signing_secret_key: String,
+        version: Option<u16>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        let raw_tx = self
+            .create_signal_version_transaction(
+                sender_wallet,
+                validator_address,
+                signing_secret_key,
+                version,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
+
     async fn create_retire_validator_transaction(
         &self,
         sender_wallet: Address,

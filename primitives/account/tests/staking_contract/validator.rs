@@ -9,7 +9,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::{
     account::AccountError,
     coin::Coin,
-    policy::Policy,
+    policy::{upgrades, Policy},
     slots_allocation::{JailedValidator, PenalizedSlot, ValidatorsBuilder},
 };
 use nimiq_serde::{Deserialize, Serialize};
@@ -651,6 +651,137 @@ fn deactivate_validator_works() {
         &cold_keypair,
     );
 
+    assert_eq!(
+        validator_setup
+            .staking_contract
+            .commit_incoming_transaction(
+                &invalid_tx,
+                &block_state,
+                data_store.write(&mut db_txn),
+                &mut TransactionLog::empty()
+            ),
+        Err(AccountError::InvalidSignature)
+    );
+}
+
+#[test]
+fn set_signal_data_works() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let mut validator_setup =
+        ValidatorSetup::new(Some(150_000_000), Policy::max_supported_version());
+    let data_store = validator_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = validator_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
+
+    let validator_address = validator_setup.validator_address;
+    let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
+    let signing_key = ed25519_public_key(VALIDATOR_SIGNING_KEY);
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
+
+    let new_signal_data = Policy::signal_data_for_version(upgrades::v2::WARM_KEY_SIGNALING);
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // The validator starts without any signal data; setting it works in the valid case (signed
+    // with the warm/signing key).
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::SetSignalData {
+            validator_address: validator_address.clone(),
+            new_signal_data: Some(new_signal_data.clone()),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+    );
+
+    let mut tx_logger = TransactionLog::empty();
+    let receipt = validator_setup
+        .staking_contract
+        .commit_incoming_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut tx_logger,
+        )
+        .expect("Failed to commit transaction");
+
+    assert!(receipt.is_some());
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::SetSignalData {
+            validator_address: validator_address.clone(),
+            signal_data: Some(new_signal_data.clone()),
+        }]
+    );
+
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+    assert_eq!(validator.signing_key, signing_key);
+    assert_eq!(validator.signal_data, Some(new_signal_data.clone()));
+
+    // Reverting the transaction restores the previous (empty) signal data.
+    let mut tx_logger = TransactionLog::empty();
+    validator_setup
+        .staking_contract
+        .revert_incoming_transaction(
+            &tx,
+            &block_state,
+            receipt,
+            data_store.write(&mut db_txn),
+            &mut tx_logger,
+        )
+        .expect("Failed to revert transaction");
+
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+    assert_eq!(validator.signal_data, None);
+
+    // A non-existent validator fails.
+    let fake_address = non_existent_address();
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::SetSignalData {
+            validator_address: fake_address.clone(),
+            new_signal_data: Some(new_signal_data.clone()),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+    );
+    assert_eq!(
+        validator_setup
+            .staking_contract
+            .commit_incoming_transaction(
+                &tx,
+                &block_state,
+                data_store.write(&mut db_txn),
+                &mut TransactionLog::empty()
+            ),
+        Err(AccountError::NonExistentAddress {
+            address: fake_address
+        })
+    );
+
+    // A wrong signer (here the cold key) is rejected: the signal data must be set with the
+    // validator's warm (signing) key.
+    let invalid_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::SetSignalData {
+            validator_address: validator_address.clone(),
+            new_signal_data: Some(new_signal_data),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &cold_keypair,
+    );
     assert_eq!(
         validator_setup
             .staking_contract

@@ -93,6 +93,14 @@ pub enum Log {
     #[serde(rename_all = "camelCase")]
     ReactivateValidator { validator_address: Address },
 
+    /// The validator with the given address has updated its signal data using its warm
+    /// (signing) key.
+    #[serde(rename_all = "camelCase")]
+    SetSignalData {
+        validator_address: Address,
+        signal_data: Option<Blake2bHash>,
+    },
+
     #[serde(rename_all = "camelCase")]
     CreateStaker {
         staker_address: Address,
@@ -251,6 +259,9 @@ impl Log {
                 validator_address, ..
             }
             | Log::ReactivateValidator { validator_address }
+            | Log::SetSignalData {
+                validator_address, ..
+            }
             | Log::RetireValidator { validator_address } => validator_address == address,
             Log::DeleteValidator {
                 validator_address,
