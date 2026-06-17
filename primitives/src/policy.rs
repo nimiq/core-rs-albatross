@@ -9,6 +9,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::networks::NetworkId;
 
+pub mod upgrades;
+
 /// Global policy
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
 
