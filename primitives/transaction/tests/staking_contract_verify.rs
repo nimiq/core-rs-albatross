@@ -9,7 +9,10 @@ use nimiq_bls::{
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, PrivateKey};
 use nimiq_primitives::{
-    account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
+    account::AccountType,
+    coin::Coin,
+    networks::NetworkId,
+    policy::{upgrades, Policy},
     transaction::TransactionError,
 };
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
@@ -382,6 +385,82 @@ fn deactivate_validator() {
             Err(TransactionError::InvalidProof)
         );
     });
+}
+
+#[test]
+fn set_signal_data() {
+    let mut rng = test_rng(false);
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
+
+    let signal_data = Policy::signal_data_for_version(upgrades::v2::WARM_KEY_SIGNALING);
+
+    let tx = make_signed_incoming_tx(
+        IncomingStakingTransactionData::SetSignalData {
+            validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
+            new_signal_data: Some(signal_data.clone()),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+        None,
+    );
+
+    // Rejected before the activation version.
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx, 0),
+        Err(TransactionError::InvalidForVersion)
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx, upgrades::v2::WARM_KEY_SIGNALING - 1),
+        Err(TransactionError::InvalidForVersion)
+    );
+
+    // Works from the activation version onwards.
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx, upgrades::v2::WARM_KEY_SIGNALING),
+        Ok(())
+    );
+
+    // Clearing the signal data (None) also works.
+    let tx_clear = make_signed_incoming_tx(
+        IncomingStakingTransactionData::SetSignalData {
+            validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
+            new_signal_data: None,
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+        None,
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx_clear, upgrades::v2::WARM_KEY_SIGNALING),
+        Ok(())
+    );
+
+    // Signaling transaction with a non-zero value is rejected.
+    let mut tx_value = tx.clone();
+    tx_value.value = Coin::from_u64_unchecked(1);
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx_value, upgrades::v2::WARM_KEY_SIGNALING),
+        Err(TransactionError::InvalidValue)
+    );
+
+    // Invalid signature is rejected.
+    let other_pair = KeyPair::generate(&mut rng);
+    let tx_bad = make_signed_incoming_tx(
+        IncomingStakingTransactionData::SetSignalData {
+            validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
+            new_signal_data: Some(signal_data),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+        Some(other_pair.public),
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx_bad, upgrades::v2::WARM_KEY_SIGNALING),
+        Err(TransactionError::InvalidProof)
+    );
 }
 
 #[test]

@@ -168,6 +168,15 @@ impl Policy {
     /// A value of `80` means 80% of the stake needs to support the upgrade.
     pub const UPGRADE_MIN_SUPPORT: u64 = 80;
 
+    /// Builds the canonical `signal_data` value that signals support for the given protocol
+    /// `version`. The version is encoded in the first two bytes (big-endian), the rest is zero.
+    /// This is the inverse of the check performed by [`Policy::supports_upgrade`].
+    pub fn signal_data_for_version(version: u16) -> Blake2bHash {
+        let mut signal_data = [0u8; 32];
+        signal_data[..2].copy_from_slice(&version.to_be_bytes());
+        Blake2bHash(signal_data)
+    }
+
     /// This function is used to determine if a validator signalled for a specific upgrade.
     /// This is checking the first two bytes of the signal data.
     /// However, the check could also be version specific in the future.

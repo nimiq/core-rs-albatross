@@ -18,6 +18,8 @@ pub enum TransactionError {
     InvalidProof,
     #[error("Transaction is invalid for recipient")]
     InvalidForRecipient,
+    #[error("Transaction is invalid for the current protocol version")]
+    InvalidForVersion,
     #[error("Invalid transaction data")]
     InvalidData,
     #[error("Invalid serialization: {0}")]

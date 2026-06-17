@@ -580,6 +580,16 @@ impl Transaction {
                             // The signer of the internal proof is the staker address
                             addresses.insert(proof.compute_signer());
                         }
+                        IncomingStakingTransactionData::SetSignalData {
+                            validator_address,
+                            proof,
+                            ..
+                        } => {
+                            // Add the validator address
+                            addresses.insert(validator_address);
+                            // The signer of the internal proof is the validator's signing key
+                            addresses.insert(proof.compute_signer());
+                        }
                     }
                 }
             }

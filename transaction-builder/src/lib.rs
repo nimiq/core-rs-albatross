@@ -1444,6 +1444,87 @@ impl TransactionBuilder {
         }
     }
 
+    /// Creates a transaction that sets the `signal_data` of a validator, signed with the
+    /// validator's *signing (warm) key*. This is the warm-key alternative to updating the
+    /// signal data via `new_update_validator` (which requires the cold key).
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
+    ///                             is taken from the account belonging to this key pair.
+    ///  - `validator_address`:     The validator address.
+    ///  - `signing_key_pair`:      The key pair that corresponds to the validator's signing key.
+    ///                             The data is signed using this key pair.
+    ///  - `new_signal_data`:       The new signal data (or `None` to clear it).
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is valid.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    /// # Note
+    ///
+    /// This is a *signaling transaction*. It is only valid from protocol version
+    /// `upgrades::v2::WARM_KEY_SIGNALING` onwards.
+    ///
+    pub fn new_set_signal_data(
+        key_pair: &KeyPair,
+        validator_address: Address,
+        signing_key_pair: &KeyPair,
+        new_signal_data: Option<Blake2bHash>,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.set_signal_data(validator_address, new_signal_data);
+
+        let mut builder = Self::new();
+        builder
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(signing_key_pair);
+                let mut builder = builder.generate().unwrap().unwrap_basic();
+                builder.sign_with_key_pair(key_pair);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Convenience wrapper around [`new_set_signal_data`](Self::new_set_signal_data) that signals
+    /// support for the given protocol `version` (or clears the signal if `None`), signed with the
+    /// validator's signing (warm) key.
+    pub fn new_signal_version(
+        key_pair: &KeyPair,
+        validator_address: Address,
+        signing_key_pair: &KeyPair,
+        version: Option<u16>,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        Self::new_set_signal_data(
+            key_pair,
+            validator_address,
+            signing_key_pair,
+            version.map(Policy::signal_data_for_version),
+            fee,
+            validity_start_height,
+            network_id,
+        )
+    }
+
     /// Creates a transaction that retires a validator.
     ///
     /// # Arguments
