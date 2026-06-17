@@ -134,6 +134,26 @@ pub enum ValidatorCommand {
         tx_commons: TxCommon,
     },
 
+    /// Sends a transaction signalling support for a protocol upgrade `version`, signed with the
+    /// validator's signing (warm) key (so the cold key is not required). Omit the version to clear
+    /// the current signal. Only valid once the chain has reached the protocol version that
+    /// introduces this transaction.
+    /// The sender wallet must be unlocked prior to this command.
+    SignalVersion {
+        /// The fee will be paid from this address. This wallet must be already unlocked.
+        sender_wallet: Address,
+
+        /// The Schnorr signing secret key used by the validator.
+        signing_secret_key: String,
+
+        /// The protocol version to signal support for. Omit to clear the signal.
+        #[clap(long)]
+        version: Option<u16>,
+
+        #[clap(flatten)]
+        tx_commons: TxCommon,
+    },
+
     /// Sends a transaction to delete this validator. The transaction fee will be paid from the
     /// validator deposit that is being returned.
     DeleteValidator {
@@ -348,6 +368,42 @@ impl HandleSubcommand for ValidatorCommand {
                         .send_retire_validator_transaction(
                             sender_wallet,
                             validator_address,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+
+            ValidatorCommand::SignalVersion {
+                sender_wallet,
+                signing_secret_key,
+                version,
+                tx_commons,
+            } => {
+                let validator_address = client.validator.get_address().await?.data;
+                if tx_commons.dry {
+                    let tx = client
+                        .consensus
+                        .create_signal_version_transaction(
+                            sender_wallet,
+                            validator_address,
+                            signing_secret_key,
+                            version,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_signal_version_transaction(
+                            sender_wallet,
+                            validator_address,
+                            signing_secret_key,
+                            version,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )

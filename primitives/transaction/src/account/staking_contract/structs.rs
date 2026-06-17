@@ -1,7 +1,10 @@
 use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsSignature};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
-use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_primitives::{
+    coin::Coin,
+    policy::{upgrades, Policy},
+};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize, SerializedMaxSize};
 
 use crate::{SignatureProof, Transaction, TransactionError};
@@ -85,6 +88,12 @@ pub enum IncomingStakingTransactionData {
         retire_stake: Coin,
         proof: SignatureProof,
     },
+    SetSignalData {
+        validator_address: Address,
+        new_signal_data: Option<Blake2bHash>,
+        // This proof is signed with the validator warm key.
+        proof: SignatureProof,
+    },
 }
 
 impl IncomingStakingTransactionData {
@@ -98,6 +107,7 @@ impl IncomingStakingTransactionData {
                 | IncomingStakingTransactionData::UpdateStaker { .. }
                 | IncomingStakingTransactionData::SetActiveStake { .. }
                 | IncomingStakingTransactionData::RetireStake { .. }
+                | IncomingStakingTransactionData::SetSignalData { .. }
         )
     }
 
@@ -108,7 +118,7 @@ impl IncomingStakingTransactionData {
     pub fn verify(
         &self,
         transaction: &Transaction,
-        _protocol_version: u16,
+        protocol_version: u16,
     ) -> Result<(), TransactionError> {
         match self {
             IncomingStakingTransactionData::CreateValidator {
@@ -210,6 +220,19 @@ impl IncomingStakingTransactionData {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof)?
             }
+            IncomingStakingTransactionData::SetSignalData { proof, .. } => {
+                // Setting the signal data with the warm key is only allowed once the protocol has
+                // upgraded to the version that introduces this transaction. Before that the
+                // transaction must be rejected, otherwise nodes that have not upgraded yet would
+                // diverge.
+                if protocol_version < upgrades::v2::WARM_KEY_SIGNALING {
+                    warn!("SetSignalData transactions are not allowed before protocol version {}. The offending transaction is the following:\n{:?}", upgrades::v2::WARM_KEY_SIGNALING, transaction);
+                    return Err(TransactionError::InvalidForVersion);
+                }
+
+                // Check that the signature is correct.
+                verify_transaction_signature(transaction, proof)?
+            }
         }
 
         Ok(())
@@ -225,7 +248,8 @@ impl IncomingStakingTransactionData {
             | IncomingStakingTransactionData::CreateStaker { proof, .. }
             | IncomingStakingTransactionData::UpdateStaker { proof, .. }
             | IncomingStakingTransactionData::SetActiveStake { proof, .. }
-            | IncomingStakingTransactionData::RetireStake { proof, .. } => {
+            | IncomingStakingTransactionData::RetireStake { proof, .. }
+            | IncomingStakingTransactionData::SetSignalData { proof, .. } => {
                 *proof = signature_proof;
             }
             IncomingStakingTransactionData::AddStake { .. } => {}

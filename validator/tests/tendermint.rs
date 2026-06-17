@@ -5,7 +5,6 @@ use nimiq_block::BlockError;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::traits::WriteTransaction;
-use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
@@ -291,7 +290,8 @@ fn create_validator(temp_producer: &TemporaryBlockProducer) -> Address {
     Address::from(&validator_key_pair)
 }
 
-/// Signals support for a specific version for a given validator.
+/// Signals support for a specific version for a given validator, using the warm-key
+/// `set_signal_data` path (the mechanism exercised by the `SetSignalData` transaction).
 fn signal_support(
     temp_producer: &TemporaryBlockProducer,
     validator_address: &Address,
@@ -301,32 +301,36 @@ fn signal_support(
 
     let blockchain_rg = blockchain.read();
     let mut staking_contract = blockchain_rg.get_staking_contract();
-
-    let mut raw_txn = blockchain_rg.write_transaction();
     let data_store = blockchain_rg
         .state()
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+
+    // The signal data is authorized by the validator's warm (signing) key.
+    let signer = {
+        let read_txn = blockchain_rg.read_transaction();
+        Address::from(
+            &staking_contract
+                .get_validator(&data_store.read(&read_txn), validator_address)
+                .expect("Validator should exist")
+                .signing_key,
+        )
+    };
+
+    let mut raw_txn = blockchain_rg.write_transaction();
     let mut txn = (&mut raw_txn).into();
     let mut data_store_write = data_store.write(&mut txn);
     let mut store = StakingContractStoreWrite::new(&mut data_store_write);
 
     staking_contract
-        .update_validator(
+        .set_signal_data(
             &mut store,
             validator_address,
-            None,
-            None,
-            None,
-            Some(version.map(|v| {
-                let version_bytes = v.to_be_bytes();
-                let mut signal_data = [0; 32];
-                signal_data[..2].copy_from_slice(&version_bytes);
-                Blake2bHash(signal_data)
-            })),
+            &signer,
+            version.map(Policy::signal_data_for_version),
             &mut TransactionLog::empty(),
         )
-        .expect("Failed to update validator");
+        .expect("Failed to set signal data");
 
     blockchain_rg
         .state()

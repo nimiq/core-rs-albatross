@@ -500,6 +500,60 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
+    /// Returns a serialized `set_signal_data` transaction, signed with the validator's signing
+    /// (warm) key. You need to provide the address of a basic account (the sender wallet) to pay
+    /// the transaction fee. The `new_signal_data` field is interpreted as follows:
+    /// null = Clear the signal data field (set it to None).
+    /// "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
+    /// Note: this transaction is only valid from protocol version `upgrades::v2::WARM_KEY_SIGNALING` onwards.
+    async fn create_set_signal_data_transaction(
+        &self,
+        sender_wallet: Address,
+        validator_address: Address,
+        signing_secret_key: String,
+        new_signal_data: Option<String>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Sends a `set_signal_data` transaction to the network. See
+    /// `create_set_signal_data_transaction` for the meaning of `new_signal_data`.
+    async fn send_set_signal_data_transaction(
+        &self,
+        sender_wallet: Address,
+        validator_address: Address,
+        signing_secret_key: String,
+        new_signal_data: Option<String>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
+    /// Returns a serialized `set_signal_data` transaction that signals support for the given
+    /// protocol `version` (or clears the signal if null), signed with the validator's signing
+    /// (warm) key. You need to provide the address of a basic account (the sender wallet) to pay
+    /// the transaction fee.
+    async fn create_signal_version_transaction(
+        &self,
+        sender_wallet: Address,
+        validator_address: Address,
+        signing_secret_key: String,
+        version: Option<u16>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Sends a `set_signal_data` transaction that signals support for the given protocol `version`
+    /// to the network.
+    async fn send_signal_version_transaction(
+        &self,
+        sender_wallet: Address,
+        validator_address: Address,
+        signing_secret_key: String,
+        version: Option<u16>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
     /// Returns a serialized `retire_validator` transaction. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
     async fn create_retire_validator_transaction(

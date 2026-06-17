@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "interaction-traits")]
 use crate::{
     account::staking_contract::{
-        receipts::{DeleteValidatorReceipt, ReactivateValidatorReceipt, UpdateValidatorReceipt},
+        receipts::{
+            DeleteValidatorReceipt, ReactivateValidatorReceipt, SetSignalDataReceipt,
+            UpdateValidatorReceipt,
+        },
         store::{
             StakingContractStoreReadOps, StakingContractStoreReadOpsExt, StakingContractStoreWrite,
         },
@@ -332,6 +335,72 @@ impl StakingContract {
         validator.signing_key = receipt.old_signing_key;
         validator.voting_key = receipt.old_voting_key;
         validator.reward_address = receipt.old_reward_address;
+        validator.signal_data = receipt.old_signal_data;
+
+        // Update the validator entry.
+        store.put_validator(validator_address, validator);
+
+        Ok(())
+    }
+
+    /// Sets the signal data of a validator. In contrast to `update_validator`, this is signed
+    /// with the validator's warm (signing) key, so that operators do not need their cold key to
+    /// signal protocol upgrades. The `signer` is the address derived from the transaction proof.
+    pub fn set_signal_data(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        validator_address: &Address,
+        signer: &Address,
+        new_signal_data: Option<Blake2bHash>,
+        tx_logger: &mut TransactionLog,
+    ) -> Result<SetSignalDataReceipt, AccountError> {
+        // Get the validator.
+        let mut validator = store.expect_validator(validator_address)?;
+
+        // Check that the signer is correct (it must be the validator's warm/signing key).
+        if *signer != Address::from(&validator.signing_key) {
+            debug!("The transaction signer doesn't match the signing key of the validator.");
+            return Err(AccountError::InvalidSignature);
+        }
+
+        // Create the receipt.
+        let receipt = SetSignalDataReceipt {
+            old_signal_data: validator.signal_data.clone(),
+        };
+
+        // All checks passed, not allowed to fail from here on!
+
+        // Update the validator's signal data.
+        validator.signal_data = new_signal_data.clone();
+
+        tx_logger.push_log(Log::SetSignalData {
+            validator_address: validator_address.clone(),
+            signal_data: new_signal_data,
+        });
+
+        // Update the validator entry.
+        store.put_validator(validator_address, validator);
+
+        Ok(receipt)
+    }
+
+    /// Reverts setting the signal data of a validator.
+    pub fn revert_set_signal_data(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        validator_address: &Address,
+        receipt: SetSignalDataReceipt,
+        tx_logger: &mut TransactionLog,
+    ) -> Result<(), AccountError> {
+        // Get the validator.
+        let mut validator = store.expect_validator(validator_address)?;
+
+        tx_logger.push_log(Log::SetSignalData {
+            validator_address: validator_address.clone(),
+            signal_data: validator.signal_data.clone(),
+        });
+
+        // Revert the signal data.
         validator.signal_data = receipt.old_signal_data;
 
         // Update the validator entry.

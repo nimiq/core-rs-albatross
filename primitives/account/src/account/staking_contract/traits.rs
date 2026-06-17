@@ -221,6 +221,23 @@ impl AccountTransactionInteraction for StakingContract {
                 )
                 .map(|receipt| Some(receipt.into()))
             }
+            IncomingStakingTransactionData::SetSignalData {
+                validator_address,
+                new_signal_data,
+                proof,
+            } => {
+                // Get the signer's address from the proof.
+                let signer = proof.compute_signer();
+
+                self.set_signal_data(
+                    &mut store,
+                    &validator_address,
+                    &signer,
+                    new_signal_data,
+                    tx_logger,
+                )
+                .map(|receipt| Some(receipt.into()))
+            }
         }
     }
 
@@ -325,6 +342,13 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                     tx_logger,
                 )
+            }
+            IncomingStakingTransactionData::SetSignalData {
+                validator_address, ..
+            } => {
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
+
+                self.revert_set_signal_data(&mut store, &validator_address, receipt, tx_logger)
             }
         }
     }
