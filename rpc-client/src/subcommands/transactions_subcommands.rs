@@ -54,6 +54,22 @@ pub enum TransactionCommand {
         tx_commons: TxCommonWithValue,
     },
 
+    /// Sends a basic transaction, with an arbitrary data field, from the wallet `sender_wallet` to a
+    /// basic `recipient`.
+    BasicWithData {
+        /// Transaction will be sent from this address. The sender wallet must be unlocked prior to this action.
+        sender_wallet: Address,
+
+        /// Recipient for this transaction. This must be a basic account.
+        recipient: Address,
+
+        /// The arbitrary data (in hex) to be included in the transaction.
+        data: String,
+
+        #[clap(flatten)]
+        tx_commons: TxCommonWithValue,
+    },
+
     /* Staker transactions */
     /// Sends a `new_staker` transaction to the network. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
@@ -340,6 +356,12 @@ pub enum TransactionCommand {
         /// The transaction to be sent in hex string format.
         raw_tx: String,
     },
+
+    /// Returns whether the consensus is established.
+    IsConsensusEstablished {},
+
+    /// Returns the status of the sync process.
+    SyncStatus {},
 }
 
 impl TransactionCommand {
@@ -379,6 +401,40 @@ impl HandleSubcommand for TransactionCommand {
                         .send_basic_transaction(
                             sender_wallet,
                             recipient,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+            TransactionCommand::BasicWithData {
+                sender_wallet,
+                recipient,
+                data,
+                tx_commons,
+            } => {
+                if tx_commons.common_tx_fields.dry {
+                    let tx = client
+                        .consensus
+                        .create_basic_transaction_with_data(
+                            sender_wallet,
+                            recipient,
+                            data,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_basic_transaction_with_data(
+                            sender_wallet,
+                            recipient,
+                            data,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
                             tx_commons.common_tx_fields.validity_start_height,
@@ -842,6 +898,12 @@ impl HandleSubcommand for TransactionCommand {
             TransactionCommand::GetRawTransactionInfo { raw_tx } => {
                 let tx = client.consensus.get_raw_transaction_info(raw_tx).await?;
                 println!("{tx:#?}");
+            }
+            TransactionCommand::IsConsensusEstablished {} => {
+                println!("{:#?}", client.consensus.is_consensus_established().await?);
+            }
+            TransactionCommand::SyncStatus {} => {
+                println!("{:#?}", client.consensus.get_sync_status().await?);
             }
             TransactionCommand::SendRawTransaction { raw_tx } => {
                 let tx = client.consensus.send_raw_transaction(raw_tx).await?;

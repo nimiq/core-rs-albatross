@@ -22,6 +22,18 @@ pub enum ValidatorCommand {
     /// Returns the address of the local validator.
     ValidatorAddress {},
 
+    /// Adds a voting key that will be used when the key expected by the chain changes.
+    AddVotingKey {
+        /// The BLS secret key to be added.
+        secret_key: String,
+    },
+
+    /// Returns whether the local validator is currently elected.
+    IsValidatorElected {},
+
+    /// Returns whether the local validator is currently synced.
+    IsValidatorSynced {},
+
     /// Sends a transaction to the network to create this validator. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee and the validator deposit. The sender wallet must be unlocked
     /// prior to this command.
@@ -111,6 +123,17 @@ pub enum ValidatorCommand {
         tx_commons: TxCommon,
     },
 
+    /// Sends a transaction to retire this validator. You need to provide the address of a basic
+    /// account (the sender wallet) to pay the transaction fee.
+    /// The sender wallet must be unlocked prior to this command.
+    RetireValidator {
+        /// The fee will be paid from this address. This wallet must be already unlocked.
+        sender_wallet: Address,
+
+        #[clap(flatten)]
+        tx_commons: TxCommon,
+    },
+
     /// Sends a transaction to delete this validator. The transaction fee will be paid from the
     /// validator deposit that is being returned.
     DeleteValidator {
@@ -128,6 +151,19 @@ impl HandleSubcommand for ValidatorCommand {
         match self {
             ValidatorCommand::ValidatorAddress {} => {
                 println!("{:#?}", client.validator.get_address().await?);
+            }
+
+            ValidatorCommand::AddVotingKey { secret_key } => {
+                client.validator.add_voting_key(secret_key).await?;
+                println!("Voting key added");
+            }
+
+            ValidatorCommand::IsValidatorElected {} => {
+                println!("{:#?}", client.validator.is_validator_elected().await?);
+            }
+
+            ValidatorCommand::IsValidatorSynced {} => {
+                println!("{:#?}", client.validator.is_validator_synced().await?);
             }
 
             ValidatorCommand::SetAutoReactivateValidator {
@@ -282,6 +318,36 @@ impl HandleSubcommand for ValidatorCommand {
                             sender_wallet,
                             validator_address,
                             signing_secret_key,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+
+            ValidatorCommand::RetireValidator {
+                sender_wallet,
+                tx_commons,
+            } => {
+                let validator_address = client.validator.get_address().await?.data;
+                if tx_commons.dry {
+                    let tx = client
+                        .consensus
+                        .create_retire_validator_transaction(
+                            sender_wallet,
+                            validator_address,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_retire_validator_transaction(
+                            sender_wallet,
+                            validator_address,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )

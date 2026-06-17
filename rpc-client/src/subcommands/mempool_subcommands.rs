@@ -1,6 +1,7 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
+use nimiq_hash::Blake2bHash;
 use nimiq_rpc_client::MempoolInterface;
 
 use super::accounts_subcommands::HandleSubcommand;
@@ -30,6 +31,12 @@ pub enum MempoolCommand {
 
     /// Returns the minimum fee per byte of the local mempool.
     MinFeePerByte {},
+
+    /// Returns a transaction from the local mempool given its hash.
+    MempoolTransaction {
+        /// The hash of the transaction to fetch from the local mempool.
+        hash: Blake2bHash,
+    },
 }
 
 #[async_trait]
@@ -65,6 +72,12 @@ impl HandleSubcommand for MempoolCommand {
             }
             MempoolCommand::MinFeePerByte {} => {
                 println!("{:#?}", client.mempool.get_min_fee_per_byte().await?);
+            }
+            MempoolCommand::MempoolTransaction { hash } => {
+                println!(
+                    "{:#?}",
+                    client.mempool.get_transaction_from_mempool(hash).await?
+                );
             }
         }
         Ok(client)

@@ -11,6 +11,9 @@ use crate::Client;
 
 #[derive(Debug, Parser)]
 pub enum BlockchainCommand {
+    /// Returns the network ID the client is connected to.
+    NetworkId {},
+
     /// Returns the block number for the current head.
     BlockNumber {},
 
@@ -101,6 +104,21 @@ pub enum BlockchainCommand {
         /// If set true only the hash of the transactions will be fetched. Otherwise the full transactions will be retrieved.
         #[clap(short = 'h')]
         just_hash: bool,
+    },
+
+    /// Returns the transaction references (transaction hash and block number) for a given address.
+    /// Similar to `transactions-by-address`, but only returns the hash and block number of each transaction.
+    TransactionReferencesByAddress {
+        /// The address to query by.
+        address: Address,
+
+        /// Max number of transaction references to fetch. If absent it defaults to 500.
+        #[clap(long)]
+        max: Option<u16>,
+
+        /// A transaction to start at.
+        #[clap(long)]
+        start_at: Option<Blake2bHash>,
     },
 
     /// Returns the information for the slot owner at the given block height and offset. The
@@ -199,6 +217,9 @@ impl HandleSubcommand for BlockchainCommand {
                 }?;
                 println!("{block:#?}")
             }
+            BlockchainCommand::NetworkId {} => {
+                println!("{:#?}", client.blockchain.get_network_id().await?)
+            }
             BlockchainCommand::BlockNumber {} => {
                 println!("{:#?}", client.blockchain.get_block_number().await?)
             }
@@ -291,6 +312,19 @@ impl HandleSubcommand for BlockchainCommand {
                             .await?
                     )
                 }
+            }
+            BlockchainCommand::TransactionReferencesByAddress {
+                address,
+                max,
+                start_at,
+            } => {
+                println!(
+                    "{:#?}",
+                    client
+                        .blockchain
+                        .get_transaction_references_by_address(address, max, start_at)
+                        .await?
+                )
             }
             BlockchainCommand::PenalizedSlots { previous_penalized } => {
                 if previous_penalized {

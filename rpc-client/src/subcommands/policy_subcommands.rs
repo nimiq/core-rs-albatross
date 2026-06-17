@@ -127,6 +127,18 @@ pub enum PolicyCommand {
         block_number: u32,
     },
 
+    /// Returns the first block after the reporting window of a given block number has ended.
+    BlockAfterReportingWindow {
+        /// The block number.
+        block_number: u32,
+    },
+
+    /// Returns the first block after the jail period of a given block number has ended.
+    BlockAfterJail {
+        /// The block number.
+        block_number: u32,
+    },
+
     /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is
     /// calculated using the following formula:
     /// Supply (t) = Genesis_supply + Initial_supply_velocity / Supply_decay * (1 - 2^(- Supply_decay * t))
@@ -245,6 +257,21 @@ impl HandleSubcommand for PolicyCommand {
                 println!(
                     "{:#?}",
                     client.policy.get_first_batch_of_epoch(block_number).await?
+                );
+            }
+            PolicyCommand::BlockAfterReportingWindow { block_number } => {
+                println!(
+                    "{:#?}",
+                    client
+                        .policy
+                        .get_block_after_reporting_window(block_number)
+                        .await?
+                );
+            }
+            PolicyCommand::BlockAfterJail { block_number } => {
+                println!(
+                    "{:#?}",
+                    client.policy.get_block_after_jail(block_number).await?
                 );
             }
             PolicyCommand::SupplyAt {

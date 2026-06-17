@@ -62,6 +62,12 @@ pub enum AccountCommand {
         address: Address,
     },
 
+    /// Removes an imported account from the wallet.
+    Remove {
+        /// The account's address.
+        address: Address,
+    },
+
     /// Signs a message using the specified account. The account must already be unlocked.
     Sign {
         /// The message to be signed.
@@ -147,6 +153,9 @@ impl HandleSubcommand for AccountCommand {
             }
             AccountCommand::IsUnlocked { address } => {
                 println!("{:#?}", client.wallet.is_account_unlocked(address).await?);
+            }
+            AccountCommand::Remove { address } => {
+                println!("{:#?}", client.wallet.remove_account(address).await?);
             }
             AccountCommand::Sign {
                 message,
