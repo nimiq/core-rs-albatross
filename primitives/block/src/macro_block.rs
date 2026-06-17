@@ -7,7 +7,7 @@ use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, Hasher, SerializeCo
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
     networks::NetworkId,
-    policy::Policy,
+    policy::{upgrades, Policy},
     slots_allocation::{Validators, ValidatorsBuilder},
     Message, PREFIX_TENDERMINT_PROPOSAL,
 };
@@ -264,16 +264,33 @@ impl MacroHeader {
         Ok(())
     }
 
-    fn zkp_body_root(&self) -> Blake2sHash {
+    /// Blake2s root over the payload, folded into the header hash by `serialize_content`.
+    /// See `serialize_payload_commitment` for the contents.
+    fn payload_commitment_root(&self) -> Blake2sHash {
         let mut h = <Blake2sHash as HashOutput>::Builder::default();
-        self.zkp_body_serialize_content(&mut h).unwrap();
+        self.serialize_payload_commitment(&mut h).unwrap();
         h.finish()
     }
 
-    pub fn zkp_body_serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+    /// Serializes the payload commitment embedded in the header hash: the elected
+    /// validator set (election blocks only), the next batch's initial punished set, and
+    /// the body root.
+    ///
+    /// The validator set uses `Validators::hash` (voting keys only) before v2, and
+    /// `Validators::commitment_hash` (full set) from v2 on, which additionally binds the
+    /// signing keys, addresses and slot ranges so they can't be swapped under an
+    /// unchanged hash.
+    pub fn serialize_payload_commitment<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         if let Some(ref validators) = self.validators {
-            let pk_tree_root = validators.hash::<Blake2sHash>();
-            pk_tree_root.serialize_to_writer(writer)?;
+            // v1 hashing is left untouched so mainnet/testnet header hashes stay
+            // byte-identical until the v2 upgrade activates.
+            let validators_root =
+                if self.version >= upgrades::v2::ELECTION_VALIDATOR_METADATA_COMMITMENT {
+                    validators.commitment_hash::<Blake2sHash>()
+                } else {
+                    validators.hash::<Blake2sHash>()
+                };
+            validators_root.serialize_to_writer(writer)?;
         } else {
             0u8.serialize_to_writer(writer)?;
         }
@@ -374,8 +391,8 @@ impl SerializeContent for MacroHeader {
         extra_data_hash.serialize_to_writer(writer)?;
 
         self.state_root.serialize_to_writer(writer)?;
-        // This includes validators and next_batch_punished_set.
-        self.zkp_body_root().serialize_to_writer(writer)?;
+        // Binds the validator set, the next batch's initial punished set and the body root.
+        self.payload_commitment_root().serialize_to_writer(writer)?;
         self.history_root.serialize_to_writer(writer)?;
 
         Ok(())
@@ -411,7 +428,7 @@ mod test {
     use nimiq_bls::CompressedPublicKey as BlsCompressedPublicKey;
     use nimiq_keys::Ed25519PublicKey as SchnorrPublicKey;
     use nimiq_primitives::{
-        policy::Policy,
+        policy::{upgrades, Policy},
         slots_allocation::{Validator, Validators},
     };
 
@@ -424,6 +441,95 @@ mod test {
             2 * dbg!(MacroBlock::MAX_SIZE) + 16384
                 <= dbg!(nimiq_network_interface::network::MIN_SUPPORTED_MSG_SIZE)
         );
+    }
+
+    /// Builds a single-band election header carrying `validators`, at the given protocol
+    /// version. Only the fields that influence the header hash are set.
+    fn election_header(validators: Validators, version: u16) -> MacroHeader {
+        MacroHeader {
+            version,
+            validators: Some(validators),
+            ..Default::default()
+        }
+    }
+
+    /// Builds a valid single-band validator set owning all slots, with the given Ed25519
+    /// signing key and a matching reward address. The BLS voting key is the same for every
+    /// set so that only the metadata (signing key / address) differs between them.
+    fn validators_with_signing_key(signing_key: SchnorrPublicKey) -> Validators {
+        let validator = Validator::new(
+            nimiq_keys::Address::from(&signing_key),
+            BlsCompressedPublicKey::default(),
+            signing_key,
+            0..Policy::SLOTS,
+        );
+        Validators::new(vec![validator])
+    }
+
+    /// From protocol version 2 on, the macro-header hash must bind the validators'
+    /// Ed25519 signing keys and reward addresses, so a peer cannot swap them on an
+    /// election block while keeping the same hash (and a valid justification).
+    /// Before version 2 the binding is dormant and the hash is unchanged.
+    ///
+    /// Regression test for the validator-metadata poisoning issue: the BLS voting-key
+    /// tree (`Validators::hash`) does not commit signing keys or addresses.
+    #[test]
+    fn election_hash_binds_signing_key_from_version_2() {
+        use nimiq_hash::{Blake2sHash, Hash};
+
+        let honest = validators_with_signing_key(SchnorrPublicKey::from([0x11; 32]));
+        let forged = validators_with_signing_key(SchnorrPublicKey::from([0x22; 32]));
+
+        // The forge keeps the BLS voting-key tree identical; only the metadata differs.
+        assert_eq!(
+            honest.hash::<Blake2sHash>(),
+            forged.hash::<Blake2sHash>(),
+            "voting-key tree must be unaffected by the signing-key swap"
+        );
+        assert_ne!(
+            honest.commitment_hash::<Blake2sHash>(),
+            forged.commitment_hash::<Blake2sHash>(),
+            "v2 commitment must distinguish the swapped signing key"
+        );
+
+        let activation = upgrades::v2::ELECTION_VALIDATOR_METADATA_COMMITMENT;
+
+        // Before activation: binding dormant, the swap is invisible to the header hash (the bug).
+        assert_eq!(
+            election_header(honest.clone(), activation - 1).hash(),
+            election_header(forged.clone(), activation - 1).hash(),
+            "pre-activation the header hash must be unchanged (legacy hashing)"
+        );
+
+        // From activation on: the swap changes the authenticated header hash (the fix).
+        assert_ne!(
+            election_header(honest, activation).hash(),
+            election_header(forged, activation).hash(),
+            "from activation the header hash must bind the signing key / address"
+        );
+    }
+
+    /// Validator sets with non-contiguous or overlapping slot bands are rejected, so the
+    /// `get_band_from_slot` lookup can never panic on a crafted set (which would otherwise
+    /// crash light nodes that adopt the set verbatim).
+    #[test]
+    fn non_contiguous_slot_bands_rejected() {
+        let band = |start, end| {
+            Validator::new(
+                nimiq_keys::Address::default(),
+                BlsCompressedPublicKey::default(),
+                SchnorrPublicKey::default(),
+                start..end,
+            )
+        };
+
+        // Gap between the two bands (0..1 then 2..Policy::SLOTS leaves slot 1 uncovered).
+        let gapped = Validators::new(vec![band(0, 1), band(2, Policy::SLOTS)]);
+        assert!(gapped.validate_keys().is_err());
+
+        // Overlapping bands.
+        let overlapping = Validators::new(vec![band(0, 2), band(1, Policy::SLOTS)]);
+        assert!(overlapping.validate_keys().is_err());
     }
 
     /// Verifies that invalid BLS voting keys are caught by verify() and

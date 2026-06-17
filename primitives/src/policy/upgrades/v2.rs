@@ -19,3 +19,9 @@ pub const WARM_KEY_SIGNALING: u16 = VERSION;
 /// so an aged proof can no longer be replayed past the validity-store dedup
 /// retention. See `EquivocationProof::is_valid_at`.
 pub const EQUIVOCATION_REPORTING_WINDOW: u16 = VERSION;
+
+/// The election macro-header hash commits to the full validator set — signing keys,
+/// reward addresses and slot ranges in addition to the voting keys (via
+/// `Validators::commitment_hash`) — so a peer cannot swap them on an election block
+/// under an unchanged hash. Gated in `MacroHeader::serialize_payload_commitment`.
+pub const ELECTION_VALIDATOR_METADATA_COMMITMENT: u16 = VERSION;

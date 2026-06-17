@@ -17,7 +17,7 @@
 use std::{cmp::Ordering, collections::BTreeMap, fmt, ops::Range, slice::Iter};
 
 use nimiq_bls::{G2Projective, LazyPublicKey as LazyBlsPublicKey, PublicKey as BlsPublicKey};
-use nimiq_hash::{Hash, HashOutput};
+use nimiq_hash::{Hash, HashOutput, Hasher};
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -224,6 +224,15 @@ impl Validators {
                 .voting_key
                 .uncompress()
                 .ok_or(InvalidValidatorsError)?;
+            // The slot bands must be contiguous and start at 0, in band order. The
+            // honest chain always builds them this way (see `ValidatorsBuilder::build`),
+            // but a crafted set with gaps or overlaps would otherwise make
+            // `get_band_from_slot` land on a slot that no band covers and panic on
+            // light nodes that adopt the set verbatim. Reject such sets here so the lookup
+            // can never panic
+            if validator.slots.start != total_slots || validator.slots.end < validator.slots.start {
+                return Err(InvalidValidatorsError);
+            }
             // Use `checked_add` so a crafted validator set cannot silently wrap the
             // running total around `u16` (overflow checks are disabled in the release
             // profile). Any overflow implies far more than `Policy::SLOTS` slots, so the
@@ -253,6 +262,27 @@ impl Validators {
     /// Iterates over the validators.
     pub fn iter(&self) -> Iter<'_, Validator> {
         self.validators.iter()
+    }
+
+    /// Hashes the full validator set used in the macro header hash from v2 on: per band,
+    /// in band order, the `address`, `signing_key`, `voting_key` and slot range.
+    ///
+    /// Unlike `Validators::hash`, which commits only the voting keys (leaving the signing
+    /// keys, addresses and slot ranges swappable under an unchanged hash), this binds all
+    /// of them. It is a plain hash rather than a Merkle tree — the tree only existed for a
+    /// circuit that no longer exists.
+    pub fn commitment_hash<H: HashOutput>(&self) -> H {
+        let mut bytes = Vec::new();
+        for validator in self.iter() {
+            bytes.extend_from_slice(validator.address.as_bytes());
+            bytes.extend_from_slice(validator.signing_key.as_bytes());
+            // Raw compressed BLS bytes (like `Validators::hash`) so an invalid key can't panic
+            bytes.extend_from_slice(validator.voting_key.compressed().as_ref());
+            bytes.extend_from_slice(&validator.slots.start.to_be_bytes());
+            bytes.extend_from_slice(&validator.slots.end.to_be_bytes());
+        }
+
+        H::Builder::default().chain(&bytes).finish()
     }
 }
 
