@@ -370,7 +370,26 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
+            use serde::de::Error as _;
+
             let validators: Vec<Validator> = Deserialize::deserialize(deserializer)?;
+
+            // Reject oversized sets at the untrusted boundary: a tiny `slots:
+            // Range<u16>` can declare huge slot counts that `Validators::hash()`
+            // would materialize into GBs. A real set sums to exactly `Policy::SLOTS`.
+            // `checked_add` guards the `u16` total (release builds skip overflow checks).
+            let mut total_slots: u16 = 0;
+            for validator in &validators {
+                total_slots = total_slots
+                    .checked_add(validator.num_slots())
+                    .ok_or_else(|| D::Error::custom("validator slot total overflows u16"))?;
+            }
+            if total_slots > Policy::SLOTS {
+                return Err(D::Error::custom(
+                    "validator slot total exceeds Policy::SLOTS",
+                ));
+            }
+
             Ok(Self::new(validators))
         }
     }
