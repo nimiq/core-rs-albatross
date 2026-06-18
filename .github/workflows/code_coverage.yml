@@ -92,10 +92,10 @@ jobs:
         echo $third_piece
         
         set -o pipefail
-        echo $${{matrix.args}} | xargs cargo llvm-cov nextest --features=nimiq-zkp-component/test-prover
+        echo $${{matrix.args}} | xargs cargo llvm-cov nextest
       # Fixme: --doctest is not supported in stable. See:
       # https://github.com/taiki-e/cargo-llvm-cov/tree/7448e48b438797efb446a98ebd8ff22d3fae5ebe#known-limitations
-      # run: cargo llvm-cov --features=nimiq-zkp-component/test-prover --doctests
+      # run: cargo llvm-cov --doctests
     - name: Disk Space
       run: df -h /
     - name: Generate coverage report

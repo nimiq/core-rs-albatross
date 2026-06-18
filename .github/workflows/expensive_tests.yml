@@ -23,4 +23,4 @@ jobs:
     - name: Install cargo-nextest
       run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
     - name: Run tests
-      run: cargo nextest run --features=expensive-tests,nimiq-zkp-component/test-prover
+      run: cargo nextest run --features=expensive-tests
