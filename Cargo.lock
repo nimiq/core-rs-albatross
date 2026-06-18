@@ -2810,9 +2810,9 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
 dependencies = [
  "either",
 ]
@@ -4242,7 +4242,7 @@ dependencies = [
  "data-encoding",
  "ed25519-zebra",
  "hex",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "nimiq-database-value",
  "nimiq-hash",
  "nimiq-hash_derive",
@@ -5104,7 +5104,7 @@ version = "1.7.0"
 dependencies = [
  "curve25519-dalek",
  "hex",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "nimiq-database",
  "nimiq-database-value",
  "nimiq-database-value-derive",
@@ -5804,7 +5804,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -5817,7 +5817,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9120690fafc389a67ba3803df527d0ec9cbbc9cc45e4cc20b332996dfb672425"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
