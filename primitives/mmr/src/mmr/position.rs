@@ -154,8 +154,10 @@ fn all_ones(num: usize) -> bool {
 /// Important: This uses 1-based indexing.
 fn move_left(index: usize) -> usize {
     let bit_length = bit_length(index);
-    let most_significant_bits = 1 << (bit_length - 1); // 2^(l - 1)
-    index - (most_significant_bits as usize - 1)
+    // `1usize`, not a bare `1`: as `i32` the shift wraps for `bit_length >= 33` under release,
+    // making `index_to_height` loop forever
+    let most_significant_bits = 1usize << (bit_length - 1); // 2^(l - 1)
+    index - (most_significant_bits - 1)
 }
 
 /// To calculate the height for any index, we move left in the tree (on the same height)

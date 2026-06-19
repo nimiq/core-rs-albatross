@@ -81,6 +81,12 @@ impl<H: Merge + Clone> Proof<H> {
         let positions: Result<Vec<(Position, H)>, Error> = leaves
             .iter()
             .map(|(index, value)| {
+                // Reject out-of-range leaf numbers before the Position arithmetic, which does
+                // not terminate for huge inputs. A tree never has more leaves than nodes, so
+                // this never refuses a valid leaf
+                if *index >= self.mmr_size {
+                    return Err(Error::ProveInvalidLeaves);
+                }
                 let pos = Position::from(leaf_number_to_index(*index));
                 // Make sure that we only ever prove leaf nodes.
                 if pos.index >= self.mmr_size {
@@ -336,6 +342,35 @@ mod tests {
         mmr::{utils::test_utils::TestHash, MerkleMountainRange},
         store::{memory::MemoryStore, Store},
     };
+
+    #[test]
+    fn calculate_root_rejects_out_of_range_leaf_index() {
+        use std::{sync::mpsc, thread, time::Duration};
+
+        // A leaf number with the top bit set used to wedge `calculate_root`: under release
+        // (overflow-checks off) `leaf_number_to_index` -> `Position::from` -> `index_to_height`
+        // never terminated. Run it on a worker thread so a regression surfaces as a timeout
+        // instead of hanging the whole test binary.
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let leaf: usize = 1;
+            let leaves = [(0x8000_0000_0000_0000usize, &leaf)];
+            let proof: Proof<TestHash> = Proof {
+                mmr_size: 4,
+                nodes: vec![TestHash(42)],
+            };
+            let _ = tx.send(proof.calculate_root(&leaves));
+        });
+        match rx.recv_timeout(Duration::from_secs(10)) {
+            Ok(result) => assert_eq!(result, Err(Error::ProveInvalidLeaves)),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                panic!("calculate_root did not return within 10s: non-terminating loop")
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                panic!("worker thread panicked before returning")
+            }
+        }
+    }
 
     #[test]
     fn it_correctly_constructs_proofs() {
