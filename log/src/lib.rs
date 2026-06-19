@@ -44,7 +44,6 @@ pub static NIMIQ_MODULES: &[&str] = &[
     "nimiq_network_interface",
     "nimiq_network_libp2p",
     "nimiq_network_mock",
-    "nimiq_pow_migration",
     "nimiq_primitives",
     "nimiq_rpc",
     "nimiq_rpc_client",

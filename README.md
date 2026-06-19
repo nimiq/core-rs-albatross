@@ -34,8 +34,6 @@ For the Testnet use and more detailed information on how to connect and use the 
 - [Nimiq Albatross White Paper](https://arxiv.org/abs/1903.01589): White paper describing the consensus algorithm used in Nimiq Proof-of-Stake.
 - [Nimiq Developer Center](https://www.nimiq.com/developers/): The place for all the developer documentation and protocol design implementation.
 - [JSON-RPC Specification](https://www.nimiq.com/developers/build/set-up-your-own-node/rpc-docs/): Documentation for interacting with the network using JSON-RPC.
-- [Nimiq Proof-of-Stake Migration Technicalities](https://www.nimiq.com/developers/migration/migration-technical-details): Migration process to Nimiq Proof-of-Stake.
-- [Migration for Integrators](https://www.nimiq.com/developers/migration/migration-integrators): A guide for those who want a more in depth overview of the transitioning process from Proof-of-Work to Proof-of-Stake.
 - [Blockchain Explorer](https://nimiq.watch/): Block Explorer for the Mainnet.
 
 ## Hardware Requirements per Node Type
