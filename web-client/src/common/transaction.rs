@@ -783,13 +783,30 @@ pub struct PlainRetireStakeData {
     pub retire_stake: u64,
 }
 
+/// Whether a set signal data (warm-key) transaction replaces the entire `signalData` field or
+/// only updates the protocol-version bytes (preserving the rest).
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+pub enum PlainSignalDataUpdateMode {
+    Full,
+    Version,
+}
+
 /// JSON-compatible and human-readable format of set signal data (warm-key) data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainSetSignalDataData {
     pub raw: String,
     pub validator: String,
+    /// Whether this transaction replaces the entire signal data (`full`) or only updates the
+    /// protocol-version bytes (`version`).
+    pub mode: PlainSignalDataUpdateMode,
+    /// For `full` mode: the new signal data as a hex string, or `null` to clear it. Always `null`
+    /// in `version` mode.
     pub new_signal_data: Option<String>,
+    /// For `version` mode: the signaled protocol version, or `null` to clear it. Always `null` in
+    /// `full` mode.
+    pub version: Option<u16>,
 }
 
 /// Enum over all possible meanings of a transaction's proof.

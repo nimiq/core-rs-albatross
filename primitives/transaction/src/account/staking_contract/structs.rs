@@ -90,10 +90,24 @@ pub enum IncomingStakingTransactionData {
     },
     SetSignalData {
         validator_address: Address,
-        new_signal_data: Option<Blake2bHash>,
+        update: SignalDataUpdate,
         // This proof is signed with the validator warm key.
         proof: SignatureProof,
     },
+}
+
+/// Specifies how a [`SetSignalData`](IncomingStakingTransactionData::SetSignalData) transaction
+/// updates a validator's `signal_data` field.
+#[derive(Clone, Debug, Serialize, Deserialize, SerializedMaxSize)]
+#[repr(u8)]
+pub enum SignalDataUpdate {
+    /// Replaces the *entire* `signal_data` field (`None` clears it). This overwrites any
+    /// previously signaled protocol version.
+    Full(Option<Blake2bHash>),
+    /// Updates *only* the protocol-version bytes (the first two bytes, big-endian), preserving
+    /// the rest of `signal_data`. `None` clears the version bytes (sets them to zero). In
+    /// contrast to [`SignalDataUpdate::Full`], this is a non-destructive partial update.
+    Version(Option<u16>),
 }
 
 impl IncomingStakingTransactionData {
@@ -226,7 +240,12 @@ impl IncomingStakingTransactionData {
                 // transaction must be rejected, otherwise nodes that have not upgraded yet would
                 // diverge.
                 if protocol_version < upgrades::v2::WARM_KEY_SIGNALING {
-                    warn!("SetSignalData transactions are not allowed before protocol version {}. The offending transaction is the following:\n{:?}", upgrades::v2::WARM_KEY_SIGNALING, transaction);
+                    warn!(
+                        min_protocol_version = upgrades::v2::WARM_KEY_SIGNALING,
+                        protocol_version,
+                        ?transaction,
+                        "SetSignalData transactions are not allowed before the warm-key signaling upgrade"
+                    );
                     return Err(TransactionError::InvalidForVersion);
                 }
 

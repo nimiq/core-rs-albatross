@@ -505,7 +505,10 @@ pub trait ConsensusInterface {
     /// the transaction fee. The `new_signal_data` field is interpreted as follows:
     /// null = Clear the signal data field (set it to None).
     /// "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
-    /// Note: this transaction is only valid from protocol version `upgrades::v2::WARM_KEY_SIGNALING` onwards.
+    /// Note: this *replaces the entire signal data field*, overwriting any protocol version
+    /// previously signaled via `create_signal_version_transaction`. Use that method instead if you
+    /// only want to update the version while preserving the rest of the signal data.
+    /// This transaction is only valid from protocol version `upgrades::v2::WARM_KEY_SIGNALING` onwards.
     async fn create_set_signal_data_transaction(
         &self,
         sender_wallet: Address,
@@ -529,9 +532,12 @@ pub trait ConsensusInterface {
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     /// Returns a serialized `set_signal_data` transaction that signals support for the given
-    /// protocol `version` (or clears the signal if null), signed with the validator's signing
-    /// (warm) key. You need to provide the address of a basic account (the sender wallet) to pay
-    /// the transaction fee.
+    /// protocol `version` (or clears the signaled version if null), signed with the validator's
+    /// signing (warm) key. You need to provide the address of a basic account (the sender wallet)
+    /// to pay the transaction fee.
+    /// Note: this only updates the protocol-version bytes of the signal data and preserves the
+    /// rest of the field. To replace the entire signal data, use `create_set_signal_data_transaction`.
+    /// This transaction is only valid from protocol version `upgrades::v2::WARM_KEY_SIGNALING` onwards.
     async fn create_signal_version_transaction(
         &self,
         sender_wallet: Address,

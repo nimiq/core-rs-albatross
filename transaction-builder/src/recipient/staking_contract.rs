@@ -1,8 +1,10 @@
 use nimiq_bls::{CompressedSignature, KeyPair as BlsKeyPair};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
-use nimiq_primitives::{coin::Coin, policy::Policy};
-use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
+use nimiq_primitives::coin::Coin;
+use nimiq_transaction::account::staking_contract::{
+    IncomingStakingTransactionData, SignalDataUpdate,
+};
 
 use crate::recipient::Recipient;
 
@@ -128,7 +130,7 @@ impl StakingRecipientBuilder {
     ) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::SetSignalData {
             validator_address,
-            new_signal_data,
+            update: SignalDataUpdate::Full(new_signal_data),
             proof: Default::default(),
         });
         self
@@ -137,15 +139,20 @@ impl StakingRecipientBuilder {
     /// Convenience wrapper around [`set_signal_data`](Self::set_signal_data) that signals support
     /// for the given protocol `version` (or clears the signal if `None`). It needs to be signed by
     /// the validator's signing (warm) key.
+    ///
+    /// In contrast to [`set_signal_data`](Self::set_signal_data), this only updates the version
+    /// bytes of the signal data and preserves the rest.
     pub fn signal_version(
         &mut self,
         validator_address: Address,
         version: Option<u16>,
     ) -> &mut Self {
-        self.set_signal_data(
+        self.data = Some(IncomingStakingTransactionData::SetSignalData {
             validator_address,
-            version.map(Policy::signal_data_for_version),
-        )
+            update: SignalDataUpdate::Version(version),
+            proof: Default::default(),
+        });
+        self
     }
 
     /// This method allows to create a staker with a given (optional) delegation to a validator.

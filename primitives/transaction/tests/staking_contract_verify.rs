@@ -20,7 +20,9 @@ use nimiq_test_log::test;
 use nimiq_test_utils::test_rng;
 use nimiq_transaction::{
     account::{
-        staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
+        staking_contract::{
+            IncomingStakingTransactionData, OutgoingStakingTransactionData, SignalDataUpdate,
+        },
         AccountTransactionVerification,
     },
     SignatureProof, Transaction,
@@ -397,7 +399,7 @@ fn set_signal_data() {
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::SetSignalData {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
-            new_signal_data: Some(signal_data.clone()),
+            update: SignalDataUpdate::Full(Some(signal_data.clone())),
             proof: SignatureProof::default(),
         },
         0,
@@ -425,7 +427,7 @@ fn set_signal_data() {
     let tx_clear = make_signed_incoming_tx(
         IncomingStakingTransactionData::SetSignalData {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
-            new_signal_data: None,
+            update: SignalDataUpdate::Full(None),
             proof: SignatureProof::default(),
         },
         0,
@@ -450,7 +452,7 @@ fn set_signal_data() {
     let tx_bad = make_signed_incoming_tx(
         IncomingStakingTransactionData::SetSignalData {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
-            new_signal_data: Some(signal_data),
+            update: SignalDataUpdate::Full(Some(signal_data)),
             proof: SignatureProof::default(),
         },
         0,
