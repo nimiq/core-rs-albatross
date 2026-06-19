@@ -2,6 +2,8 @@ use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
+#[cfg(feature = "interaction-traits")]
+use nimiq_transaction::account::staking_contract::SignalDataUpdate;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "interaction-traits")]
@@ -351,7 +353,7 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         signer: &Address,
-        new_signal_data: Option<Blake2bHash>,
+        update: SignalDataUpdate,
         tx_logger: &mut TransactionLog,
     ) -> Result<SetSignalDataReceipt, AccountError> {
         // Get the validator.
@@ -369,6 +371,17 @@ impl StakingContract {
         };
 
         // All checks passed, not allowed to fail from here on!
+
+        // Resolve the update mode into the new signal data value.
+        let new_signal_data = match update {
+            // Full mode replaces the entire field (and thus any previously signaled version).
+            SignalDataUpdate::Full(signal_data) => signal_data,
+            // Version mode is a non-destructive partial update: it only touches the version bytes
+            // and preserves the rest of the existing signal data.
+            SignalDataUpdate::Version(version) => {
+                Policy::signal_data_with_version(validator.signal_data.clone(), version)
+            }
+        };
 
         // Update the validator's signal data.
         validator.signal_data = new_signal_data.clone();

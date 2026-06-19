@@ -427,9 +427,46 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
-        let native_signal_data = signal_data.map(|r| Blake2bHash::from_str(&r).unwrap());
+        let native_signal_data = signal_data
+            .map(|r| Blake2bHash::from_str(&r))
+            .transpose()
+            .map_err(|e| JsError::new(&e.to_string()))?;
         let mut recipient = Recipient::new_staking_builder();
         recipient.set_signal_data(validator.native_cloned(), native_signal_data);
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_cloned()))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from(tx))
+    }
+
+    /// Signals support for the given protocol `version` with the validator's *signing (warm) key*
+    /// by updating the validator's signal data in the staking contract. In contrast to
+    /// `newSetSignalData`, this only updates the protocol-version bytes of the signal data and
+    /// preserves the rest. Pass `undefined` as `version` to clear the signaled version.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
+    #[wasm_bindgen(js_name = newSignalVersion)]
+    pub fn new_signal_version(
+        sender: &Address,
+        validator: &Address,
+        version: Option<u16>,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.signal_version(validator.native_cloned(), version);
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder

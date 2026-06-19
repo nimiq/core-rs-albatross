@@ -1084,14 +1084,13 @@ impl ConsensusInterface for ConsensusDispatcher {
             .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
         let signing_key_pair = KeyPair::from(secret_key);
 
-        // null = clear the signal data, "0x29a4b..." = set the signal data.
-        let new_signal_data: Option<Blake2bHash> = match new_signal_data {
-            None => None,
-            Some(string) => Some(
+        // `None` = clear the signal data, "0x29a4b..." = set the signal data.
+        let new_signal_data: Option<Blake2bHash> = new_signal_data
+            .map(|string| {
                 Blake2bHash::deserialize_from_vec(&hex::decode(string)?)
-                    .map_err(|_| Error::InvalidArgument("Signal Data".to_string()))?,
-            ),
-        };
+                    .map_err(|_| Error::InvalidArgument("Signal Data".to_string()))
+            })
+            .transpose()?;
 
         let transaction = TransactionBuilder::new_set_signal_data(
             &self.get_wallet_keypair(&sender_wallet)?,

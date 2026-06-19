@@ -16,7 +16,9 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng;
 use nimiq_transaction::{
-    account::staking_contract::IncomingStakingTransactionData, inherent::Inherent, SignatureProof,
+    account::staking_contract::{IncomingStakingTransactionData, SignalDataUpdate},
+    inherent::Inherent,
+    SignatureProof,
 };
 use nimiq_utils::key_rng::SecureGenerate;
 
@@ -693,7 +695,7 @@ fn set_signal_data_works() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::SetSignalData {
             validator_address: validator_address.clone(),
-            new_signal_data: Some(new_signal_data.clone()),
+            update: SignalDataUpdate::Full(Some(new_signal_data.clone())),
             proof: SignatureProof::default(),
         },
         0,
@@ -751,7 +753,7 @@ fn set_signal_data_works() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::SetSignalData {
             validator_address: fake_address.clone(),
-            new_signal_data: Some(new_signal_data.clone()),
+            update: SignalDataUpdate::Full(Some(new_signal_data.clone())),
             proof: SignatureProof::default(),
         },
         0,
@@ -776,7 +778,7 @@ fn set_signal_data_works() {
     let invalid_tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::SetSignalData {
             validator_address: validator_address.clone(),
-            new_signal_data: Some(new_signal_data),
+            update: SignalDataUpdate::Full(Some(new_signal_data)),
             proof: SignatureProof::default(),
         },
         0,
@@ -793,6 +795,95 @@ fn set_signal_data_works() {
             ),
         Err(AccountError::InvalidSignature)
     );
+}
+
+#[test]
+fn signal_version_partial_update_works() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let mut validator_setup =
+        ValidatorSetup::new(Some(150_000_000), Policy::max_supported_version());
+    let data_store = validator_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = validator_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let block_state = BlockState::new(2, 2, Policy::max_supported_version());
+
+    let validator_address = validator_setup.validator_address.clone();
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
+
+    // First, set the full signal data to a value that carries extra bytes beyond the version.
+    let mut bytes = [0u8; 32];
+    bytes[..2].copy_from_slice(&1u16.to_be_bytes());
+    bytes[10] = 0xCD;
+    let full_signal_data = Blake2bHash(bytes);
+
+    let tx_full = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::SetSignalData {
+            validator_address: validator_address.clone(),
+            update: SignalDataUpdate::Full(Some(full_signal_data.clone())),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+    );
+    validator_setup
+        .staking_contract
+        .commit_incoming_transaction(
+            &tx_full,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to commit full signal data transaction");
+
+    // Now signal a new version: only the first two bytes change, the rest is preserved.
+    let tx_version = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::SetSignalData {
+            validator_address: validator_address.clone(),
+            update: SignalDataUpdate::Version(Some(2)),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+    );
+    let receipt = validator_setup
+        .staking_contract
+        .commit_incoming_transaction(
+            &tx_version,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to commit signal version transaction");
+
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+    let signal_data = validator.signal_data.expect("Signal data should be set");
+    assert_eq!(&signal_data.as_slice()[..2], &2u16.to_be_bytes());
+    assert_eq!(signal_data.as_slice()[10], 0xCD);
+
+    // Reverting the version update restores the previous full signal data.
+    validator_setup
+        .staking_contract
+        .revert_incoming_transaction(
+            &tx_version,
+            &block_state,
+            receipt,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to revert signal version transaction");
+
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+    assert_eq!(validator.signal_data, Some(full_signal_data));
 }
 
 #[test]

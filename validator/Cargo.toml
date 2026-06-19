@@ -72,6 +72,7 @@ nimiq-test-log = { workspace = true }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/14167
 nimiq-test-utils = { workspace = true }
+nimiq-transaction = { workspace = true }
 # Self dev-dependency so that this crate's own tests are built with the
 # `test-accessors` feature enabled (which exposes test-only accessors). This does not
 # affect regular `cargo build`, where dev-dependencies are not compiled.
