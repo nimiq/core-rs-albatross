@@ -1,5 +1,7 @@
 use nimiq_serde::Deserialize;
-use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
+use nimiq_transaction::account::staking_contract::{
+    IncomingStakingTransactionData, SignalDataUpdate,
+};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "primitives")]
@@ -9,8 +11,8 @@ use crate::common::{
     transaction::{
         PlainAddStakeData, PlainCreateStakerData, PlainCreateValidatorData, PlainRawData,
         PlainRetireStakeData, PlainSetActiveStakeData, PlainSetSignalDataData,
-        PlainTransactionProof, PlainTransactionRecipientData, PlainUpdateStakerData,
-        PlainUpdateValidatorData, PlainValidatorData,
+        PlainSignalDataUpdateMode, PlainTransactionProof, PlainTransactionRecipientData,
+        PlainUpdateStakerData, PlainUpdateValidatorData, PlainValidatorData,
     },
 };
 
@@ -129,13 +131,27 @@ impl StakingContract {
             }),
             IncomingStakingTransactionData::SetSignalData {
                 validator_address,
-                new_signal_data,
+                update,
                 proof: _proof,
-            } => PlainTransactionRecipientData::SetSignalData(PlainSetSignalDataData {
-                raw: hex::encode(bytes),
-                validator: validator_address.to_user_friendly_address(),
-                new_signal_data: new_signal_data.map(hex::encode),
-            }),
+            } => {
+                let (mode, new_signal_data, version) = match update {
+                    SignalDataUpdate::Full(signal_data) => (
+                        PlainSignalDataUpdateMode::Full,
+                        signal_data.map(hex::encode),
+                        None,
+                    ),
+                    SignalDataUpdate::Version(version) => {
+                        (PlainSignalDataUpdateMode::Version, None, version)
+                    }
+                };
+                PlainTransactionRecipientData::SetSignalData(PlainSetSignalDataData {
+                    raw: hex::encode(bytes),
+                    validator: validator_address.to_user_friendly_address(),
+                    mode,
+                    new_signal_data,
+                    version,
+                })
+            }
         })
     }
 

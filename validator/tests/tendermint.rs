@@ -14,6 +14,7 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, test_network::TestNetwork, test_rng,
 };
+use nimiq_transaction::account::staking_contract::SignalDataUpdate;
 use nimiq_validator::{aggregation::tendermint::proposal::Header, tendermint::TendermintProtocol};
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 
@@ -327,7 +328,7 @@ fn signal_support(
             &mut store,
             validator_address,
             &signer,
-            version.map(Policy::signal_data_for_version),
+            SignalDataUpdate::Version(version),
             &mut TransactionLog::empty(),
         )
         .expect("Failed to set signal data");

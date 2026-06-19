@@ -8,6 +8,7 @@ use nimiq_transaction::{
 };
 use thiserror::Error;
 
+use crate::recipient::staking_contract::StakingRecipientBuilder;
 pub use crate::{proof::TransactionProofBuilder, recipient::Recipient, sender::Sender};
 
 pub mod proof;
@@ -1481,6 +1482,60 @@ impl TransactionBuilder {
         let mut recipient = Recipient::new_staking_builder();
         recipient.set_signal_data(validator_address, new_signal_data);
 
+        Self::finalize_signal_data_transaction(
+            key_pair,
+            signing_key_pair,
+            recipient,
+            fee,
+            validity_start_height,
+            network_id,
+        )
+    }
+
+    /// Convenience wrapper around [`new_set_signal_data`](Self::new_set_signal_data) that signals
+    /// support for the given protocol `version` (or clears the signal if `None`), signed with the
+    /// validator's signing (warm) key.
+    ///
+    /// In contrast to [`new_set_signal_data`](Self::new_set_signal_data), this only updates the
+    /// version bytes of the signal data and preserves the rest of the field.
+    ///
+    /// # Note
+    ///
+    /// This is a *signaling transaction*. It is only valid from protocol version
+    /// `upgrades::v2::WARM_KEY_SIGNALING` onwards.
+    pub fn new_signal_version(
+        key_pair: &KeyPair,
+        validator_address: Address,
+        signing_key_pair: &KeyPair,
+        version: Option<u16>,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.signal_version(validator_address, version);
+
+        Self::finalize_signal_data_transaction(
+            key_pair,
+            signing_key_pair,
+            recipient,
+            fee,
+            validity_start_height,
+            network_id,
+        )
+    }
+
+    /// Assembles and signs a `SetSignalData` transaction from an already-configured staking
+    /// recipient builder. Shared by [`new_set_signal_data`](Self::new_set_signal_data) and
+    /// [`new_signal_version`](Self::new_signal_version).
+    fn finalize_signal_data_transaction(
+        key_pair: &KeyPair,
+        signing_key_pair: &KeyPair,
+        recipient: StakingRecipientBuilder,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
         let mut builder = Self::new();
         builder
             .with_sender(Sender::new_basic(Address::from(key_pair)))
@@ -1500,29 +1555,6 @@ impl TransactionBuilder {
             }
             _ => unreachable!(),
         }
-    }
-
-    /// Convenience wrapper around [`new_set_signal_data`](Self::new_set_signal_data) that signals
-    /// support for the given protocol `version` (or clears the signal if `None`), signed with the
-    /// validator's signing (warm) key.
-    pub fn new_signal_version(
-        key_pair: &KeyPair,
-        validator_address: Address,
-        signing_key_pair: &KeyPair,
-        version: Option<u16>,
-        fee: Coin,
-        validity_start_height: u32,
-        network_id: NetworkId,
-    ) -> Transaction {
-        Self::new_set_signal_data(
-            key_pair,
-            validator_address,
-            signing_key_pair,
-            version.map(Policy::signal_data_for_version),
-            fee,
-            validity_start_height,
-            network_id,
-        )
     }
 
     /// Creates a transaction that retires a validator.
