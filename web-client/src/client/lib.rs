@@ -39,9 +39,9 @@ use web_sys::MessageEvent;
 use crate::{
     client::{
         account::{
-            PlainAccount, PlainAccountArrayType, PlainAccountType, PlainStaker,
-            PlainStakerArrayType, PlainStakerType, PlainValidator, PlainValidatorArrayType,
-            PlainValidatorType,
+            PlainAccount, PlainAccountArrayType, PlainAccountType, PlainElectedValidator,
+            PlainElectedValidatorArrayType, PlainStaker, PlainStakerArrayType, PlainStakerType,
+            PlainValidator, PlainValidatorArrayType, PlainValidatorType,
         },
         block::{PlainBlock, PlainBlockType},
         bls_cache::BlsCache,
@@ -554,6 +554,29 @@ impl Client {
         let addresses = Client::unpack_addresses(addresses)?;
         let plain_validators = self.get_plain_validators(addresses).await?;
         Ok(serde_wasm_bindgen::to_value(&plain_validators)?.into())
+    }
+
+    /// Returns the validators elected for the current epoch, together with the number of validator
+    /// slots assigned to each of them.
+    ///
+    /// The slot distribution is fixed for the duration of an epoch and is the metric used on-chain
+    /// to evaluate support for protocol upgrades. Combine this with {@link Client.getValidators} to
+    /// relate slot counts to each validator's stake and signal data.
+    ///
+    /// Throws if the elected validators are not available (e.g. before consensus is established).
+    #[wasm_bindgen(js_name = getElectedValidators)]
+    pub async fn get_elected_validators(&self) -> Result<PlainElectedValidatorArrayType, JsError> {
+        let consensus_proxy = self.inner.consensus_proxy();
+        let blockchain = consensus_proxy.blockchain.read();
+        let validators = blockchain
+            .current_validators()
+            .ok_or_else(|| JsError::new("No elected validators available"))?;
+        let elected: Vec<PlainElectedValidator> = validators
+            .validators
+            .iter()
+            .map(PlainElectedValidator::from)
+            .collect();
+        Ok(serde_wasm_bindgen::to_value(&elected)?.into())
     }
 
     /// Sends a transaction to the network and returns {@link PlainTransactionDetails}.

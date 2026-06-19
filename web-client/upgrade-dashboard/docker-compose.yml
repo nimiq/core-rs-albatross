@@ -1,0 +1,49 @@
+name: nimiq-upgrade-dashboard
+
+# Build and serve the upgrade-signaling dashboard entirely in containers — no Rust,
+# Node or wasm tooling needed on the host.
+#
+#   # 1. Build web-client/dist (with the new getElectedValidators method). One-shot.
+#   docker compose -f web-client/upgrade-dashboard/docker-compose.yml run --rm build
+#
+#   # 2. Serve it, then open http://localhost:8000/upgrade-dashboard/
+#   docker compose -f web-client/upgrade-dashboard/docker-compose.yml up serve
+
+services:
+  # Rust -> WASM build. Rebuilds the `web` target AND regenerates the launcher + lib so the
+  # whole dist is internally consistent (the launcher/lib are gitignored build artifacts).
+  # --skip-wasm-opt avoids binaryen (and its x86_64-only download) — fine for local use.
+  build:
+    build:
+      context: .
+    image: nimiq-webclient-wasm-builder
+    working_dir: /repo/web-client
+    environment:
+      # cc-rs already prefers clang for wasm targets; set it explicitly to be safe.
+      CC_wasm32_unknown_unknown: clang
+      CARGO_TARGET_DIR: /repo/target
+      # extras' test devDep (vitest) wants node >=20; the build only needs tsup (fine on 18),
+      # so skip the engine check during `yarn install`.
+      YARN_IGNORE_ENGINES: "true"
+    command: ["./scripts/build.sh", "--only", "web", "--skip-wasm-opt"]
+    volumes:
+      - ../../:/repo                                  # repo root -> /repo (dist writes back to host)
+      - cargo-registry:/usr/local/cargo/registry      # cache crate downloads between runs
+      - cargo-git:/usr/local/cargo/git
+      - wasm-target:/repo/target                       # cache build artifacts (and keep host target clean)
+      - extras-node-modules:/repo/web-client/extras/node_modules  # keep node_modules off the host
+
+  # Static file server with correct .mjs / .wasm MIME types (Caddy handles both natively).
+  serve:
+    image: caddy:2-alpine
+    command: ["caddy", "file-server", "--root", "/srv", "--listen", ":80", "--browse"]
+    ports:
+      - "8000:80"
+    volumes:
+      - ../../web-client:/srv:ro
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  wasm-target:
+  extras-node-modules:

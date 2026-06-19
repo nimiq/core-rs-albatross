@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nimiq Protocol Upgrade Signaling</title>
+  </head>
+  <body>
+    <script type="module" src="./dashboard.js"></script>
+
+    <header>
+      <h1>Protocol Upgrade Signaling</h1>
+      <div class="status-line">
+        <span>Consensus: <strong id="consensus" class="connecting">connecting</strong></span>
+        <span>Peers: <strong id="peers">0</strong></span>
+        <span>Block: <strong id="block">-</strong></span>
+        <span>Epoch: <strong id="epoch">-</strong></span>
+        <span>Version: <strong id="version">-</strong> &rarr; Target <strong id="target-version">-</strong></span>
+        <span class="muted">Updated: <span id="updated">never</span></span>
+      </div>
+    </header>
+
+    <!-- Overall verdict: upgrade activates only when BOTH metrics reach the threshold. -->
+    <div id="verdict" class="verdict pending">
+      Waiting for consensus&hellip;
+    </div>
+
+    <section class="metrics">
+      <div class="card">
+        <div class="card-title">Active stake signaling</div>
+        <div class="card-value"><span id="stake-pct">–</span><span class="pct">%</span></div>
+        <div class="bar"><div class="bar-fill" id="stake-bar"></div><div class="threshold"></div></div>
+        <div class="card-detail" id="stake-detail">&nbsp;</div>
+        <div class="card-badge" id="stake-badge">&nbsp;</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Slots signaling</div>
+        <div class="card-value"><span id="slots-pct">–</span><span class="pct">%</span></div>
+        <div class="bar"><div class="bar-fill" id="slots-bar"></div><div class="threshold"></div></div>
+        <div class="card-detail" id="slots-detail">&nbsp;</div>
+        <div class="card-badge" id="slots-badge">&nbsp;</div>
+      </div>
+    </section>
+
+    <section class="controls">
+      <input type="search" id="search" placeholder="Filter by address&hellip;" />
+      <select id="filter">
+        <option value="all">All validators</option>
+        <option value="supporting">Signaling target version</option>
+        <option value="other">Signaling other version</option>
+        <option value="none">Not signaling</option>
+      </select>
+      <button id="refresh">Refresh</button>
+      <span class="muted" id="count">&nbsp;</span>
+    </section>
+
+    <table id="validators">
+      <thead>
+        <tr>
+          <th>Validator</th>
+          <th class="num">Stake (NIM)</th>
+          <th class="num">Stake %</th>
+          <th class="num">Slots</th>
+          <th class="num">Slot %</th>
+          <th class="num">Signaled</th>
+          <th>Supports target</th>
+        </tr>
+      </thead>
+      <tbody id="validators-body">
+        <tr><td colspan="7" class="muted">No data yet.</td></tr>
+      </tbody>
+    </table>
+
+    <style>
+      :root {
+        --bg: #0d1117; --fg: #e6edf3; --muted: #8b949e; --card: #161b22;
+        --border: #30363d; --accent: #0582ca; --ok: #2ea043; --no: #c9510c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, sans-serif; margin: 0; padding: 24px 32px;
+        background: var(--bg); color: var(--fg); line-height: 1.45;
+      }
+      h1 { font-size: 22px; margin: 0 0 8px; }
+      .status-line { display: flex; flex-wrap: wrap; gap: 18px; font-size: 14px; }
+      .muted { color: var(--muted); }
+      #consensus.connecting { color: firebrick; }
+      #consensus.syncing { color: orange; }
+      #consensus.established { color: var(--ok); }
+
+      .verdict {
+        margin: 20px 0; padding: 14px 18px; border-radius: 8px; font-weight: 600;
+        border: 1px solid var(--border);
+      }
+      .verdict.pending { background: #1c2128; color: var(--muted); }
+      .verdict.ready { background: rgba(46,160,67,.15); color: #56d364; border-color: var(--ok); }
+      .verdict.not-ready { background: rgba(201,81,12,.12); color: #e0823d; border-color: var(--no); }
+
+      .metrics { display: flex; gap: 20px; flex-wrap: wrap; }
+      .card {
+        flex: 1 1 280px; background: var(--card); border: 1px solid var(--border);
+        border-radius: 10px; padding: 18px 20px;
+      }
+      .card-title { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+      .card-value { font-size: 44px; font-weight: 700; line-height: 1.1; margin: 6px 0 12px; }
+      .card-value .pct { font-size: 22px; color: var(--muted); margin-left: 2px; }
+      .bar {
+        position: relative; height: 12px; background: #21262d; border-radius: 6px; overflow: hidden;
+      }
+      .bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width .4s ease; }
+      .bar-fill.ok { background: var(--ok); }
+      /* 80% threshold marker */
+      .threshold { position: absolute; top: -2px; bottom: -2px; left: 80%; width: 2px; background: #f0c674; }
+      .card-detail { margin-top: 10px; font-size: 14px; color: var(--muted); }
+      .card-badge { margin-top: 6px; font-size: 13px; font-weight: 600; }
+      .card-badge.ok { color: #56d364; }
+      .card-badge.no { color: #e0823d; }
+
+      .controls { display: flex; gap: 12px; align-items: center; margin: 26px 0 12px; flex-wrap: wrap; }
+      .controls input, .controls select, .controls button {
+        background: var(--card); color: var(--fg); border: 1px solid var(--border);
+        border-radius: 6px; padding: 7px 10px; font-size: 14px;
+      }
+      .controls input { min-width: 240px; }
+      .controls button { cursor: pointer; }
+      .controls button:hover { border-color: var(--accent); }
+
+      table { width: 100%; border-collapse: collapse; font-size: 14px; }
+      th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+      th { color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; }
+      th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      td.addr { font-family: ui-monospace, monospace; font-size: 12px; white-space: nowrap; }
+      tr.supporting td { background: rgba(46,160,67,.06); }
+      .tag { padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+      .tag.ok { background: rgba(46,160,67,.18); color: #56d364; }
+      .tag.no { background: rgba(139,148,158,.18); color: var(--muted); }
+      .tag.other { background: rgba(240,198,116,.18); color: #f0c674; }
+    </style>
+  </body>
+</html>
