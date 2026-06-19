@@ -133,6 +133,15 @@ pub trait AbstractBlockchain {
                 .collect()
         };
 
+        // A malformed `disabled_slots` set can disable every in-range slot while having a
+        // popcount != Policy::SLOTS (e.g. by carrying extra out-of-range bits), which leaves
+        // `slots` empty and turns the `offset % slots.len()` below into a division by zero.
+        // Treat an empty viable set like the all-disabled case and accept any slot so that no
+        // input can crash the node
+        if slots.is_empty() {
+            slots = (0..Policy::SLOTS).collect();
+        }
+
         // Shuffle the slots vector using the Fisher–Yates shuffle.
         for i in (1..slots.len()).rev() {
             let r = rng.next_u64_below((i + 1) as u64) as usize;

@@ -84,6 +84,9 @@ pub enum BlockError {
     #[error("Incorrect validators")]
     InvalidValidators,
 
+    #[error("Invalid punished set")]
+    InvalidPunishedSet,
+
     #[error("Incorrect reward transactions")]
     InvalidRewardTransactions,
 

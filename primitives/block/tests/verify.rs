@@ -758,3 +758,66 @@ fn test_verify_election_macro_body() {
         Ok(())
     );
 }
+
+#[test]
+fn test_verify_rejects_out_of_range_punished_set() {
+    // Build a valid election macro header so the punished-set check is the only thing that can fail.
+    let mut validators = ValidatorsBuilder::new();
+    for _ in 0..Policy::SLOTS {
+        validators.push(
+            Address::default(),
+            BlsPublicKey::new(G2Projective::generator()).compress(),
+            SchnorrPublicKey::default(),
+        );
+    }
+
+    let mut macro_header = MacroHeader {
+        network: NetworkId::UnitAlbatross,
+        version: Policy::max_supported_version(),
+        block_number: Policy::genesis_block_number() + Policy::blocks_per_epoch(),
+        round: 0,
+        timestamp: 0,
+        interlink: Some(vec![]),
+        extra_data: vec![0; 30],
+        validators: Some(validators.build()),
+        ..Default::default()
+    };
+
+    let macro_body = MacroBody {
+        transactions: vec![],
+    };
+    macro_header.body_root = macro_body.hash();
+
+    // A punished set that references an out-of-range slot (index == SLOTS) must be rejected. It
+    // could otherwise disable every in-range slot while evading the all-disabled fast path in
+    // `compute_slot_number` and crash light/pico clients with a division by zero
+    let mut punished_set = BitSet::new();
+    punished_set.insert(Policy::SLOTS as usize);
+    macro_header.next_batch_initial_punished_set = punished_set;
+
+    let block = Block::Macro(MacroBlock {
+        header: macro_header.clone(),
+        justification: None,
+        body: Some(macro_body.clone()),
+    });
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
+        Err(BlockError::InvalidPunishedSet)
+    );
+
+    // An in-range punished set (including the boundary slot SLOTS - 1) is accepted.
+    let mut punished_set = BitSet::new();
+    punished_set.insert(0);
+    punished_set.insert(Policy::SLOTS as usize - 1);
+    macro_header.next_batch_initial_punished_set = punished_set;
+
+    let block = Block::Macro(MacroBlock {
+        header: macro_header,
+        justification: None,
+        body: Some(macro_body),
+    });
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
+}

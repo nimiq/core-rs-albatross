@@ -34,5 +34,7 @@ nimiq-vrf = { workspace = true }
 rand = "0.10"
 
 nimiq-blockchain = { workspace = true }
+nimiq-collections = { workspace = true }
+nimiq-serde = { workspace = true }
 nimiq-test-utils = { workspace = true }
 nimiq-test-log = { workspace = true }

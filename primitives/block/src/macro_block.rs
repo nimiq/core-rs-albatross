@@ -250,6 +250,17 @@ impl MacroHeader {
                 .validate_keys()
                 .map_err(|_| BlockError::InvalidValidators)?;
         }
+        // The punished set may only reference in-range validator slots. An out-of-range bit
+        // would let a malformed set disable every in-range slot while evading the all-disabled
+        // fast path in `compute_slot_number`, which would otherwise divide by zero on light/pico
+        // clients that adopt this header without recomputing the set from the staking contract
+        if self
+            .next_batch_initial_punished_set
+            .iter()
+            .any(|slot| slot >= Policy::SLOTS as usize)
+        {
+            return Err(BlockError::InvalidPunishedSet);
+        }
         Ok(())
     }
 
