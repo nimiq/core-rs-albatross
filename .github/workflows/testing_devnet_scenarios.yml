@@ -51,7 +51,7 @@ jobs:
         tool-cache: true
         large-packages: false
     - name: Checkout testing branch
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         ref: iicruz/testing-tendermint-ci-fails
     - name: Verify branch

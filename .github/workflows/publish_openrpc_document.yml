@@ -12,7 +12,7 @@ jobs:
     name: Build nimiq-rpc-schema with release flag
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Build binary in release mode
         run: |
