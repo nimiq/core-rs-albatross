@@ -9,6 +9,7 @@ pub mod test_network;
 pub mod test_transaction;
 pub mod transactions;
 pub mod validator;
+pub mod versions;
 
 pub use self::test_rng::test_rng;
 
