@@ -1328,6 +1328,16 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
         let missing_range = self.get_missing_range(txn);
         let mut result = BTreeMap::default();
         for (key, value) in diff.0 {
+            // The ROOT key can never hold a value; routing it into the complete
+            // branch (`put_raw`) panics on `put_value().unwrap()` (RootCantHaveValue),
+            // and the only guard there is a release-stripped `debug_assert!`. The
+            // missing branch is already guarded; guard the complete branch too so an
+            // attacker-supplied diff entry cannot crash the node.
+            if key.is_empty() {
+                return Err(MerkleRadixTrieError::InvalidChunk(
+                    "diff key must not be the root key",
+                ));
+            }
             if self.is_within_complete_part(&key, &missing_range) {
                 let old_value = self.get_raw(txn, &key);
                 if let Some(value) = value {
@@ -2352,6 +2362,56 @@ mod tests {
 
         let mut diff_map = BTreeMap::new();
         diff_map.insert(KeyNibbles::ROOT, None);
+        match trie.apply_diff(&mut txn, TrieDiff(diff_map)) {
+            Err(MerkleRadixTrieError::InvalidChunk(_)) => {}
+            other => panic!("expected InvalidChunk(_), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn apply_diff_root_key_in_complete_part_returns_error_instead_of_panicking() {
+        // A ROOT-keyed diff entry on a PARTIALLY-synced incomplete trie
+        // (missing_range.start != ROOT) routes to the COMPLETE branch -> put_raw ->
+        // put_value().unwrap() -> RootCantHaveValue panic. The only guard there was a
+        // release-stripped debug_assert!. The other root-key test only covers a
+        // FRESH incomplete trie (start == ROOT -> already-guarded missing branch).
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let original = MerkleRadixTrie::new(&env, TestTrie);
+        let trie = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+
+        let key_1: KeyNibbles = "413f22".parse().unwrap();
+        let key_2: KeyNibbles = "413".parse().unwrap();
+        let key_3: KeyNibbles = "413f227fa".parse().unwrap();
+        let key_4: KeyNibbles = "413b391".parse().unwrap();
+        original.put(&mut txn, &key_1, 80085).unwrap();
+        original.put(&mut txn, &key_2, 999).unwrap();
+        original.put(&mut txn, &key_3, 1337).unwrap();
+        original.put(&mut txn, &key_4, 6969).unwrap();
+        original.update_root(&mut txn).unwrap();
+        let hash = original.root_hash_assert(&txn);
+
+        // Partially sync: a single limit-0 chunk from ROOT advances the missing
+        // range's start past ROOT while leaving the trie incomplete.
+        let chunk = original.get_chunk_with_proof(&txn, KeyNibbles::ROOT.., 0);
+        trie.put_chunk(&mut txn, KeyNibbles::ROOT, chunk, hash)
+            .unwrap();
+        assert!(!trie.is_complete(&txn));
+
+        let missing_range = trie.get_missing_range(&txn);
+        let start = missing_range.as_ref().unwrap().start.clone();
+        assert!(
+            !start.is_empty(),
+            "setup: missing-range start must be non-empty"
+        );
+        assert!(
+            trie.is_within_complete_part(&KeyNibbles::ROOT, &missing_range),
+            "setup: ROOT must route to the complete (put_raw) branch",
+        );
+
+        let mut diff_map = BTreeMap::new();
+        diff_map.insert(KeyNibbles::ROOT, Some(vec![1u8, 2, 3]));
         match trie.apply_diff(&mut txn, TrieDiff(diff_map)) {
             Err(MerkleRadixTrieError::InvalidChunk(_)) => {}
             other => panic!("expected InvalidChunk(_), got {:?}", other),
