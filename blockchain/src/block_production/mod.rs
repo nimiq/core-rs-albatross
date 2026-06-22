@@ -431,7 +431,7 @@ impl BlockProducer {
 
         // Calculate the reward transactions.
         let reward_transactions =
-            blockchain.create_reward_transactions(macro_header, &staking_contract);
+            blockchain.create_reward_transactions(macro_header, &staking_contract, txn_option);
 
         // Create the body for the macro block.
         Ok(MacroBody {

@@ -1,17 +1,103 @@
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_genesis::NetworkId;
-use nimiq_keys::{KeyPair, PrivateKey};
-use nimiq_primitives::policy::Policy;
+use nimiq_keys::{Address, KeyPair, PrivateKey};
+use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_serde::Deserialize;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
-    blockchain::{generate_transactions, REWARD_KEY},
+    blockchain::{generate_transactions, validator_key, REWARD_KEY},
 };
+use nimiq_transaction::Transaction;
+use nimiq_transaction_builder::TransactionBuilder;
 
 fn key_pair_with_funds() -> KeyPair {
     let priv_key = PrivateKey::deserialize_from_vec(&hex::decode(REWARD_KEY).unwrap()).unwrap();
     priv_key.into()
+}
+
+fn update_validator_reward_address_tx(
+    new_reward_address: Address,
+    validity_start_height: u32,
+) -> Transaction {
+    TransactionBuilder::new_update_validator(
+        &key_pair_with_funds(),
+        &validator_key(),
+        None,
+        None,
+        Some(new_reward_address),
+        None,
+        Coin::ZERO,
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    )
+}
+
+/// Regression test: `create_reward_transactions` must read reward recipients from the in-flight
+/// write txn, not a fresh committed snapshot. During a rebranch all fork blocks are applied on one
+/// uncommitted txn, so an `UpdateValidator` that changed a validator's reward_address earlier in
+/// the same batch is only visible there. Reading committed state recomputed the OLD address while
+/// the macro body (built over committed state by the producer) carries the NEW one, so the
+/// rebranching node rejected (`InvalidRewardTransactions` -> `InvalidFork`) a macro block that
+/// extending nodes accept -- a deterministic liveness split between two honest nodes.
+#[test]
+fn it_can_rebranch_with_reward_address_change() {
+    let producer1 = TemporaryBlockProducer::new(); // superior fork carrying the UpdateValidator
+    let producer2 = TemporaryBlockProducer::new(); // victim/inferior fork that rebranches
+    let new_reward_address = Address([0x11u8; 20]);
+
+    // Shared committed prefix through the first macro block (rewards empty there).
+    loop {
+        let b = producer1.next_block(vec![], false);
+        let is_macro = b.is_macro();
+        assert_eq!(producer2.push(b), Ok(PushResult::Extended));
+        if is_macro {
+            break;
+        }
+    }
+    let m1 = producer1.blockchain.read().block_number();
+    assert_eq!(Policy::batch_at(m1), 1);
+    let m2 = Policy::macro_block_after(m1 + 1);
+    assert_eq!(Policy::batch_at(m2), 2);
+
+    // Fork in batch 2: producer2 builds an inferior (skip-block) chain; producer1's second block
+    // carries the UpdateValidator that sets the NEW reward address.
+    let superior_first = producer1.next_block(vec![], false);
+    producer2.next_block(vec![], true);
+    assert_eq!(producer2.push(superior_first), Ok(PushResult::Ignored));
+
+    let update_tx = update_validator_reward_address_tx(
+        new_reward_address.clone(),
+        producer1.blockchain.read().block_number() + 1,
+    );
+    let superior_update = producer1.next_block_with_txs(vec![], false, vec![update_tx]);
+    producer2.next_block(vec![], false);
+    assert_eq!(producer2.push(superior_update), Ok(PushResult::Ignored));
+
+    while producer1.blockchain.read().block_number() < m2 - 1 {
+        let sup = producer1.next_block(vec![], false);
+        producer2.next_block(vec![], false);
+        assert_eq!(producer2.push(sup), Ok(PushResult::Ignored));
+    }
+
+    let macro_block = producer1.next_block(vec![], false);
+    assert!(macro_block.is_macro());
+    assert_eq!(producer1.blockchain.read().block_number(), m2);
+
+    // The rebranching victim must accept the same macro block extending nodes accept. Before the
+    // fix this returned `Err(InvalidFork)` because rewards were recomputed from stale committed
+    // state (OLD reward address).
+    let result = producer2.push(macro_block);
+    assert_eq!(
+        result,
+        Ok(PushResult::Rebranched),
+        "rebranching victim must accept the macro block extending nodes accept; got {result:?}"
+    );
+
+    let b1 = producer1.blockchain.read();
+    let b2 = producer2.blockchain.read();
+    assert_eq!(b1.state.head_hash, b2.state.head_hash);
+    assert_eq!(b1.state.macro_head_hash, b2.state.macro_head_hash);
 }
 
 #[test]

@@ -354,7 +354,8 @@ pub fn next_macro_block_proposal(
         ..Default::default()
     };
 
-    let reward_transactions = blockchain.create_reward_transactions(&header, &staking_contract);
+    let reward_transactions =
+        blockchain.create_reward_transactions(&header, &staking_contract, None);
 
     let body = MacroBody {
         transactions: reward_transactions,

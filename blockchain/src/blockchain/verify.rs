@@ -315,7 +315,7 @@ impl Blockchain {
         }
 
         let reward_transactions =
-            self.create_reward_transactions(&macro_block.header, &staking_contract);
+            self.create_reward_transactions(&macro_block.header, &staking_contract, Some(txn));
 
         let body = macro_block
             .body

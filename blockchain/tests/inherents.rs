@@ -60,7 +60,7 @@ fn it_can_create_batch_finalization_inherents() {
     };
 
     let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract);
+        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
 
     let body = MacroBody {
         transactions: reward_transactions,
@@ -125,7 +125,7 @@ fn it_can_create_batch_finalization_inherents() {
 
     let staking_contract = blockchain.get_staking_contract();
     let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract);
+        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
     macro_header.next_batch_initial_punished_set = staking_contract
         .punished_slots
         .next_batch_initial_punished_set(macro_header.block_number, &active_validators);
@@ -241,7 +241,7 @@ fn it_can_penalize_delayed_batch() {
 
     let staking_contract = blockchain.get_staking_contract();
     let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract);
+        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
 
     let body = MacroBody {
         transactions: reward_transactions,
@@ -712,7 +712,7 @@ fn it_can_create_version_upgrade_inherents() {
     };
 
     let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract);
+        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
 
     let body = MacroBody {
         transactions: reward_transactions,
@@ -851,7 +851,7 @@ fn it_burns_all_rewards_when_all_slots_penalized() {
     // This must not panic — previously it would trigger
     // "Must have positive total probability" in DiscreteDistribution::new().
     let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract);
+        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
 
     // All rewards should be burned: expect exactly one burn transaction.
     assert_eq!(
