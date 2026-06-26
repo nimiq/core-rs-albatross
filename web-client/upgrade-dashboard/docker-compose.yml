@@ -25,7 +25,7 @@ services:
       # extras' test devDep (vitest) wants node >=20; the build only needs tsup (fine on 18),
       # so skip the engine check during `yarn install`.
       YARN_IGNORE_ENGINES: "true"
-    command: ["./scripts/build.sh", "--only", "web", "--skip-wasm-opt"]
+    command: ["./scripts/build.sh", "--only", "web,types", "--skip-wasm-opt"]
     volumes:
       - ../../:/repo                                  # repo root -> /repo (dist writes back to host)
       - cargo-registry:/usr/local/cargo/registry      # cache crate downloads between runs
