@@ -113,7 +113,7 @@ ark-ec = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-ff = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 
 [workspace.package]
-version = "1.7.0"
+version = "1.7.1"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2024"
 homepage = "https://nimiq.com"
