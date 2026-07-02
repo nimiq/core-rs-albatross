@@ -1,5 +1,5 @@
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountType;
+use nimiq_primitives::{account::AccountType, policy::upgrades};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 
 use crate::{
@@ -13,9 +13,18 @@ pub struct OracleContractVerifier {}
 impl AccountTransactionVerification for OracleContractVerifier {
     fn verify_incoming_transaction(
         transaction: &Transaction,
-        _protocol_version: u16,
+        protocol_version: u16,
     ) -> Result<(), TransactionError> {
         assert_eq!(transaction.recipient_type, AccountType::Oracle);
+
+        // Oracle contracts only activate with the v3 fork.
+        if protocol_version < upgrades::v3::BRIDGE_ORACLE_CONTRACTS {
+            warn!(
+                "Oracle contracts are not enabled in this protocol version. The offending transaction is the following:\n{:?}",
+                transaction
+            );
+            return Err(TransactionError::InvalidForRecipient);
+        }
 
         if transaction
             .flags
@@ -49,9 +58,18 @@ impl AccountTransactionVerification for OracleContractVerifier {
 
     fn verify_outgoing_transaction(
         transaction: &Transaction,
-        _protocol_version: u16,
+        protocol_version: u16,
     ) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::Oracle);
+
+        // Oracle contracts only activate with the v3 fork.
+        if protocol_version < upgrades::v3::BRIDGE_ORACLE_CONTRACTS {
+            warn!(
+                "Oracle contracts are not enabled in this protocol version. The offending transaction is the following:\n{:?}",
+                transaction
+            );
+            return Err(TransactionError::InvalidForSender);
+        }
 
         if !transaction.sender_data.is_empty() {
             warn!(

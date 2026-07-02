@@ -9,3 +9,8 @@ pub const VERSION: u16 = 3;
 
 // --- Changes shipping in v3 -------------------------------------------------
 // Add one `pub const MY_CHANGE: u16 = VERSION;` line per change below.
+
+/// Bridge and oracle contracts for cross-chain asset transfers. Transactions
+/// involving `AccountType::Bridge` or `AccountType::Oracle` are invalid in
+/// blocks before this version.
+pub const BRIDGE_ORACLE_CONTRACTS: u16 = VERSION;
