@@ -3,7 +3,7 @@
 // This module contains all bridge contract functionality for cross-chain asset transfers.
 // The main implementation is in bridge_contract.rs, with transaction data structures in structs.rs
 
-use nimiq_primitives::account::AccountType;
+use nimiq_primitives::{account::AccountType, policy::upgrades};
 
 use crate::{
     account::AccountTransactionVerification, Transaction, TransactionError, TransactionFlags,
@@ -23,9 +23,18 @@ pub struct BridgeContractVerifier {}
 impl AccountTransactionVerification for BridgeContractVerifier {
     fn verify_incoming_transaction(
         transaction: &Transaction,
-        _protocol_version: u16,
+        protocol_version: u16,
     ) -> Result<(), TransactionError> {
         assert_eq!(transaction.recipient_type, AccountType::Bridge);
+
+        // Bridge contracts only activate with the v3 fork.
+        if protocol_version < upgrades::v3::BRIDGE_ORACLE_CONTRACTS {
+            warn!(
+                ?transaction,
+                "Bridge contracts are not enabled in this protocol version",
+            );
+            return Err(TransactionError::InvalidForRecipient);
+        }
 
         if transaction
             .flags
@@ -56,9 +65,18 @@ impl AccountTransactionVerification for BridgeContractVerifier {
 
     fn verify_outgoing_transaction(
         transaction: &Transaction,
-        _protocol_version: u16,
+        protocol_version: u16,
     ) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::Bridge);
+
+        // Bridge contracts only activate with the v3 fork.
+        if protocol_version < upgrades::v3::BRIDGE_ORACLE_CONTRACTS {
+            warn!(
+                ?transaction,
+                "Bridge contracts are not enabled in this protocol version",
+            );
+            return Err(TransactionError::InvalidForSender);
+        }
 
         // Parse and verify the outgoing data from sender_data
         let data = OutgoingBridgeTransactionData::parse(transaction)?;
