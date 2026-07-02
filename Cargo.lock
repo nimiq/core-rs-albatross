@@ -177,9 +177,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "ark-ec"
@@ -3664,7 +3664,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot",
- "rand 0.10.1",
+ "rand 0.10.2",
  "serde",
  "tempfile",
  "thiserror 2.0.18",
@@ -3732,7 +3732,7 @@ dependencies = [
  "nimiq-vrf",
  "parking_lot",
  "prometheus-client 0.25.0",
- "rand 0.10.1",
+ "rand 0.10.2",
  "rand_chacha 0.10.0",
  "serde",
  "tempfile",
@@ -3799,7 +3799,7 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-utils",
  "parking_lot",
- "rand 0.10.1",
+ "rand 0.10.2",
  "rand_core_compat",
  "serde",
  "thiserror 2.0.18",
@@ -3867,7 +3867,7 @@ dependencies = [
  "nimiq-utils",
  "parking_lot",
  "pin-project",
- "rand 0.10.1",
+ "rand 0.10.2",
  "serde",
  "thiserror 2.0.18",
  "tokio",
@@ -3883,7 +3883,7 @@ dependencies = [
  "libmdbx",
  "nimiq-database-value",
  "pprof",
- "rand 0.10.1",
+ "rand 0.10.2",
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
@@ -3995,7 +3995,7 @@ dependencies = [
  "nimiq-time",
  "nimiq-utils",
  "parking_lot",
- "rand 0.10.1",
+ "rand 0.10.2",
  "serde",
  "thiserror 2.0.18",
  "tokio",
@@ -4132,7 +4132,7 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-utils",
  "p256",
- "rand 0.10.1",
+ "rand 0.10.2",
  "rand_core_compat",
  "serde",
  "sha2",
@@ -4186,7 +4186,7 @@ dependencies = [
  "nimiq-validator-network",
  "nimiq-wallet",
  "parking_lot",
- "rand 0.10.1",
+ "rand 0.10.2",
  "rustls",
  "rustls-pemfile",
  "serde",
@@ -4222,7 +4222,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot",
- "rand 0.10.1",
+ "rand 0.10.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
@@ -4365,7 +4365,7 @@ dependencies = [
  "nimiq-macros",
  "nimiq-test-log",
  "nimiq-utils",
- "rand 0.10.1",
+ "rand 0.10.2",
  "rand_core 0.10.1",
  "serde",
  "unicode-normalization",
@@ -4414,7 +4414,7 @@ dependencies = [
  "pin-project",
  "pin-project-lite",
  "prometheus-client 0.25.0",
- "rand 0.10.1",
+ "rand 0.10.2",
  "serde",
  "sha2",
  "thiserror 2.0.18",
@@ -4615,7 +4615,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-transaction-builder",
  "nimiq-utils",
- "rand 0.10.1",
+ "rand 0.10.2",
  "serde",
  "tokio",
  "tokio-metrics",
@@ -4649,7 +4649,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-time",
  "nimiq-utils",
- "rand 0.10.1",
+ "rand 0.10.2",
  "serde",
  "tokio",
  "tokio-stream",
@@ -4719,7 +4719,7 @@ dependencies = [
  "nimiq-vrf",
  "parking_lot",
  "paste",
- "rand 0.10.1",
+ "rand 0.10.2",
  "rand_core_compat",
  "serde",
  "tempfile",
@@ -4851,7 +4851,7 @@ dependencies = [
  "nimiq-test-utils",
  "parking_lot",
  "pin-project",
- "rand 0.10.1",
+ "rand 0.10.2",
  "rand_core 0.10.1",
  "serde",
  "subtle",
@@ -4904,7 +4904,7 @@ dependencies = [
  "nimiq-validator-network",
  "nimiq-vrf",
  "parking_lot",
- "rand 0.10.1",
+ "rand 0.10.2",
  "rayon",
  "serde",
  "tokio",
@@ -4948,7 +4948,7 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
  "nimiq-test-utils",
- "rand 0.10.1",
+ "rand 0.10.2",
  "serde",
  "sha2",
  "tracing",
@@ -5006,7 +5006,7 @@ dependencies = [
  "nimiq-transaction-builder",
  "nimiq-utils",
  "parking_lot",
- "rand 0.10.1",
+ "rand 0.10.2",
  "serde",
  "serde-wasm-bindgen",
  "serde_bytes",
@@ -5695,9 +5695,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.45"
+version = "1.0.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924"
+checksum = "dfbc457d0c7a0759a614551b11a6409e5951f6c7537be1f1b7682b9ae9230368"
 dependencies = [
  "proc-macro2",
 ]
@@ -5743,9 +5743,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2e8e8bcc7961af1fdac401278c6a831614941f6164ee3bf4ce61b7edb162207"
+checksum = "c7f5fa3a058cd35567ef9bfa5e75732bee0f9e4c55fa90477bef2dfcdbc4be80"
 dependencies = [
  "chacha20 0.10.0",
  "getrandom 0.4.3",
@@ -6083,9 +6083,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.40"
+version = "0.23.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef86cd5876211988985292b91c96a8f2d298df24e75989a43a3c73f2d4d8168b"
+checksum = "6b92b125634d9b795e7beca796cc790df15a7fb38323bf3196fda83292d06b1f"
 dependencies = [
  "log",
  "once_cell",
@@ -6877,9 +6877,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.49"
+version = "0.3.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "711a53c2d47bbd818258c498c8dbfe186a2526c631495cfe7e078567f86b8469"
+checksum = "18dfaaeddcb932337b5e7866ee7d0ce9b76d2fd092997146f187ec09b4558a50"
 dependencies = [
  "deranged",
  "js-sys",
@@ -6898,9 +6898,9 @@ checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
 
 [[package]]
 name = "time-macros"
-version = "0.2.29"
+version = "0.2.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71c652a3727a9cbb9a02f707f530b618ce00d0ccd762009c8c23bd191df3c17d"
+checksum = "c431b87111666e491a90baa837f914fb45cd5dc3c268591b0220ff5057f2085f"
 dependencies = [
  "num-conv",
  "time-core",
