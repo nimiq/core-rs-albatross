@@ -3,7 +3,7 @@ use nimiq_account::{
 };
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
+use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::Serialize;
 use nimiq_test_utils::accounts_revert::TestCommitRevert;
 use nimiq_transaction::{
@@ -607,7 +607,7 @@ fn fee_for_failed_outgoing_tx_is_charged_to_sender_data_signer() {
     let victim_proof = SignatureProof::from_ed25519(victim.public, victim.sign(b"unrelated"));
     transaction.proof = victim_proof.serialize_to_vec();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
     let receipts = accounts
         .commit_and_test(&[transaction], &[], &block_state, &mut BlockLogger::empty())
         .expect("commit should succeed (transaction is committed as failed)");

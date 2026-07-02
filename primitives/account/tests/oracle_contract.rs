@@ -11,6 +11,7 @@ use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
     networks::NetworkId,
+    policy::Policy,
     transaction::TransactionError,
 };
 use nimiq_serde::Serialize;
@@ -185,7 +186,7 @@ fn make_change_owner_transaction(
 fn it_can_create_contract_from_transaction() {
     let (accounts, _oracle_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Create transaction data
     let creation_data = CreationTransactionData {
@@ -241,7 +242,7 @@ fn it_can_create_contract_from_transaction() {
 fn it_rejects_contract_creation_with_zero_hash_count() {
     let (accounts, _oracle_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Create transaction data with zero hash_count
     let creation_data = CreationTransactionData {
@@ -283,7 +284,7 @@ fn it_rejects_contract_creation_with_zero_hash_count() {
 fn it_can_update_contract_with_hashes() {
     let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Create update transaction
     let hashes = vec![make_hash(1), make_hash(2), make_hash(3)];
@@ -322,7 +323,7 @@ fn it_can_update_contract_with_hashes() {
 fn it_implements_ring_buffer() {
     let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // First, fill the contract to capacity (hash_count = 10)
     let initial_hashes: Vec<AnyHash> = (0..10).map(|i| make_hash(i)).collect();
@@ -411,7 +412,7 @@ fn it_implements_ring_buffer() {
 fn it_reverts_update_straddling_hash_count_boundary() {
     let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Fill to 9 hashes (indices 0..8), so latest_index = 8 and next start_index = 9
     let initial_hashes: Vec<AnyHash> = (0..9).map(|i| make_hash(i)).collect();
@@ -490,7 +491,7 @@ fn it_reverts_update_straddling_hash_count_boundary() {
 fn it_reverts_update_after_multiple_wraps() {
     let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Fill the buffer twice plus one entry, so latest_index = 20 and the next write starts at pos 1.
     let initial_hashes: Vec<AnyHash> = (0..21).map(|i| make_hash(i)).collect();
@@ -567,7 +568,7 @@ fn it_reverts_update_after_multiple_wraps() {
 fn it_can_change_owner() {
     let (accounts, mut oracle_contract, key_1, key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
     let old_owner = oracle_contract.owner.clone();
     let new_owner = Address::from(&key_2.public);
 
@@ -602,7 +603,7 @@ fn it_can_change_owner() {
 fn it_rejects_owner_change_with_invalid_signature() {
     let (accounts, mut oracle_contract, key_1, key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
     let new_owner = Address::from(&key_2.public);
 
     // Create owner change transaction signed by wrong key
@@ -625,7 +626,7 @@ fn it_rejects_owner_change_with_invalid_signature() {
 fn it_can_delete_contract_by_removing_balance() {
     let (accounts, mut oracle_contract, key_1, key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Create transaction to withdraw full balance
     let tx = make_signed_transaction(&key_1, Address::from(&key_2.public), 1000);
@@ -651,7 +652,7 @@ fn it_can_delete_contract_by_removing_balance() {
 fn it_rejects_partial_withdrawal() {
     let (accounts, mut oracle_contract, key_1, key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Try to withdraw partial balance
     let tx = make_signed_transaction(&key_1, Address::from(&key_2.public), 500);
@@ -673,7 +674,7 @@ fn it_rejects_partial_withdrawal() {
 fn it_rejects_withdrawal_with_invalid_signature() {
     let (accounts, mut oracle_contract, _key_1, key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Create transaction signed by wrong key
     let tx = make_signed_transaction(&key_2, Address::from(&key_2.public), 1000);
@@ -695,7 +696,7 @@ fn it_rejects_withdrawal_with_invalid_signature() {
 fn it_does_not_support_regular_incoming_transactions() {
     let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     let mut tx = Transaction::new_basic(
         Address::from(&key_1.public),
@@ -725,7 +726,7 @@ fn it_does_not_support_regular_incoming_transactions() {
 fn it_can_apply_and_revert_transaction() {
     let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // First, add some hashes
     let hashes = vec![make_hash(1), make_hash(2)];
@@ -757,7 +758,7 @@ fn reserve_release_balance_works() {
     let sender_address = Address([1u8; 20]);
     let data_store = accounts.data_store(&sender_address);
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     let mut reserved_balance = ReservedBalance::new(sender_address.clone());
 
@@ -820,7 +821,7 @@ fn it_can_be_pruned_when_balance_is_zero() {
     assert!(!oracle_contract.can_be_pruned());
 
     // Withdraw full balance
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
     let tx = make_signed_transaction(&key_1, Address::from(&key_2.public), 1000);
 
     let mut tx_logger = TransactionLog::empty();
@@ -884,7 +885,7 @@ fn it_can_restore_from_pruned_receipt() {
 fn it_rejects_mixing_hash_types() {
     let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // First, add Blake2b hashes
     let blake2b_hashes = vec![make_hash_blake2b(1), make_hash_blake2b(2)];
@@ -1002,7 +1003,7 @@ fn it_allows_different_hash_types_in_different_contracts() {
         ),
     ]);
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Contract 1 uses Blake2b
     let blake2b_hashes = vec![make_hash_blake2b(1)];
@@ -1050,7 +1051,7 @@ fn it_allows_different_hash_types_in_different_contracts() {
 fn it_handles_empty_hash_update_with_existing_hashes() {
     let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
 
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // First, add some Sha256 hashes to establish the contract's hash type
     let sha256_hashes = vec![make_hash_sha256(1), make_hash_sha256(2)];
@@ -1132,7 +1133,7 @@ fn it_handles_empty_hash_update_with_existing_hashes() {
 #[test]
 fn it_commits_and_reverts_failed_transaction() {
     let (accounts, mut oracle_contract, key_1, key_2) = init_tree();
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Failed transactions on Oracle contracts are fee-only. With zero fee this is a no-op
     // on balance, but still exercises commit_failed/revert_failed and log symmetry.
@@ -1155,7 +1156,7 @@ fn it_commits_and_reverts_failed_transaction() {
 #[test]
 fn it_reverts_update_when_num_hashes_exceeds_current_latest() {
     let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Put exactly one hash, so latest_index = 0.
     let tx1 = make_update_transaction(Address([1u8; 20]), &key_1, vec![make_hash(1)]);
@@ -1199,7 +1200,7 @@ fn it_reverts_update_when_num_hashes_exceeds_current_latest() {
 #[test]
 fn it_rejects_revert_owner_change_without_receipt() {
     let (accounts, mut oracle_contract, key_1, key_2) = init_tree();
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Commit owner change first.
     let tx =
@@ -1236,7 +1237,7 @@ fn it_rejects_revert_owner_change_without_receipt() {
 #[test]
 fn it_rejects_revert_owner_change_with_invalid_receipt_serialization() {
     let (accounts, mut oracle_contract, key_1, key_2) = init_tree();
-    let block_state = BlockState::new(1, 1);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Commit owner change.
     let owner_change_tx =
