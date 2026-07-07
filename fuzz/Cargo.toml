@@ -16,11 +16,24 @@ workspace = true
 
 [dependencies]
 afl = { version = "0.18.2", optional = true }
+hex = "0.4"
 
 nimiq-collections = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["key-nibbles", "serde-derive", "trie"] }
 nimiq-serde = { workspace = true }
+nimiq-vrf = { workspace = true, features = ["fuzzing"] }
+
+# Reference implementation for the `vrf_map_to_curve` differential target: the previous (4.x)
+# curve25519-dalek still provides `nonspec_map_to_curve`, which was removed in 5.0 and reimplemented
+# in nimiq-vrf. Only used to prove byte-for-byte equivalence.
+curve25519-dalek-4x = { package = "curve25519-dalek", version = "4.1.3", features = ["digest"] }
+sha2-0_10 = { package = "sha2", version = "0.10" }
+
+# For the `keys_scalar_reduction` differential target: `legacy_compatibility` re-enables the
+# deprecated `Scalar::from_bits` so we can prove the production `from_bytes_mod_order` path (which no
+# longer needs that feature) is byte-identical to it.
+curve25519-dalek = { version = "5.0.0", features = ["digest", "legacy_compatibility"] }
 
 [features]
 fuzz = ["afl"]

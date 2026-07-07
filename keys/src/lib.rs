@@ -80,5 +80,7 @@ mod es256_signature;
 mod key_pair;
 mod private_key;
 mod public_key;
+#[cfg(test)]
+mod scalar_reduction_equivalence;
 mod signature;
 mod tagged_signing;

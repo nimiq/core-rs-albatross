@@ -36,8 +36,16 @@ impl PrivateKey {
         scalar_bytes[31] |= 64;
         // The above bit operations ensure that the integer represented by
         // `scalar_bytes` is less than 2***255-19 as required by this function.
-        #[allow(deprecated)]
-        Scalar::from_bits(scalar_bytes)
+        //
+        // CONSENSUS-CRITICAL. This clamped seed is stored REDUCED (`a mod l`). Historically it was
+        // built with the deprecated, feature-gated `Scalar::from_bits`, which kept it UNREDUCED.
+        // Reduction is output-preserving here because the secret scalar is only ever consumed as
+        // (1) a point multiplication against an order-`l` base (`a·B = (a mod l)·B`), or (2) a
+        // scalar multiplication by a reduced scalar (dalek reduces `a` mod `l` before use). This
+        // equivalence is proven byte-for-byte by the `scalar_reduction_equivalence` fuzz test, so
+        // `from_bytes_mod_order` produces exactly the same signatures as the old `from_bits` while
+        // avoiding the `legacy_compatibility` feature. Do NOT revert to `from_bits`.
+        Scalar::from_bytes_mod_order(scalar_bytes)
     }
 
     #[inline]

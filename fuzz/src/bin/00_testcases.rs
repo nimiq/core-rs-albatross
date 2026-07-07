@@ -71,5 +71,27 @@ fn main() -> io::Result<()> {
         burn.to_user_friendly_address().replace(" ", ""),
     )?;
 
+    // Seeds for the `vrf_map_to_curve` differential target. The map accepts arbitrary bytes, so the
+    // seeds just need a useful spread: empty, a single byte, and the exact 69-byte shape built at
+    // the real call sites (32-byte public key + 1-byte use case + 4-byte nonce + 32-byte entropy),
+    // in all-zero/all-one/counting variants to poke the branchy field arithmetic.
+    let write =
+        |name: &str, bytes: Vec<u8>| fs::write(format!("in/vrf_map_to_curve/{name}"), bytes);
+    fs::create_dir_all("in/vrf_map_to_curve")?;
+    write("empty", vec![])?;
+    write("one_byte", vec![0])?;
+    write("call_shape_zeros", vec![0u8; 69])?;
+    write("call_shape_ones", vec![0xffu8; 69])?;
+    write("call_shape_counting", (0u8..69).collect())?;
+
+    // Seeds for the `keys_scalar_reduction` differential target. Needs >= 96 bytes:
+    // [seed | h | k]. Cover all-zero, all-one, and a structured spread.
+    let write =
+        |name: &str, bytes: Vec<u8>| fs::write(format!("in/keys_scalar_reduction/{name}"), bytes);
+    fs::create_dir_all("in/keys_scalar_reduction")?;
+    write("zeros", vec![0u8; 96])?;
+    write("ones", vec![0xffu8; 96])?;
+    write("counting", (0u8..96).collect())?;
+
     Ok(())
 }

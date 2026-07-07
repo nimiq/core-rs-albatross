@@ -367,7 +367,12 @@ impl ToScalar for ::ed25519_zebra::SigningKey {
         scalar_bytes[31] |= 64;
         // The above bit operations ensure that the integer represented by
         // `scalar_bytes` is less than 2^255-19 as required by this function.
-        #[allow(deprecated)]
-        Scalar::from_bits(scalar_bytes)
+        //
+        // CONSENSUS-CRITICAL. Stored REDUCED (`a mod l`); see the matching note in
+        // `PrivateKey::to_scalar`. Reduction is output-preserving because the secret scalar is only
+        // ever multiplied by an order-`l` point or a reduced scalar, proven byte-for-byte by the
+        // `scalar_reduction_equivalence` fuzz test. This replaces the deprecated `from_bits` and
+        // lets us drop the `legacy_compatibility` feature. Do NOT revert to `from_bits`.
+        Scalar::from_bytes_mod_order(scalar_bytes)
     }
 }
