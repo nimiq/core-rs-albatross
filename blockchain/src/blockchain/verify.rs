@@ -6,7 +6,12 @@ use nimiq_database::{
     traits::{ReadTransaction, WriteTransaction},
 };
 use nimiq_hash::Hash;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{
+    policy::{upgrades, Policy},
+    trie::trie_diff::TrieDiff,
+    TreeProof,
+};
+use nimiq_trie::WriteTransactionProxy as TrieMdbxWriteTransaction;
 
 use crate::{interface::HistoryInterface, BlockProducer, Blockchain};
 
@@ -120,6 +125,26 @@ impl Blockchain {
             }
         }
 
+        Ok(())
+    }
+
+    /// Verifies that the block's `diff_root` matches the forward `diff` produced by applying it.
+    /// Enforced only from `DIFF_ROOT_COMMITMENT` on; earlier blocks are not checked.
+    pub(crate) fn verify_diff_root(&self, block: &Block, diff: &TrieDiff) -> Result<(), PushError> {
+        if block.version() < upgrades::v2::DIFF_ROOT_COMMITMENT {
+            return Ok(());
+        }
+        let diff_root = TreeProof::new(diff.0.iter()).root_hash();
+        if *block.diff_root() != diff_root {
+            warn!(
+                %block,
+                header_root = %block.diff_root(),
+                computed_root = %diff_root,
+                reason = "Header diff root doesn't match real diff root",
+                "Rejecting block"
+            );
+            return Err(PushError::InvalidBlock(BlockError::DiffRootMismatch));
+        }
         Ok(())
     }
 
@@ -489,14 +514,21 @@ impl Blockchain {
             return Err(error);
         }
 
-        // Update our blockchain state using the received proposal. If we can't update the state, we
-        // return a proposal timeout.
-        if let Err(error) =
-            self.commit_accounts(block, None, &mut txn.into(), &mut BlockLogger::empty())
-        {
-            debug!(%error, %block, "Tendermint - await_proposal: Failed to commit accounts");
-            return Err(error);
-        }
+        // Update our blockchain state using the received proposal, recording the forward diff so we
+        // can verify it against the header's diff root. If we can't update the state, we return a
+        // proposal timeout.
+        let diff = {
+            let mut txn: TrieMdbxWriteTransaction = txn.into();
+            txn.start_recording();
+            if let Err(error) =
+                self.commit_accounts(block, None, &mut txn, &mut BlockLogger::empty())
+            {
+                debug!(%error, %block, "Tendermint - await_proposal: Failed to commit accounts");
+                return Err(error);
+            }
+            txn.stop_recording().into_forward_diff()
+        };
+        self.verify_diff_root(block, &diff)?;
 
         // Check the validity of the block against our state. If it is invalid, we return a proposal
         // timeout. This also returns the block body that matches the block header

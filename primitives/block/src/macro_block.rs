@@ -395,6 +395,11 @@ impl SerializeContent for MacroHeader {
         self.payload_commitment_root().serialize_to_writer(writer)?;
         self.history_root.serialize_to_writer(writer)?;
 
+        // From `DIFF_ROOT_COMMITMENT` on, the diff root is part of the (signed) header hash.
+        if self.version >= upgrades::v2::DIFF_ROOT_COMMITMENT {
+            self.diff_root.serialize_to_writer(writer)?;
+        }
+
         Ok(())
     }
 }

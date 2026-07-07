@@ -650,6 +650,7 @@ impl Blockchain {
             })?;
             if is_complete {
                 let recorded_diff = txn.stop_recording().into_forward_diff();
+                self.verify_diff_root(block, &recorded_diff)?;
                 self.chain_store
                     .put_accounts_diff(txn.raw(), &block.hash(), &recorded_diff);
             }
