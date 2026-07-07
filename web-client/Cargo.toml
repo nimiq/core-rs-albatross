@@ -23,7 +23,6 @@ workspace = true
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
-ark-serialize = "0.4"
 futures = { workspace = true }
 getrandom = { version = "0.4", features = ["wasm_js"] }
 # We need to enable the `wasm_js` feature of getrandom 0.3 while we still indirectly depend on it

@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-ark-mnt6-753 = "0.4"
+ark-mnt6-753 = "0.5"
 async-trait = "0.1"
 clap = { version = "4.6", features = ["derive"] }
 futures = { workspace = true }

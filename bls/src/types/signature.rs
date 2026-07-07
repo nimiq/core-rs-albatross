@@ -1,6 +1,6 @@
 use std::fmt;
 
-use ark_ec::{AffineRepr, Group};
+use ark_ec::{AffineRepr, PrimeGroup};
 use ark_ff::{One, PrimeField, ToConstraintField};
 pub use ark_mnt6_753::G1Projective;
 use ark_mnt6_753::{Fq, G1Affine};

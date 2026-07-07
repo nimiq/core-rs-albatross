@@ -1,4 +1,4 @@
-use ark_ec::Group;
+use ark_ec::PrimeGroup;
 use nimiq_block::{
     Block, BlockError, EquivocationProof, ForkProof, MacroBlock, MacroBody, MacroHeader,
     MicroBlock, MicroBody, MicroHeader, MicroJustification, MultiSignature, SkipBlockProof,

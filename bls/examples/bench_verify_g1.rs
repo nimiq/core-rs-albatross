@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ark_ec::{pairing::Pairing, Group};
+use ark_ec::{pairing::Pairing, PrimeGroup};
 use ark_ff::Zero;
 use ark_mnt6_753::{G1Projective, G2Projective, MNT6_753};
 use nimiq_bls::{KeyPair, SigHash, Signature};
