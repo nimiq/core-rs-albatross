@@ -1492,9 +1492,8 @@ impl TransactionBuilder {
         )
     }
 
-    /// Convenience wrapper around [`new_set_signal_data`](Self::new_set_signal_data) that signals
-    /// support for the given protocol `version` (or clears the signal if `None`), signed with the
-    /// validator's signing (warm) key.
+    /// Creates a `SetSignalData` transaction that signals support for the given protocol `version`
+    /// (or clears the signal if `None`), signed with the validator's signing (warm) key.
     ///
     /// In contrast to [`new_set_signal_data`](Self::new_set_signal_data), this only updates the
     /// version bytes of the signal data and preserves the rest of the field.
