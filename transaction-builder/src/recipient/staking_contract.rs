@@ -136,9 +136,9 @@ impl StakingRecipientBuilder {
         self
     }
 
-    /// Convenience wrapper around [`set_signal_data`](Self::set_signal_data) that signals support
-    /// for the given protocol `version` (or clears the signal if `None`). It needs to be signed by
-    /// the validator's signing (warm) key.
+    /// This method signals support for the given protocol `version` (or clears the signal if
+    /// `None`). Like [`set_signal_data`](Self::set_signal_data), it needs to be signed by the
+    /// validator's signing (warm) key.
     ///
     /// In contrast to [`set_signal_data`](Self::set_signal_data), this only updates the version
     /// bytes of the signal data and preserves the rest.

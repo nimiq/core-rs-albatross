@@ -531,7 +531,7 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
-    /// Returns a serialized `set_signal_data` transaction that signals support for the given
+    /// Returns a serialized `signal_version` transaction that signals support for the given
     /// protocol `version` (or clears the signaled version if null), signed with the validator's
     /// signing (warm) key. You need to provide the address of a basic account (the sender wallet)
     /// to pay the transaction fee.
@@ -548,7 +548,7 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error>;
 
-    /// Sends a `set_signal_data` transaction that signals support for the given protocol `version`
+    /// Sends a `signal_version` transaction that signals support for the given protocol `version`
     /// to the network.
     async fn send_signal_version_transaction(
         &self,
