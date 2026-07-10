@@ -770,7 +770,7 @@ pub const MAINNET_POLICY: Policy = Policy {
     genesis_block_number: 3456000,
     // This should only be increased when a new hard fork code is released.
     // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
-    max_supported_version: 1,
+    max_supported_version: 2,
 };
 
 /// Policy constants for TestNet
@@ -783,7 +783,7 @@ pub const TESTNET_POLICY: Policy = Policy {
     genesis_block_number: 3032010,
     // This should only be increased when a new hard fork code is released.
     // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
-    max_supported_version: 1,
+    max_supported_version: 2,
 };
 
 /// Policy constants used for testing purposes

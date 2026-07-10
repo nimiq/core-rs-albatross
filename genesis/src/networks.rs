@@ -259,7 +259,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                         name: "dev-albatross",
                         genesis: read_genesis_config(Path::new(&p))
                             .expect("failure reading provided NIMIQ_OVERRIDE_DEVNET_CONFIG"),
-                        max_supported_version: 1, // This should only be increased when a new hard fork code is released
+                        max_supported_version: 2, // This should only be increased when a new hard fork code is released
                                                   // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
                     })
                 }) {
@@ -273,7 +273,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                     env!("OUT_DIR"),
                     "/genesis/dev-albatross/genesis.rs",
                 )),
-                max_supported_version: 1,
+                max_supported_version: 2,
             };
             &INFO
         }
@@ -289,7 +289,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                         name: "test-albatross",
                         genesis: read_genesis_config(Path::new(&p))
                             .expect("failure reading provided NIMIQ_OVERRIDE_TESTNET_CONFIG"),
-                        max_supported_version: 1, // This should only be increased when a new hard fork code is released
+                        max_supported_version: 2, // This should only be increased when a new hard fork code is released
                                                   // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
                     })
                 }) {
@@ -303,7 +303,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                     env!("OUT_DIR"),
                     "/genesis/test-albatross/genesis.rs"
                 )),
-                max_supported_version: 1, // This should only be increased when a new hard fork code is released
+                max_supported_version: 2, // This should only be increased when a new hard fork code is released
                                           // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
             };
             &INFO
@@ -333,7 +333,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                         name: "main-albatross",
                         genesis: read_genesis_config(Path::new(&p))
                             .expect("failure reading provided NIMIQ_OVERRIDE_MAINNET_CONFIG"),
-                        max_supported_version: 1, // This should only be increased when a new hard fork code is released
+                        max_supported_version: 2, // This should only be increased when a new hard fork code is released
                                                   // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
                     })
                 }) {
@@ -347,7 +347,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                     env!("OUT_DIR"),
                     "/genesis/main-albatross/genesis.rs"
                 )),
-                max_supported_version: 1, // This should only be increased when a new hard fork code is released
+                max_supported_version: 2, // This should only be increased when a new hard fork code is released
                                           // VERY IMPORTANT: This should be changed accordingly in `NetworkInfo`.
             };
             &INFO
