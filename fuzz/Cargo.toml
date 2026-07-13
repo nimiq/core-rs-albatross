@@ -17,10 +17,13 @@ workspace = true
 [dependencies]
 afl = { version = "0.18.2", optional = true }
 
+nimiq-account = { workspace = true }
+nimiq-bls = { workspace = true }
 nimiq-collections = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["key-nibbles", "serde-derive", "trie"] }
 nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
 
 [features]
 fuzz = ["afl"]

@@ -3943,10 +3943,13 @@ name = "nimiq-fuzz"
 version = "1.7.1"
 dependencies = [
  "afl",
+ "nimiq-account",
+ "nimiq-bls",
  "nimiq-collections",
  "nimiq-keys",
  "nimiq-primitives",
  "nimiq-serde",
+ "nimiq-transaction",
 ]
 
 [[package]]
