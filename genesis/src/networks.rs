@@ -222,7 +222,10 @@ fn network(network_id: NetworkId) -> Option<&'static NetworkInfo> {
     let result = network_impl(network_id);
     if let Some(info) = result {
         assert_eq!(network_id, info.network_id);
-        assert_eq!(network_id, info.genesis_block().network());
+        // Keep the temporary block alive until the decompressed genesis keys are cached. Dropping
+        // its lazy public keys while another thread initializes `keys` can deadlock the interner.
+        let genesis_block = info.genesis_block();
+        assert_eq!(network_id, genesis_block.network());
         let keys = match network_id {
             NetworkId::DevAlbatross => &KEYS_DEV,
             NetworkId::TestAlbatross => &KEYS_TEST,

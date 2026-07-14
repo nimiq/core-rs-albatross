@@ -5,7 +5,7 @@ use instant::SystemTime;
 use libp2p::{
     gossipsub,
     identity::Keypair,
-    multiaddr::{multiaddr, Multiaddr},
+    multiaddr::{multiaddr, Multiaddr, Protocol},
     PeerId,
 };
 use nimiq_keys::{Address, KeyPair};
@@ -401,6 +401,29 @@ async fn create_network_with_n_peers(
     }
 
     (networks, keys)
+}
+
+#[test(tokio::test)]
+async fn listening_on_memory_zero_returns_unique_allocated_addresses() {
+    let requested_address = multiaddr![Memory(0u64)];
+    let net1 = Network::new(network_config(requested_address.clone()), ()).await;
+    let net2 = Network::new(network_config(requested_address.clone()), ()).await;
+
+    let (address1, address2) = futures::try_join!(
+        net1.listen_on_address(requested_address.clone()),
+        net2.listen_on_address(requested_address),
+    )
+    .unwrap();
+
+    assert_ne!(address1, address2);
+    assert!(matches!(
+        address1.iter().next(),
+        Some(Protocol::Memory(address)) if address != 0
+    ));
+    assert!(matches!(
+        address2.iter().next(),
+        Some(Protocol::Memory(address)) if address != 0
+    ));
 }
 
 #[test(tokio::test)]

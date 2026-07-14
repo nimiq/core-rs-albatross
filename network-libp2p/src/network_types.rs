@@ -4,6 +4,7 @@ use bytes::Bytes;
 #[cfg(feature = "metrics")]
 use instant::Instant;
 use libp2p::{
+    core::transport::ListenerId,
     gossipsub,
     kad::{QueryId, Record},
     request_response::{InboundRequestId, OutboundRequestId, ResponseChannel},
@@ -90,6 +91,10 @@ pub(crate) enum NetworkAction {
     },
     ListenOn {
         listen_addresses: Vec<Multiaddr>,
+    },
+    ListenOnAddress {
+        listen_address: Multiaddr,
+        output: oneshot::Sender<Result<Multiaddr, NetworkError>>,
     },
     ConnectPeersByServices {
         services: Services,
@@ -228,6 +233,9 @@ pub(crate) struct GossipsubTopicInfo {
 
 #[derive(Default)]
 pub(crate) struct TaskState {
+    /// Senders waiting for a listener to report its resolved address.
+    pub(crate) pending_listen_addresses:
+        HashMap<ListenerId, oneshot::Sender<Result<Multiaddr, NetworkError>>>,
     /// Senders for DHT (kad) put operations
     pub(crate) dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     /// Senders for DHT (kad) get operations
