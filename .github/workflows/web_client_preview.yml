@@ -35,6 +35,6 @@ jobs:
       - name: Build package
         working-directory: ./web-client
         run: ./scripts/build.sh
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
       - name: Publish preview
         run: npx pkg-pr-new publish './web-client/dist' --comment=update
