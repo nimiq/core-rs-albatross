@@ -77,13 +77,13 @@ impl AsRef<[u8]> for CompressedPublicKey {
 
 impl fmt::Display for CompressedPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", &self.to_hex())
+        write!(f, "{}", self.to_hex())
     }
 }
 
 impl fmt::Debug for CompressedPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "CompressedPublicKey({})", &self.to_hex())
+        write!(f, "CompressedPublicKey({})", self.to_hex())
     }
 }
 

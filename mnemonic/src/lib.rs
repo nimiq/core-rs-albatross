@@ -417,10 +417,7 @@ impl Mnemonic {
             .iter()
             .map(|word| wordlist.binary_search(&word.to_lowercase().as_ref()).ok())
         {
-            match index {
-                Some(i) => push_usize(&mut bit_vec, i, Self::NUM_BITS_PER_WORD),
-                None => return None,
-            }
+            push_usize(&mut bit_vec, index?, Self::NUM_BITS_PER_WORD)
         }
         Some(bit_vec)
     }

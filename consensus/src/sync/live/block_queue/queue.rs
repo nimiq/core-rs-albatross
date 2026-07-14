@@ -330,7 +330,7 @@ impl<N: Network> BlockQueue<N> {
         // Enforce a maximum number of announced blocks per peer per block number.
         let peer_id = block_source.peer_id();
         let mut num_buffered_blocks = 0;
-        for (_, (_, block_source)) in map.iter() {
+        for (_, block_source) in map.values() {
             // Don't count blocks that we requested.
             if block_source.is_requested() {
                 continue;

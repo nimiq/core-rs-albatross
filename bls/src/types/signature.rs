@@ -119,7 +119,7 @@ impl fmt::Display for Signature {
 
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Signature({})", &::hex::encode(self.compress().as_ref()))
+        write!(f, "Signature({})", ::hex::encode(self.compress().as_ref()))
     }
 }
 

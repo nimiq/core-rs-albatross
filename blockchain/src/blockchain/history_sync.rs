@@ -651,8 +651,8 @@ impl Blockchain {
                 *prev_info.head.state_root(),
                 accounts_hash,
                 "Inconsistent state after reverting block {} - {:?}",
-                &current_info.head,
-                &current_info.head,
+                current_info.head,
+                current_info.head,
             );
 
             // Move on to the next block.
