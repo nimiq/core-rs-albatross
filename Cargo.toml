@@ -61,6 +61,8 @@ members = [
   "web-client",
 ]
 
+exclude = ["patches/gloo-timers"]
+
 resolver = "2"
 
 # Force nimiq-bls to be built with optimization level 2 in the test profiles.
