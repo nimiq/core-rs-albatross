@@ -24,7 +24,7 @@ struct CliGlobalOpts {
     #[clap(long, short, global = true, default_value_t = NetworkId::MainAlbatross)]
     network: NetworkId,
     #[clap(long, short = 'V', global = true)]
-    validity_start: u32,
+    validity_start: Option<u32>,
 }
 
 #[derive(Subcommand)]
@@ -83,6 +83,9 @@ fn run_app() -> Result<(), Error> {
         network,
         validity_start,
     } = cli.global_opts;
+
+    let validity_start =
+        validity_start.ok_or_else(|| anyhow::anyhow!("--validity-start is required"))?;
 
     let result = match cli.command {
         Commands::Basic(args) => commands::basic::get_tx(args.args, fee, validity_start, network)?,
