@@ -198,6 +198,24 @@ impl AccountTransactionInteraction for OracleContract {
                     // Validate that all new hashes match the contract's hash type
                     self.validate_hash_types(&hashes)?;
 
+                    // A *non-first* update may not write more hashes than the ring
+                    // buffer holds. With more than `hash_count` hashes the update
+                    // wraps over its own positions, so `removed_hashes` captures a
+                    // value written earlier *in the same update* instead of the true
+                    // pre-transaction value; the revert then restores that wrong
+                    // value and diverges the accounts-tree root on a reorg (a
+                    // consensus fork). The eviction receipt and the revert index math
+                    // both assume at most one write per position, which this
+                    // guarantees. The first-ever update is exempt: its revert clears
+                    // the buffer back to the fresh (empty) state via the
+                    // `num_hashes > current_latest` branch and never consults
+                    // `removed_hashes`, so the double-write cannot corrupt it.
+                    if self.latest_index.is_some() && hashes.len() > self.hash_count as usize {
+                        return Err(AccountError::InvalidTransaction(
+                            TransactionError::InvalidData,
+                        ));
+                    }
+
                     // Empty update: no state change, no log
                     if hashes.is_empty() {
                         return Ok(None);
