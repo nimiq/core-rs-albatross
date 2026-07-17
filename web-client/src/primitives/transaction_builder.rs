@@ -314,7 +314,10 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
-        let native_signal_data = signal_data.map(|r| Blake2bHash::from_str(&r).unwrap());
+        let native_signal_data = signal_data
+            .map(|r| Blake2bHash::from_str(&r))
+            .transpose()
+            .map_err(|e| JsError::new(&e.to_string()))?;
         let mut recipient = Recipient::new_staking_builder();
         recipient.create_validator(
             *signing_key.native_ref(),
@@ -353,7 +356,11 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
-        let native_signal_data = signal_data.map(|r| Some(Blake2bHash::from_str(&r).unwrap()));
+        let native_signal_data = signal_data
+            .map(|r| Blake2bHash::from_str(&r))
+            .transpose()
+            .map_err(|e| JsError::new(&e.to_string()))?
+            .map(Some);
         let mut recipient = Recipient::new_staking_builder();
         let native_signing_key = signing_key.map(|r| *r.native_ref());
         let native_voting_key_pair = voting_key_pair.map(|r| r.native_ref().clone());
