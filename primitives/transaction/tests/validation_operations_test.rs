@@ -450,3 +450,105 @@ fn test_chain_config_with_validation_program() {
     // Verify the validation program is stored correctly
     assert_eq!(chain_config.validation_program.operations.len(), 4);
 }
+
+// ---------------------------------------------------------------------------
+// Regression tests for the `Load*` bounds-check integer overflow (audit finding
+// "High — Integer overflow in Load* bounds checks").
+//
+// The offset/length operands are popped from the stack and, on the outgoing
+// burn-proof path, originate from fully attacker-controlled burn data. A naive
+// `offset + N > data.len()` guard wraps on overflow (release builds don't enable
+// overflow-checks) and lets an out-of-bounds slice through to a panic, which
+// halts every node re-executing the block. Each opcode must return an error
+// instead of panicking. These run through `extract_only`, the exact path used by
+// permissionless burn-proof submission.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn load_bytes_offset_plus_length_overflow_is_rejected_not_panic() {
+    // offset + length overflows u64 (u64::MAX - 3 + 100), so a wrapping guard
+    // would compute a small "end" and slip an out-of-bounds slice through.
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(u64::MAX - 3),
+        ValidationOp::PushConst(100),
+        ValidationOp::LoadBytes,
+    ]);
+    let burn_tx_data = vec![0u8; 64];
+    assert!(program.extract_only(&burn_tx_data).is_err());
+}
+
+#[test]
+fn load_u64_offset_overflow_is_rejected_not_panic() {
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(u64::MAX),
+        ValidationOp::LoadU64(Endianness::LittleEndian),
+    ]);
+    let burn_tx_data = vec![0u8; 64];
+    assert!(program.extract_only(&burn_tx_data).is_err());
+}
+
+#[test]
+fn load_u32_offset_overflow_is_rejected_not_panic() {
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(u64::MAX),
+        ValidationOp::LoadU32(Endianness::BigEndian),
+    ]);
+    let burn_tx_data = vec![0u8; 64];
+    assert!(program.extract_only(&burn_tx_data).is_err());
+}
+
+#[test]
+fn load_address_offset_overflow_is_rejected_not_panic() {
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(u64::MAX),
+        ValidationOp::LoadAddress,
+    ]);
+    let burn_tx_data = vec![0u8; 64];
+    assert!(program.extract_only(&burn_tx_data).is_err());
+}
+
+#[test]
+fn load_evm_u64_offset_overflow_is_rejected_not_panic() {
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(u64::MAX),
+        ValidationOp::LoadEvmU64,
+    ]);
+    let burn_tx_data = vec![0u8; 64];
+    assert!(program.extract_only(&burn_tx_data).is_err());
+}
+
+#[test]
+fn load_just_past_end_boundary_is_rejected() {
+    // Data is 8 bytes; a u64 read at offset 1 needs bytes [1..9] — one past the
+    // end. No overflow here, just an ordinary out-of-range read that must fail.
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(1),
+        ValidationOp::LoadU64(Endianness::LittleEndian),
+    ]);
+    let burn_tx_data = vec![0u8; 8];
+    assert!(program.extract_only(&burn_tx_data).is_err());
+}
+
+#[test]
+fn load_within_bounds_still_succeeds_after_fix() {
+    // Guard against an over-tight bound: a legitimate in-range read of exactly
+    // the last available bytes must still succeed and extract the right value.
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(0),
+        ValidationOp::LoadU64(Endianness::LittleEndian),
+        ValidationOp::Store("value".to_string()),
+    ]);
+    let burn_tx_data = 42u64.to_le_bytes().to_vec(); // exactly 8 bytes
+    let result = program
+        .extract_only(&burn_tx_data)
+        .expect("in-range load must succeed");
+    assert_eq!(
+        result
+            .extracted_values
+            .get("value")
+            .expect("value was stored")
+            .as_u64()
+            .expect("value is a u64"),
+        42
+    );
+}
