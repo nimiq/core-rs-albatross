@@ -25,7 +25,7 @@ thiserror = "2.0"
 
 ark-std = "0.5"
 ark-ff = "0.5"
-ark-ec = "0.5"
+ark-ec = "0.6"
 ark-mnt6-753 = "0.5"
 ark-serialize = "0.5"
 
