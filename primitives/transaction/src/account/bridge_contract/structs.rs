@@ -2,7 +2,7 @@ use nimiq_keys::Address;
 use nimiq_serde::{Deserialize, Serialize};
 
 use super::core::{ChainConfig, OutgoingTransaction};
-use crate::{SignatureProof, Transaction, TransactionError};
+use crate::{account::htlc_contract::AnyHash, SignatureProof, Transaction, TransactionError};
 
 /// Data used to create bridge contracts.
 ///
@@ -37,6 +37,18 @@ impl CreationTransactionData {
         if self.chain_config.chain_id != self.source_chain_id {
             warn!("Chain config chain_id does not match source_chain_id");
             return Err(TransactionError::InvalidData);
+        }
+        // The release path (extract_burn_transaction_hash and AnyMerkleProof)
+        // supports only Blake2b, Sha256 and Keccak256. A bridge configured with any
+        // other hash function could accept deposits but never process a burn-proof
+        // release, permanently locking user funds. The match is exhaustive so a
+        // newly added AnyHash variant forces an explicit support decision here.
+        match self.chain_config.hash_function {
+            AnyHash::Blake2b(_) | AnyHash::Sha256(_) | AnyHash::Keccak256(_) => {}
+            AnyHash::Sha512(_) => {
+                warn!("Invalid creation data: Sha512 hash_function is not supported by the bridge release path");
+                return Err(TransactionError::InvalidData);
+            }
         }
         // Reject programs that contain Assert or PushExpected* operations.
         // These require a ValidationContext (full execution mode) and cause
