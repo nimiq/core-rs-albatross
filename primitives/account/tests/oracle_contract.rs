@@ -564,6 +564,81 @@ fn it_reverts_update_after_multiple_wraps() {
     );
 }
 
+/// Regression: a *non-first* update carrying more hashes than `hash_count` wraps
+/// over its own ring positions, so `removed_hashes` captures a value written
+/// earlier in the same update. The revert then restores that wrong value instead
+/// of the true prior one, diverging the accounts-tree root on a reorg (consensus
+/// fork). Such an update must be rejected. Concretely, with `hash_count = 3` and a
+/// full buffer, a follow-up 4-hash update evicts position 0 twice; before the fix
+/// the revert would restore `data_3` there instead of `data_0`.
+#[test]
+fn oracle_rejects_non_first_update_exceeding_hash_count() {
+    let mut rng = test_rng(true);
+    let key = KeyPair::generate(&mut rng);
+    let contract_addr = Address([1u8; 20]);
+
+    let oracle = OracleContract {
+        balance: Coin::from_u64_unchecked(1000),
+        owner: Address::from(&key.public),
+        hash_count: 3,
+        hashes: Vec::new(),
+        latest_index: None,
+    };
+    let accounts = TestCommitRevert::with_initial_state(&[
+        (
+            Address::from(&key.public),
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(10_000),
+            }),
+        ),
+        (contract_addr.clone(), Account::Oracle(oracle.clone())),
+    ]);
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // Fill the buffer to capacity (a first update of exactly hash_count is allowed),
+    // so every position holds real data and the next update is *non-first*.
+    let mut oracle = oracle;
+    let fill = make_update_transaction(
+        contract_addr.clone(),
+        &key,
+        vec![make_hash(1), make_hash(2), make_hash(3)],
+    );
+    accounts
+        .test_commit_incoming_transaction(
+            &mut oracle,
+            &fill,
+            &block_state,
+            &mut TransactionLog::empty(),
+            true,
+        )
+        .expect("initial fill of exactly hash_count hashes must succeed");
+    assert_eq!(oracle.latest_index, Some(2));
+
+    // A follow-up update of 4 hashes (> hash_count = 3) would wrap over its own
+    // positions and corrupt the revert; it must be rejected before any mutation.
+    let too_many = make_update_transaction(
+        contract_addr,
+        &key,
+        vec![make_hash(4), make_hash(5), make_hash(6), make_hash(7)],
+    );
+    let result = accounts.test_commit_incoming_transaction(
+        &mut oracle,
+        &too_many,
+        &block_state,
+        &mut TransactionLog::empty(),
+        false,
+    );
+    assert!(
+        matches!(
+            result,
+            Err(AccountError::InvalidTransaction(
+                TransactionError::InvalidData
+            ))
+        ),
+        "a non-first update exceeding hash_count must be rejected, got {result:?}",
+    );
+}
+
 #[test]
 fn it_can_change_owner() {
     let (accounts, mut oracle_contract, key_1, key_2) = init_tree();
