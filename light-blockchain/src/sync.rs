@@ -1,4 +1,4 @@
-use nimiq_block::Block;
+use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
@@ -142,6 +142,12 @@ impl LightBlockchain {
         // Perform block intrinsic checks.
         let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
         block.verify(this.network_id, max_timestamp)?;
+
+        // The pico path never checks the VRF seed (it skips `verify_proposer`); an
+        // undecodable seed would otherwise panic in `VrfSeed::entropy` at proposer selection.
+        if block.unwrap_macro_ref().header.seed.try_entropy().is_none() {
+            return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+        }
 
         // Upgrade the blockchain lock
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
