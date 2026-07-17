@@ -384,18 +384,14 @@ impl AccountTransactionInteraction for BridgeContract {
             }
         };
 
-        // Verify the oracle state index is valid
-        let oracle_state_index = outgoing_data.burn_proof.oracle_state_index as usize;
-        if oracle_state_index >= oracle.hashes.len() {
-            log::warn!(
-                oracle_state_index,
-                oracle_hashes_len = oracle.hashes.len(),
-                "Oracle state index out of bounds",
-            );
-            return Err(AccountError::InvalidTransaction(
-                TransactionError::InvalidData,
-            ));
-        }
+        // The relayer supplies a *global* index into the oracle's hash history.
+        // Validity is decided by `get_hash_at_index` below, which returns `None`
+        // (→ InvalidData) for any index outside the retained window
+        // [earliest_index, latest_index]. A physical `index >= oracle.hashes.len()`
+        // check would be wrong: `hashes` is a fixed-size ring buffer of length
+        // `hash_count`, so once it wraps, every valid global index is >= hash_count
+        // and would be rejected, permanently locking all withdrawals.
+        let oracle_state_index = outgoing_data.burn_proof.oracle_state_index;
 
         // Compute the leaf hash from burn transaction data
         let leaf_hash = outgoing_data
@@ -412,7 +408,7 @@ impl AccountTransactionInteraction for BridgeContract {
         let (prev_oracle_state_hash, current_oracle_state_hash) = {
             let prev_oracle_state_hash = if oracle_state_index > 0 {
                 oracle
-                    .get_hash_at_index(oracle_state_index.saturating_sub(1) as u64)
+                    .get_hash_at_index(oracle_state_index.saturating_sub(1))
                     .ok_or(AccountError::InvalidTransaction(
                         TransactionError::InvalidData,
                     ))?
@@ -421,7 +417,7 @@ impl AccountTransactionInteraction for BridgeContract {
             };
             (
                 prev_oracle_state_hash,
-                oracle.get_hash_at_index(oracle_state_index as u64).ok_or(
+                oracle.get_hash_at_index(oracle_state_index).ok_or(
                     AccountError::InvalidTransaction(TransactionError::InvalidData),
                 )?,
             )
