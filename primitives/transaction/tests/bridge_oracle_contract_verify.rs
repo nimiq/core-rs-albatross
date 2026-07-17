@@ -8,7 +8,7 @@ use nimiq_primitives::{
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     account::{
-        htlc_contract::{AnyHash, AnyHash32},
+        htlc_contract::{AnyHash, AnyHash32, AnyHash64},
         oracle_contract::CreationTransactionData as OracleCreationData,
         AccountTransactionVerification,
     },
@@ -126,6 +126,61 @@ fn bridge_creation_is_version_gated() {
             assert_eq!(result, Ok(()));
         }
     });
+}
+
+/// A bridge configured with `hash_function = Sha512` must be rejected at creation:
+/// Sha512 has no `AnyMerkleProof` variant and `extract_burn_transaction_hash`
+/// returns `UnsupportedHashFunction`, so such a bridge could accept deposits but
+/// never process a burn-proof release — a permanent fund lock.
+#[test]
+fn bridge_creation_rejects_unsupported_hash_function() {
+    let make_tx = |hash_function: AnyHash| {
+        let data = BridgeCreationData {
+            owner: Address::from(&key_pair().public),
+            oracle_address: Address::from([4u8; 20]),
+            source_chain_id: 1,
+            chain_config: ChainConfig {
+                chain_id: 1,
+                hash_function,
+                address_format: AddressFormat::Ethereum,
+                endianness: Endianness::LittleEndian,
+                block_time: std::time::Duration::from_secs(60),
+                validation_program: ValidationProgram::empty(),
+                max_proof_depth: 64,
+            },
+        };
+        Transaction::new_contract_creation(
+            Address::from([1u8; 20]),
+            AccountType::Basic,
+            vec![],
+            AccountType::Bridge,
+            data.serialize_to_vec(),
+            1000.try_into().unwrap(),
+            0.try_into().unwrap(),
+            1,
+            NetworkId::UnitAlbatross,
+        )
+    };
+
+    // Sha512 is unsupported by the release path → rejected at an activated version.
+    let sha512_tx = make_tx(AnyHash::Sha512(AnyHash64::from([0u8; 64])));
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&sha512_tx, ACTIVATION),
+        Err(TransactionError::InvalidData),
+    );
+
+    // The three supported hash functions are accepted at an activated version.
+    for supported in [
+        AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
+        AnyHash::Sha256(AnyHash32::from([0u8; 32])),
+        AnyHash::Keccak256(AnyHash32::from([0u8; 32])),
+    ] {
+        let tx = make_tx(supported);
+        assert_eq!(
+            AccountType::verify_incoming_transaction(&tx, ACTIVATION),
+            Ok(()),
+        );
+    }
 }
 
 #[test]
