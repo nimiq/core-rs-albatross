@@ -18,7 +18,7 @@ byteorder = "1.5"
 curve25519-dalek = { version = "5.0.0", features = ["digest"] }
 hex = "0.4"
 log = { workspace = true }
-num-bigint = "0.4"
+num-bigint = "0.5"
 rand = "0.10"
 serde = { version = "1.0", optional = true }
 sha2 = "0.11"
