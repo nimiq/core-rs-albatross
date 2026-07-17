@@ -1509,6 +1509,28 @@ pub struct ValidationProgram {
     pub operations: Vec<ValidationOp>,
 }
 
+/// Computes the byte range `offset..offset + len` into a buffer of size `data_len`,
+/// rejecting any range that overflows or falls outside the buffer.
+///
+/// `offset` and `len` originate from attacker-controlled burn data, so the
+/// addition is done with `checked_add`: a plain `offset + len` can wrap (release
+/// builds do not enable overflow checks) and satisfy a naive `> data_len` guard
+/// while the real range is out of bounds, panicking on the subsequent slice.
+fn checked_data_range(
+    offset: u64,
+    len: u64,
+    data_len: usize,
+) -> Result<std::ops::Range<usize>, BridgeError> {
+    let end = offset
+        .checked_add(len)
+        .ok_or(BridgeError::InvalidDataLength)?;
+    if end > data_len as u64 {
+        return Err(BridgeError::InvalidDataLength);
+    }
+    // `end <= data_len`, which is a `usize`, so both bounds fit in `usize`.
+    Ok(offset as usize..end as usize)
+}
+
 impl ValidationProgram {
     /// Creates a new validation program with the given operations
     pub fn new(operations: Vec<ValidationOp>) -> Self {
@@ -1538,70 +1560,49 @@ impl ValidationProgram {
             }
 
             ValidationOp::LoadBytes => {
-                let length = ctx.pop_u64()? as usize;
-                let offset = ctx.pop_u64()? as usize;
-                let burn_tx_data = ctx.burn_tx_data();
+                let length = ctx.pop_u64()?;
+                let offset = ctx.pop_u64()?;
+                let data = ctx.burn_tx_data();
+                let range = checked_data_range(offset, length, data.len())?;
 
-                if offset + length > burn_tx_data.len() {
-                    return Err(BridgeError::InvalidDataLength);
-                }
-
-                let bytes = burn_tx_data[offset..offset + length].to_vec();
+                let bytes = data[range].to_vec();
                 ctx.stack_mut().push(StackValue::Bytes(bytes));
             }
 
             ValidationOp::LoadU64(endianness) => {
-                let offset = ctx.pop_u64()? as usize;
-                let burn_tx_data = ctx.burn_tx_data();
+                let offset = ctx.pop_u64()?;
+                let data = ctx.burn_tx_data();
+                let range = checked_data_range(offset, 8, data.len())?;
 
-                if offset + 8 > burn_tx_data.len() {
-                    return Err(BridgeError::InvalidDataLength);
-                }
-
-                let value = endianness_conversion::parse_u64(
-                    &burn_tx_data[offset..offset + 8],
-                    *endianness,
-                )?;
+                let value = endianness_conversion::parse_u64(&data[range], *endianness)?;
                 ctx.stack_mut().push(StackValue::U64(value));
             }
 
             ValidationOp::LoadU32(endianness) => {
-                let offset = ctx.pop_u64()? as usize;
-                let burn_tx_data = ctx.burn_tx_data();
+                let offset = ctx.pop_u64()?;
+                let data = ctx.burn_tx_data();
+                let range = checked_data_range(offset, 4, data.len())?;
 
-                if offset + 4 > burn_tx_data.len() {
-                    return Err(BridgeError::InvalidDataLength);
-                }
-
-                let value = endianness_conversion::parse_u32(
-                    &burn_tx_data[offset..offset + 4],
-                    *endianness,
-                )?;
+                let value = endianness_conversion::parse_u32(&data[range], *endianness)?;
                 ctx.stack_mut().push(StackValue::U32(value));
             }
 
             ValidationOp::LoadAddress => {
-                let offset = ctx.pop_u64()? as usize;
-                let burn_tx_data = ctx.burn_tx_data();
+                let offset = ctx.pop_u64()?;
+                let data = ctx.burn_tx_data();
+                let range = checked_data_range(offset, 20, data.len())?;
 
-                if offset + 20 > burn_tx_data.len() {
-                    return Err(BridgeError::InvalidDataLength);
-                }
-
-                let bytes = burn_tx_data[offset..offset + 20].to_vec();
+                let bytes = data[range].to_vec();
                 ctx.stack_mut().push(StackValue::Bytes(bytes));
             }
 
             ValidationOp::LoadEvmU64 => {
-                let offset = ctx.pop_u64()? as usize;
-                let burn_tx_data = ctx.burn_tx_data();
-
-                if offset + 32 > burn_tx_data.len() {
-                    return Err(BridgeError::InvalidDataLength);
-                }
+                let offset = ctx.pop_u64()?;
+                let data = ctx.burn_tx_data();
+                let range = checked_data_range(offset, 32, data.len())?;
 
                 let mut evm_bytes = [0u8; 32];
-                evm_bytes.copy_from_slice(&burn_tx_data[offset..offset + 32]);
+                evm_bytes.copy_from_slice(&data[range]);
                 let value = crate::bridge_contract::decode_arithmetic::bytes32_to_u64(&evm_bytes)?;
                 ctx.stack_mut().push(StackValue::U64(value));
             }
