@@ -533,6 +533,103 @@ fn bridge_outgoing_commit_success() {
     assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
 }
 
+/// A *successful* outgoing bridge transaction with a non-zero fee must debit the
+/// fee from the burn-proof signer, not mint it. The bridge releases only `value`
+/// and the fee is still paid into the reward pot, so without a signer debit the
+/// total supply would inflate by exactly the fee. `commit_and_test` also verifies
+/// the commit/revert round-trip (state root + logs), covering the fee refund.
+#[test]
+fn bridge_outgoing_success_charges_fee_to_signer() {
+    let owner = KeyPair::generate_default_csprng();
+    let signer_address = Address::from(&owner.public);
+    let initial_signer_balance = Coin::from_u64_unchecked(10_000);
+
+    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let oracle = make_single_state_oracle(&burn_data);
+    let bridge = BridgeContract {
+        owner: signer_address.clone(),
+        oracle_address: oracle_addr(),
+        balance: Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        source_chain_id: SOURCE_CHAIN_ID,
+        chain_config: chain_config(),
+        transaction_count: 0,
+    };
+    // The target is intentionally not seeded: a zero-balance account is never
+    // stored in the trie (it is created by the release and pruned again on
+    // revert), so seeding it would make the revert root-hash check spuriously
+    // fail against the pruned post-revert trie.
+    let test = TestCommitRevert::with_initial_state(&[
+        (oracle_addr(), Account::Oracle(oracle)),
+        (bridge_addr(), Account::Bridge(bridge)),
+        (
+            signer_address.clone(),
+            Account::Basic(BasicAccount {
+                balance: initial_signer_balance,
+            }),
+        ),
+    ]);
+
+    // Build a signed outgoing bridge transaction with a non-zero fee. The proof
+    // in `sender_data` is signed by `owner`, so the fee payer is the owner.
+    let fee = Coin::from_u64_unchecked(10);
+    let outgoing = OutgoingTransaction {
+        burn_transaction_data: burn_data,
+        merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        oracle_state_index: 0,
+    };
+    let mut bridge_data = OutgoingBridgeTransactionData {
+        burn_proof: outgoing,
+        proof: SignatureProof::default(),
+    };
+    let mut tx = Transaction::new_extended(
+        bridge_addr(),
+        AccountType::Bridge,
+        bridge_data.serialize_to_vec(),
+        nimiq_target(),
+        AccountType::Basic,
+        vec![],
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+        fee,
+        1,
+        NetworkId::UnitAlbatross,
+    );
+    let sig = owner.sign(&tx.serialize_content());
+    bridge_data.set_signature(SignatureProof::from_ed25519(owner.public.clone(), sig));
+    tx.sender_data = bridge_data.serialize_to_vec();
+
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+    let receipts = test
+        .commit_and_test(&[tx], &[], &bs, &mut BlockLogger::empty())
+        .expect("successful outgoing commit");
+
+    // The fee payer is recorded as the burn-proof signer (so revert can refund it).
+    match &receipts.transactions[0] {
+        OperationReceipt::Ok(receipt) => assert_eq!(
+            receipt.fee_payer,
+            Some(signer_address.clone()),
+            "fee payer must be the burn-proof signer",
+        ),
+        other => panic!("expected a successful receipt, got {other:?}"),
+    }
+
+    // Value leaves the bridge, the fee leaves the signer, the target gets the value.
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT - RELEASE_AMOUNT),
+        "bridge debits exactly the released value",
+    );
+    assert_eq!(
+        test.get_complete(&signer_address, None).balance(),
+        initial_signer_balance - fee,
+        "fee is debited from the signer (no supply inflation)",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+        "target receives the released value",
+    );
+}
+
 /// Wrong chain_id in burn data → rejected.
 #[test]
 fn bridge_outgoing_rejects_wrong_chain_id() {
