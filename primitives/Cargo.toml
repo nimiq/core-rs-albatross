@@ -20,9 +20,9 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-ark-ec = "0.5"
-ark-mnt6-753 = "0.5"
-ark-serialize = "0.5"
+ark-ec = "0.6"
+ark-mnt6-753 = "0.6"
+ark-serialize = "0.6"
 byteorder = "1.5"
 cfg_eval = "0.1"
 hex = { version = "0.4", optional = true }

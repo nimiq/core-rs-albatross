@@ -18,7 +18,7 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-ark-ec = "0.5"
+ark-ec = "0.6"
 bitflags = { version = "2.12", features = ["serde"] }
 byteorder = "1.5"
 hex = "0.4"
@@ -43,6 +43,6 @@ nimiq-utils = { workspace = true, features = ["merkle"] }
 nimiq-vrf = { workspace = true, features = ["serde-derive"] }
 
 [dev-dependencies]
-ark-serialize = "0.5"
+ark-serialize = "0.6"
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
