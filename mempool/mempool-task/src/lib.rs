@@ -162,7 +162,7 @@ impl<N: Network> MempoolTask<N> {
                             "Revalidate mempool transactions after protocol upgrade to version {}",
                             version
                         );
-                        self.mempool.revalidate_transactions();
+                        self.mempool.revalidate_transactions(version);
                         debug!(
                             "Revalidate mempool transactions after protocol upgrade to version {}",
                             version

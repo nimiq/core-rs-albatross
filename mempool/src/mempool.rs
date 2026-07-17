@@ -21,7 +21,7 @@ use nimiq_transaction::{
     TransactionTopic,
 };
 use nimiq_utils::spawn;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use tokio_metrics::TaskMonitor;
 
 #[cfg(feature = "metrics")]
@@ -403,30 +403,37 @@ impl Mempool {
     /// After a protocol upgrade there might be transactions that are no longer valid because of new rules introduced by the
     /// protocol upgrade.
     /// This revalidates all transactions in the mempool and removes the ones that are no longer valid.
-    pub fn revalidate_transactions(&self) {
-        let blockchain = self.blockchain.read();
-        let mut state = self.state.write();
-        let protocol_version = blockchain.protocol_version();
-        let MempoolState {
-            regular_transactions,
-            control_transactions,
-            ..
-        } = &mut *state;
+    ///
+    /// `protocol_version` is the version to validate against: the caller passes the version of the
+    /// election block that activated the upgrade, so it is fixed and never re-read from the blockchain.
+    pub fn revalidate_transactions(&self, protocol_version: u16) {
+        // Hold state as an upgradable read for the whole operation so nothing changes between
+        // deciding what is invalid and removing it. Readers (e.g. block production) still run;
+        // only writers wait. The blockchain lock is not held across the per-tx checks
+        let state = self.state.upgradable_read();
 
-        // Find transactions that no longer pass verification under the new protocol version.
-        let invalid: Vec<Blake2bHash> = regular_transactions
+        let invalid: Vec<Blake2bHash> = state
+            .regular_transactions
             .transactions
-            .values_mut()
-            .chain(control_transactions.transactions.values_mut())
-            .filter_map(|tx| {
+            .iter()
+            .chain(state.control_transactions.transactions.iter())
+            .filter_map(|(hash, tx)| {
+                // Clone for the `&mut`; `verify_mut` clears the cached `valid` so the checks re-run
+                let mut tx = tx.clone();
                 tx.reset_verification_state();
                 tx.verify_mut(tx.network_id, protocol_version)
                     .err()
-                    .map(|_| tx.hash())
+                    .map(|_| hash.clone())
             })
             .collect();
 
-        // Remove them; `remove()` releases each sender's reserved balance and prunes empty sender state.
+        if invalid.is_empty() {
+            return;
+        }
+
+        // Upgrade to write only to remove them; `remove()` needs current state to release balance
+        let blockchain = self.blockchain.read();
+        let mut state = RwLockUpgradableReadGuard::upgrade(state);
         for hash in invalid {
             state.remove(&blockchain, &hash, EvictionReason::Invalid);
         }
