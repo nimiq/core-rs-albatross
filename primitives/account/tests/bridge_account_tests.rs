@@ -774,6 +774,73 @@ fn bridge_outgoing_rejects_oracle_index_out_of_bounds() {
     ));
 }
 
+/// Regression: once the oracle ring buffer wraps, valid global indices are
+/// `>= hash_count`. The old `oracle_state_index >= oracle.hashes.len()` guard
+/// rejected them, permanently locking every withdrawal. Here `hash_count = 2`
+/// and the buffer has wrapped (`latest_index = 2`), so the burn's covering state
+/// lives at global index 2; the release against index 2 must commit.
+#[test]
+fn bridge_outgoing_succeeds_with_wrapped_oracle_index() {
+    let owner = KeyPair::generate_default_csprng();
+
+    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let leaf = blake2b(&burn_data);
+    let zero = leaf.zero_of_same_type();
+    // Oracle chain: data_i = H(data_{i-1} || state_i); state_2 is the burn's leaf,
+    // so a proof covering index 2 verifies. state_0/state_1 are arbitrary.
+    let data_0 = zero.digest(&blake2b(b"state0"));
+    let data_1 = data_0.digest(&blake2b(b"state1"));
+    let data_2 = data_1.digest(&leaf);
+    // Ring buffer of size 2 after writing indices 0,1,2: pos0 = index 2, pos1 = index 1.
+    // earliest_index = 1, so index 0 is evicted and the retained window is [1, 2].
+    let oracle = OracleContract {
+        owner: Address::from([0x01u8; 20]),
+        balance: Coin::from_u64_unchecked(1_000),
+        hash_count: 2,
+        hashes: vec![data_2, data_1],
+        latest_index: Some(2),
+    };
+    let bridge = BridgeContract {
+        owner: Address::from(&owner.public),
+        oracle_address: oracle_addr(),
+        balance: Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        source_chain_id: SOURCE_CHAIN_ID,
+        chain_config: chain_config(),
+        transaction_count: 0,
+    };
+    let test = TestCommitRevert::with_initial_state(&[
+        (oracle_addr(), Account::Oracle(oracle)),
+        (bridge_addr(), Account::Bridge(bridge)),
+    ]);
+
+    // Release against global oracle index 2 (== hash_count, i.e. past the wrap).
+    let tx = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        burn_data,
+        2,
+        &owner,
+    );
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+    let receipts = test
+        .commit_and_test(&[tx], &[], &bs, &mut BlockLogger::empty())
+        .expect("release against a wrapped-oracle index must commit");
+
+    assert!(
+        matches!(receipts.transactions[0], OperationReceipt::Ok(_)),
+        "release against global index >= hash_count must succeed after wrap",
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT - RELEASE_AMOUNT),
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+    );
+}
+
 /// Merkle proof doesn't match oracle state hash → rejected.
 #[test]
 fn bridge_outgoing_rejects_wrong_merkle_proof() {
