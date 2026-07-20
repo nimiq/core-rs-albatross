@@ -4405,6 +4405,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-test-log",
  "nimiq-test-utils",
+ "nimiq-time",
  "nimiq-transaction",
  "nimiq-transaction-builder",
  "nimiq-utils",

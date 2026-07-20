@@ -90,6 +90,10 @@ impl<N: Network> MempoolTask<N> {
             return;
         }
 
+        // A protocol upgrade event might have been dropped by a lagging event stream,
+        // so resynchronize the version used for transaction verification
+        self.mempool.resync_protocol_version();
+
         let mempool = Arc::clone(&self.mempool);
         let network = Arc::clone(&self.consensus.network);
         #[cfg(not(feature = "metrics"))]
@@ -152,23 +156,20 @@ impl<N: Network> MempoolTask<N> {
                         .get_block(hash, true)
                         .expect("Head block not found");
                     let is_election = block.is_election();
-                    let version = block.version();
 
                     self.mempool.update(&[(hash.clone(), block)], [].as_ref());
 
-                    // If we upgraded we must revalidate all transactions.
-                    if is_election && self.mempool.set_protocol_version(version) < version {
-                        debug!(
-                            "Revalidate mempool transactions after protocol upgrade to version {}",
-                            version
-                        );
-                        self.mempool.revalidate_transactions();
-                        debug!(
-                            "Revalidate mempool transactions after protocol upgrade to version {}",
-                            version
-                        );
+                    // Elections also repair a version whose upgrade event was dropped
+                    // by a lagging event stream while the mempool was active
+                    if is_election {
+                        self.mempool.resync_protocol_version();
                     }
                 }
+            }
+            BlockchainEvent::ProtocolUpgrade(..) => {
+                // The upgrade might have been adopted through history or macro sync while
+                // not yet synced, so this is deliberately not gated on being synced
+                self.mempool.resync_protocol_version();
             }
             // Mempool updates are only done once we are synced.
             BlockchainEvent::Rebranched(old_chain, new_chain)

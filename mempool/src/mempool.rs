@@ -691,6 +691,20 @@ impl Mempool {
         old_protocol_version
     }
 
+    /// Synchronizes the protocol version used for transaction verification with the
+    /// current blockchain state. If the protocol version increased, all mempool
+    /// contents are revalidated under the new version's rules.
+    pub fn resync_protocol_version(&self) {
+        let protocol_version = self.blockchain.read().protocol_version();
+        if self.set_protocol_version(protocol_version) < protocol_version {
+            debug!(
+                version = protocol_version,
+                "Revalidating mempool transactions after protocol upgrade"
+            );
+            self.revalidate_transactions();
+        }
+    }
+
     /// Checks whether a transaction has been filtered
     pub fn is_filtered(&self, hash: &Blake2bHash) -> bool {
         self.filter.read().blacklisted(hash)

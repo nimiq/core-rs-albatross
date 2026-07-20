@@ -37,6 +37,7 @@ nimiq-utils = { workspace = true, features = ["time"] }
 metrics = ["nimiq-mempool/metrics", "tokio-metrics"]
 
 [dev-dependencies]
+nimiq-time = { workspace = true }
 tokio = { version = "1.52", features = ["macros", "rt", "time"] }
 
 nimiq-database = { workspace = true }
