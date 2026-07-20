@@ -9,7 +9,7 @@ use nimiq_transaction::account::bridge_contract::{
     CreationTransactionData, OutgoingBridgeTransactionData,
 };
 #[cfg(feature = "interaction-traits")]
-use nimiq_transaction::{inherent::Inherent, HashType, SignatureProof, Transaction};
+use nimiq_transaction::{inherent::Inherent, HashType, Transaction};
 #[cfg(feature = "interaction-traits")]
 pub use store::BridgeContractStoreWrite;
 pub use store::BridgeNonce;
@@ -80,21 +80,12 @@ impl BridgeContract {
         new_balance: Coin,
         is_reserve: bool,
     ) -> Result<(), AccountError> {
-        // For outgoing transactions (bridge is sender), the signature is in sender_data
-        // For incoming transactions (bridge is recipient), the signature is in proof
-        let signature_proof = if transaction.sender_type == AccountType::Bridge {
-            // Outgoing transaction - signature is in sender_data
-            let outgoing_data =
-                OutgoingBridgeTransactionData::deserialize_all(&transaction.sender_data)?;
-            outgoing_data.proof
-        } else {
-            // Incoming transaction - signature is in proof field
-            SignatureProof::deserialize_all(&transaction.proof)?
-        };
-
-        if !signature_proof.is_signed_by(&self.owner) {
-            return Err(AccountError::InvalidSignature);
-        }
+        // Outgoing bridge transactions are permissionless burn-releases: the Merkle
+        // burn-proof verified in `commit_outgoing_transaction` is the sole authorization,
+        // so we deliberately do NOT require the owner's signature here. Requiring it made
+        // `reserve_balance` (mempool admission) reject the very transactions that `commit`
+        // accepts, diverging the mempool from consensus and breaking permissionless
+        // submission. Balance availability is still enforced by `reserve_balance` itself.
 
         // If withdrawing, must withdraw the full balance (contract deletion)
         if new_balance < self.balance {
