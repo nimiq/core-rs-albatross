@@ -1043,7 +1043,9 @@ impl HistoryInterface for HistoryStore {
             return None;
         }
 
-        // Retrieve historic transactions up to the block number from database
+        // Retrieve historic transactions up to the block number from database.
+        // Fetched once and reused below; scanning the whole epoch twice per request
+        // is an unnecessary I/O amplification on this network/RPC-reachable path.
         let hist_txs = self.get_historic_txns(epoch_number, 0..num_txs as u32, Some(&txn));
 
         // Get the transaction at transaction_index before sorting
@@ -1057,9 +1059,8 @@ impl HistoryInterface for HistoryStore {
             }
         };
 
-        // Retrieve transactions up to the block number from database
-        let txs: Vec<Transaction> = self
-            .get_historic_txns(epoch_number, 0..num_txs as u32, Some(&txn))
+        // Reuse the already-fetched historic transactions instead of re-scanning the epoch.
+        let txs: Vec<Transaction> = hist_txs
             .iter()
             .filter_map(|historic_tx| {
                 if historic_tx.is_not_basic() {
