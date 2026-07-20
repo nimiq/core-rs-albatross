@@ -180,12 +180,13 @@ fn bridge_reserve_and_release_balance_owner() {
     assert_eq!(reserved.balance(), Coin::ZERO);
 }
 
-/// `reserve_balance` rejects an outgoing tx whose burn-proof signature is NOT
-/// the bridge owner. This is the mempool-admission half of the intentional
-/// asymmetry: the same tx is accepted at block execution (see the
-/// permissionless test below).
+/// `reserve_balance` accepts an outgoing tx whose burn-proof signature is NOT
+/// the bridge owner. Burn-releases are permissionless — the Merkle burn-proof
+/// verified at commit is the sole authorization — so mempool admission must
+/// accept the same transactions block execution accepts. (An owner-signature
+/// check here used to diverge the mempool from consensus.)
 #[test]
-fn bridge_reserve_balance_rejects_non_owner() {
+fn bridge_reserve_balance_accepts_non_owner() {
     let owner = KeyPair::generate_default_csprng();
     let relayer = KeyPair::generate_default_csprng(); // not the owner
 
@@ -215,11 +216,11 @@ fn bridge_reserve_balance_rejects_non_owner() {
 
     let mut reserved = ReservedBalance::new(bridge_addr());
     let res = bridge.reserve_balance(&tx, &mut reserved, &bs, data_store.read(&mut db_txn));
-    assert_eq!(
-        res,
-        Err(AccountError::InvalidSignature),
-        "reserve_balance must reject a non-owner burn-proof signature"
+    assert!(
+        res.is_ok(),
+        "reserve_balance must accept a non-owner burn-proof signature: {res:?}"
     );
+    assert_eq!(reserved.balance(), Coin::from_u64_unchecked(RELEASE_AMOUNT));
 }
 
 /// `reserve_balance` rejects when the requested total exceeds the bridge balance.
