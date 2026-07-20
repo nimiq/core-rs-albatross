@@ -510,9 +510,24 @@ impl Mempool {
                     Some(transaction) => transaction,
                     None => return false,
                 };
-                let still_valid = blockchain
+                let mut still_valid = blockchain
                     .reserve_balance(&sender_account, tx, &mut sender_state.reserved_balance)
                     .is_ok();
+                if still_valid
+                    && blockchain
+                        .reserve_bridge_signer_fee(tx, &mut sender_state.reserved_balance)
+                        .is_err()
+                {
+                    // The bridge signer fee could not be re-reserved (no-op for non-bridge
+                    // txs). Roll back the value reservation and drop the tx, mirroring
+                    // `MempoolState::put`. The rollback must happen here: this bucket is
+                    // detached from `state_by_sender`, so the `remove` below hits its
+                    // sender-not-found early return and would release nothing.
+                    blockchain
+                        .release_balance(&sender_account, tx, &mut sender_state.reserved_balance)
+                        .ok();
+                    still_valid = false;
+                }
                 if !still_valid {
                     mempool_state.remove(blockchain, tx_hash, EvictionReason::Invalid);
                 }
