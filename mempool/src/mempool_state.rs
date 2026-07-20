@@ -90,10 +90,22 @@ impl MempoolState {
         if let Some(sender_state) = self.state_by_sender.get_mut(&tx.sender) {
             let reserved_balance = &mut sender_state.reserved_balance;
             blockchain.reserve_balance(&sender_account, &tx, reserved_balance)?;
+            // Bridge burn-releases pay their fee from the burn-proof signer, not the
+            // sender; reserve it against the signer too. Roll back the value reservation
+            // if it cannot be reserved so the bucket is never left inconsistent.
+            if let Err(e) = blockchain.reserve_bridge_signer_fee(&tx, reserved_balance) {
+                blockchain
+                    .release_balance(&sender_account, &tx, reserved_balance)
+                    .ok();
+                return Err(e.into());
+            }
             sender_state.txns.insert(tx.hash());
         } else {
             let mut reserved_balance = ReservedBalance::new(tx.sender.clone());
             blockchain.reserve_balance(&sender_account, &tx, &mut reserved_balance)?;
+            // See above: also reserve the signer fee for bridge transactions. On failure
+            // the freshly-created `reserved_balance` is simply dropped (nothing inserted).
+            blockchain.reserve_bridge_signer_fee(&tx, &mut reserved_balance)?;
 
             let sender_state = SenderPendingState {
                 reserved_balance,
@@ -162,6 +174,8 @@ impl MempoolState {
         blockchain
             .release_balance(&sender_account, &tx, &mut sender_state.reserved_balance)
             .expect("Failed to release balance");
+        // Mirror of `put`: release the bridge signer fee reserved against the signer.
+        blockchain.release_bridge_signer_fee(&tx, &mut sender_state.reserved_balance);
 
         if sender_state.txns.is_empty() {
             self.state_by_sender.remove(&tx.sender);

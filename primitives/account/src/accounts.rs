@@ -656,7 +656,10 @@ impl Accounts {
     /// `transaction.proof`. The latter is never verified for `AccountType::Bridge`
     /// senders, so deriving the fee payer from it would let a submitter charge the
     /// fee to an arbitrary account by placing any public key in `transaction.proof`.
-    fn extract_signer_address(&self, transaction: &Transaction) -> Result<Address, AccountError> {
+    pub fn extract_signer_address(
+        &self,
+        transaction: &Transaction,
+    ) -> Result<Address, AccountError> {
         debug_assert_eq!(transaction.sender_type, AccountType::Bridge);
 
         let outgoing_data = OutgoingBridgeTransactionData::parse(transaction)
