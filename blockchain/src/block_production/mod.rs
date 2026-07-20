@@ -303,6 +303,13 @@ impl BlockProducer {
         // The rng seed. We need this parameterized in order to have determinism when running unit tests.
         rng: &mut R,
     ) -> Result<MacroBlock, BlockProducerError> {
+        // The complete accounts state is needed to produce a macro block proposal. Abort
+        // gracefully otherwise, mirroring `Blockchain::verify_macro_block_proposal` on the
+        // verifying side
+        if !blockchain.accounts_complete() {
+            return Err(BlockProducerError::AccountsIncomplete);
+        }
+
         // The network ID stays unchanged for the whole blockchain.
         let network = blockchain.head().network();
 
@@ -336,7 +343,7 @@ impl BlockProducer {
         // Get the staking contract PRIOR to any state changes.
         let staking_contract = blockchain
             .get_staking_contract_if_complete(None)
-            .expect("Staking Contract must be complete to create a macro body");
+            .ok_or(BlockProducerError::AccountsIncomplete)?;
 
         // Calculate the punished set for the next batch.
         let next_batch_initial_punished_set = staking_contract

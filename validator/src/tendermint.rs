@@ -238,9 +238,17 @@ where
             && blockchain.state().current_version() + 1 == Policy::max_supported_version()
         {
             let new_version = blockchain.state().current_version() + 1;
-            let staking_contract = blockchain
-                .get_staking_contract_if_complete(None)
-                .expect("Staking Contract must be complete to create a macro proposal");
+            // The complete accounts state is needed to determine the upgrade support, as the
+            // support check below reads the individual validator entries of the staking
+            // contract. Abort instead of panicking, mirroring the stale-blockchain abort above
+            if !blockchain.accounts_complete() {
+                warn!("Cannot create macro proposal, accounts state is incomplete");
+                return Err(ProtocolError::Abort);
+            }
+            let Some(staking_contract) = blockchain.get_staking_contract_if_complete(None) else {
+                // Unreachable: the accounts state was just checked to be complete
+                return Err(ProtocolError::Abort);
+            };
             let data_store = blockchain.get_staking_contract_store();
             let txn = blockchain.read_transaction();
             let data_store_read = &data_store.read(&txn);

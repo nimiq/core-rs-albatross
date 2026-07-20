@@ -10,7 +10,7 @@ use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
-use nimiq_tendermint::{ProposalMessage, Protocol, SignedProposalMessage};
+use nimiq_tendermint::{ProposalMessage, Protocol, ProtocolError, SignedProposalMessage};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, test_network::TestNetwork, test_rng,
@@ -411,6 +411,52 @@ async fn it_triggers_version_upgrades() {
         .create_proposal(0)
         .expect("Should have created proposal");
     assert_eq!(proposal.0.proposal.0.version, next_version);
+}
+
+#[test(tokio::test)]
+async fn it_aborts_proposal_creation_with_incomplete_accounts() {
+    // Move to before the next election block, with an upgrade to the next version pending.
+    let initial_version = Policy::max_supported_version() - 1;
+    let temp_producer = TemporaryBlockProducer::new_with_protocol_version(initial_version);
+    for _ in 0..Policy::blocks_per_epoch() - 1 {
+        let block = temp_producer.next_block(vec![], false);
+        temp_producer
+            .push(block)
+            .expect("Should be able to push block");
+    }
+
+    // Initialize a TendermintProtocol.
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+    let current_validators = blockchain.read().current_validators().unwrap().clone();
+    let hub = MockHub::default();
+    let nw: Arc<Network> = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
+    let interface = TendermintProtocol::new(
+        Arc::clone(&blockchain),
+        val_net,
+        temp_producer.producer.clone(),
+        current_validators,
+        0,
+        NetworkId::UnitAlbatross,
+        blockchain.read().head().block_number() + 1,
+    );
+
+    // Make the accounts trie incomplete.
+    {
+        let blockchain_rg = blockchain.read();
+        let mut raw_txn = blockchain_rg.write_transaction();
+        blockchain_rg
+            .state()
+            .accounts
+            .reinitialize_as_incomplete(&mut (&mut raw_txn).into());
+        raw_txn.commit();
+    }
+
+    // The version-upgrade support check must abort the proposal instead of panicking.
+    assert!(matches!(
+        interface.create_proposal(0),
+        Err(ProtocolError::Abort)
+    ));
 }
 
 #[test(tokio::test)]

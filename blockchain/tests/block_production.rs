@@ -1,7 +1,9 @@
 use std::{convert::TryInto, sync::Arc};
 
 use nimiq_block::{Block, EquivocationProof, ForkProof, MicroHeader, MicroJustification};
-use nimiq_blockchain::{interface::HistoryInterface, BlockProducer, Blockchain, BlockchainConfig};
+use nimiq_blockchain::{
+    interface::HistoryInterface, BlockProducer, BlockProducerError, Blockchain, BlockchainConfig,
+};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction};
@@ -1502,6 +1504,26 @@ fn it_can_revert_basic_and_create_contracts_txns() {
     let result = bc.revert_blocks(1, &mut txn);
 
     assert!(result.is_ok());
+}
+
+#[test]
+fn it_aborts_macro_block_proposal_with_incomplete_accounts() {
+    let temp_producer = TemporaryBlockProducer::new_incomplete();
+    let bc = temp_producer.blockchain.read();
+
+    // Producing a macro block proposal on an incomplete accounts trie must fail
+    // gracefully instead of panicking
+    let result = temp_producer.producer.next_macro_block_proposal(
+        &bc,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        0u32,
+        vec![],
+        None,
+    );
+    assert!(matches!(
+        result,
+        Err(BlockProducerError::AccountsIncomplete)
+    ));
 }
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
