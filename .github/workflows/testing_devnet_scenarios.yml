@@ -61,7 +61,7 @@ jobs:
           echo "Failed to checkout iicruz/testing-tendermint-ci-fails!"
           exit 1
         fi
-    - uses: actions/setup-python@v6
+    - uses: actions/setup-python@v7
       with:
         python-version: '3.8'
     - name: Install python dependencies
