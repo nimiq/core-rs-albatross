@@ -455,7 +455,11 @@ where
                 let equivocation_proofs = state
                     .consensus
                     .equivocation_proofs
-                    .get_equivocation_proofs_for_block(Self::EQUIVOCATION_PROOFS_MAX_SIZE);
+                    .get_equivocation_proofs_for_block(
+                        next_block_number,
+                        blockchain.protocol_version(),
+                        Self::EQUIVOCATION_PROOFS_MAX_SIZE,
+                    );
                 let prev_seed = head.seed().clone();
 
                 self.micro_producer = Some(ProduceMicroBlock::new(

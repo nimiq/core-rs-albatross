@@ -62,11 +62,24 @@ impl EquivocationProofPool {
         }
     }
 
-    /// Returns a list of current equivocation proofs.
-    pub fn get_equivocation_proofs_for_block(&self, max_size: usize) -> Vec<EquivocationProof> {
+    /// Returns a list of equivocation proofs that are valid for inclusion in a block
+    /// with the given block number and version.
+    pub fn get_equivocation_proofs_for_block(
+        &self,
+        block_number: u32,
+        version: u16,
+        max_size: usize,
+    ) -> Vec<EquivocationProof> {
         let mut proofs = Vec::new();
         let mut size = 0;
         for proof in self.equivocation_proofs.iter() {
+            // The pool is only pruned at macro blocks and proofs are re-added on reverts
+            // unconditionally, so proofs can expire mid-batch. Mirror the check done by
+            // `MicroBlock` body verification to never produce a block that includes an
+            // expired proof, which the network would reject
+            if !proof.is_valid_at(block_number, version) {
+                continue;
+            }
             let proof_len = proof.serialized_size();
             if size + proof_len < max_size {
                 proofs.push(proof.clone());
@@ -74,5 +87,82 @@ impl EquivocationProofPool {
             }
         }
         proofs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_block::{ForkProof, MicroHeader};
+    use nimiq_hash::HashOutput;
+    use nimiq_keys::{Address, KeyPair, PrivateKey};
+    use nimiq_primitives::policy::Policy;
+
+    use super::*;
+
+    fn equivocation_proof(offense_block: u32) -> EquivocationProof {
+        // The pool never verifies signatures, so any key works here.
+        let key = KeyPair::from(PrivateKey::from_bytes(&[1u8; 32]).unwrap());
+        let header1 = MicroHeader {
+            version: 1,
+            block_number: offense_block,
+            timestamp: 0,
+            ..Default::default()
+        };
+        let mut header2 = header1.clone();
+        header2.timestamp = 1;
+        let justification1 = key.sign(header1.hash().as_bytes());
+        let justification2 = key.sign(header2.hash().as_bytes());
+        ForkProof::new(
+            Address::burn_address(),
+            header1,
+            justification1,
+            header2,
+            justification2,
+        )
+        .into()
+    }
+
+    #[test]
+    fn get_equivocation_proofs_for_block_filters_expired_proofs() {
+        let offense_block = Policy::genesis_block_number();
+        let mut pool = EquivocationProofPool::new();
+        assert!(pool.insert(equivocation_proof(offense_block)));
+
+        let last_reportable = Policy::last_block_of_equivocation_reporting_window(offense_block);
+        assert!(last_reportable < Policy::last_block_of_collateral_lockup(offense_block));
+
+        // Within the reporting window the proof is returned.
+        assert_eq!(
+            pool.get_equivocation_proofs_for_block(last_reportable, 2, usize::MAX)
+                .len(),
+            1
+        );
+        // Past the window it is filtered out from version 2 on.
+        assert!(pool
+            .get_equivocation_proofs_for_block(last_reportable + 1, 2, usize::MAX)
+            .is_empty());
+        // Legacy versions still use the longer window.
+        assert_eq!(
+            pool.get_equivocation_proofs_for_block(last_reportable + 1, 1, usize::MAX)
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn get_equivocation_proofs_for_block_keeps_valid_drops_expired_together() {
+        let older = Policy::genesis_block_number();
+        // An offense one block later has a reporting window that ends one block later.
+        let newer = older + 1;
+        let mut pool = EquivocationProofPool::new();
+        assert!(pool.insert(equivocation_proof(older)));
+        assert!(pool.insert(equivocation_proof(newer)));
+
+        // A block past `older`'s window but still within `newer`'s window: the two proofs
+        // must be filtered independently, not all-or-nothing.
+        let at = Policy::last_block_of_equivocation_reporting_window(older) + 1;
+        let returned = pool.get_equivocation_proofs_for_block(at, 2, usize::MAX);
+        assert_eq!(returned.len(), 1);
+        assert_eq!(returned[0].block_number(), newer);
     }
 }
