@@ -490,6 +490,8 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                             // Skip to that round
                             self.state.current_round = round;
                             self.state.current_step = Step::Propose;
+                            // Drop the abandoned round's timeout so the skipped-to round arms a fresh one.
+                            self.timeout = None;
                             self.future_contributions
                                 .retain(|&round, _contributors| round > self.state.current_round);
                             self.future_round_messages
