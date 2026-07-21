@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 
 use futures::stream::{self, StreamExt};
 use nimiq_collections::BitSet;
@@ -971,6 +971,51 @@ async fn it_skips_ahead() {
     let update = await_state(&mut tendermint).await;
     expect_nothing_observed(&mut observe_receiver);
     assert_eq!(update.current_round, 2);
+}
+
+// A skip ahead must start a fresh proposal timeout for the round it jumps to,
+// not reuse the (elapsed) timeout of the round it left.
+#[test(tokio::test)]
+async fn skip_ahead_restarts_proposal_timeout() {
+    let (proposer, mut observe_receiver) = create_validator(vec![false, false, false], vec![]);
+    let (sender, receiver) = mpsc::channel(10);
+
+    let mut tendermint = Tendermint::new(
+        proposer.clone(),
+        None,
+        stream::iter(vec![]).boxed(),
+        ReceiverStream::new(receiver).boxed(),
+    );
+
+    // First poll arms the round 0 proposal timeout and then waits.
+    assert_poll_pending(&mut tendermint);
+
+    // Let the round 0 timeout elapse.
+    nimiq_time::sleep(Duration::from_millis(150)).await;
+
+    // f+1 votes for round 2 trigger a skip ahead.
+    let mut bs = BitSet::default();
+    for index in 0..Validator::F_PLUS_ONE {
+        bs.insert(index);
+    }
+    let mut contributions = BTreeMap::default();
+    contributions.insert(None, bs);
+    sender
+        .try_send(TaggedAggregationMessage {
+            tag: (2, Step::Prevote),
+            aggregation: Agg { contributions },
+        })
+        .expect("try_send must not fail");
+
+    // Skip ahead to round 2.
+    let update = expect_state(&mut tendermint);
+    assert_eq!(update.current_round, 2);
+
+    // The node must still await the round 2 proposal on a fresh timeout, not have
+    // prematurely voted nil by reusing the elapsed round 0 one.
+    assert_eq!(update.current_step, Step::Propose);
+    assert!(!update.votes.contains_key(&(2, Step::Prevote)));
+    expect_nothing_observed(&mut observe_receiver);
 }
 
 // // We don't have enough prevotes for the first proposal we create.
