@@ -18,7 +18,7 @@ use crate::{
     level::Level,
     network::{Network, NetworkHelper},
     partitioner::Partitioner,
-    pending_contributions::{PendingContribution, PendingContributionList},
+    pending_contributions::{Kind, PendingContribution, PendingContributionList},
     protocol::Protocol,
     store::ContributionStore,
     update::LevelUpdate,
@@ -110,6 +110,7 @@ where
             own_contribution.clone(),
             0,
             protocol.node_id(),
+            Kind::Aggregate,
             true,
         );
 
@@ -474,11 +475,21 @@ where
             self.respond_to_update(level, origin);
 
             // Store the aggregate (and individual if present) contributions in `pending_contributions`.
-            self.pending_contributions
-                .add_contribution(update.aggregate, level, origin, false);
+            self.pending_contributions.add_contribution(
+                update.aggregate,
+                level,
+                origin,
+                Kind::Aggregate,
+                false,
+            );
             if let Some(individual) = update.individual {
-                self.pending_contributions
-                    .add_contribution(individual, level, origin, false);
+                self.pending_contributions.add_contribution(
+                    individual,
+                    level,
+                    origin,
+                    Kind::Individual,
+                    false,
+                );
             }
         }
 
