@@ -101,13 +101,14 @@ pub enum IncomingStakingTransactionData {
 #[derive(Clone, Debug, Serialize, Deserialize, SerializedMaxSize)]
 #[repr(u8)]
 pub enum SignalDataUpdate {
-    /// Replaces the *entire* `signal_data` field (`None` clears it). This overwrites any
-    /// previously signaled protocol version.
+    /// Replaces the *entire* `signal_data` field. `None` clears it (the only way to reach a `None`
+    /// signal data); `Some(hash)` sets it verbatim. This overwrites any previously signaled version.
     Full(Option<Blake2bHash>),
-    /// Updates *only* the protocol-version bytes (the first two bytes, big-endian), preserving
-    /// the rest of `signal_data`. `None` clears the version bytes (sets them to zero). In
-    /// contrast to [`SignalDataUpdate::Full`], this is a non-destructive partial update.
-    Version(Option<u16>),
+    /// Sets *only* the protocol-version bytes (the first two bytes, big-endian) to `version`,
+    /// preserving the rest of `signal_data`. Unlike [`SignalDataUpdate::Full`], this is a
+    /// non-destructive partial update and always yields a present (`Some`) value — clearing the
+    /// whole field is a `Full` operation. Pass `0` to zero the version bytes.
+    Version(u16),
 }
 
 impl IncomingStakingTransactionData {

@@ -177,18 +177,17 @@ impl Policy {
         Blake2bHash(signal_data)
     }
 
-    /// Applies a protocol-version update to an existing `signal_data` value: the `version` is
-    /// encoded into the first two bytes (big-endian) while the remaining bytes are preserved.
-    /// `version == None` clears the version bytes (sets them to zero). Returns `None` if the
-    /// resulting value is all-zero, so that "no signal" has a single canonical representation.
+    /// Applies a protocol-version update to an existing `signal_data` value: `version` is encoded
+    /// into the first two bytes (big-endian) while the remaining bytes are preserved. This is a
+    /// partial update, so it always yields a present value (clearing the whole field is a separate
+    /// operation). `version == 0` zeroes the version bytes. An all-zero result and a `None` signal
+    /// data are equivalent for upgrade signaling at every real version (>= 2) — both make
+    /// [`Policy::supports_upgrade`] return `false`; they differ only at version 0.
     /// This is the partial-update counterpart to [`Policy::signal_data_for_version`].
-    pub fn signal_data_with_version(
-        current: Option<Blake2bHash>,
-        version: Option<u16>,
-    ) -> Option<Blake2bHash> {
+    pub fn signal_data_with_version(current: Option<Blake2bHash>, version: u16) -> Blake2bHash {
         let mut bytes: [u8; 32] = current.map(Into::into).unwrap_or([0u8; 32]);
-        bytes[..2].copy_from_slice(&version.unwrap_or(0).to_be_bytes());
-        (bytes != [0u8; 32]).then_some(Blake2bHash(bytes))
+        bytes[..2].copy_from_slice(&version.to_be_bytes());
+        Blake2bHash(bytes)
     }
 
     /// This function is used to determine if a validator signalled for a specific upgrade.
@@ -778,38 +777,45 @@ mod tests {
 
         // Setting a version on empty signal data encodes it in the first two bytes and matches
         // the canonical encoding.
-        let v2 = Policy::signal_data_with_version(None, Some(2)).unwrap();
+        let v2 = Policy::signal_data_with_version(None, 2);
         assert_eq!(&v2.as_slice()[..2], &2u16.to_be_bytes());
         assert!(v2.as_slice()[2..].iter().all(|&b| b == 0));
         assert!(Policy::supports_upgrade(Some(v2), 2));
         assert_eq!(
-            Policy::signal_data_with_version(None, Some(2)),
-            Some(Policy::signal_data_for_version(2))
+            Policy::signal_data_with_version(None, 2),
+            Policy::signal_data_for_version(2)
         );
 
         // Updating the version preserves the remaining bytes (non-destructive partial update).
         let mut bytes = [0u8; 32];
         bytes[5] = 0xAB;
-        let updated = Policy::signal_data_with_version(Some(Blake2bHash(bytes)), Some(7)).unwrap();
+        let updated = Policy::signal_data_with_version(Some(Blake2bHash(bytes)), 7);
         assert_eq!(&updated.as_slice()[..2], &7u16.to_be_bytes());
         assert_eq!(updated.as_slice()[5], 0xAB);
         assert!(Policy::supports_upgrade(Some(updated), 7));
 
-        // Clearing the version (None) zeroes only the version bytes, preserving the rest.
+        // Zeroing the version (version 0) zeroes only the version bytes, preserving the rest.
         let mut bytes = [0u8; 32];
         bytes[..2].copy_from_slice(&9u16.to_be_bytes());
         bytes[5] = 0xAB;
-        let cleared = Policy::signal_data_with_version(Some(Blake2bHash(bytes)), None).unwrap();
+        let cleared = Policy::signal_data_with_version(Some(Blake2bHash(bytes)), 0);
         assert_eq!(&cleared.as_slice()[..2], &[0u8, 0u8]);
         assert_eq!(cleared.as_slice()[5], 0xAB);
 
-        // The result canonicalizes to `None` when everything becomes zero.
+        // A version update always yields a present value — it never clears the field to `None`.
+        // An all-zero result is a valid value, equivalent to `None` for upgrade signaling.
         assert_eq!(
-            Policy::signal_data_with_version(Some(Policy::signal_data_for_version(3)), None),
-            None
+            Policy::signal_data_with_version(Some(Policy::signal_data_for_version(3)), 0),
+            Blake2bHash::default()
         );
-        assert_eq!(Policy::signal_data_with_version(None, None), None);
-        assert_eq!(Policy::signal_data_with_version(None, Some(0)), None);
+        assert_eq!(
+            Policy::signal_data_with_version(None, 0),
+            Blake2bHash::default()
+        );
+        assert!(!Policy::supports_upgrade(
+            Some(Policy::signal_data_with_version(None, 0)),
+            2
+        ));
     }
 
     #[test]

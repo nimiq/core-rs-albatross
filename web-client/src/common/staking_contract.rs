@@ -141,7 +141,7 @@ impl StakingContract {
                         None,
                     ),
                     SignalDataUpdate::Version(version) => {
-                        (PlainSignalDataUpdateMode::Version, None, version)
+                        (PlainSignalDataUpdateMode::Version, None, Some(version))
                     }
                 };
                 PlainTransactionRecipientData::SetSignalData(PlainSetSignalDataData {

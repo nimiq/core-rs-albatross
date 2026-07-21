@@ -458,7 +458,7 @@ impl TransactionBuilder {
     /// Signals support for the given protocol `version` with the validator's *signing (warm) key*
     /// by updating the validator's signal data in the staking contract. In contrast to
     /// `newSetSignalData`, this only updates the protocol-version bytes of the signal data and
-    /// preserves the rest. Pass `undefined` as `version` to clear the signaled version.
+    /// preserves the rest. To clear the signal data entirely, use `newSetSignalData` with `null`.
     ///
     /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
     ///
@@ -467,7 +467,7 @@ impl TransactionBuilder {
     pub fn new_signal_version(
         sender: &Address,
         validator: &Address,
-        version: Option<u16>,
+        version: u16,
         fee: Option<u64>,
         validity_start_height: u32,
         network_id: u8,

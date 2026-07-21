@@ -1133,7 +1133,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         sender_wallet: Address,
         validator_address: Address,
         signing_secret_key: String,
-        version: Option<u16>,
+        version: u16,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
@@ -1159,7 +1159,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         sender_wallet: Address,
         validator_address: Address,
         signing_secret_key: String,
-        version: Option<u16>,
+        version: u16,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {

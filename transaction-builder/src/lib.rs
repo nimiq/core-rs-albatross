@@ -1492,8 +1492,10 @@ impl TransactionBuilder {
         )
     }
 
-    /// Creates a `SetSignalData` transaction that signals support for the given protocol `version`
-    /// (or clears the signal if `None`), signed with the validator's signing (warm) key.
+    /// Creates a `SetSignalData` transaction that signals support for the given protocol `version`,
+    /// signed with the validator's signing (warm) key. This only updates the version bytes and
+    /// preserves the rest; to clear the signal data use [`new_set_signal_data`](Self::new_set_signal_data)
+    /// with `None`.
     ///
     /// In contrast to [`new_set_signal_data`](Self::new_set_signal_data), this only updates the
     /// version bytes of the signal data and preserves the rest of the field.
@@ -1506,7 +1508,7 @@ impl TransactionBuilder {
         key_pair: &KeyPair,
         validator_address: Address,
         signing_key_pair: &KeyPair,
-        version: Option<u16>,
+        version: u16,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,

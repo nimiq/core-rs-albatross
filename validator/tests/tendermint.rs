@@ -296,7 +296,7 @@ fn create_validator(temp_producer: &TemporaryBlockProducer) -> Address {
 fn signal_support(
     temp_producer: &TemporaryBlockProducer,
     validator_address: &Address,
-    version: Option<u16>,
+    version: u16,
 ) {
     let blockchain = Arc::clone(&temp_producer.blockchain);
 
@@ -403,14 +403,14 @@ async fn it_triggers_version_upgrades() {
 
     // Case 2: The elected slots support the upgrade (validator1 holds them all), but only half of
     // the active stake does, so the stake threshold is not reached.
-    signal_support(&temp_producer, &validator1, Some(next_version));
+    signal_support(&temp_producer, &validator1, next_version);
     let proposal = interface
         .create_proposal(0)
         .expect("Should have created proposal");
     assert_eq!(proposal.0.proposal.0.version, initial_version);
 
     // Case 3: Both the elected slots and the active stake support the upgrade.
-    signal_support(&temp_producer, &validator2, Some(next_version));
+    signal_support(&temp_producer, &validator2, next_version);
 
     let proposal = interface
         .create_proposal(0)
@@ -518,8 +518,8 @@ async fn it_does_not_trigger_version_upgrades_on_checkpoint_blocks() {
 
     // Setup second validator with same stake and signal full support from both
     let validator2 = create_validator(&temp_producer);
-    signal_support(&temp_producer, &validator1, Some(next_version));
-    signal_support(&temp_producer, &validator2, Some(next_version));
+    signal_support(&temp_producer, &validator1, next_version);
+    signal_support(&temp_producer, &validator2, next_version);
 
     // Even with both thresholds reached, a checkpoint block must keep the current version,
     // since the network only accepts version increases on election blocks
@@ -555,7 +555,7 @@ async fn it_rejects_unsupported_version_upgrade_blocks() {
     // support. This yields full slot support but only half of the active stake, below the
     // `UPGRADE_MIN_SUPPORT` threshold, so the upgrade is not supported.
     let _validator2 = create_validator(&temp_producer);
-    signal_support(&temp_producer, &validator1, Some(next_version));
+    signal_support(&temp_producer, &validator1, next_version);
 
     // Forcefully craft an election block that bumps the version despite the missing support.
     let proposal = {

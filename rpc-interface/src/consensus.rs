@@ -532,18 +532,18 @@ pub trait ConsensusInterface {
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     /// Returns a serialized `signal_version` transaction that signals support for the given
-    /// protocol `version` (or clears the signaled version if null), signed with the validator's
-    /// signing (warm) key. You need to provide the address of a basic account (the sender wallet)
-    /// to pay the transaction fee.
+    /// protocol `version`, signed with the validator's signing (warm) key. You need to provide the
+    /// address of a basic account (the sender wallet) to pay the transaction fee.
     /// Note: this only updates the protocol-version bytes of the signal data and preserves the
-    /// rest of the field. To replace the entire signal data, use `create_set_signal_data_transaction`.
+    /// rest of the field; it cannot clear the field. To replace the entire signal data (including
+    /// clearing it), use `create_set_signal_data_transaction`.
     /// This transaction is only valid from protocol version `upgrades::v2::WARM_KEY_SIGNALING` onwards.
     async fn create_signal_version_transaction(
         &self,
         sender_wallet: Address,
         validator_address: Address,
         signing_secret_key: String,
-        version: Option<u16>,
+        version: u16,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error>;
@@ -555,7 +555,7 @@ pub trait ConsensusInterface {
         sender_wallet: Address,
         validator_address: Address,
         signing_secret_key: String,
-        version: Option<u16>,
+        version: u16,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;

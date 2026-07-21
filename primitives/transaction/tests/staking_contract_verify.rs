@@ -439,6 +439,23 @@ fn set_signal_data() {
         Ok(())
     );
 
+    // A `Full` update with an all-zero hash is a valid value of the `Option<Blake2bHash>` field
+    // (equivalent to `None` for upgrade signaling), so it is accepted.
+    let tx_zero = make_signed_incoming_tx(
+        IncomingStakingTransactionData::SetSignalData {
+            validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
+            update: SignalDataUpdate::Full(Some(Blake2bHash::default())),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+        None,
+    );
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx_zero, upgrades::v2::WARM_KEY_SIGNALING),
+        Ok(())
+    );
+
     // Signaling transaction with a non-zero value is rejected.
     let mut tx_value = tx.clone();
     tx_value.value = Coin::from_u64_unchecked(1);

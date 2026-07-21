@@ -804,8 +804,7 @@ pub struct PlainSetSignalDataData {
     /// For `full` mode: the new signal data as a hex string, or `null` to clear it. Always `null`
     /// in `version` mode.
     pub new_signal_data: Option<String>,
-    /// For `version` mode: the signaled protocol version, or `null` to clear it. Always `null` in
-    /// `full` mode.
+    /// For `version` mode: the signaled protocol version; `null` in `full` mode.
     pub version: Option<u16>,
 }
 

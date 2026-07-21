@@ -843,7 +843,7 @@ fn signal_version_partial_update_works() {
     let tx_version = make_signed_incoming_transaction(
         IncomingStakingTransactionData::SetSignalData {
             validator_address: validator_address.clone(),
-            update: SignalDataUpdate::Version(Some(2)),
+            update: SignalDataUpdate::Version(2),
             proof: SignatureProof::default(),
         },
         0,
@@ -884,6 +884,39 @@ fn signal_version_partial_update_works() {
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .expect("Validator should exist");
     assert_eq!(validator.signal_data, Some(full_signal_data));
+
+    // Withdrawing the signal uses `Version(0)` (there is no `Version(None)`): it zeroes the
+    // version bytes but keeps the field present with the rest preserved, so the validator no
+    // longer supports an upgrade.
+    let tx_withdraw = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::SetSignalData {
+            validator_address: validator_address.clone(),
+            update: SignalDataUpdate::Version(0),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+    );
+    validator_setup
+        .staking_contract
+        .commit_incoming_transaction(
+            &tx_withdraw,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to commit signal withdrawal transaction");
+
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+    let signal_data = validator
+        .signal_data
+        .expect("Signal data should still be present");
+    assert_eq!(&signal_data.as_slice()[..2], &[0u8, 0u8]);
+    assert_eq!(signal_data.as_slice()[10], 0xCD);
+    assert!(!Policy::supports_upgrade(Some(signal_data), 2));
 }
 
 #[test]
