@@ -126,6 +126,11 @@ where
         // Wake the task to process this contribution.
         self.waker.wake();
     }
+
+    /// Number of pending contributions currently stored.
+    pub(crate) fn len(&self) -> usize {
+        self.list.len()
+    }
 }
 
 impl<TId, TProtocol> Stream for PendingContributionList<TId, TProtocol>
@@ -186,5 +191,190 @@ where
         // Wait for more contributions.
         self.waker.store_waker(cx);
         Poll::Pending
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use nimiq_bls::PublicKey;
+    use nimiq_collections::bitset::BitSet;
+    use parking_lot::RwLock;
+    use serde::{Deserialize, Serialize};
+
+    use super::PendingContributionList;
+    use crate::{
+        contribution::{AggregatableContribution, ContributionError},
+        evaluator::WeightedVote,
+        identity::{Identity, IdentityRegistry, WeightRegistry},
+        partitioner::{BinomialPartitioner, Partitioner},
+        protocol,
+        store::ReplaceStore,
+        verifier::{VerificationResult, Verifier},
+    };
+
+    // Minimal mock protocol, mirroring the one in `tests/mod.rs`.
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    struct Contribution {
+        contributors: BitSet,
+    }
+
+    impl Contribution {
+        fn with_signer(signer: usize) -> Self {
+            let mut contributors = BitSet::new();
+            contributors.insert(signer);
+            Self { contributors }
+        }
+    }
+
+    impl AggregatableContribution for Contribution {
+        fn contributors(&self) -> BitSet {
+            self.contributors.clone()
+        }
+
+        fn combine(&mut self, other: &Self) -> Result<(), ContributionError> {
+            let overlap = &self.contributors & &other.contributors;
+            if overlap.is_empty() {
+                self.contributors = &self.contributors | &other.contributors;
+                Ok(())
+            } else {
+                Err(ContributionError::Overlapping(overlap))
+            }
+        }
+    }
+
+    struct Registry;
+
+    impl WeightRegistry for Registry {
+        fn weight(&self, _id: usize) -> Option<usize> {
+            Some(1)
+        }
+    }
+
+    impl IdentityRegistry for Registry {
+        fn public_key(&self, _id: usize) -> Option<PublicKey> {
+            None
+        }
+
+        fn signers_identity(&self, slots: &BitSet) -> Identity {
+            Identity::new(slots.clone())
+        }
+    }
+
+    struct DumbVerifier;
+
+    #[async_trait]
+    impl Verifier for DumbVerifier {
+        type Contribution = Contribution;
+        async fn verify(&self, _contribution: &Self::Contribution) -> VerificationResult {
+            VerificationResult::Ok
+        }
+    }
+
+    struct Protocol {
+        partitioner: Arc<BinomialPartitioner>,
+        evaluator: Arc<WeightedVote<usize, Self>>,
+        store: Arc<RwLock<ReplaceStore<usize, Self>>>,
+        registry: Arc<Registry>,
+        verifier: Arc<DumbVerifier>,
+    }
+
+    impl Protocol {
+        fn new(node_id: usize, num_ids: usize) -> Self {
+            let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_ids));
+            let registry = Arc::new(Registry);
+            let store = Arc::new(RwLock::new(ReplaceStore::<usize, Self>::new(
+                partitioner.clone(),
+            )));
+            let evaluator = Arc::new(WeightedVote::new(
+                store.clone(),
+                registry.clone(),
+                partitioner.clone(),
+                |aggregate: &Contribution,
+                 registry: &Registry,
+                 partitioner: &BinomialPartitioner| {
+                    registry.signers_identity(&aggregate.contributors()).len() == partitioner.size()
+                },
+            ));
+
+            Self {
+                partitioner,
+                evaluator,
+                store,
+                registry,
+                verifier: Arc::new(DumbVerifier),
+            }
+        }
+    }
+
+    impl std::fmt::Debug for Protocol {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("Protocol")
+        }
+    }
+
+    impl protocol::Protocol<usize> for Protocol {
+        type Contribution = Contribution;
+        type Registry = Registry;
+        type Verifier = DumbVerifier;
+        type Store = ReplaceStore<usize, Self>;
+        type Evaluator = WeightedVote<usize, Self>;
+        type Partitioner = BinomialPartitioner;
+
+        fn registry(&self) -> Arc<Self::Registry> {
+            self.registry.clone()
+        }
+        fn verifier(&self) -> Arc<Self::Verifier> {
+            self.verifier.clone()
+        }
+        fn store(&self) -> Arc<RwLock<Self::Store>> {
+            self.store.clone()
+        }
+        fn evaluator(&self) -> Arc<Self::Evaluator> {
+            self.evaluator.clone()
+        }
+        fn partitioner(&self) -> Arc<Self::Partitioner> {
+            self.partitioner.clone()
+        }
+        fn identify(&self) -> usize {
+            0
+        }
+        fn node_id(&self) -> usize {
+            0
+        }
+    }
+
+    // A single origin flooding distinct bitsets must not grow the pool.
+    #[test]
+    fn one_origin_cannot_inflate_the_pool() {
+        let protocol = Protocol::new(0, 8);
+        let mut list =
+            PendingContributionList::<usize, Protocol>::new(0, protocol.evaluator.clone());
+
+        for signer in 0..1_000 {
+            list.add_contribution(Contribution::with_signer(signer), 1, 1, false);
+        }
+
+        assert!(list.len() <= 2, "pool grew to {}", list.len());
+    }
+
+    // Contributions from different origins must each be retained.
+    #[test]
+    fn distinct_origins_are_retained() {
+        let protocol = Protocol::new(0, 8);
+        let mut list =
+            PendingContributionList::<usize, Protocol>::new(0, protocol.evaluator.clone());
+
+        for origin in 1..=3 {
+            list.add_contribution(Contribution::with_signer(origin), 1, origin, false);
+        }
+
+        assert!(
+            list.len() >= 3,
+            "expected all 3 origins retained, got {}",
+            list.len()
+        );
     }
 }
