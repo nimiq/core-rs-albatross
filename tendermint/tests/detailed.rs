@@ -823,6 +823,120 @@ async fn late_known_precommit_polka_produces_decision() {
     assert_eq!(decision.sig.len(), Validator::TWO_F_PLUS_ONE);
 }
 
+/// The 2f+1 prevote polka for an initially-unknown proposal arrives first, and the proposal
+/// itself arrives (via gossip) while the node is still in the Prevote step.
+#[test(tokio::test)]
+async fn late_proposal_while_in_prevote_sets_valid() {
+    let (validator, mut observe_receiver) = create_validator(vec![false], vec![]);
+    let (mut proposal_sender, proposal_receiver) = mpsc::channel(10);
+
+    let mut tendermint = Tendermint::new(
+        validator.clone(),
+        None,
+        ReceiverStream::new(proposal_receiver).boxed(),
+        stream::iter(vec![]).boxed(),
+    );
+
+    // No proposal arrives in time -> the node votes None in 0.Prevote after the timeout.
+    let update = await_state(&mut tendermint).await;
+    assert_eq!(update.votes.get(&(0, Step::Prevote)), Some(&None));
+
+    // 0.Prevote aggregation is started.
+    let _update = expect_state(&mut tendermint);
+    expect_observe_aggregate(&mut observe_receiver);
+
+    // 2f+1 prevotes arrive for the still-unknown proposal 99.
+    aggregate(
+        &validator,
+        (0, Step::Prevote),
+        vec![(Some(99), 0..Validator::TWO_F_PLUS_ONE)],
+    );
+
+    // The node records the polka, requests the unknown proposal and starts the timeout.
+    // It stays in 0.Prevote and cannot set `valid` yet (the proposal body is unknown).
+    let update = expect_state(&mut tendermint);
+    assert_eq!(update.current_round, 0);
+    assert_eq!(update.current_step, Step::Prevote);
+    assert_eq!(update.valid, None);
+
+    // The proposal 99 arrives via gossip while the node is still in 0.Prevote.
+    send_proposal(&mut proposal_sender, 99, 0, None, true);
+    let accepted = expect_proposal(&mut tendermint, Acceptance::Accept);
+    assert_eq!(accepted.0, 99);
+
+    // Observing (proposal 99 + its 2f+1 prevote polka) advances the node to Precommit voting
+    // for 99, locks on it and sets `valid`.
+    let update = expect_state(&mut tendermint);
+    assert_eq!(update.current_round, 0);
+    assert_eq!(update.current_step, Step::Precommit);
+    assert_eq!(update.votes.get(&(0, Step::Precommit)), Some(&Some(99)));
+    assert_eq!(update.locked, Some((0, 99)));
+    assert_eq!(update.valid, Some((0, 99)));
+}
+
+/// The 2f+1 prevote polka for an initially-unknown proposal arrives first; the node times out of
+/// Prevote (voting None) before the proposal is known and advances into the Precommit window of the
+/// same round. The proposal then arrives (via gossip).
+#[test(tokio::test)]
+async fn late_proposal_in_precommit_window_sets_valid() {
+    let (validator, mut observe_receiver) = create_validator(vec![false], vec![]);
+    let (mut proposal_sender, proposal_receiver) = mpsc::channel(10);
+
+    let mut tendermint = Tendermint::new(
+        validator.clone(),
+        None,
+        ReceiverStream::new(proposal_receiver).boxed(),
+        stream::iter(vec![]).boxed(),
+    );
+
+    // No proposal arrives in time -> the node votes None in 0.Prevote after the timeout.
+    let update = await_state(&mut tendermint).await;
+    assert_eq!(update.votes.get(&(0, Step::Prevote)), Some(&None));
+
+    // 0.Prevote aggregation is started.
+    let _update = expect_state(&mut tendermint);
+    expect_observe_aggregate(&mut observe_receiver);
+
+    // 2f+1 prevotes arrive for the still-unknown proposal 99: the polka is recorded in
+    // best_votes, the proposal is requested, and the post-aggregation timeout is started.
+    aggregate(
+        &validator,
+        (0, Step::Prevote),
+        vec![(Some(99), 0..Validator::TWO_F_PLUS_ONE)],
+    );
+    let update = expect_state(&mut tendermint);
+    assert_eq!(update.current_step, Step::Prevote);
+    assert_eq!(update.valid, None);
+
+    // The timeout elapses before the proposal is known -> the node votes None in 0.Precommit
+    // and remains in round 0 (the precommit window).
+    let update = await_state(&mut tendermint).await;
+    assert_eq!(update.current_round, 0);
+    assert_eq!(update.current_step, Step::Precommit);
+    assert_eq!(update.votes.get(&(0, Step::Precommit)), Some(&None));
+
+    // 0.Precommit aggregation is started (only this node's own None vote), so the node keeps
+    // waiting in the precommit window: no precommit polka, no round change.
+    let _update = expect_state(&mut tendermint);
+    expect_observe_aggregate(&mut observe_receiver);
+
+    // The proposal 99 finally arrives via gossip while the node waits in 0.Precommit and the
+    // 2f+1 prevote polka for 99 is already recorded in best_votes.
+    send_proposal(&mut proposal_sender, 99, 0, None, true);
+    let accepted = expect_proposal(&mut tendermint, Acceptance::Accept);
+    assert_eq!(accepted.0, 99);
+
+    // Correct behaviour: observing the proposal together with its recorded prevote polka sets
+    // `valid`, matching the Tendermint paper.
+    let update = expect_state(&mut tendermint);
+    assert_eq!(update.current_round, 0);
+    assert_eq!(update.current_step, Step::Precommit);
+    assert_eq!(update.valid, Some((0, 99)));
+    // Safety: the node does NOT retroactively lock and keeps its None precommit vote.
+    assert_eq!(update.locked, None);
+    assert_eq!(update.votes.get(&(0, Step::Precommit)), Some(&None));
+}
+
 // The first proposer does not send a proposal but the second one does.
 #[test(tokio::test)]
 async fn it_skips_ahead() {
