@@ -14,7 +14,13 @@
 //!                      |             SlotBand                      |    SlotBand       |
 //!                      +-------------------------------------------+-------------------+
 //! ```
-use std::{cmp::Ordering, collections::BTreeMap, fmt, ops::Range, slice::Iter};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    ops::Range,
+    slice::Iter,
+};
 
 use nimiq_bls::{G2Projective, LazyPublicKey as LazyBlsPublicKey, PublicKey as BlsPublicKey};
 use nimiq_hash::{Hash, HashOutput, Hasher};
@@ -217,6 +223,7 @@ impl Validators {
     /// validator set structure is valid (correct number of slots, compatible with ZK circuit).
     pub fn validate_keys(&self) -> Result<(), InvalidValidatorsError> {
         let mut total_slots: u16 = 0;
+        let mut seen_addresses = BTreeSet::new();
 
         // Check that all keys can be decompressed and count total slots in one pass
         for validator in self.iter() {
@@ -224,13 +231,20 @@ impl Validators {
                 .voting_key
                 .uncompress()
                 .ok_or(InvalidValidatorsError)?;
-            // The slot bands must be contiguous and start at 0, in band order. The
-            // honest chain always builds them this way (see `ValidatorsBuilder::build`),
-            // but a crafted set with gaps or overlaps would otherwise make
-            // `get_band_from_slot` land on a slot that no band covers and panic on
-            // light nodes that adopt the set verbatim. Reject such sets here so the lookup
-            // can never panic
-            if validator.slots.start != total_slots || validator.slots.end < validator.slots.start {
+            // Bands must be contiguous from 0 and non-empty. Gaps or overlaps would make
+            // `get_band_from_slot` land on an uncovered slot and panic on light nodes. An
+            // empty band (`end == start`) adds nothing to the total or the pre-v2
+            // `Validators::hash`, so it could duplicate an existing address to hijack its
+            // `validator_map` entry without changing the header hash.
+            if validator.slots.start != total_slots || validator.slots.end <= validator.slots.start
+            {
+                return Err(InvalidValidatorsError);
+            }
+            // Each address must own a single band. The pre-v2 `Validators::hash` ignores
+            // addresses and signing keys, so a band could otherwise be split into two sharing
+            // an address but with a different signing key, hijacking `validator_map` (last-wins
+            // in `new`) and thus `get_validator_by_address`.
+            if !seen_addresses.insert(&validator.address) {
                 return Err(InvalidValidatorsError);
             }
             // Use `checked_add` so a crafted validator set cannot silently wrap the
@@ -422,5 +436,56 @@ mod serde_derive {
 
             Ok(Self::new(validators))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ops::Range;
+
+    use ark_ec::PrimeGroup;
+    use nimiq_bls::{G2Projective, PublicKey as BlsPublicKey};
+    use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
+
+    use super::*;
+
+    fn validator(address: u8, slots: Range<u16>) -> Validator {
+        // The BLS generator is a valid, decompressable voting key, so `validate_keys`
+        // reaches the slot band check instead of failing on the key.
+        Validator::new(
+            Address::from([address; 20]),
+            BlsPublicKey::new(G2Projective::generator()).compress(),
+            SchnorrPublicKey::default(),
+            slots,
+        )
+    }
+
+    #[test]
+    fn it_accepts_a_contiguous_full_slot_set() {
+        let validators = Validators::new(vec![validator(1, 0..Policy::SLOTS)]);
+        assert!(validators.validate_keys().is_ok());
+    }
+
+    #[test]
+    fn it_rejects_empty_slot_bands() {
+        // A zero-width band owns no slots, so it slips past the total and pre-v2 hash checks. Use
+        // a distinct address so this isolates the empty-band rejection (a duplicate address would
+        // otherwise be caught by the uniqueness check instead).
+        let validators = Validators::new(vec![
+            validator(1, 0..Policy::SLOTS),
+            validator(2, Policy::SLOTS..Policy::SLOTS),
+        ]);
+        assert!(validators.validate_keys().is_err());
+    }
+
+    #[test]
+    fn it_rejects_duplicate_addresses() {
+        // A band split into two contiguous, non-empty bands sharing an address keeps the total
+        // and the pre-v2 hash intact, but must be rejected so `validator_map` stays unambiguous.
+        let validators = Validators::new(vec![
+            validator(1, 0..(Policy::SLOTS / 2)),
+            validator(1, (Policy::SLOTS / 2)..Policy::SLOTS),
+        ]);
+        assert!(validators.validate_keys().is_err());
     }
 }
