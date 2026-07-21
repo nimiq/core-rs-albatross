@@ -408,14 +408,23 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         };
 
         // The proposal with `proposal_hash` was successfully verified. Add it to the set of proposals for its round.
+        let proposal_round = proposal.message.round;
         self.state
             .round_proposals
-            .entry(proposal.message.round)
+            .entry(proposal_round)
             .or_default()
             .insert(
                 proposal_hash.clone(),
                 (proposal.message.valid_round, proposal.signature),
             );
+
+        // The 2f+1 prevote polka for this proposal may have been observed before the proposal
+        // itself was known: the aggregate arrived first, so `poll_aggregations`/`aggregate` could
+        // not set `valid` (the proposal body was still unknown) and the node may since have advanced
+        // within the round (e.g. timed out into Precommit). Set it now.
+        if self.has_two_f_plus_one(&proposal_hash, proposal_round) {
+            self.update_valid(proposal_round, proposal_hash.clone());
+        }
 
         // make sure the next poll will return a state update
         Some(proposal_hash)
