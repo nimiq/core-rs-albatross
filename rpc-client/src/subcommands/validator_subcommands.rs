@@ -156,9 +156,9 @@ pub enum ValidatorCommand {
     },
 
     /// Sends a transaction signalling support for a protocol upgrade `version`, signed with the
-    /// validator's signing (warm) key (so the cold key is not required). Omit the version to clear
-    /// the current signal. Only valid once the chain has reached the protocol version that
-    /// introduces this transaction.
+    /// validator's signing (warm) key (so the cold key is not required). This only updates the
+    /// version bytes; to clear the signal data use the `set-signal-data` command. Only valid once
+    /// the chain has reached the protocol version that introduces this transaction.
     /// The sender wallet must be unlocked prior to this command.
     SignalVersion {
         /// The fee will be paid from this address. This wallet must be already unlocked.
@@ -167,9 +167,9 @@ pub enum ValidatorCommand {
         /// The Schnorr signing secret key used by the validator.
         signing_secret_key: String,
 
-        /// The protocol version to signal support for. Omit to clear the signal.
+        /// The protocol version to signal support for.
         #[clap(long)]
-        version: Option<u16>,
+        version: u16,
 
         #[clap(flatten)]
         tx_commons: TxCommon,

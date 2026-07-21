@@ -136,17 +136,14 @@ impl StakingRecipientBuilder {
         self
     }
 
-    /// This method signals support for the given protocol `version` (or clears the signal if
-    /// `None`). Like [`set_signal_data`](Self::set_signal_data), it needs to be signed by the
-    /// validator's signing (warm) key.
+    /// This method signals support for the given protocol `version`. Like
+    /// [`set_signal_data`](Self::set_signal_data), it needs to be signed by the validator's signing
+    /// (warm) key.
     ///
     /// In contrast to [`set_signal_data`](Self::set_signal_data), this only updates the version
-    /// bytes of the signal data and preserves the rest.
-    pub fn signal_version(
-        &mut self,
-        validator_address: Address,
-        version: Option<u16>,
-    ) -> &mut Self {
+    /// bytes of the signal data and preserves the rest; it cannot clear the field (use
+    /// [`set_signal_data`](Self::set_signal_data) with `None` for that).
+    pub fn signal_version(&mut self, validator_address: Address, version: u16) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::SetSignalData {
             validator_address,
             update: SignalDataUpdate::Version(version),

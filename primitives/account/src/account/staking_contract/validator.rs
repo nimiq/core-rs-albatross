@@ -374,13 +374,15 @@ impl StakingContract {
 
         // Resolve the update mode into the new signal data value.
         let new_signal_data = match update {
-            // Full mode replaces the entire field (and thus any previously signaled version).
+            // Full mode replaces the entire field (and thus any previously signaled version); it is
+            // the only mode that can clear the field to `None`.
             SignalDataUpdate::Full(signal_data) => signal_data,
-            // Version mode is a non-destructive partial update: it only touches the version bytes
-            // and preserves the rest of the existing signal data.
-            SignalDataUpdate::Version(version) => {
-                Policy::signal_data_with_version(validator.signal_data.clone(), version)
-            }
+            // Version mode is a non-destructive partial update: it only sets the version bytes and
+            // preserves the rest, so it always yields a present value.
+            SignalDataUpdate::Version(version) => Some(Policy::signal_data_with_version(
+                validator.signal_data.clone(),
+                version,
+            )),
         };
 
         // Update the validator's signal data.
