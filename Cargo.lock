@@ -4382,6 +4382,7 @@ dependencies = [
  "nimiq-time",
  "nimiq-transaction",
  "nimiq-transaction-builder",
+ "nimiq-trie",
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot",

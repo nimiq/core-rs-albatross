@@ -59,6 +59,7 @@ nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
 nimiq-time = { workspace = true }
 nimiq-transaction-builder = { workspace = true }
+nimiq-trie = { workspace = true }
 nimiq-vrf = { workspace = true }
 
 [features]
