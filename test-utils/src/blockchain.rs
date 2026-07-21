@@ -1,10 +1,7 @@
 use std::{str::FromStr, sync::Arc, time::Instant};
 
 use nimiq_account::{Account, StakingContractStoreWrite, TransactionLog};
-use nimiq_block::{
-    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
-    SkipBlockProof, TendermintProof,
-};
+use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, TendermintProof};
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
@@ -236,25 +233,6 @@ pub fn sign_macro_block(
     block.justification = Some(tendermint_proof);
 
     block
-}
-
-pub fn sign_skip_block_info(
-    voting_key_pair: &BlsKeyPair,
-    skip_block_info: &SkipBlockInfo,
-) -> SkipBlockProof {
-    let skip_block_info =
-        SignedSkipBlockInfo::from_message(skip_block_info.clone(), &voting_key_pair.secret_key, 0);
-
-    let signature =
-        AggregateSignature::from_signatures(&[skip_block_info.signature.multiply(Policy::SLOTS)]);
-    let mut signers = BitSet::new();
-    for i in 0..Policy::SLOTS {
-        signers.insert(i as usize);
-    }
-
-    SkipBlockProof {
-        sig: MultiSignature::new(signature, signers),
-    }
 }
 
 pub fn validator_key() -> SchnorrKeyPair {

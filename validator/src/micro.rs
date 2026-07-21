@@ -10,8 +10,9 @@ use futures::{future::BoxFuture, ready, FutureExt, Stream};
 use nimiq_block::{Block, EquivocationProof, MicroBlock, SkipBlockInfo};
 use nimiq_blockchain::{BlockProducer, BlockProducerError, Blockchain};
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_hash::Blake2bHash;
 use nimiq_mempool::mempool::Mempool;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::policy::{upgrades, Policy};
 use nimiq_time::sleep;
 use nimiq_utils::time::systemtime_to_timestamp;
 use nimiq_validator_network::ValidatorNetwork;
@@ -225,11 +226,31 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         let skip_block_inputs = {
             let blockchain = self.blockchain.read();
             if in_current_state(blockchain.head()) {
-                Some((
-                    blockchain.current_validators().unwrap().clone(),
-                    blockchain.next_skip_block_state_root(),
-                    blockchain.state().current_version(),
-                ))
+                let protocol_version = blockchain.state().current_version();
+                let state_root = match blockchain.next_skip_block_state_root() {
+                    Some(state_root) => Some(state_root),
+                    // Before the state root binding it is not part of the signed message
+                    // (see `SkipBlockInfo::signing_hash`), so any value works and a
+                    // validator with an incomplete accounts state can still participate
+                    None if protocol_version < upgrades::v2::SKIP_BLOCK_STATE_ROOT_BINDING => {
+                        Some(Blake2bHash::default())
+                    }
+                    None => {
+                        warn!(
+                            block_number = self.block_number,
+                            "Cannot participate in the skip block aggregation, accounts state \
+                             is incomplete"
+                        );
+                        None
+                    }
+                };
+                state_root.map(|state_root| {
+                    (
+                        blockchain.current_validators().unwrap().clone(),
+                        state_root,
+                        protocol_version,
+                    )
+                })
             } else {
                 None
             }
@@ -458,5 +479,74 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream
             ProduceMicroBlockEvent::MicroBlock => None,
         };
         Poll::Ready(Some(event))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_database::traits::WriteTransaction;
+    use nimiq_mempool::config::MempoolConfig;
+    use nimiq_network_mock::MockHub;
+    use nimiq_test_log::test;
+    use nimiq_test_utils::block_production::TemporaryBlockProducer;
+    use nimiq_time::timeout;
+    use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
+
+    use super::*;
+
+    #[test(tokio::test)]
+    async fn it_abstains_from_skip_block_aggregation_on_incomplete_accounts() {
+        let temp_producer = TemporaryBlockProducer::new_with_protocol_version(
+            upgrades::v2::SKIP_BLOCK_STATE_ROOT_BINDING,
+        );
+
+        // Make the accounts trie incomplete.
+        {
+            let blockchain = temp_producer.blockchain.read();
+            let mut txn = blockchain.write_transaction();
+            blockchain
+                .state
+                .accounts
+                .reinitialize_as_incomplete(&mut (&mut txn).into());
+            txn.commit();
+        }
+
+        let blockchain = Arc::clone(&temp_producer.blockchain);
+        let mempool = Arc::new(Mempool::new(
+            Arc::clone(&blockchain),
+            MempoolConfig::default(),
+        ));
+        let mut hub = MockHub::default();
+        let network = Arc::new(ValidatorNetworkImpl::new(Arc::new(hub.new_network())));
+
+        let (prev_seed, block_number) = {
+            let blockchain = blockchain.read();
+            (
+                blockchain.head().seed().clone(),
+                blockchain.block_number() + 1,
+            )
+        };
+
+        // Slot band 1 never matches the single genesis validator's band, so this node is
+        // not the proposer and takes the skip block path as soon as the timeout elapses.
+        let event = NextProduceMicroBlockEvent::new(
+            blockchain,
+            mempool,
+            network,
+            temp_producer.producer.clone(),
+            1,
+            vec![],
+            prev_seed,
+            block_number,
+            Duration::ZERO,
+            Duration::ZERO,
+        );
+
+        // With an incomplete accounts state, from the state root binding on the validator
+        // must abstain from the aggregation instead of panicking.
+        let (produced, _) = timeout(Duration::from_secs(10), event.next())
+            .await
+            .expect("Producer must abstain instead of aggregating");
+        assert!(produced.is_none());
     }
 }

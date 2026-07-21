@@ -330,7 +330,9 @@ impl TemporaryBlockProducer {
             };
             (
                 skip_block_info,
-                blockchain.next_skip_block_state_root(),
+                blockchain
+                    .next_skip_block_state_root()
+                    .expect("Accounts trie must be complete to compute the skip block state root"),
                 blockchain.state().current_version(),
             )
         };

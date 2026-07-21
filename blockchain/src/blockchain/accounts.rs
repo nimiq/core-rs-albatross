@@ -143,8 +143,15 @@ impl Blockchain {
     /// single, deterministic `Penalize` inherent, the resulting state root is fully determined by
     /// the current (head) state.
     ///
-    /// Validators use this to bind the `state_root` into the skip block proof before aggregating it
-    pub fn next_skip_block_state_root(&self) -> Blake2bHash {
+    /// Validators use this to bind the `state_root` into the skip block proof before aggregating it.
+    ///
+    /// Returns `None` if the accounts trie is incomplete, in which case the state root cannot be
+    /// computed and the caller must not participate in the skip block aggregation.
+    pub fn next_skip_block_state_root(&self) -> Option<Blake2bHash> {
+        if !self.state.accounts.is_complete(None) {
+            return None;
+        }
+
         let head = &self.state.main_chain.head;
         let block_number = head.block_number() + 1;
         let timestamp = head.timestamp() + Policy::MIN_PRODUCER_TIMEOUT;
@@ -166,7 +173,7 @@ impl Blockchain {
             .exercise_transactions(&[], &inherents, &block_state, None)
             .expect("Failed to compute skip block state root");
 
-        state_root
+        Some(state_root)
     }
 
     /// Reverts the accounts given a block. This only applies to micro blocks and skip blocks, since

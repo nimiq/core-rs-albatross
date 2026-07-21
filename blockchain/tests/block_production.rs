@@ -1526,6 +1526,25 @@ fn it_aborts_macro_block_proposal_with_incomplete_accounts() {
     ));
 }
 
+#[test]
+fn it_requires_complete_accounts_for_the_skip_block_state_root() {
+    // With a complete accounts trie the deterministic skip block state root is available.
+    let temp_producer = TemporaryBlockProducer::new();
+    assert!(temp_producer
+        .blockchain
+        .read()
+        .next_skip_block_state_root()
+        .is_some());
+
+    // On an incomplete trie it must be unavailable instead of panicking.
+    let temp_producer = TemporaryBlockProducer::new_incomplete();
+    assert!(temp_producer
+        .blockchain
+        .read()
+        .next_skip_block_state_root()
+        .is_none());
+}
+
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
     let priv_key =
         SchnorrPrivateKey::deserialize_from_vec(&hex::decode(secret_key).unwrap()).unwrap();
