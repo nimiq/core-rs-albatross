@@ -127,7 +127,14 @@ pub enum PolicyCommand {
         block_number: u32,
     },
 
-    /// Returns the first block after the reporting window of a given block number has ended.
+    /// Returns the first block after the collateral lock-up window of a given block number has ended.
+    BlockAfterCollateralLockup {
+        /// The block number.
+        block_number: u32,
+    },
+
+    /// **Deprecated**: use `block-after-collateral-lockup`. This window never governed equivocation
+    /// reporting; it has always been the collateral lock-up window.
     BlockAfterReportingWindow {
         /// The block number.
         block_number: u32,
@@ -259,12 +266,25 @@ impl HandleSubcommand for PolicyCommand {
                     client.policy.get_first_batch_of_epoch(block_number).await?
                 );
             }
-            PolicyCommand::BlockAfterReportingWindow { block_number } => {
+            PolicyCommand::BlockAfterCollateralLockup { block_number } => {
                 println!(
                     "{:#?}",
                     client
                         .policy
-                        .get_block_after_reporting_window(block_number)
+                        .get_block_after_collateral_lockup(block_number)
+                        .await?
+                );
+            }
+            PolicyCommand::BlockAfterReportingWindow { block_number } => {
+                eprintln!(
+                    "warning: `block-after-reporting-window` is deprecated and will be removed; \
+                     use `block-after-collateral-lockup` instead"
+                );
+                println!(
+                    "{:#?}",
+                    client
+                        .policy
+                        .get_block_after_collateral_lockup(block_number)
                         .await?
                 );
             }

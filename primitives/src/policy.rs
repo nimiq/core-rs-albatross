@@ -567,6 +567,9 @@ impl Policy {
     /// equivocation *reporting* (that is `lastBlockOfEquivocationReportingWindow`); it has always
     /// been the collateral lock-up window. Kept for API backwards compatibility.
     #[inline]
+    #[deprecated(since = "2.0.0", note = "renamed to `last_block_of_collateral_lockup`")]
+    // The generated wasm shim calls this deprecated function; callers still get the warning
+    #[cfg_attr(feature = "ts-types", allow(deprecated))]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = lastBlockOfReportingWindow))]
     pub fn last_block_of_reporting_window(block_number: u32) -> u32 {
         Self::last_block_of_collateral_lockup(block_number)
@@ -575,6 +578,9 @@ impl Policy {
     /// @deprecated Renamed to `blockAfterCollateralLockup`. Kept for API backwards compatibility;
     /// see `lastBlockOfCollateralLockup`.
     #[inline]
+    #[deprecated(since = "2.0.0", note = "renamed to `block_after_collateral_lockup`")]
+    // The generated wasm shim calls this deprecated function; callers still get the warning
+    #[cfg_attr(feature = "ts-types", allow(deprecated))]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = blockAfterReportingWindow))]
     pub fn block_after_reporting_window(block_number: u32) -> u32 {
         Self::block_after_collateral_lockup(block_number)

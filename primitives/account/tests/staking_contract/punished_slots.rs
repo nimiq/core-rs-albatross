@@ -734,7 +734,7 @@ fn jail_not_reelected_and_revert(
         "Reporting block must be in a later epoch than the offense"
     );
     assert!(
-        reporting_block <= Policy::last_block_of_reporting_window(offense_event_block),
+        reporting_block <= Policy::last_block_of_collateral_lockup(offense_event_block),
         "Can only report event up until the reporting window"
     );
 
