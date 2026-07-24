@@ -362,9 +362,15 @@ impl<S: HistoryInterface + HistoryIndexInterface> HistoryIndexInterface for Hist
         if tx_hashes.len() < max as usize
             && let Some(pre_genesis) = &self.pre_genesis
         {
-            // If the transaction hashes are empty, we can start at the given hash
-            // because the hash does not seem to be in the main database.
-            let pre_genesis_start = if tx_hashes.is_empty() { start_at } else { None };
+            // The main store returned nothing. Forward `start_at` to the pre-genesis store only
+            // if it is not a main-store hash: a main-store `start_at` means the main store is
+            // exhausted, so pre-genesis must start from the beginning (`None`). Forwarding a hash
+            // pre-genesis does not have would yield an empty result and drop its history.
+            let pre_genesis_start = if tx_hashes.is_empty() {
+                start_at.filter(|hash| self.main.get_hist_tx_by_hash(hash, txn_option).is_none())
+            } else {
+                None
+            };
 
             let mut pre_genesis_tx_hashes = pre_genesis.get_tx_hashes_by_address(
                 address,
@@ -533,6 +539,25 @@ mod tests {
                 .unwrap(),
                 2,
                 Some(hashes[5].deref().clone()),
+                None,
+            )
+        });
+    }
+
+    #[test]
+    fn get_tx_hashes_by_address_continues_into_pre_genesis() {
+        // Paging with `start_at` set to an address's oldest main-store tx must still return its
+        // older pre-genesis txs. `hashes[3]` (ext_3) is the sender's oldest main-store tx.
+        let hist_txs = gen_hist_txs();
+        let hashes: Vec<_> = hist_txs.iter().map(|hist_tx| hist_tx.tx_hash()).collect();
+        test_history_fn(|history_store| {
+            history_store.get_tx_hashes_by_address(
+                &Address::from_user_friendly_address(
+                    "NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF",
+                )
+                .unwrap(),
+                99,
+                Some(hashes[3].deref().clone()),
                 None,
             )
         });
