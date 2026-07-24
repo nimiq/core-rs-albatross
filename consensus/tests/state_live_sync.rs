@@ -331,7 +331,7 @@ async fn can_sync_state() {
     yield_now().await;
 
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
     let size = mock_node.blockchain.read().state.accounts.size();
     let num_chunks = size.div_ceil(Policy::state_chunks_max_size() as u64);
@@ -352,7 +352,7 @@ async fn can_sync_state() {
         yield_now().await;
 
         assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-        assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+        assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
         let blockchain_rg = incomplete_blockchain.read();
         log::info!(
@@ -390,7 +390,7 @@ async fn can_sync_state() {
     yield_now().await;
 
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
     // Will apply the buffered block.
     assert!(
@@ -405,7 +405,7 @@ async fn can_sync_state() {
     yield_now().await;
 
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
     push_micro_block(&producer, &mock_node.blockchain);
     gossip_head_block(&block_tx, mock_id.clone(), &mock_node.blockchain).await;
@@ -423,7 +423,7 @@ async fn can_sync_state() {
     yield_now().await;
 
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
     let blockchain_rg = incomplete_blockchain.read();
     assert!(blockchain_rg.accounts_complete());
@@ -487,7 +487,7 @@ async fn revert_chunks_for_state_live_sync() {
         "Should immediately receive block"
     );
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
     info!("Applying chunk #{}", 0);
     assert!(
@@ -503,7 +503,7 @@ async fn revert_chunks_for_state_live_sync() {
         "Should receive and accept chunks"
     );
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
     let blockchain_rg = incomplete_blockchain.read();
     log::info!(
@@ -547,7 +547,7 @@ async fn revert_chunks_for_state_live_sync() {
         "Should immediately receive block"
     );
     assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
     info!("Applying chunk #{}", 2);
     assert!(
@@ -563,7 +563,7 @@ async fn revert_chunks_for_state_live_sync() {
         "Should receive and accept chunks"
     );
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
     info!("Applying chunk #{}", 3);
     assert!(
@@ -811,7 +811,7 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
 
     // Check buffer cleared.
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 }
 
 // Buffer clearing after macro blocks
@@ -899,7 +899,7 @@ async fn clears_buffer_after_macro_block() {
 
     // Check buffer.
     assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
     produce_macro_blocks(&producer, &mock_node.blockchain, 1);
     gossip_head_block(&block_tx, mock_id.clone(), &mock_node.blockchain).await;
@@ -923,7 +923,7 @@ async fn clears_buffer_after_macro_block() {
 
     // Check buffer.
     assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 
     assert!(
         matches!(
@@ -957,7 +957,7 @@ async fn clears_buffer_after_macro_block() {
 
     // Check buffer.
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
 }
 
 // Check correct reply for incomplete nodes

@@ -120,7 +120,7 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
                 self.on_block_processed(&hash);
                 if result == PushResult::Extended || result == PushResult::Rebranched {
                     return Some(LiveSyncEvent::PushEvent(
-                        LiveSyncPushEvent::AcceptedBufferedBlock(hash, self.num_buffered_blocks()),
+                        LiveSyncPushEvent::AcceptedBufferedBlock(hash, self.num_buffered_heights()),
                     ));
                 }
             }

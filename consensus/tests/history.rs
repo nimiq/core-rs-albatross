@@ -142,7 +142,7 @@ async fn send_single_micro_block_to_block_queue() {
         blockchain2.read().block_number(),
         1 + Policy::genesis_block_number()
     );
-    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(syncer.live_sync.queue().num_buffered_heights(), 0);
 }
 
 #[test(tokio::test)]
@@ -233,7 +233,7 @@ async fn send_two_micro_blocks_out_of_order() {
         blockchain1.read().block_number(),
         2 + Policy::genesis_block_number()
     );
-    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(syncer.live_sync.queue().num_buffered_heights(), 0);
     assert_eq!(
         blockchain1
             .read()
@@ -320,7 +320,7 @@ async fn send_micro_blocks_out_of_order() {
 
     // Obtain the buffered blocks
     assert_eq!(
-        syncer.live_sync.queue().num_buffered_blocks() as u64,
+        syncer.live_sync.queue().num_buffered_heights() as u64,
         n_blocks - 1
     );
 
@@ -343,7 +343,7 @@ async fn send_micro_blocks_out_of_order() {
     }
 
     // No blocks buffered
-    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(syncer.live_sync.queue().num_buffered_heights(), 0);
 }
 
 #[test(tokio::test)]
@@ -439,7 +439,7 @@ async fn send_invalid_block() {
         blockchain1.read().block_number(),
         1 + Policy::genesis_block_number()
     );
-    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(syncer.live_sync.queue().num_buffered_heights(), 0);
     assert_eq!(
         blockchain1
             .read()
@@ -529,7 +529,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 
     // Now both blocks should've been pushed to the blockchain
     assert_eq!(blockchain1.read().block_number(), 2 + genesis_block_number);
-    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(syncer.live_sync.queue().num_buffered_heights(), 0);
     assert_eq!(
         blockchain1
             .read()
@@ -666,7 +666,7 @@ async fn request_missing_blocks_across_macro_block() {
 
     // Now all blocks should've been pushed to the blockchain.
     assert_eq!(blockchain1.read().block_number(), block2.block_number());
-    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(syncer.live_sync.queue().num_buffered_heights(), 0);
     assert_eq!(
         blockchain1
             .read()

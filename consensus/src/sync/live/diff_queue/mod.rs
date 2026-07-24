@@ -210,8 +210,8 @@ impl<N: Network> DiffQueue<N> {
         self.block_queue.add_block_stream(block_stream)
     }
 
-    pub(crate) fn num_buffered_blocks(&self) -> usize {
-        self.block_queue.num_buffered_blocks()
+    pub(crate) fn num_buffered_heights(&self) -> usize {
+        self.block_queue.num_buffered_heights()
     }
 
     /// Sets whether diffs should be fetched for incoming blocks.

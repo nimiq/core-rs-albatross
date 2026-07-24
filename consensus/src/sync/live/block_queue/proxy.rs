@@ -101,9 +101,9 @@ impl<N: Network> BlockQueueProxy<N> {
         self.queue.lock().buffered_blocks()
     }
 
-    /// Returns the total number of buffered blocks.
-    pub fn num_buffered_blocks(&self) -> usize {
-        self.queue.lock().num_buffered_blocks()
+    /// Returns the number of buffered block heights.
+    pub fn num_buffered_heights(&self) -> usize {
+        self.queue.lock().num_buffered_heights()
     }
 
     /// Returns the peer list used by the queue

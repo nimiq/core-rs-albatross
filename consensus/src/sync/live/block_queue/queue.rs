@@ -780,8 +780,10 @@ impl<N: Network> BlockQueue<N> {
             .collect()
     }
 
-    /// Returns the number of buffered blocks.
-    pub(crate) fn num_buffered_blocks(&self) -> usize {
+    /// Returns the number of block heights with buffered blocks. Each height contributes at most
+    /// one block to the chain, so this is the number of blocks still missing to reach the tip of
+    /// the buffer.
+    pub(crate) fn num_buffered_heights(&self) -> usize {
         self.buffer.len()
     }
 

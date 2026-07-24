@@ -496,8 +496,8 @@ impl<N: Network> StateQueue<N> {
         self.buffer_size
     }
 
-    pub fn num_buffered_blocks(&self) -> usize {
-        self.diff_queue.num_buffered_blocks()
+    pub fn num_buffered_heights(&self) -> usize {
+        self.diff_queue.num_buffered_heights()
     }
 
     pub fn chunk_request_state(&self) -> &ChunkRequestState {
