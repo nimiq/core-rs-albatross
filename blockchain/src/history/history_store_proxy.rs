@@ -2,10 +2,7 @@ use nimiq_block::{Block, MicroBlock};
 use nimiq_database::mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
-use nimiq_mmr::{
-    error::Error as MMRError,
-    mmr::proof::{RangeProof, SizeProof},
-};
+use nimiq_mmr::{error::Error as MMRError, mmr::proof::SizeProof};
 use nimiq_transaction::{
     historic_transaction::{HistoricTransaction, RawTransactionHash},
     inherent::Inherent,
@@ -362,23 +359,6 @@ impl<S: HistoryInterface, I: HistoryIndexInterface> HistoryInterface for History
                 chunk_index,
                 txn_option,
             ),
-        }
-    }
-
-    /// Creates a new history tree from chunks and returns the root hash.
-    fn tree_from_chunks(
-        &self,
-        epoch_number: u32,
-        chunks: Vec<(Vec<HistoricTransaction>, RangeProof<Blake2bHash>)>,
-        txn: &mut MdbxWriteTransaction,
-    ) -> Result<Blake2bHash, MMRError> {
-        match self {
-            HistoryStoreProxy::WithIndex(index) => {
-                index.tree_from_chunks(epoch_number, chunks, txn)
-            }
-            HistoryStoreProxy::WithoutIndex(store) => {
-                store.tree_from_chunks(epoch_number, chunks, txn)
-            }
         }
     }
 

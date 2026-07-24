@@ -13,12 +13,7 @@ use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mmr::{
     error::Error as MMRError,
-    mmr::{
-        partial::PartialMerkleMountainRange,
-        position::leaf_number_to_index,
-        proof::{RangeProof, SizeProof},
-        MerkleMountainRange,
-    },
+    mmr::{position::leaf_number_to_index, proof::SizeProof, MerkleMountainRange},
     store::memory::MemoryStore,
 };
 use nimiq_primitives::policy::Policy;
@@ -733,59 +728,6 @@ impl HistoryInterface for HistoryStore {
             proof,
             history: hist_txs,
         })
-    }
-
-    /// Creates a new history tree from chunks and returns the root hash.
-    fn tree_from_chunks(
-        &self,
-        epoch_number: u32,
-        chunks: Vec<(Vec<HistoricTransaction>, RangeProof<Blake2bHash>)>,
-        txn: &mut MdbxWriteTransaction,
-    ) -> Result<Blake2bHash, MMRError> {
-        // Get partial history tree for given epoch.
-        let mut tree = PartialMerkleMountainRange::new(MMRStore::with_write_transaction(
-            &self.hist_tree_table,
-            txn,
-            epoch_number,
-        ));
-
-        // Push all proofs into the history tree and remember all leaves.
-        let mut all_leaves = Vec::with_capacity(
-            chunks.len() * chunks.first().map(|(leaves, _)| leaves.len()).unwrap_or(0),
-        );
-        for (mut leaves, proof) in chunks {
-            tree.push_proof(proof, &leaves)?;
-            all_leaves.append(&mut leaves);
-        }
-
-        // Calculate the root once the tree is complete.
-        if !tree.is_finished() {
-            return Err(MMRError::IncompleteProof);
-        }
-
-        let root = tree.get_root()?;
-
-        let mut cursor = WriteTransaction::dup_cursor(txn, &self.hist_tx_table);
-        // Then add all transactions to the database as the tree is finished.
-        for (leaf_index, hist_tx) in all_leaves.iter().enumerate() {
-            let value = IndexedTransaction {
-                index: leaf_index as u32,
-                value: hist_tx.clone(),
-            };
-            cursor.append(&epoch_number, &value);
-
-            if let Some(ref validity_store) = self.validity_store {
-                validity_store.add_transaction(txn, hist_tx.block_number, hist_tx.tx_hash());
-            }
-
-            txn.put(
-                &self.last_leaf_table,
-                &hist_tx.block_number,
-                &(leaf_index as u32),
-            );
-        }
-
-        Ok(root)
     }
 
     /// Returns the block number of the last leaf in the history store

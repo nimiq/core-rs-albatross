@@ -4,10 +4,7 @@ use nimiq_block::{Block, MicroBlock};
 use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_mmr::{
-    error::Error,
-    mmr::proof::{RangeProof, SizeProof},
-};
+use nimiq_mmr::{error::Error, mmr::proof::SizeProof};
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
     historic_transaction::{HistoricTransaction, RawTransactionHash},
@@ -288,16 +285,6 @@ impl<S: HistoryInterface> HistoryInterface for HistoryStoreMerger<S> {
                 txn_option,
             )
         }
-    }
-
-    fn tree_from_chunks(
-        &self,
-        epoch_number: u32,
-        chunks: Vec<(Vec<HistoricTransaction>, RangeProof<Blake2bHash>)>,
-        txn: &mut MdbxWriteTransaction,
-    ) -> Result<Blake2bHash, Error> {
-        assert_ne!(epoch_number, 0, "Epoch 0 is pre-genesis");
-        self.main.tree_from_chunks(epoch_number, chunks, txn)
     }
 
     fn get_last_leaf_block_number(&self, txn_option: Option<&MdbxReadTransaction>) -> Option<u32> {

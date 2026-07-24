@@ -4,10 +4,7 @@ use nimiq_block::{Block, MicroBlock};
 use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_mmr::{
-    error::Error as MMRError,
-    mmr::proof::{RangeProof, SizeProof},
-};
+use nimiq_mmr::{error::Error as MMRError, mmr::proof::SizeProof};
 use nimiq_transaction::{
     historic_transaction::{HistoricTransaction, RawTransactionHash},
     history_proof::HistoryTreeProof,
@@ -158,14 +155,6 @@ pub trait HistoryInterface: Debug {
         chunk_index: usize,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<HistoryTreeChunk>;
-
-    /// Creates a new history tree from chunks and returns the root hash.
-    fn tree_from_chunks(
-        &self,
-        epoch_number: u32,
-        chunks: Vec<(Vec<HistoricTransaction>, RangeProof<Blake2bHash>)>,
-        txn: &mut MdbxWriteTransaction,
-    ) -> Result<Blake2bHash, MMRError>;
 
     /// Returns the block number of the last leaf in the history store
     fn get_last_leaf_block_number(&self, txn_option: Option<&MdbxReadTransaction>) -> Option<u32>;

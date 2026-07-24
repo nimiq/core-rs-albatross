@@ -11,10 +11,7 @@ use nimiq_database::{
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_mmr::{
-    error::Error as MMRError,
-    mmr::proof::{RangeProof, SizeProof},
-};
+use nimiq_mmr::{error::Error as MMRError, mmr::proof::SizeProof};
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
     historic_transaction::{HistoricTransaction, HistoricTransactionData, RawTransactionHash},
@@ -451,16 +448,6 @@ impl HistoryInterface for HistoryStoreIndex {
             chunk_index,
             txn_option,
         )
-    }
-
-    fn tree_from_chunks(
-        &self,
-        epoch_number: u32,
-        chunks: Vec<(Vec<HistoricTransaction>, RangeProof<Blake2bHash>)>,
-        txn: &mut MdbxWriteTransaction,
-    ) -> Result<Blake2bHash, MMRError> {
-        self.history_store
-            .tree_from_chunks(epoch_number, chunks, txn)
     }
 
     fn get_last_leaf_block_number(&self, txn_option: Option<&MdbxReadTransaction>) -> Option<u32> {
