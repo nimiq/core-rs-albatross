@@ -19,13 +19,15 @@ use nimiq_primitives::{
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{
-        fill_micro_blocks_with_txns, next_protocol_upgrade_block, produce_macro_blocks_with_txns,
-        signing_key, validator_address, voting_key,
+        fill_micro_blocks_with_txns, next_election_block_with_version, next_protocol_upgrade_block,
+        produce_macro_blocks_with_txns, signal_next_protocol_version_via_tx, signing_key,
+        validator_address, voting_key,
     },
     node::Node,
     test_rng,
     test_transaction::generate_accounts,
 };
+use nimiq_time::timeout;
 use nimiq_transaction_builder::TransactionBuilder;
 
 #[test(tokio::test)]

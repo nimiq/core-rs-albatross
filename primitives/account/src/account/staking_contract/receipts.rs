@@ -11,7 +11,7 @@ use crate::{convert_receipt, AccountReceipt};
 
 /// Penalize receipt for the inherent. This is necessary to be able to revert
 /// these inherents.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct PenalizeReceipt {
     /// true if corresponding validator was deactivated by this penalty
     pub newly_deactivated: bool,
@@ -119,21 +119,6 @@ pub struct DeleteValidatorReceipt {
     pub jailed_from: Option<u32>,
 }
 convert_receipt!(DeleteValidatorReceipt);
-
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
-pub enum BalanceType {
-    Active,
-    Inactive,
-}
-
-/// Receipt for add stake transactions. Stores which balance the stake was
-/// credited to, which is necessary to be able to revert the transaction.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct AddStakeReceipt {
-    /// the balance which the stake was attributed to.
-    pub credited_balance: BalanceType,
-}
-convert_receipt!(AddStakeReceipt);
 
 /// Receipt for most staker-related transactions. This is necessary to be able to revert
 /// these transactions.

@@ -9,8 +9,6 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::{upgrades, Policy};
 use serde::{Deserialize, Serialize};
 
-use super::AddStakeReceipt;
-use crate::BalanceType;
 #[cfg(feature = "interaction-traits")]
 use crate::{
     account::staking_contract::{
@@ -292,7 +290,7 @@ impl StakingContract {
         value: Coin,
         protocol_version: u16,
         tx_logger: &mut TransactionLog,
-    ) -> Result<AddStakeReceipt, AccountError> {
+    ) -> Result<(), AccountError> {
         if protocol_version < upgrades::v3::STAKING_CHANGE_ADD_STAKE_POLICY {
             return self.legacy_add_stake_before_v3(store, staker_address, value, tx_logger);
         }
@@ -308,7 +306,7 @@ impl StakingContract {
         // (invariant 1). History sync replays transactions without re-running those checks, so we enforce
         // the invariant here too as defense in depth.
         // Add stake may be credited to either the active or inactive balance below. Both minimum-stake
-        // invariants only use these balances through their sum, so adding `value` to the either active or inactive
+        // invariants only use these balances through their sum, so adding `value` to either active or inactive
         // arguments is equivalent.
         Staker::enforce_min_stake(
             staker.active_balance + value,
@@ -321,27 +319,19 @@ impl StakingContract {
         // Update the staker's and staking contract's balances.
         // We want to preferentially credit the active balance. Only if there is no active balance,
         // then it will attribute the funds to the inactive balance.
-        let credited_balance = if !staker.active_balance.is_zero() {
+        let credited_to_active = !staker.active_balance.is_zero();
+        if credited_to_active {
             staker.active_balance += value;
-            BalanceType::Active
         } else {
             staker.inactive_balance += value;
             if staker.inactive_from.is_none() {
                 staker.inactive_from = Some(0); // To uphold the (invariant 3)
             }
-            BalanceType::Inactive
-        };
+        }
         self.balance += value;
 
-        // Create the receipt.
-        let receipt = AddStakeReceipt {
-            credited_balance: credited_balance.clone(),
-        };
-
         // If we are actively delegating to a validator, we need to update it.
-        if credited_balance == BalanceType::Active
-            && let Some(validator_address) = &staker.delegation
-        {
+        if credited_to_active && let Some(validator_address) = &staker.delegation {
             self.increase_stake_to_validator(store, validator_address, value);
         }
 
@@ -350,54 +340,57 @@ impl StakingContract {
             staker_address: staker_address.clone(),
             validator_address: staker.delegation.clone(),
             value,
-            credited_balance,
+            credited_to_active,
         });
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);
 
-        Ok(receipt)
+        Ok(())
     }
 
     /// Reverts a stake transaction.
+    ///
+    /// No receipt is needed to identify the balance credited by [`Self::add_stake`].
+    /// Transactions are reverted in reverse order, so the staker is in its state immediately
+    /// after this operation. If the active balance was credited, it was already non-zero and
+    /// remains non-zero; otherwise, it was zero and was left unchanged. Thus, the current active
+    /// balance identifies which balance to debit.
+    ///
     /// IMPORTANT: This code is shared between new and legacy add stake versions.
     pub fn revert_add_stake(
         &mut self,
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
-        receipt: AddStakeReceipt,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
         // If we are delegating to a validator, we need to update it too.
-        if receipt.credited_balance == BalanceType::Active
-            && let Some(validator_address) = &staker.delegation
-        {
+        let credited_to_active = !staker.active_balance.is_zero();
+        if credited_to_active && let Some(validator_address) = &staker.delegation {
             self.decrease_stake_from_validator(store, validator_address, value);
         }
 
         // Update the staker's and staking contract's balances.
-        match receipt.credited_balance {
-            BalanceType::Active => {
-                staker.active_balance -= value;
-            }
-            BalanceType::Inactive => {
-                staker.inactive_balance -= value;
-                if staker.inactive_balance.is_zero() {
-                    staker.inactive_from = None;
-                }
+        if credited_to_active {
+            staker.active_balance -= value;
+        } else {
+            staker.inactive_balance -= value;
+            if staker.inactive_balance.is_zero() {
+                staker.inactive_from = None;
             }
         }
+
         self.balance -= value;
 
         tx_logger.push_log(Log::Stake {
             staker_address: staker_address.clone(),
             validator_address: staker.delegation.clone(),
             value,
-            credited_balance: receipt.credited_balance,
+            credited_to_active,
         });
 
         // Update the staker entry.
@@ -1087,7 +1080,7 @@ impl StakingContract {
         staker_address: &Address,
         value: Coin,
         tx_logger: &mut TransactionLog,
-    ) -> Result<AddStakeReceipt, AccountError> {
+    ) -> Result<(), AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
@@ -1116,14 +1109,12 @@ impl StakingContract {
             staker_address: staker_address.clone(),
             validator_address: staker.delegation.clone(),
             value,
-            credited_balance: BalanceType::Active,
+            credited_to_active: true,
         });
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);
 
-        Ok(AddStakeReceipt {
-            credited_balance: BalanceType::Active,
-        })
+        Ok(())
     }
 }

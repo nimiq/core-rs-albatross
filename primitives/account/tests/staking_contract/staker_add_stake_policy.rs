@@ -47,22 +47,14 @@ fn add_stake(protocol_version: u16) {
         )
         .expect("Failed to commit transaction");
 
-    assert_eq!(
-        receipt,
-        Some(
-            AddStakeReceipt {
-                credited_balance: BalanceType::Active
-            }
-            .into()
-        )
-    );
+    assert_eq!(receipt, None);
     assert_eq!(
         tx_logger.logs,
         vec![Log::Stake {
             staker_address: staker_address.clone(),
             validator_address: Some(validator_address.clone()),
             value: tx.value,
-            credited_balance: BalanceType::Active,
+            credited_to_active: true,
         }]
     );
 
@@ -114,7 +106,7 @@ fn add_stake(protocol_version: u16) {
             staker_address: staker_address.clone(),
             validator_address: Some(validator_address.clone()),
             value: tx.value,
-            credited_balance: BalanceType::Active,
+            credited_to_active: true,
         }]
     );
 
@@ -199,15 +191,7 @@ fn add_stake_priority_works() {
         )
         .expect("Failed to commit transaction");
 
-    assert_eq!(
-        receipt,
-        Some(
-            AddStakeReceipt {
-                credited_balance: BalanceType::Active
-            }
-            .into()
-        )
-    );
+    assert_eq!(receipt, None);
 
     assert_eq!(
         tx_logs.logs,
@@ -215,7 +199,7 @@ fn add_stake_priority_works() {
             staker_address: staker_setup.staker_address.clone(),
             validator_address: Some(staker_setup.validator_address.clone()),
             value: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
-            credited_balance: BalanceType::Active,
+            credited_to_active: true,
         }]
     );
 
@@ -350,15 +334,7 @@ fn add_stake_policy_to_inactive() {
         )
         .expect("Failed to commit transaction");
 
-    assert_eq!(
-        receipt,
-        Some(
-            AddStakeReceipt {
-                credited_balance: BalanceType::Inactive
-            }
-            .into()
-        )
-    );
+    assert_eq!(receipt, None);
 
     assert_eq!(
         tx_logs.logs,
@@ -366,7 +342,7 @@ fn add_stake_policy_to_inactive() {
             staker_address: staker_setup.staker_address.clone(),
             validator_address: Some(staker_setup.validator_address.clone()),
             value: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
-            credited_balance: BalanceType::Inactive,
+            credited_to_active: false,
         }]
     );
 
@@ -496,15 +472,7 @@ fn add_stake_with_only_retired_balance() {
         )
         .expect("Failed to commit transaction");
 
-    assert_eq!(
-        receipt,
-        Some(
-            AddStakeReceipt {
-                credited_balance: BalanceType::Inactive
-            }
-            .into()
-        )
-    );
+    assert_eq!(receipt, None);
 
     assert_eq!(
         tx_logs.logs,
@@ -512,7 +480,7 @@ fn add_stake_with_only_retired_balance() {
             staker_address: staker_setup.staker_address.clone(),
             validator_address: Some(staker_setup.validator_address.clone()),
             value: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
-            credited_balance: BalanceType::Inactive,
+            credited_to_active: false,
         }]
     );
 
@@ -644,15 +612,7 @@ fn add_stake_enforces_minimum_stake_works() {
         )
         .expect("Failed to commit transaction");
 
-    assert_eq!(
-        receipt,
-        Some(
-            AddStakeReceipt {
-                credited_balance: BalanceType::Inactive
-            }
-            .into()
-        )
-    );
+    assert_eq!(receipt, None);
 
     assert_eq!(
         tx_logs.logs,
@@ -660,7 +620,7 @@ fn add_stake_enforces_minimum_stake_works() {
             staker_address: staker_setup.staker_address.clone(),
             validator_address: Some(staker_setup.validator_address.clone()),
             value: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
-            credited_balance: BalanceType::Inactive,
+            credited_to_active: false,
         }]
     );
 
@@ -743,15 +703,7 @@ fn add_stake_does_not_touch_inactive_or_retired_balances_before_v3() {
         )
         .expect("Failed to commit transaction");
 
-    assert_eq!(
-        receipt,
-        Some(
-            AddStakeReceipt {
-                credited_balance: BalanceType::Active
-            }
-            .into()
-        )
-    );
+    assert_eq!(receipt, None);
 
     assert_eq!(
         tx_logs.logs,
@@ -759,7 +711,7 @@ fn add_stake_does_not_touch_inactive_or_retired_balances_before_v3() {
             staker_address: staker_setup.staker_address.clone(),
             validator_address: Some(staker_setup.validator_address.clone()),
             value: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
-            credited_balance: BalanceType::Active,
+            credited_to_active: true,
         }]
     );
 
@@ -933,15 +885,7 @@ fn add_stake_enforces_minimum_stake_works_before_v3() {
         )
         .expect("Failed to commit transaction");
 
-    assert_eq!(
-        receipt,
-        Some(
-            AddStakeReceipt {
-                credited_balance: BalanceType::Active
-            }
-            .into()
-        )
-    );
+    assert_eq!(receipt, None);
 
     assert_eq!(
         tx_logs.logs,
@@ -949,7 +893,7 @@ fn add_stake_enforces_minimum_stake_works_before_v3() {
             staker_address: staker_setup.staker_address.clone(),
             validator_address: Some(staker_setup.validator_address.clone()),
             value: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
-            credited_balance: BalanceType::Active,
+            credited_to_active: true,
         }]
     );
 
@@ -1037,15 +981,7 @@ fn add_stake_enforces_greater_than_zero_works_before_v3() {
         )
         .expect("Failed to commit transaction");
 
-    assert_eq!(
-        receipt,
-        Some(
-            AddStakeReceipt {
-                credited_balance: BalanceType::Active
-            }
-            .into()
-        )
-    );
+    assert_eq!(receipt, None);
 
     assert_eq!(
         tx_logs.logs,
@@ -1053,7 +989,7 @@ fn add_stake_enforces_greater_than_zero_works_before_v3() {
             staker_address: staker_setup.staker_address.clone(),
             validator_address: Some(staker_setup.validator_address.clone()),
             value: Coin::from_u64_unchecked(1),
-            credited_balance: BalanceType::Active,
+            credited_to_active: true,
         }]
     );
 
