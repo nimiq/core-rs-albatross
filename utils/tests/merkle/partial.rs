@@ -392,6 +392,58 @@ fn it_correctly_computes_more_complex_proofs() {
 }
 
 #[test]
+fn it_rejects_proofs_with_crafted_total_len() {
+    // A deserialized proof can carry an arbitrary `total_len`, so its implied tree
+    // shape may request more helper nodes than the previous result provides.
+    // This used to underflow `helper_index` and panic in debug builds.
+
+    // Without a previous result there are no helper nodes at all, but an empty
+    // proof with `total_len = 0` immediately requests one.
+    let crafted = PartialMerkleProof::<Blake2bHash>::empty(0);
+    let proof_result = crafted.compute_root(&[], None);
+    match proof_result {
+        Err(PartialMerkleProofError::InvalidPreviousProof) => {}
+        _ => assert!(
+            false,
+            "Crafted empty proof gave invalid response: {proof_result:?}"
+        ),
+    }
+
+    // Build a valid previous result covering values [0, 3) with one helper node.
+    let values = ["1", "2", "3", "4", "5"];
+    let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 3);
+    assert!(
+        chunks.is_ok(),
+        "Proof builder errored: {:?}",
+        chunks.err().unwrap()
+    );
+    let chunks = chunks.unwrap();
+
+    let previous_result = chunks[0].compute_root_from_values(&values[..3], None);
+    assert!(
+        previous_result.is_ok(),
+        "Proof errored: {:?}",
+        previous_result.err().unwrap()
+    );
+    let previous_result = previous_result.unwrap();
+    assert_eq!(previous_result.helper_nodes().len(), 1);
+    assert_eq!(previous_result.next_index(), 3);
+
+    // A tree of `total_len = 4` decomposes the already verified range [0, 3)
+    // into two subtrees ([0, 2) and [2, 3)), requesting two helper nodes where
+    // only one exists.
+    let crafted = PartialMerkleProof::<Blake2bHash>::empty(4);
+    let proof_result = crafted.compute_root(&[], Some(&previous_result));
+    match proof_result {
+        Err(PartialMerkleProofError::InvalidPreviousProof) => {}
+        _ => assert!(
+            false,
+            "Crafted proof gave invalid response: {proof_result:?}"
+        ),
+    }
+}
+
+#[test]
 fn it_discards_invalid_proofs() {
     let values = vec!["1", "2", "3", "4"];
     /*

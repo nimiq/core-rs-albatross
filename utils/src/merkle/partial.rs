@@ -199,7 +199,11 @@ impl<H: HashOutput> PartialMerkleProof<H> {
 
         // Catch cases that require proof/helper nodes.
         if current_range.end <= index_offset {
-            *helper_index -= 1;
+            // A crafted `total_len` can request more helper nodes than the previous
+            // result provides, so this must not underflow.
+            *helper_index = helper_index
+                .checked_sub(1)
+                .ok_or(PartialMerkleProofError::InvalidPreviousProof)?;
             let hash = helper_nodes
                 .get(*helper_index)
                 .ok_or(PartialMerkleProofError::InvalidPreviousProof)?;
