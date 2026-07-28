@@ -31,9 +31,17 @@ impl Address {
 
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> Result<Address, JsError> {
-        Ok(Address::from(nimiq_keys::Address::from(
-            &bytes[0..nimiq_keys::Address::len()],
-        )))
+        // Require exactly the address length. Converting the slice into a fixed-size
+        // array rejects both short input and any trailing bytes, so nothing is
+        // silently dropped (and the fixed array can't panic on construction).
+        let bytes: [u8; nimiq_keys::Address::SIZE] = bytes.try_into().map_err(|_| {
+            JsError::new(&format!(
+                "Address requires exactly {} bytes, got {}",
+                nimiq_keys::Address::SIZE,
+                bytes.len()
+            ))
+        })?;
+        Ok(Address::from(nimiq_keys::Address::from(bytes)))
     }
 
     /// Deserializes an address from a byte array.

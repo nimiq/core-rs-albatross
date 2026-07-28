@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use nimiq_keys::SecureGenerate;
 use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -35,16 +33,21 @@ impl KeyPair {
 
     /// Parses a keypair from its hex representation.
     ///
-    /// Throws when the string is not valid hex format or when it represents less than 64 bytes.
+    /// Throws when the string is not valid hex or does not represent a 64-byte keypair
+    /// (optionally followed by a 1-byte lock-state flag, as produced by `toHex`).
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<KeyPair, JsError> {
-        if hex.len() < 128 {
+        // Decode first (safe on any &str), then reject anything that is not exactly a
+        // keypair. 64 bytes = private (32) + public (32); an optional 65th byte is the
+        // (currently unused) lock-state flag written by `serialize`/`to_hex`.
+        let bytes = hex::decode(hex)?;
+        if bytes.len() != 64 && bytes.len() != 65 {
             return Err(JsError::new(
-                "Invalid hex: expected at least 128 characters (64 bytes)",
+                "Invalid hex: expected 64 bytes (optionally + 1 lock-state byte)",
             ));
         }
-        let private = nimiq_keys::PrivateKey::from_str(&hex[0..64])?;
-        let public = nimiq_keys::Ed25519PublicKey::from_str(&hex[64..128])?;
+        let private = nimiq_keys::PrivateKey::from_bytes(&bytes[0..32])?;
+        let public = nimiq_keys::Ed25519PublicKey::from_bytes(&bytes[32..64])?;
         // TODO: Deserialize locked state if bytes remaining
         let key_pair = nimiq_keys::KeyPair { private, public };
         Ok(KeyPair::from(key_pair))

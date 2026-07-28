@@ -485,24 +485,33 @@ impl Transaction {
                     raw: hex::encode(self.sender_data()),
                 };
 
+                // `Transaction::new` does not validate contract data, so unparseable
+                // bytes fall back to the raw representation rather than panicking.
                 if self.inner.sender_type == AccountType::Staking {
-                    let data = OutgoingStakingTransactionData::parse(&self.inner).unwrap();
-                    match data {
-                        OutgoingStakingTransactionData::DeleteValidator => {
+                    match OutgoingStakingTransactionData::parse(&self.inner) {
+                        Ok(OutgoingStakingTransactionData::DeleteValidator) => {
                             PlainTransactionSenderData::DeleteValidator(raw_data)
                         }
-                        OutgoingStakingTransactionData::RemoveStake => {
+                        Ok(OutgoingStakingTransactionData::RemoveStake) => {
                             PlainTransactionSenderData::RemoveStake(raw_data)
                         }
+                        Err(_) => PlainTransactionSenderData::Raw(raw_data),
                     }
                 } else {
-                    PlainTransactionSenderData::Raw(PlainRawData { raw: raw_data.raw })
+                    PlainTransactionSenderData::Raw(raw_data)
                 }
             },
             data: {
+                // `Transaction::new` does not validate contract data, so unparseable
+                // bytes fall back to the raw representation rather than panicking.
+                let raw_recipient_data = || {
+                    PlainTransactionRecipientData::Raw(PlainRawData {
+                        raw: hex::encode(&self.inner.recipient_data),
+                    })
+                };
                 if self.inner.recipient_type == AccountType::Staking {
-                    // Parse transaction data
-                    StakingContract::parse_data(&self.inner.recipient_data).unwrap()
+                    StakingContract::parse_data(&self.inner.recipient_data)
+                        .unwrap_or_else(|_| raw_recipient_data())
                 } else if self.inner.recipient_type == AccountType::Vesting {
                     VestingContract::parse_data(
                         &self.inner.recipient_data,
@@ -511,7 +520,7 @@ impl Transaction {
                         genesis_block_number,
                         genesis_timestamp,
                     )
-                    .unwrap()
+                    .unwrap_or_else(|_| raw_recipient_data())
                 } else if self.inner.recipient_type == AccountType::HTLC {
                     HashedTimeLockedContract::parse_data(
                         &self.inner.recipient_data,
@@ -519,14 +528,19 @@ impl Transaction {
                         genesis_block_number,
                         genesis_timestamp,
                     )
-                    .unwrap()
+                    .unwrap_or_else(|_| raw_recipient_data())
                 } else {
-                    PlainTransactionRecipientData::Raw(PlainRawData {
-                        raw: hex::encode(self.recipient_data()),
-                    })
+                    raw_recipient_data()
                 }
             },
             proof: {
+                // `Transaction::new` does not validate the proof, so unparseable
+                // bytes fall back to the raw representation rather than panicking.
+                let raw_proof = || {
+                    PlainTransactionProof::Raw(PlainRawProof {
+                        raw: hex::encode(&self.inner.proof),
+                    })
+                };
                 if self.inner.proof.is_empty() {
                     PlainTransactionProof::Raw(PlainRawProof::default())
                 } else if self.inner.sender_type == AccountType::HTLC {
@@ -534,19 +548,19 @@ impl Transaction {
                         &self.inner.proof,
                         !self.inner.network_id.is_albatross(),
                     )
-                    .unwrap()
+                    .unwrap_or_else(|_| raw_proof())
                 } else {
                     // Depending on the network the signature proofs are constructed slightly differently.
                     let proof = if self.inner.network_id.is_albatross() {
-                        SignatureProof::deserialize(&self.inner.proof).unwrap()
+                        SignatureProof::deserialize(&self.inner.proof).ok()
                     } else {
-                        SignatureProof::from(
-                            PoWSignatureProof::deserialize_all(&self.inner.proof)
-                                .unwrap()
-                                .into_pos(),
-                        )
+                        PoWSignatureProof::deserialize_all(&self.inner.proof)
+                            .ok()
+                            .map(|pow| SignatureProof::from(pow.into_pos()))
                     };
-                    proof.to_plain_transaction_proof()
+                    proof
+                        .map(|proof| proof.to_plain_transaction_proof())
+                        .unwrap_or_else(raw_proof)
                 }
             },
             size: self.serialized_size(),
