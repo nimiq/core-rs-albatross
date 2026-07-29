@@ -146,6 +146,10 @@ impl Transaction {
     /// of a transaction can be different key pairs (addresses). If no inner key pair is provided, the outer
     /// key pair is used for both signatures.
     ///
+    /// Throws when the transaction's recipient data is not valid data for an incoming staking
+    /// transaction, or when an incoming staking transaction is not sent from a basic account or
+    /// a vesting contract.
+    ///
     /// ### Limitations
     /// - HTLC redemption is not supported and will throw.
     #[cfg(feature = "primitives")]
@@ -396,11 +400,17 @@ impl Transaction {
         let proof = match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(key_pair.native_ref());
-                builder.generate().unwrap().proof
+                builder
+                    .generate()
+                    .ok_or_else(|| JsError::new("Failed to sign transaction"))?
+                    .proof
             }
             TransactionProofBuilder::Vesting(mut builder) => {
                 builder.sign_with_key_pair(key_pair.native_ref());
-                builder.generate().unwrap().proof
+                builder
+                    .generate()
+                    .ok_or_else(|| JsError::new("Failed to sign transaction"))?
+                    .proof
             }
             TransactionProofBuilder::Htlc(mut _builder) => {
                 // TODO: Create a separate HTLC signing method that takes the type of proof as an argument
@@ -427,13 +437,33 @@ impl Transaction {
             }
             TransactionProofBuilder::OutStaking(mut builder) => {
                 builder.sign_with_key_pair(key_pair.native_ref());
-                builder.generate().unwrap().proof
+                builder
+                    .generate()
+                    .ok_or_else(|| JsError::new("Failed to sign transaction"))?
+                    .proof
             }
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(inner_key_pair.unwrap_or(key_pair).native_ref());
-                let mut builder = builder.generate().unwrap().unwrap_basic();
+                // `generate` returns `None` when the recipient data could not be parsed as
+                // incoming staking transaction data, in which case it was left unsigned.
+                let inner_proof_builder = builder.generate().ok_or_else(|| {
+                    JsError::new("Invalid data for an incoming staking transaction")
+                })?;
+                // The remaining proof depends on the sender, which must be a basic account or a
+                // vesting contract for an incoming staking transaction.
+                let mut builder = match inner_proof_builder {
+                    TransactionProofBuilder::Basic(builder)
+                    | TransactionProofBuilder::Vesting(builder) => builder,
+                    _ => {
+                        return Err(JsError::new(
+                            "Incoming staking transactions must be sent from a basic account or a vesting contract",
+                        ))
+                    }
+                };
                 builder.sign_with_key_pair(key_pair.native_ref());
-                let tx = builder.generate().unwrap();
+                let tx = builder
+                    .generate()
+                    .ok_or_else(|| JsError::new("Failed to sign transaction"))?;
                 // Set the recipient data to the data with the added signature
                 self.set_recipient_data(tx.recipient_data);
                 tx.proof
