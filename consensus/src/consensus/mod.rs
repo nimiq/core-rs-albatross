@@ -178,6 +178,23 @@ pub struct Consensus<N: Network> {
     waker: Option<Waker>,
 }
 
+/// Decides whether a finished head request provides enough evidence to establish
+/// consensus. We want at least 2/3 of the peers that responded to report a head
+/// block we already know, which is expressed as `num_known >= 2 * num_unknown`.
+///
+/// We must additionally have heard back from at least one peer. Failed head
+/// requests are not counted, so an all-failed request yields `num_known == 0` and
+/// `num_unknown == 0`, which would otherwise satisfy the comparison vacuously and
+/// establish consensus on zero evidence. The only legitimate zero-response case is
+/// a lone seed node (`min_peers == 0`) with no peers to ask, whose head request
+/// over an empty peer set completes with `0`/`0`; that case is identified here by
+/// `num_agents == 0` (when `min_peers >= 1` the establishment check is only reached
+/// with `num_agents >= min_peers >= 1`, so this never masks a failed request).
+fn head_request_established(num_known: usize, num_unknown: usize, num_agents: usize) -> bool {
+    let num_responses = num_known + num_unknown;
+    (num_responses > 0 || num_agents == 0) && num_known >= 2 * num_unknown
+}
+
 impl<N: Network> Consensus<N> {
     /// Minimum number of peers for consensus to be established.
     const MIN_PEERS_ESTABLISHED: usize = 3;
@@ -448,8 +465,14 @@ impl<N: Network> Consensus<N> {
                     // If we have a finished one, check its outcome.
                     if let Some(head_request) = finished_head_request {
                         debug!("Trying to establish consensus, checking head request ({} known, {} unknown).", head_request.num_known_blocks, head_request.num_unknown_blocks);
-                        // We would like that 2/3 of our peers have a known state.
-                        if head_request.num_known_blocks >= 2 * head_request.num_unknown_blocks {
+                        // We would like that 2/3 of our peers have a known state, and
+                        // that at least one peer actually responded (see
+                        // `head_request_established`).
+                        if head_request_established(
+                            head_request.num_known_blocks,
+                            head_request.num_unknown_blocks,
+                            self.num_agents(),
+                        ) {
                             info!("Consensus established, 2/3 of heads known.");
                             self.established_flag.swap(true, Ordering::Release);
 
@@ -606,5 +629,42 @@ impl<N: Network> Future for Consensus<N> {
 
         self.waker.store_waker(cx);
         Poll::Pending
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::head_request_established;
+
+    #[test]
+    fn all_failed_head_request_does_not_establish() {
+        // An all-failed head request yields 0 known / 0 unknown. With peers present
+        // (e.g. the default `min_peers = 3`) this must NOT establish consensus, even
+        // though `0 >= 2 * 0` holds: we have zero evidence about our peers' heads.
+        assert!(!head_request_established(0, 0, 3));
+        assert!(!head_request_established(0, 0, 1));
+    }
+
+    #[test]
+    fn lone_seed_node_establishes_on_empty_result() {
+        // A seed node configured with `min_peers = 0` and no peers issues a head
+        // request over an empty peer set, which completes with 0 known / 0 unknown.
+        // This is the sole legitimate zero-response case and must still establish.
+        assert!(head_request_established(0, 0, 0));
+    }
+
+    #[test]
+    fn establishes_when_two_thirds_of_heads_are_known() {
+        // 2/3 (or more) of the responding peers report a known head.
+        assert!(head_request_established(2, 1, 3));
+        assert!(head_request_established(4, 2, 6));
+        assert!(head_request_established(1, 0, 3));
+    }
+
+    #[test]
+    fn does_not_establish_below_two_thirds_known() {
+        // Fewer than 2/3 of the responding peers report a known head.
+        assert!(!head_request_established(1, 1, 3));
+        assert!(!head_request_established(2, 3, 5));
     }
 }
