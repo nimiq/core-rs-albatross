@@ -1,13 +1,13 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::SystemTime};
 
 use nimiq_account::{Account, StakingContractStoreWrite, TransactionLog};
-use nimiq_block::BlockError;
+use nimiq_block::{BlockError, MacroBlock};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::traits::WriteTransaction;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_libp2p::Network;
-use nimiq_network_mock::MockHub;
+use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
 use nimiq_tendermint::{ProposalMessage, Protocol, ProtocolError, SignedProposalMessage};
 use nimiq_test_log::test;
@@ -15,6 +15,7 @@ use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, test_network::TestNetwork, test_rng,
 };
 use nimiq_transaction::account::staking_contract::SignalDataUpdate;
+use nimiq_utils::time::systemtime_to_timestamp;
 use nimiq_validator::{aggregation::tendermint::proposal::Header, tendermint::TendermintProtocol};
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 
@@ -587,4 +588,80 @@ async fn it_rejects_unsupported_version_upgrade_blocks() {
         ),
         "Expected InvalidVersionUpgrade, got {result:?}"
     );
+}
+
+/// A macro block's timestamp must be at least one block separation time after its predecessor,
+/// so a batch does not lose a second at the macro block.
+#[test(tokio::test)]
+async fn it_ensures_macro_block_observes_block_separation_time() {
+    // Anchor genesis at the current whole second (genesis timestamps are whole seconds) so the
+    // head's deterministic timestamps sit near real time. With the fixed historical unit-genesis
+    // timestamp the head would be far in the past, the proposer would stamp `now()` either way, and
+    // the regression would stay hidden.
+    let genesis_timestamp = systemtime_to_timestamp(SystemTime::now()) / 1000 * 1000;
+    let temp_producer = TemporaryBlockProducer::new_with_genesis_timestamp(genesis_timestamp);
+
+    // Produce every micro block of the batch, leaving the head just before the macro block.
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        temp_producer.next_block(vec![], false);
+    }
+
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+    let (predecessor_timestamp, macro_block_number, current_validators) = {
+        let bc = blockchain.read();
+        (
+            bc.timestamp(),
+            bc.block_number() + 1,
+            bc.current_validators().unwrap().clone(),
+        )
+    };
+
+    // The proposal path never touches the network, so a mock network suffices.
+    let hub = MockHub::default();
+    let nw: Arc<MockNetwork> =
+        TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
+    let interface = TendermintProtocol::new(
+        Arc::clone(&blockchain),
+        val_net,
+        temp_producer.producer.clone(),
+        current_validators,
+        0,
+        NetworkId::UnitAlbatross,
+        macro_block_number,
+    );
+
+    let (message, body) = interface
+        .create_proposal(0)
+        .expect("Should have created proposal");
+    let macro_header = message.proposal.0.clone();
+
+    // Guard against a slow run: if wall-clock has already reached the head, the old `max(now, head)`
+    // would satisfy the assertion below too and the test would pass on regressed code.
+    assert!(
+        blockchain.read().time.now() < predecessor_timestamp + Policy::BLOCK_SEPARATION_TIME,
+        "test setup outran the head timestamp; cannot observe the regression",
+    );
+
+    // The proposer gives the macro block its own slot, one separation time past the predecessor.
+    assert!(
+        macro_header.timestamp >= predecessor_timestamp + Policy::BLOCK_SEPARATION_TIME,
+        "macro block timestamp {} must be at least one block separation time ({} ms) after its \
+         predecessor's timestamp {}",
+        macro_header.timestamp,
+        Policy::BLOCK_SEPARATION_TIME,
+        predecessor_timestamp,
+    );
+
+    // The stamp is ahead of the local clock but within the drift allowance, so verifying the
+    // proposal must still succeed.
+    let macro_block = MacroBlock {
+        header: macro_header,
+        body: Some(body.0),
+        justification: None,
+    };
+    blockchain
+        .read()
+        .verify_macro_block_proposal(macro_block, 0, None)
+        .expect("a proposal within the drift allowance must verify");
 }

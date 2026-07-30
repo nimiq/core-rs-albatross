@@ -270,8 +270,19 @@ where
             None
         };
 
-        // Create the proposal.
-        let time = blockchain.time.now();
+        // Create the proposal. This is proposer policy, not a consensus rule: validation accepts
+        // any timestamp from the predecessor up to `now + TIMESTAMP_MAX_DRIFT`. We target the macro
+        // block's scheduled slot (previous macro plus one batch of separation times), mirroring the
+        // micro block anchor in `expected_next_timestamp`, so an on-time batch keeps the block
+        // separation time without over-counting a late one. `now` is the fallback for a stalled
+        // chain, capped at the drift allowance so verifiers do not reject the proposal.
+        let now = blockchain.time.now();
+        let scheduled = blockchain.macro_head().header.timestamp.saturating_add(
+            Policy::BLOCK_SEPARATION_TIME.saturating_mul(Policy::blocks_per_batch() as u64),
+        );
+        let time = scheduled
+            .max(now)
+            .min(now.saturating_add(Policy::TIMESTAMP_MAX_DRIFT));
         let block = self
             .block_producer
             .next_macro_block_proposal(&blockchain, time, round, vec![], version)
