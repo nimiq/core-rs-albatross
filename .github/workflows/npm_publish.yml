@@ -27,7 +27,7 @@ jobs:
           ' Cargo.lock)
           if [ -z "$VERSION" ]; then echo "::error::Could not resolve wasm-bindgen version from Cargo.lock"; exit 1; fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: wasm-bindgen-cli@${{ steps.wasm-bindgen.outputs.version }}
       - name: Build package
