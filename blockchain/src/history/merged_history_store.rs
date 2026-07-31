@@ -579,7 +579,7 @@ mod tests {
             block_number: block,
             block_time: 0,
             data: HistoricTransactionData::Reward(RewardEvent {
-                validator_address: Address::burn_address(),
+                validator_address: reward_address.clone(),
                 reward_address,
                 value: Coin::from_u64_unchecked(value),
             }),

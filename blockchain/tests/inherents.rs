@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use nimiq_account::{BlockLogger, BlockState, StakingContractStoreWrite, TransactionLog};
+use nimiq_account::{Account, BlockLogger, BlockState, StakingContractStoreWrite, TransactionLog};
 use nimiq_block::{
     Block, DoubleProposalProof, DoubleVoteProof, ForkProof, MacroBlock, MacroBody, MacroHeader,
     SkipBlockInfo,
@@ -13,9 +13,10 @@ use nimiq_hash::{Blake2sHash, HashOutput};
 use nimiq_keys::Address;
 use nimiq_primitives::{
     coin::Coin,
+    key_nibbles::KeyNibbles,
     networks::NetworkId,
     policy::Policy,
-    slots_allocation::{JailedValidator, PenalizedSlot},
+    slots_allocation::{JailedValidator, PenalizedSlot, Validator, Validators},
     TendermintIdentifier, TendermintProposal, TendermintStep, TendermintVote,
 };
 use nimiq_test_log::test;
@@ -27,58 +28,274 @@ use nimiq_transaction::inherent::Inherent;
 use nimiq_utils::time::OffsetTime;
 use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
+const EXPECTED_REWARD: u64 = 166_810_895;
+const ONE_SLOT_REWARD: u64 = EXPECTED_REWARD / Policy::SLOTS as u64;
+
+struct RewardTestSetup {
+    blockchain: Arc<Blockchain>,
+    validator_address: Address,
+}
+
+struct MixedRewardValidators {
+    payable_reward_address: Address,
+    penalized_address: Address,
+    burn_address_validator: Address,
+    payable_slots: std::ops::Range<u16>,
+    unpayable_slots: std::ops::Range<u16>,
+    penalized_slots: std::ops::Range<u16>,
+    burn_address_slots: std::ops::Range<u16>,
+}
+
+impl RewardTestSetup {
+    fn new() -> Self {
+        let time = Arc::new(OffsetTime::new());
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let blockchain = Arc::new(
+            Blockchain::new(
+                env,
+                BlockchainConfig::default(),
+                NetworkId::UnitAlbatross,
+                time,
+            )
+            .unwrap(),
+        );
+
+        let staking_contract = blockchain.get_staking_contract();
+        let validator_address = staking_contract
+            .active_validators
+            .iter()
+            .next()
+            .unwrap()
+            .0
+            .clone();
+
+        Self {
+            blockchain,
+            validator_address,
+        }
+    }
+
+    fn set_validator_reward_address(&self, reward_address: Address) {
+        let mut txn = self.blockchain.write_transaction();
+        let mut db_txn = (&mut txn).into();
+        let data_store = self
+            .blockchain
+            .state
+            .accounts
+            .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut data_store_write = data_store.write(&mut db_txn);
+        let mut store = StakingContractStoreWrite::new(&mut data_store_write);
+        let mut staking_contract = self.blockchain.get_staking_contract();
+
+        staking_contract
+            .update_validator(
+                &mut store,
+                &self.validator_address,
+                None,
+                None,
+                Some(reward_address),
+                None,
+                &mut TransactionLog::empty(),
+            )
+            .unwrap();
+        txn.commit();
+    }
+
+    fn configure_mixed_reward_validators(&mut self) -> MixedRewardValidators {
+        let slot_validator = self
+            .blockchain
+            .state
+            .current_slots
+            .as_ref()
+            .unwrap()
+            .validators[0]
+            .clone();
+        let payable_reward_address = {
+            let staking_contract = self.blockchain.get_staking_contract();
+            let txn = self.blockchain.read_transaction();
+            let data_store = self
+                .blockchain
+                .state
+                .accounts
+                .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+            staking_contract
+                .get_validator(&data_store.read(&txn), &self.validator_address)
+                .unwrap()
+                .reward_address
+        };
+        let unpayable_address = Address::from([0xb; Address::SIZE]);
+        let penalized_address = Address::from([0xc; Address::SIZE]);
+        let burn_address_validator = Address::from([0xd; Address::SIZE]);
+
+        let mut txn = self.blockchain.write_transaction();
+        let mut db_txn = (&mut txn).into();
+        let mut staking_contract = self.blockchain.get_staking_contract();
+        {
+            let data_store = self
+                .blockchain
+                .state
+                .accounts
+                .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+            let mut data_store_write = data_store.write(&mut db_txn);
+            let mut store = StakingContractStoreWrite::new(&mut data_store_write);
+
+            for (validator_address, reward_address) in [
+                (&unpayable_address, Policy::STAKING_CONTRACT_ADDRESS.clone()),
+                (&penalized_address, payable_reward_address.clone()),
+                (&burn_address_validator, Address::burn_address()),
+            ] {
+                staking_contract
+                    .create_validator(
+                        &mut store,
+                        validator_address,
+                        slot_validator.signing_key,
+                        slot_validator.voting_key.compressed().clone(),
+                        reward_address,
+                        None,
+                        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+                        None,
+                        None,
+                        false,
+                        Policy::genesis_block_number(),
+                        &mut TransactionLog::empty(),
+                    )
+                    .unwrap();
+            }
+        }
+        self.blockchain
+            .state
+            .accounts
+            .tree
+            .put(
+                &mut db_txn,
+                &KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS),
+                Account::Staking(staking_contract),
+            )
+            .unwrap();
+        txn.commit();
+
+        let slots_per_validator = Policy::SLOTS / 4;
+        let payable_slots = 0..slots_per_validator;
+        let unpayable_slots = payable_slots.end..payable_slots.end + slots_per_validator;
+        let penalized_slots = unpayable_slots.end..unpayable_slots.end + slots_per_validator;
+        let burn_address_slots = penalized_slots.end..Policy::SLOTS;
+        Arc::get_mut(&mut self.blockchain)
+            .unwrap()
+            .state
+            .current_slots = Some(Validators::new(vec![
+            Validator::new(
+                self.validator_address.clone(),
+                slot_validator.voting_key.clone(),
+                slot_validator.signing_key,
+                payable_slots.clone(),
+            ),
+            Validator::new(
+                unpayable_address.clone(),
+                slot_validator.voting_key.clone(),
+                slot_validator.signing_key,
+                unpayable_slots.clone(),
+            ),
+            Validator::new(
+                penalized_address.clone(),
+                slot_validator.voting_key.clone(),
+                slot_validator.signing_key,
+                penalized_slots.clone(),
+            ),
+            Validator::new(
+                burn_address_validator.clone(),
+                slot_validator.voting_key,
+                slot_validator.signing_key,
+                burn_address_slots.clone(),
+            ),
+        ]));
+
+        MixedRewardValidators {
+            payable_reward_address,
+            penalized_address,
+            burn_address_validator,
+            payable_slots,
+            unpayable_slots,
+            penalized_slots,
+            burn_address_slots,
+        }
+    }
+
+    fn penalize_slots(&self, slots: impl IntoIterator<Item = u16>) {
+        self.penalize_validator_slots(&self.validator_address, slots);
+    }
+
+    fn penalize_validator_slots(
+        &self,
+        validator_address: &Address,
+        slots: impl IntoIterator<Item = u16>,
+    ) {
+        for slot in slots {
+            let penalize_inherent = Inherent::Penalize {
+                slot: PenalizedSlot {
+                    slot,
+                    validator_address: validator_address.clone(),
+                    offense_event_block: 1 + Policy::genesis_block_number(),
+                },
+            };
+
+            let mut txn = self.blockchain.write_transaction();
+            assert!(self
+                .blockchain
+                .state
+                .accounts
+                .commit(
+                    &mut (&mut txn).into(),
+                    &[],
+                    &[penalize_inherent],
+                    &BlockState::new(
+                        Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+                        1,
+                        self.blockchain.protocol_version()
+                    ),
+                    &mut BlockLogger::empty()
+                )
+                .is_ok());
+            txn.commit();
+        }
+    }
+
+    fn create_macro_block(&self) -> MacroBlock {
+        let block_number = Policy::macro_block_of(2).unwrap();
+        let staking_contract = self.blockchain.get_staking_contract();
+        let next_batch_initial_punished_set = staking_contract
+            .punished_slots
+            .next_batch_initial_punished_set(block_number, &staking_contract.active_validators);
+        let macro_header = MacroHeader {
+            network: NetworkId::UnitAlbatross,
+            version: 1,
+            block_number,
+            round: 0,
+            timestamp: self.blockchain.state.election_head.header.timestamp + 20000,
+            next_batch_initial_punished_set,
+            ..Default::default()
+        };
+        let reward_transactions =
+            self.blockchain
+                .create_reward_transactions(&macro_header, &staking_contract, None);
+
+        MacroBlock {
+            header: macro_header,
+            body: Some(MacroBody {
+                transactions: reward_transactions,
+            }),
+            justification: None,
+        }
+    }
+}
+
 #[test]
 fn it_can_create_batch_finalization_inherents() {
-    let time = Arc::new(OffsetTime::new());
-    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-    let blockchain = Arc::new(
-        Blockchain::new(
-            env,
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    );
-
-    let block_number = Policy::macro_block_of(2).unwrap();
-
-    let staking_contract = blockchain.get_staking_contract();
-    let active_validators = staking_contract.active_validators.clone();
-    let next_batch_initial_punished_set = staking_contract
-        .punished_slots
-        .next_batch_initial_punished_set(block_number, &active_validators);
-
-    let mut macro_header = MacroHeader {
-        network: NetworkId::UnitAlbatross,
-        version: 1,
-        block_number,
-        round: 0,
-        timestamp: blockchain.state.election_head.header.timestamp + 20000,
-        next_batch_initial_punished_set,
-        ..Default::default()
-    };
-
-    let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
-
-    let body = MacroBody {
-        transactions: reward_transactions,
-    };
-
-    let macro_block = MacroBlock {
-        header: macro_header.clone(),
-        body: Some(body),
-        justification: None,
-    };
+    let setup = RewardTestSetup::new();
+    let macro_block = setup.create_macro_block();
 
     // Simple case. Expect 1x FinalizeBatch, 1x Reward to validator
-    let inherents = blockchain.finalize_previous_batch(&macro_block);
+    let inherents = setup.blockchain.finalize_previous_batch(&macro_block);
     assert_eq!(inherents.len(), 2);
-
-    let (validator_address, _) = active_validators.iter().next().unwrap();
-
-    const EXPECTED_REWARD: u64 = 166_810_895;
 
     let mut got_reward = false;
     let mut got_finalize_batch = false;
@@ -97,53 +314,12 @@ fn it_can_create_batch_finalization_inherents() {
     assert!(got_reward && got_finalize_batch && inherents.len() == 2);
 
     // Penalize one slot. Expect 1x FinalizeBatch, 1x Reward to validator, 1x Reward burn
-    let penalize_inherent = Inherent::Penalize {
-        slot: PenalizedSlot {
-            slot: 0,
-            validator_address: validator_address.clone(),
-            offense_event_block: 1 + Policy::genesis_block_number(),
-        },
-    };
-
-    let mut txn = blockchain.write_transaction();
     // adds slot 0 to previous_lost_rewards -> slot won't get reward on next finalize_previous_batch
-    assert!(blockchain
-        .state
-        .accounts
-        .commit(
-            &mut (&mut txn).into(),
-            &[],
-            &[penalize_inherent],
-            &BlockState::new(
-                Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
-                1,
-                blockchain.protocol_version()
-            ),
-            &mut BlockLogger::empty()
-        )
-        .is_ok());
-    txn.commit();
+    setup.penalize_slots([0]);
+    let macro_block = setup.create_macro_block();
 
-    let staking_contract = blockchain.get_staking_contract();
-    let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
-    macro_header.next_batch_initial_punished_set = staking_contract
-        .punished_slots
-        .next_batch_initial_punished_set(macro_header.block_number, &active_validators);
-
-    let body = MacroBody {
-        transactions: reward_transactions,
-    };
-
-    let macro_block = MacroBlock {
-        header: macro_header,
-        body: Some(body),
-        justification: None,
-    };
-
-    let inherents = blockchain.finalize_previous_batch(&macro_block);
+    let inherents = setup.blockchain.finalize_previous_batch(&macro_block);
     assert_eq!(inherents.len(), 3);
-    let one_slot_reward = EXPECTED_REWARD / Policy::SLOTS as u64;
     let mut got_reward = false;
     let mut got_penalize = false;
     let mut got_finalize_batch = false;
@@ -151,19 +327,19 @@ fn it_can_create_batch_finalization_inherents() {
     for inherent in &inherents {
         match inherent {
             Inherent::Reward {
-                validator_address: actual_validator_address,
+                validator_address,
                 target,
                 value,
             } => {
                 if *target == Address::burn_address() {
-                    assert_eq!(*actual_validator_address, Address::burn_address());
-                    assert_eq!(*value, Coin::from_u64_unchecked(one_slot_reward));
+                    assert_eq!(*validator_address, Address::burn_address());
+                    assert_eq!(*value, Coin::from_u64_unchecked(ONE_SLOT_REWARD));
                     got_penalize = true;
                 } else {
-                    assert_eq!(*actual_validator_address, *validator_address);
+                    assert_eq!(*validator_address, setup.validator_address);
                     assert_eq!(
                         *value,
-                        Coin::from_u64_unchecked(EXPECTED_REWARD - one_slot_reward),
+                        Coin::from_u64_unchecked(EXPECTED_REWARD - ONE_SLOT_REWARD),
                     );
                     got_reward = true;
                 }
@@ -179,83 +355,14 @@ fn it_can_create_batch_finalization_inherents() {
 
 #[test]
 fn validator_deliberately_burning_rewards_works() {
-    let time = Arc::new(OffsetTime::new());
-    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-    let blockchain = Arc::new(
-        Blockchain::new(
-            env,
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    );
-
+    let setup = RewardTestSetup::new();
     // Set validator's reward address to the burn address.
-    let mut txn = blockchain.write_transaction();
-    let mut db_txn = (&mut txn).into();
-    let data_store = blockchain
-        .state
-        .accounts
-        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut data_store_write = data_store.write(&mut db_txn);
-    let mut store = StakingContractStoreWrite::new(&mut data_store_write);
-    let mut staking_contract = blockchain.get_staking_contract();
-    let validator_address = staking_contract
-        .active_validators
-        .first_entry()
-        .unwrap()
-        .key()
-        .clone();
-
-    staking_contract
-        .update_validator(
-            &mut store,
-            &validator_address,
-            None,
-            None,
-            Some(Address::burn_address()),
-            None,
-            &mut TransactionLog::empty(),
-        )
-        .unwrap();
-    txn.commit();
-
-    let block_number = Policy::macro_block_of(2).unwrap();
-
-    let active_validators = staking_contract.active_validators.clone();
-    let next_batch_initial_punished_set = staking_contract
-        .punished_slots
-        .next_batch_initial_punished_set(block_number, &active_validators);
-
-    let mut macro_header = MacroHeader {
-        network: NetworkId::UnitAlbatross,
-        version: 1,
-        block_number,
-        round: 0,
-        timestamp: blockchain.state.election_head.header.timestamp + 20000,
-        next_batch_initial_punished_set,
-        ..Default::default()
-    };
-
-    let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
-
-    let body = MacroBody {
-        transactions: reward_transactions,
-    };
-
-    let macro_block = MacroBlock {
-        header: macro_header.clone(),
-        body: Some(body),
-        justification: None,
-    };
+    setup.set_validator_reward_address(Address::burn_address());
+    let macro_block = setup.create_macro_block();
 
     // Simple case. Expect 1x FinalizeBatch, 1x Reward to validator
-    let inherents = blockchain.finalize_previous_batch(&macro_block);
+    let inherents = setup.blockchain.finalize_previous_batch(&macro_block);
     assert_eq!(inherents.len(), 2);
-
-    const EXPECTED_REWARD: u64 = 166_810_895;
 
     let mut got_reward = false;
     let mut got_finalize_batch = false;
@@ -275,66 +382,24 @@ fn validator_deliberately_burning_rewards_works() {
     assert!(got_reward && got_finalize_batch && inherents.len() == 2);
 
     // Penalize one slot. Expect 1x FinalizeBatch, 1x Reward to validator, 1x Reward burn
-    let penalize_inherent = Inherent::Penalize {
-        slot: PenalizedSlot {
-            slot: 0,
-            validator_address: validator_address.clone(),
-            offense_event_block: 1 + Policy::genesis_block_number(),
-        },
-    };
-
-    let mut txn = blockchain.write_transaction();
     // adds slot 0 to previous_lost_rewards -> slot won't get reward on next finalize_previous_batch
-    assert!(blockchain
-        .state
-        .accounts
-        .commit(
-            &mut (&mut txn).into(),
-            &[],
-            &[penalize_inherent],
-            &BlockState::new(
-                Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
-                1,
-                Policy::max_supported_version()
-            ),
-            &mut BlockLogger::empty()
-        )
-        .is_ok());
-    txn.commit();
+    setup.penalize_slots([0]);
+    let macro_block = setup.create_macro_block();
 
-    let staking_contract = blockchain.get_staking_contract();
-    let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
-    macro_header.next_batch_initial_punished_set = staking_contract
-        .punished_slots
-        .next_batch_initial_punished_set(macro_header.block_number, &active_validators);
-
-    let body = MacroBody {
-        transactions: reward_transactions,
-    };
-
-    let macro_block = MacroBlock {
-        header: macro_header,
-        body: Some(body),
-        justification: None,
-    };
-
-    let inherents = blockchain.finalize_previous_batch(&macro_block);
+    let inherents = setup.blockchain.finalize_previous_batch(&macro_block);
     assert_eq!(inherents.len(), 3);
-    let one_slot_reward = EXPECTED_REWARD / Policy::SLOTS as u64;
-
     assert_eq!(
         inherents,
         [
             Inherent::Reward {
-                validator_address: validator_address.clone(),
+                validator_address: setup.validator_address.clone(),
                 target: Address::burn_address(),
-                value: Coin::from_u64_unchecked(EXPECTED_REWARD - one_slot_reward),
+                value: Coin::from_u64_unchecked(EXPECTED_REWARD - ONE_SLOT_REWARD),
             },
             Inherent::Reward {
                 validator_address: Address::burn_address(),
                 target: Address::burn_address(),
-                value: Coin::from_u64_unchecked(one_slot_reward),
+                value: Coin::from_u64_unchecked(ONE_SLOT_REWARD),
             },
             Inherent::FinalizeBatch
         ]
@@ -343,89 +408,24 @@ fn validator_deliberately_burning_rewards_works() {
 
 #[test]
 fn validator_reward_address_that_cannot_accept_inherents_burns_rewards() {
-    let time = Arc::new(OffsetTime::new());
-    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-    let blockchain = Arc::new(
-        Blockchain::new(
-            env,
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    );
-
+    let setup = RewardTestSetup::new();
     // Point the validator reward address at the staking contract, which cannot accept Reward
     // inherents, so the reward must be burned instead.
-    let mut txn = blockchain.write_transaction();
-    let mut db_txn = (&mut txn).into();
-    let data_store = blockchain
-        .state
-        .accounts
-        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut data_store_write = data_store.write(&mut db_txn);
-    let mut store = StakingContractStoreWrite::new(&mut data_store_write);
-    let mut staking_contract = blockchain.get_staking_contract();
-    let validator_address = staking_contract
-        .active_validators
-        .first_entry()
-        .unwrap()
-        .key()
-        .clone();
-
-    staking_contract
-        .update_validator(
-            &mut store,
-            &validator_address,
-            None,
-            None,
-            Some(Policy::STAKING_CONTRACT_ADDRESS),
-            None,
-            &mut TransactionLog::empty(),
-        )
-        .unwrap();
-    txn.commit();
-
-    let block_number = Policy::macro_block_of(2).unwrap();
-    let active_validators = staking_contract.active_validators.clone();
-    let next_batch_initial_punished_set = staking_contract
-        .punished_slots
-        .next_batch_initial_punished_set(block_number, &active_validators);
-
-    let macro_header = MacroHeader {
-        network: NetworkId::UnitAlbatross,
-        version: 1,
-        block_number,
-        round: 0,
-        timestamp: blockchain.state.election_head.header.timestamp + 20000,
-        next_batch_initial_punished_set,
-        ..Default::default()
-    };
-
-    let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
-
-    const EXPECTED_REWARD: u64 = 166_810_895;
+    setup.set_validator_reward_address(Policy::STAKING_CONTRACT_ADDRESS);
+    let macro_block = setup.create_macro_block();
+    let reward_transactions = &macro_block.body.as_ref().unwrap().transactions;
 
     assert_eq!(
-        reward_transactions,
-        [nimiq_transaction::reward::RewardTransaction {
+        reward_transactions.as_slice(),
+        &[nimiq_transaction::reward::RewardTransaction {
             validator_address: Address::burn_address(),
             recipient: Address::burn_address(),
             value: Coin::from_u64_unchecked(EXPECTED_REWARD),
         }]
     );
 
-    let macro_block = MacroBlock {
-        header: macro_header,
-        body: Some(MacroBody {
-            transactions: reward_transactions,
-        }),
-        justification: None,
-    };
-
     assert_eq!(
-        blockchain.finalize_previous_batch(&macro_block),
+        setup.blockchain.finalize_previous_batch(&macro_block),
         [
             Inherent::Reward {
                 validator_address: Address::burn_address(),
@@ -439,118 +439,25 @@ fn validator_reward_address_that_cannot_accept_inherents_burns_rewards() {
 
 #[test]
 fn penalized_slots_and_unpayable_reward_address_burn_all_rewards() {
-    let time = Arc::new(OffsetTime::new());
-    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-    let blockchain = Arc::new(
-        Blockchain::new(
-            env,
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    );
-
+    let setup = RewardTestSetup::new();
     // Point the validator reward address at the staking contract, which cannot accept Reward
     // inherents, so even the non-penalized portion must be burned.
-    let mut txn = blockchain.write_transaction();
-    let mut db_txn = (&mut txn).into();
-    let data_store = blockchain
-        .state
-        .accounts
-        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut data_store_write = data_store.write(&mut db_txn);
-    let mut store = StakingContractStoreWrite::new(&mut data_store_write);
-    let mut staking_contract = blockchain.get_staking_contract();
-    let validator_address = staking_contract
-        .active_validators
-        .first_entry()
-        .unwrap()
-        .key()
-        .clone();
-
-    staking_contract
-        .update_validator(
-            &mut store,
-            &validator_address,
-            None,
-            None,
-            Some(Policy::STAKING_CONTRACT_ADDRESS),
-            None,
-            &mut TransactionLog::empty(),
-        )
-        .unwrap();
-    txn.commit();
-
-    let block_number = Policy::macro_block_of(2).unwrap();
-    let active_validators = staking_contract.active_validators.clone();
-    let mut macro_header = MacroHeader {
-        network: NetworkId::UnitAlbatross,
-        version: 1,
-        block_number,
-        round: 0,
-        timestamp: blockchain.state.election_head.header.timestamp + 20000,
-        next_batch_initial_punished_set: staking_contract
-            .punished_slots
-            .next_batch_initial_punished_set(block_number, &active_validators),
-        ..Default::default()
-    };
-
-    let penalize_inherent = Inherent::Penalize {
-        slot: PenalizedSlot {
-            slot: 0,
-            validator_address: validator_address.clone(),
-            offense_event_block: 1 + Policy::genesis_block_number(),
-        },
-    };
-
-    let mut txn = blockchain.write_transaction();
-    assert!(blockchain
-        .state
-        .accounts
-        .commit(
-            &mut (&mut txn).into(),
-            &[],
-            &[penalize_inherent],
-            &BlockState::new(
-                Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
-                1,
-                Policy::max_supported_version()
-            ),
-            &mut BlockLogger::empty()
-        )
-        .is_ok());
-    txn.commit();
-
-    let staking_contract = blockchain.get_staking_contract();
-    macro_header.next_batch_initial_punished_set = staking_contract
-        .punished_slots
-        .next_batch_initial_punished_set(macro_header.block_number, &active_validators);
-
-    let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
-
-    const EXPECTED_REWARD: u64 = 166_810_895;
+    setup.set_validator_reward_address(Policy::STAKING_CONTRACT_ADDRESS);
+    setup.penalize_slots([0]);
+    let macro_block = setup.create_macro_block();
+    let reward_transactions = &macro_block.body.as_ref().unwrap().transactions;
 
     assert_eq!(
-        reward_transactions,
-        [nimiq_transaction::reward::RewardTransaction {
+        reward_transactions.as_slice(),
+        &[nimiq_transaction::reward::RewardTransaction {
             validator_address: Address::burn_address(),
             recipient: Address::burn_address(),
             value: Coin::from_u64_unchecked(EXPECTED_REWARD),
         }]
     );
 
-    let macro_block = MacroBlock {
-        header: macro_header,
-        body: Some(MacroBody {
-            transactions: reward_transactions,
-        }),
-        justification: None,
-    };
-
     assert_eq!(
-        blockchain.finalize_previous_batch(&macro_block),
+        setup.blockchain.finalize_previous_batch(&macro_block),
         [
             Inherent::Reward {
                 validator_address: Address::burn_address(),
@@ -558,6 +465,76 @@ fn penalized_slots_and_unpayable_reward_address_burn_all_rewards() {
                 value: Coin::from_u64_unchecked(EXPECTED_REWARD),
             },
             Inherent::FinalizeBatch
+        ]
+    );
+}
+
+#[test]
+fn multiple_validators_mix_all_reward_outcomes() {
+    let mut setup = RewardTestSetup::new();
+    // Validator A can receive rewards, validator B cannot, all of validator C's slots are
+    // penalized, and validator D deliberately pays rewards to the burn address.
+    let validators = setup.configure_mixed_reward_validators();
+    setup.penalize_validator_slots(
+        &validators.penalized_address,
+        validators.penalized_slots.clone(),
+    );
+
+    let macro_block = setup.create_macro_block();
+    let reward_transactions = &macro_block.body.as_ref().unwrap().transactions;
+    let [payable_reward, burn_address_payout, aggregate_burn] = reward_transactions.as_slice()
+    else {
+        panic!("Expected two validator payouts and one aggregate burn transaction");
+    };
+
+    assert_eq!(payable_reward.validator_address, setup.validator_address);
+    assert_eq!(payable_reward.recipient, validators.payable_reward_address);
+    assert_eq!(
+        burn_address_payout.validator_address,
+        validators.burn_address_validator
+    );
+    assert_eq!(burn_address_payout.recipient, Address::burn_address());
+    assert_eq!(aggregate_burn.validator_address, Address::burn_address());
+    assert_eq!(aggregate_burn.recipient, Address::burn_address());
+
+    let payable_base_reward = ONE_SLOT_REWARD * validators.payable_slots.len() as u64;
+    let burn_address_base_reward = ONE_SLOT_REWARD * validators.burn_address_slots.len() as u64;
+    let burned_slot_count =
+        (validators.unpayable_slots.len() + validators.penalized_slots.len()) as u64;
+    let remainder = EXPECTED_REWARD % Policy::SLOTS as u64;
+    let burned_reward = ONE_SLOT_REWARD * burned_slot_count;
+
+    assert_eq!(
+        aggregate_burn.value,
+        Coin::from_u64_unchecked(burned_reward)
+    );
+    assert!(
+        (payable_reward.value == Coin::from_u64_unchecked(payable_base_reward + remainder)
+            && burn_address_payout.value == Coin::from_u64_unchecked(burn_address_base_reward))
+            || (payable_reward.value == Coin::from_u64_unchecked(payable_base_reward)
+                && burn_address_payout.value
+                    == Coin::from_u64_unchecked(burn_address_base_reward + remainder))
+    );
+
+    assert_eq!(
+        setup.blockchain.finalize_previous_batch(&macro_block),
+        [
+            Inherent::Reward {
+                validator_address: setup.validator_address.clone(),
+                target: validators.payable_reward_address.clone(),
+                value: payable_reward.value,
+            },
+            Inherent::Reward {
+                validator_address: validators.burn_address_validator,
+                target: Address::burn_address(),
+                value: burn_address_payout.value,
+            },
+            Inherent::Reward {
+                validator_address: Address::burn_address(),
+                target: Address::burn_address(),
+                value: aggregate_burn.value,
+            },
+            Inherent::FinalizeBatch,
         ]
     );
 }
@@ -1173,72 +1150,14 @@ fn it_can_create_version_upgrade_inherents() {
 
 #[test]
 fn it_burns_all_rewards_when_all_slots_penalized() {
-    let time = Arc::new(OffsetTime::new());
-    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-    let blockchain = Arc::new(
-        Blockchain::new(
-            env,
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    );
-
-    let block_number = Policy::macro_block_of(2).unwrap();
-
-    let staking_contract = blockchain.get_staking_contract();
-    let active_validators = staking_contract.active_validators.clone();
-    let (validator_address, _) = active_validators.iter().next().unwrap();
-
+    let setup = RewardTestSetup::new();
     // Penalize ALL slots so every slot has zero eligible count.
-    for slot in 0..Policy::SLOTS {
-        let penalize_inherent = Inherent::Penalize {
-            slot: PenalizedSlot {
-                slot,
-                validator_address: validator_address.clone(),
-                offense_event_block: 1 + Policy::genesis_block_number(),
-            },
-        };
-
-        let mut txn = blockchain.write_transaction();
-        assert!(blockchain
-            .state
-            .accounts
-            .commit(
-                &mut (&mut txn).into(),
-                &[],
-                &[penalize_inherent],
-                &BlockState::new(
-                    Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
-                    1,
-                    blockchain.protocol_version()
-                ),
-                &mut BlockLogger::empty()
-            )
-            .is_ok());
-        txn.commit();
-    }
-
-    let staking_contract = blockchain.get_staking_contract();
-    let next_batch_initial_punished_set = staking_contract
-        .punished_slots
-        .next_batch_initial_punished_set(block_number, &active_validators);
-
-    let macro_header = MacroHeader {
-        network: NetworkId::UnitAlbatross,
-        version: 1,
-        block_number,
-        round: 0,
-        timestamp: blockchain.state.election_head.header.timestamp + 20000,
-        next_batch_initial_punished_set,
-        ..Default::default()
-    };
+    setup.penalize_slots(0..Policy::SLOTS);
 
     // This must not panic — previously it would trigger
     // "Must have positive total probability" in DiscreteDistribution::new().
-    let reward_transactions =
-        blockchain.create_reward_transactions(&macro_header, &staking_contract, None);
+    let macro_block = setup.create_macro_block();
+    let reward_transactions = &macro_block.body.as_ref().unwrap().transactions;
 
     // All rewards should be burned: expect exactly one burn transaction.
     assert_eq!(

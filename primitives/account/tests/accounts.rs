@@ -80,7 +80,7 @@ fn it_can_commit_and_revert_a_block_body() {
         Coin::from_u64_unchecked(10),
         Coin::ZERO,
         1,
-        NetworkId::MainAlbatross,
+        NetworkId::UnitAlbatross,
     );
 
     let transactions = vec![tx];
@@ -192,7 +192,7 @@ fn it_correctly_rewards_validators() {
         value1,
         fee1,
         2,
-        NetworkId::MainAlbatross,
+        NetworkId::UnitAlbatross,
     );
 
     let tx2 = Transaction::new_basic(
@@ -201,7 +201,7 @@ fn it_correctly_rewards_validators() {
         value2,
         fee2,
         2,
-        NetworkId::MainAlbatross,
+        NetworkId::UnitAlbatross,
     );
 
     // Validator 2 mines second block.
@@ -250,19 +250,19 @@ fn it_correctly_rewards_validators() {
 
 #[test]
 fn it_correctly_burns_rewards_from_validators() {
-    let accounts = TestCommitRevert::new();
-
-    let validator_address_1 = Address::from([1u8; Address::SIZE]);
-    let validator_address_2 = Address::from([2u8; Address::SIZE]);
     let recipient_address_1 = Address::from([3u8; Address::SIZE]);
     let recipient_address_2 = Address::from([4u8; Address::SIZE]);
+    let sender_address = Address::from([5u8; Address::SIZE]);
+    let sender_balance = Coin::from_u64_unchecked(100);
 
-    // Validator 1 mines first block.
-    assert_eq!(
-        accounts.get_complete(&validator_address_1, None),
-        Account::default(),
-    );
+    let accounts = TestCommitRevert::with_initial_state(&[(
+        sender_address.clone(),
+        Account::Basic(BasicAccount {
+            balance: sender_balance,
+        }),
+    )]);
 
+    // Burn the first block reward.
     let reward = Inherent::Reward {
         validator_address: Address::burn_address(),
         target: Address::burn_address(),
@@ -276,40 +276,30 @@ fn it_correctly_burns_rewards_from_validators() {
         .is_ok());
 
     // Create transactions to Recipient 1 and Recipient 2.
-    assert_eq!(
-        accounts.get_complete(&validator_address_1, None).balance(),
-        Coin::from_u64_unchecked(0)
-    );
-
     let value1 = Coin::from_u64_unchecked(5);
     let fee1 = Coin::from_u64_unchecked(3);
     let value2 = Coin::from_u64_unchecked(7);
     let fee2 = Coin::from_u64_unchecked(11);
 
     let tx1 = Transaction::new_basic(
-        Address::burn_address(),
+        sender_address.clone(),
         recipient_address_1.clone(),
         value1,
         fee1,
         2,
-        NetworkId::MainAlbatross,
+        NetworkId::UnitAlbatross,
     );
 
     let tx2 = Transaction::new_basic(
-        Address::burn_address(),
+        sender_address.clone(),
         recipient_address_2.clone(),
         value2,
         fee2,
         2,
-        NetworkId::MainAlbatross,
+        NetworkId::UnitAlbatross,
     );
 
-    // Validator 2 mines second block.
-    assert_eq!(
-        accounts.get_complete(&validator_address_2, None),
-        Account::default()
-    );
-
+    // Burn the second block reward and the transaction fees.
     let reward = Inherent::Reward {
         validator_address: Address::burn_address(),
         target: Address::burn_address(),
@@ -338,20 +328,15 @@ fn it_correctly_burns_rewards_from_validators() {
     );
 
     assert_eq!(
-        accounts.get_complete(&validator_address_1, None).balance(),
-        Coin::ZERO
-    );
-
-    assert_eq!(
-        accounts.get_complete(&validator_address_2, None).balance(),
-        Coin::ZERO,
+        accounts.get_complete(&sender_address, None).balance(),
+        sender_balance - value1 - fee1 - value2 - fee2
     );
 
     assert_eq!(
         accounts
             .get_complete(&Address::burn_address(), None)
             .balance(),
-        Coin::from_u64_unchecked(20000) - value1 - value2
+        Coin::from_u64_unchecked(20000) + fee1 + fee2
     );
 }
 
@@ -368,11 +353,11 @@ fn it_checks_for_sufficient_funds() {
         Coin::try_from(10).unwrap(),
         Coin::from_u64_unchecked(1),
         1,
-        NetworkId::MainAlbatross,
+        NetworkId::UnitAlbatross,
     );
 
     let reward = Inherent::Reward {
-        validator_address: Address::burn_address(),
+        validator_address: address_sender.clone(),
         target: address_sender.clone(),
         value: Coin::from_u64_unchecked(10000),
     };
@@ -528,7 +513,7 @@ fn accounts_performance() {
     genesis_builder.with_network(NetworkId::UnitAlbatross);
     let address_validator = Address::from([1u8; Address::SIZE]);
     let reward = Inherent::Reward {
-        validator_address: Address::burn_address(),
+        validator_address: address_validator.clone(),
         target: address_validator,
         value: Coin::from_u64_unchecked(10000),
     };
