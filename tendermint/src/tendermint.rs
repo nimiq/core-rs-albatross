@@ -175,8 +175,8 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
     /// Test `proposal_hash` against the locked value in state using an optional `vr`.
     ///
-    /// Returns false if locked is set and the hash is *not* equal to `proposal_hash` and `vr` is not
-    /// more recent than the round this instance is locked on.
+    /// Returns false if locked is set and the hash is *not* equal to `proposal_hash` and `vr` is
+    /// older than the round this instance is locked on (or absent).
     ///
     /// Returns true otherwise.
     pub(crate) fn is_allowed_to_vote_on(
@@ -187,9 +187,11 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         match &self.state.locked {
             // Always allowed to vote when not locked.
             None => true,
-            // If locked, only allowed to vote for it if it is the same hash, or vr is more recent.
+            // If locked, only allowed to vote for it if it is the same hash, or vr is at least as
+            // recent as the locked round (Tendermint paper, Algorithm 1 line 29:
+            // `lockedRound <= vr || lockedValue = v`).
             Some((locked_round, locked_hash)) => {
-                locked_hash == proposal_hash || Some(*locked_round) < vr
+                locked_hash == proposal_hash || Some(*locked_round) <= vr
             }
         }
     }

@@ -20,15 +20,18 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     /// will lead to a different proposal, but since the former proposal was not broadcast and was not acted on no harm is done, and the protocol
     /// is not breached.
     pub(crate) fn propose(&mut self) -> Result<Return<TProtocol>, ProtocolError> {
-        // Retrieve the set of proposals for the current round. Create the set if it does not exist yet.
-        let proposals = self
+        // Retrieve the first proposal for the current round, if any. Creates the set if it does not exist yet.
+        let existing_proposal = self
             .state
             .round_proposals
             .entry(self.state.current_round)
-            .or_default();
+            .or_default()
+            .iter()
+            .next()
+            .map(|(hash, (vr, signature))| (hash.clone(), *vr, signature.clone()));
 
         // At least one proposal exists. Broadcast it.
-        if let Some((proposal_hash, (vr, signature))) = proposals.iter().next() {
+        if let Some((proposal_hash, vr, signature)) = existing_proposal {
             // A proposal exist. Broadcast it and progress to prevote step.
             log::debug!(
                 current_round = self.state.current_round,
@@ -40,7 +43,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             let proposal = self
                 .state
                 .known_proposals
-                .get(proposal_hash)
+                .get(&proposal_hash)
                 .expect("proposal must be known")
                 .clone();
 
@@ -48,14 +51,11 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             let message = ProposalMessage {
                 proposal,
                 round: self.state.current_round,
-                valid_round: *vr,
+                valid_round: vr,
             };
 
             // Create the signed proposal message which can be broadcast.
-            let signed_proposal_message = SignedProposalMessage {
-                message,
-                signature: signature.clone(),
-            };
+            let signed_proposal_message = SignedProposalMessage { message, signature };
 
             // Broadcast the signed proposal message.
             self.protocol.broadcast_proposal(signed_proposal_message);
@@ -66,19 +66,11 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             // Store the vote for this round and step. It will always be for the proposal, except for when it is
             // locked on a value which is not the proposal.
             // Note that even though the node proposes a proposal, it might not vote for it, as valid and locked are not identical.
-            let vote = self.state.locked.as_ref().map_or(
-                // If no value is locked, the node is free to vote for `proposal_hash`.
-                Some(proposal_hash.clone()),
-                // If a locked value does exists
-                |(locked_round, locked_hash)| {
-                    // it must either be the same as `proposal_hash` or `vr` must exist and be more recent than `locked_round`.
-                    if locked_hash == proposal_hash || &Some(*locked_round) <= vr {
-                        Some(proposal_hash.clone())
-                    } else {
-                        None
-                    }
-                },
-            );
+            let vote = if self.is_allowed_to_vote_on(&proposal_hash, vr) {
+                Some(proposal_hash)
+            } else {
+                None
+            };
 
             // If a vote already existed, that is a breach of protocol.
             assert!(self
@@ -121,7 +113,11 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             let signature = self.protocol.sign_proposal(&message);
 
             // Store the proposal for the current round.
-            proposals.insert(proposal_hash.clone(), (Some(*valid_round), signature));
+            self.state
+                .round_proposals
+                .entry(self.state.current_round)
+                .or_default()
+                .insert(proposal_hash.clone(), (Some(*valid_round), signature));
 
             // Yield the state as it has changed.
             Ok(Return::Update(self.state.clone()))
@@ -153,7 +149,11 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                 .insert(proposal_hash.clone(), message.proposal);
 
             // Store the proposal for the current round.
-            proposals.insert(proposal_hash, (None, signature));
+            self.state
+                .round_proposals
+                .entry(self.state.current_round)
+                .or_default()
+                .insert(proposal_hash, (None, signature));
 
             // Yield the state as it has changed.
             Ok(Return::Update(self.state.clone()))
