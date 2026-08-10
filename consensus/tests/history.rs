@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -13,14 +14,15 @@ use nimiq_consensus::{
     messages::{RequestMissingBlocks, ResponseBlocks},
     sync::{
         live::{block_queue::BlockQueue, queue::QueueConfig, BlockLiveSync},
-        sync_interface::{LiveSync, MacroSync, MacroSyncReturn},
+        sync_interface::{LiveSync, LiveSyncPushEvent, MacroSync, MacroSyncReturn},
         syncer::Syncer,
     },
     BlsCache,
 };
 use nimiq_database::mdbx::MdbxDatabase;
+use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestCommon};
-use nimiq_network_mock::{MockHub, MockId, MockPeerId};
+use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -33,7 +35,10 @@ use nimiq_test_utils::{
 use nimiq_utils::time::OffsetTime;
 use parking_lot::{Mutex, RwLock};
 use rand::RngExt;
-use tokio::{sync::mpsc, task::yield_now};
+use tokio::{
+    sync::mpsc::{self, error::TrySendError},
+    task::yield_now,
+};
 use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Default)]
@@ -83,6 +88,175 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
         )
         .unwrap(),
     ))
+}
+
+/// Announcements fed before giving up. Well above any sensible channel capacity.
+const MAX_ANNOUNCED_BLOCKS: usize = 4096;
+
+/// Scheduler rounds the proxy's background task gets to drain before we call it backpressure.
+const DRAIN_ROUNDS: usize = 16;
+
+/// Announcements used for the delivery test. Must exceed the proxy's channel capacity.
+const NUM_DELIVERED_BLOCKS: usize = 512;
+
+/// Builds a distinct announcement by rewriting the header's extra data. Announcements are admitted
+/// on `verify_header` alone, which checks no signature for micro blocks. The cached hash has to be
+/// cleared, otherwise the queue deduplicates the variants.
+fn forge_variant(template: &Block, nonce: u32) -> Block {
+    let mut block = template.clone();
+    match &mut block {
+        Block::Micro(micro) => {
+            micro.header.extra_data = nonce.to_be_bytes().to_vec();
+            micro.header.cached_hash = None;
+        }
+        Block::Macro(_) => unreachable!("template is a micro block"),
+    }
+    block
+}
+
+/// Sets up a syncer taking announcements from `block_rx`, plus the peer that announces them. The
+/// block queue only looks at announcements while it has at least one peer.
+fn setup_live_sync(
+    hub: &mut MockHub,
+    chain: &Arc<RwLock<Blockchain>>,
+    block_rx: mpsc::Receiver<(Block, MockId<MockPeerId>)>,
+) -> (
+    Syncer<MockNetwork, MockHistorySyncStream, BlockLiveSync<MockNetwork>>,
+    MockNode<MockNetwork>,
+    MockId<MockPeerId>,
+) {
+    let blockchain_proxy = BlockchainProxy::from(chain);
+    let network = Arc::new(hub.new_network());
+
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
+        blockchain_proxy.clone(),
+        Arc::clone(&network),
+        ReceiverStream::new(block_rx).boxed(),
+        QueueConfig::default(),
+    );
+
+    let live_sync = BlockLiveSync::with_queue(
+        blockchain_proxy.clone(),
+        Arc::clone(&network),
+        block_queue,
+        Arc::new(Mutex::new(BlsCache::new_test())),
+    );
+
+    let mut syncer = Syncer::new(
+        blockchain_proxy,
+        Arc::clone(&network),
+        live_sync,
+        MockHistorySyncStream::new(),
+    );
+
+    let mock_node =
+        MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
+    network.dial_mock(&mock_node.network);
+    let peer_id = mock_node.network.get_local_peer_id();
+    syncer.live_sync.add_peer(peer_id);
+
+    (syncer, mock_node, MockId::new(peer_id))
+}
+
+/// The proxy must push back once the consumer stops draining it. The consumer is never polled
+/// here, which is what a slow blockchain push does for its duration: `LiveSyncer::poll_next` only
+/// polls the proxy while it has no push operation in flight.
+#[test(tokio::test)]
+async fn block_queue_proxy_pushes_back_when_consumer_stalls() {
+    let blockchain1 = blockchain();
+    let blockchain2 = blockchain();
+
+    let mut hub = MockHub::new();
+    // Small gossip channel, so backpressure becomes visible quickly.
+    let (block_tx, block_rx) = mpsc::channel(4);
+    let (_syncer, _mock_node, mock_id) = setup_live_sync(&mut hub, &blockchain1, block_rx);
+
+    // All announcements are children of the current head, so they take the `parent_known` branch
+    // and are emitted as `QueuedBlock::Head`. The head never moves, since the consumer never runs.
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let template = next_micro_block(&producer, &blockchain2);
+
+    let mut accepted = 0;
+    let mut pushed_back = false;
+
+    for nonce in 0..MAX_ANNOUNCED_BLOCKS {
+        let announcement = forge_variant(&template, nonce as u32);
+
+        // Retry across scheduler rounds, so a full channel isn't just an unpolled background task.
+        let mut delivered = false;
+        for _ in 0..DRAIN_ROUNDS {
+            match block_tx.try_send((announcement.clone(), mock_id.clone())) {
+                Ok(()) => {
+                    delivered = true;
+                    break;
+                }
+                Err(TrySendError::Full(_)) => yield_now().await,
+                Err(TrySendError::Closed(_)) => panic!("gossip stream closed unexpectedly"),
+            }
+        }
+
+        if !delivered {
+            pushed_back = true;
+            break;
+        }
+
+        accepted += 1;
+        yield_now().await;
+    }
+
+    assert!(
+        pushed_back,
+        "the proxy absorbed all {accepted} announced blocks without ever pushing back, so a peer \
+         announcing faster than the consumer pushes can grow the proxy's channel without limit",
+    );
+}
+
+/// Backpressure must not be implemented by dropping: a discarded `QueuedBlock::Head` is lost, as
+/// nothing re-requests an announced block. Every announcement has to reach the consumer.
+#[test(tokio::test)]
+async fn block_queue_proxy_delivers_every_announced_block() {
+    let blockchain1 = blockchain();
+    let blockchain2 = blockchain();
+
+    let mut hub = MockHub::new();
+    let (block_tx, block_rx) = mpsc::channel(32);
+    let (mut syncer, _mock_node, mock_id) = setup_live_sync(&mut hub, &blockchain1, block_rx);
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let template = next_micro_block(&producer, &blockchain2);
+
+    let mut delivered: HashSet<Blake2bHash> = HashSet::new();
+    let mut announced = 0;
+
+    // Each announcement yields exactly one push and one event, so there is always something in
+    // flight to await.
+    while delivered.len() < NUM_DELIVERED_BLOCKS {
+        // Hand over as much as the gossip stream currently accepts.
+        while announced < NUM_DELIVERED_BLOCKS {
+            let announcement = forge_variant(&template, announced as u32);
+            match block_tx.try_send((announcement, mock_id.clone())) {
+                Ok(()) => announced += 1,
+                Err(TrySendError::Full(_)) => break,
+                Err(TrySendError::Closed(_)) => panic!("gossip stream closed unexpectedly"),
+            }
+        }
+
+        // Forged blocks fail verification, so every delivery surfaces as a rejection.
+        yield_now().await;
+        match syncer.next().await {
+            Some(LiveSyncPushEvent::RejectedBlock(hash)) => {
+                delivered.insert(hash);
+            }
+            Some(_) => {}
+            None => panic!("syncer terminated before all blocks were delivered"),
+        }
+    }
+
+    assert_eq!(
+        delivered.len(),
+        NUM_DELIVERED_BLOCKS,
+        "every announced block must reach the consumer",
+    );
 }
 
 #[test(tokio::test)]
