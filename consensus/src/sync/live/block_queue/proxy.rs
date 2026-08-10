@@ -15,7 +15,8 @@ use nimiq_utils::spawn;
 use parking_lot::Mutex;
 #[cfg(feature = "full")]
 use parking_lot::RwLock;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{channel, Receiver};
+use tokio_util::sync::PollSender;
 
 #[cfg(feature = "full")]
 use crate::sync::peer_list::PeerList;
@@ -34,12 +35,17 @@ use crate::{
     BlsCache,
 };
 
+/// Capacity of the channel between the internal block queue and the live sync consumer. Large
+/// enough that normal operation never fills it, so the queue keeps running while the consumer
+/// pushes, but bounded so that a stalled consumer cannot be made to buffer without limit.
+const QUEUED_BLOCK_BUFFER_SIZE: usize = 256;
+
 /// A proxy to interact with `BlockQueue` running on its independent task.
 pub struct BlockQueueProxy<N: Network> {
     /// Shared reference to the underlying block queue.
     queue: Arc<Mutex<BlockQueue<N>>>,
     /// Channel used to receive queued blocks from the internal background task.
-    receiver: UnboundedReceiver<QueuedBlock<N>>,
+    receiver: Receiver<QueuedBlock<N>>,
 }
 
 impl<N: Network> BlockQueueProxy<N> {
@@ -75,11 +81,11 @@ impl<N: Network> BlockQueueProxy<N> {
     pub fn with_queue(queue: BlockQueue<N>) -> Self {
         let queue = Arc::new(Mutex::new(queue));
 
-        let (sender, receiver) = unbounded_channel();
+        let (sender, receiver) = channel(QUEUED_BLOCK_BUFFER_SIZE);
 
         let future = BlockQueueFuture {
             queue: Arc::downgrade(&queue),
-            sender,
+            sender: PollSender::new(sender),
         };
         spawn(future);
 
@@ -173,7 +179,7 @@ impl<N: Network> Stream for BlockQueueProxy<N> {
 /// Background future that continuously polls the internal `BlockQueue` for new queued blocks.
 struct BlockQueueFuture<N: Network> {
     queue: Weak<Mutex<BlockQueue<N>>>,
-    sender: UnboundedSender<QueuedBlock<N>>,
+    sender: PollSender<QueuedBlock<N>>,
 }
 
 impl<N: Network> Future for BlockQueueFuture<N> {
@@ -182,21 +188,33 @@ impl<N: Network> Future for BlockQueueFuture<N> {
     /// Continuously polls the BlockQueue. If a new queued block is available,
     /// it sends it to the proxy. Stops if the queue is dropped or the stream ends.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let queue = match self.queue.upgrade() {
+        let this = self.get_mut();
+
+        let queue = match this.queue.upgrade() {
             Some(queue) => queue,
             None => return Poll::Ready(()),
         };
 
-        while let Poll::Ready(event) = queue.lock().poll_next_unpin(cx) {
+        loop {
+            // Reserve capacity before polling the queue, so we never take a block that we cannot
+            // deliver. This is what propagates the consumer's backpressure to the block stream.
+            match this.sender.poll_reserve(cx) {
+                Poll::Ready(Ok(())) => {}
+                Poll::Ready(Err(_)) => return Poll::Ready(()),
+                Poll::Pending => return Poll::Pending,
+            }
+
+            // Bind the result so the queue lock is released before sending.
+            let event = queue.lock().poll_next_unpin(cx);
             match event {
-                Some(queued_block) => {
-                    if let Err(error) = self.sender.send(queued_block) {
-                        error!(%error, "Failed to dispatch queued block");
+                Poll::Ready(Some(queued_block)) => {
+                    if this.sender.send_item(queued_block).is_err() {
+                        return Poll::Ready(());
                     }
                 }
-                None => return Poll::Ready(()),
+                Poll::Ready(None) => return Poll::Ready(()),
+                Poll::Pending => return Poll::Pending,
             }
         }
-        Poll::Pending
     }
 }

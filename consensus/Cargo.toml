@@ -32,6 +32,7 @@ serde = "1.0"
 thiserror = "2.0"
 tokio = { version = "1.52", features = ["rt", "sync", "time"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-util = "0.7"
 
 nimiq-account = { workspace = true, default-features = false }
 nimiq-block = { workspace = true }
