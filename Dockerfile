@@ -13,7 +13,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /root
 COPY ./ core-rs-albatross
 RUN cd core-rs-albatross && \
-    cargo build --release --bin nimiq-client --bin nimiq-bls --bin nimiq-address --bin nimiq-rpc
+    cargo build --release --bin nimiq-client --bin nimiq-bls --bin nimiq-address --bin nimiq-rpc --bin nimiq-mktx
 
 FROM ubuntu:24.04
 
@@ -38,6 +38,7 @@ COPY --from=build /root/core-rs-albatross/lib/src/config/config_file/client.exam
 COPY --from=build /root/core-rs-albatross/target/release/nimiq-client \
      /root/core-rs-albatross/target/release/nimiq-bls \
      /root/core-rs-albatross/target/release/nimiq-address \
+     /root/core-rs-albatross/target/release/nimiq-mktx \
      /root/core-rs-albatross/target/release/nimiq-rpc /usr/local/bin/
 
 # Expose the necessary ports
