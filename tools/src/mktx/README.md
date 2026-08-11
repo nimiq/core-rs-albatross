@@ -13,6 +13,15 @@ cargo run --release --bin nimiq-mktx -- <command> [options]
 
 Append `--help` to the root command or any subcommand to inspect flags and examples.
 
+## Argument conventions
+
+Signal data on `validator update` is a tri-state, spelled as two mutually exclusive flags
+so that no combination can be misread:
+
+- neither flag → leave the signal data unchanged
+- `--clear-signal-data` → clear it
+- `--new-signal-data <hex>` → set it
+
 ## Global options
 
 - `-f`, `--fee <Lunas>` defaults to `0`; ensure the sender balance covers value plus fee.

@@ -33,17 +33,19 @@ pub enum ValidatorCommands {
         secret_key: String,
         /// Hex-encoded private key of the validator's cold key; this key proves ownership of the validator
         secret_cold_key: String,
-        /// Use this flag to apply or clear signal data; without it, `new_signal_data` is ignored
-        #[arg(short, long)]
-        overwrite_signal_data: bool,
         /// Optional replacement of the validator's hex-encoded signing key
         new_secret_signing_key: Option<String>,
         /// Optional replacement of the validator's hex-encoded voting key
         new_secret_voting_key: Option<String>,
         /// Optional replacement of the validator's reward address
         new_reward_address: Option<Address>,
-        /// Optional hex-encoded replacement of the validator's signal data; requires `--overwrite-signal-data`
+        /// Optional hex-encoded replacement of the validator's signal data; omit both this
+        /// and `--clear-signal-data` to leave the signal data unchanged
+        #[arg(long, conflicts_with = "clear_signal_data")]
         new_signal_data: Option<String>,
+        /// Clear the validator's signal data; mutually exclusive with `--new-signal-data`
+        #[arg(long)]
+        clear_signal_data: bool,
     },
     SignalUpgrade {
         // Version this transaction will signal support for
@@ -122,8 +124,8 @@ pub fn get_tx(
             new_secret_signing_key,
             new_secret_voting_key,
             new_reward_address,
-            overwrite_signal_data: update_signal_data,
             new_signal_data,
+            clear_signal_data,
         } => {
             let new_signing_key = match new_secret_signing_key {
                 Some(secret_key) => Some(hex_secret_key_to_public(secret_key)?),
@@ -135,9 +137,13 @@ pub fn get_tx(
                 None => None,
             };
 
-            let new_signal_data = match update_signal_data {
-                true => Some(hex_to_signal_data(new_signal_data)?),
-                false => None,
+            // TransactionBuilder's outer `Option` says whether to touch the signal data at all,
+            // the inner one whether to set or clear it. `conflicts_with` on the flags rules
+            // out the fourth combination, so the first arm can ignore `clear_signal_data`.
+            let new_signal_data = match (new_signal_data, clear_signal_data) {
+                (data @ Some(_), _) => Some(hex_to_signal_data(data)?),
+                (None, true) => Some(None),
+                (None, false) => None,
             };
 
             Ok(TransactionOrProof::Transaction(
