@@ -25,6 +25,7 @@ pub enum ValidatorCommands {
         /// NQ address that receives the block rewards
         reward_address: Address,
         /// Optional hex-encoded signal data for validator coordination/upgrade signaling
+        #[arg(long)]
         signal_data: Option<String>,
     },
     /// Creates a transaction to update the validator's settings; update the validator's keys, reward address, and/or signal data
@@ -34,10 +35,13 @@ pub enum ValidatorCommands {
         /// Hex-encoded private key of the validator's cold key; this key proves ownership of the validator
         secret_cold_key: String,
         /// Optional replacement of the validator's hex-encoded signing key
+        #[arg(long)]
         new_secret_signing_key: Option<String>,
         /// Optional replacement of the validator's hex-encoded voting key
+        #[arg(long)]
         new_secret_voting_key: Option<String>,
         /// Optional replacement of the validator's reward address
+        #[arg(long)]
         new_reward_address: Option<Address>,
         /// Optional hex-encoded replacement of the validator's signal data; omit both this
         /// and `--clear-signal-data` to leave the signal data unchanged

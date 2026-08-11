@@ -14,6 +14,7 @@ pub struct AllArgs {
     /// Amount to transfer in Lunas; ensure balance covers value + fee
     value: Coin,
     /// Optional hex-encoded data
+    #[arg(long)]
     data: Option<String>,
 }
 

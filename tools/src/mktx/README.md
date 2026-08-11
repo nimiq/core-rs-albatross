@@ -15,6 +15,8 @@ Append `--help` to the root command or any subcommand to inspect flags and examp
 
 ## Argument conventions
 
+Required arguments are positional; optional ones are always named flags.
+
 Signal data on `validator update` is a tri-state, spelled as two mutually exclusive flags
 so that no combination can be misread:
 

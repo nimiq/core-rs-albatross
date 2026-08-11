@@ -19,6 +19,7 @@ pub enum StakeCommands {
         /// The amount of stake to lock up as initial active balance in Lunas
         value: Coin,
         /// Optional NQ address to delegate the stake to
+        #[arg(long)]
         delegation: Option<Address>,
     },
     /// Creates a transaction to add more active stake to an existing staker; the coins come from a basic account
@@ -38,8 +39,10 @@ pub enum StakeCommands {
         /// Hex-encoded staker private key authorizing the update
         staker_secret_key: String,
         /// Pay the transaction fee from the basic account belonging to this hex-encoded private key
+        #[arg(long)]
         fee_key: Option<String>,
         /// The new validator NQ address to delegate to
+        #[arg(long)]
         new_delegation: Option<Address>,
     },
     /// Sets the staker's active stake to a new value; can be used to both increase and decrease the active stake and restarts the lock-up timer
@@ -49,6 +52,7 @@ pub enum StakeCommands {
         /// Target active stake balance in Lunas; the remaining stake (if any) becomes inactive
         new_active_balance: Coin,
         /// Optional hex-encoded private key of a basic account that should pay the fee; defaults to the staker
+        #[arg(long)]
         fee_key: Option<String>,
     },
     /// Creates a transaction to retire part of the staker's stake; it moves already released inactive stake into the retired bucket so it can be withdrawn with the `remove` command
@@ -58,6 +62,7 @@ pub enum StakeCommands {
         /// Amount of stake to retire in Lunas; must be <= the staker's inactive stake
         retire_stake: Coin,
         /// Optional hex-encoded private key of a basic account that should pay the fee; defaults to the staker
+        #[arg(long)]
         fee_key: Option<String>,
     },
     /// Creates a transaction to remove the staker's entire retired stake; removes the staker once the total balance hits zero

@@ -119,3 +119,41 @@ fn main() {
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use clap::CommandFactory;
+
+    use super::Cli;
+
+    /// Optional arguments must be named flags, never positionals.
+    ///
+    /// Clap binds a lone trailing value to the *first* optional positional, so with more
+    /// than one of them there is no way to skip an earlier argument to reach a later one.
+    /// Worse, the misbinding is silent whenever the two arguments parse alike: signal data
+    /// and an Ed25519 private key are both 32 hex-encoded bytes, so a value meant for one
+    /// used to be accepted as the other and produce a valid, signed, wrong transaction.
+    #[test]
+    fn optional_arguments_are_never_positional() {
+        fn check(cmd: &clap::Command, path: &str) {
+            for arg in cmd.get_positionals() {
+                assert!(
+                    arg.is_required_set(),
+                    "`{path}`: positional `{}` is optional; make it a flag with #[arg(long)]",
+                    arg.get_id()
+                );
+            }
+            for sub in cmd.get_subcommands() {
+                check(sub, &format!("{path} {}", sub.get_name()));
+            }
+        }
+
+        check(&Cli::command(), "mktx");
+    }
+
+    /// Clap's own lint; catches duplicate short/long flags across the command tree.
+    #[test]
+    fn cli_is_well_formed() {
+        Cli::command().debug_assert();
+    }
+}
