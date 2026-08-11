@@ -49,7 +49,7 @@ pub enum StakeCommands {
         /// Target active stake balance in Lunas; the remaining stake (if any) becomes inactive
         new_active_balance: Coin,
         /// Optional hex-encoded private key of a basic account that should pay the fee; defaults to the staker
-        secret_key: Option<String>,
+        fee_key: Option<String>,
     },
     /// Creates a transaction to retire part of the staker's stake; it moves already released inactive stake into the retired bucket so it can be withdrawn with the `remove` command
     Retire {
@@ -58,7 +58,7 @@ pub enum StakeCommands {
         /// Amount of stake to retire in Lunas; must be <= the staker's inactive stake
         retire_stake: Coin,
         /// Optional hex-encoded private key of a basic account that should pay the fee; defaults to the staker
-        secret_key: Option<String>,
+        fee_key: Option<String>,
     },
     /// Creates a transaction to remove the staker's entire retired stake; removes the staker once the total balance hits zero
     Remove {
@@ -127,10 +127,10 @@ pub fn get_tx(
         StakeCommands::Activate {
             staker_secret_key,
             new_active_balance,
-            secret_key,
+            fee_key,
         } => Ok(TransactionOrProof::Transaction(
             TransactionBuilder::new_set_active_stake(
-                hex_option_secret_key_to_option_pair(secret_key)?.as_ref(),
+                hex_option_secret_key_to_option_pair(fee_key)?.as_ref(),
                 &hex_secret_key_to_pair(staker_secret_key)?,
                 new_active_balance,
                 fee,
@@ -141,10 +141,10 @@ pub fn get_tx(
         StakeCommands::Retire {
             staker_secret_key,
             retire_stake,
-            secret_key,
+            fee_key,
         } => Ok(TransactionOrProof::Transaction(
             TransactionBuilder::new_retire_stake(
-                hex_option_secret_key_to_option_pair(secret_key)?.as_ref(),
+                hex_option_secret_key_to_option_pair(fee_key)?.as_ref(),
                 &hex_secret_key_to_pair(staker_secret_key)?,
                 retire_stake,
                 fee,
