@@ -24,7 +24,7 @@ pub enum StakeCommands {
     },
     /// Creates a transaction to add more active stake to an existing staker; the coins come from a basic account
     Add {
-        /// Hex-encoded private key of the basic account adding more stake
+        /// Hex-encoded private key of the basic account adding more stake and paying for the transaction fee
         secret_key: String,
         /// NQ address of the existing staker to add stake to
         staker_address: Address,
@@ -51,7 +51,7 @@ pub enum StakeCommands {
         staker_secret_key: String,
         /// Target active stake balance in Lunas; the remaining stake (if any) becomes inactive
         new_active_balance: Coin,
-        /// Optional hex-encoded private key of a basic account that should pay the fee; defaults to the staker
+        /// Pay the transaction fee from the basic account belonging to this hex-encoded private key
         #[arg(long)]
         fee_key: Option<String>,
     },
@@ -61,13 +61,13 @@ pub enum StakeCommands {
         staker_secret_key: String,
         /// Amount of stake to retire in Lunas; must be <= the staker's inactive stake
         retire_stake: Coin,
-        /// Optional hex-encoded private key of a basic account that should pay the fee; defaults to the staker
+        /// Pay the transaction fee from the basic account belonging to this hex-encoded private key
         #[arg(long)]
         fee_key: Option<String>,
     },
     /// Creates a transaction to remove the staker's entire retired stake; removes the staker once the total balance hits zero
     Remove {
-        /// Hex-encoded private key of the staker authorizing the removal
+        /// Hex-encoded private key of the staker authorizing the removal and paying for the transaction fee
         secret_key: String,
         /// NQ address of the basic account receiving the removed stake
         recipient: Address,

@@ -26,10 +26,13 @@ pub struct Cli {
 
 #[derive(Debug, Args)]
 struct CliGlobalOpts {
+    /// Transaction fee in Lunas; ensure the sender balance covers value + fee
     #[clap(long, short, global = true, default_value_t = Coin::ZERO)]
     fee: Coin,
+    /// Chain the transaction is built for; verify it matches your target before broadcasting
     #[clap(long, short, global = true, default_value_t = NetworkId::MainAlbatross)]
     network: NetworkId,
+    /// Block height the transaction becomes valid at; required
     #[clap(long, short = 'V', global = true)]
     validity_start: Option<u32>,
 }

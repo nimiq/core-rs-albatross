@@ -51,8 +51,9 @@ pub enum ValidatorCommands {
         #[arg(long)]
         clear_signal_data: bool,
     },
+    /// Creates a transaction that signals the validator's support for a new block version
     SignalUpgrade {
-        // Version this transaction will signal support for
+        /// Version this transaction will signal support for
         version: u16,
         /// Hex-encoded private key of the account paying the fee
         secret_key: String,
