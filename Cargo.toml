@@ -114,7 +114,7 @@ opt-level = 2
 gloo-timers = { path = "patches/gloo-timers" }
 
 [workspace.package]
-version = "1.7.2"
+version = "2.0.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2024"
 homepage = "https://nimiq.com"
