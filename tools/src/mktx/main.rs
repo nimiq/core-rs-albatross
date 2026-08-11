@@ -7,9 +7,16 @@ use nimiq_primitives::{coin::Coin, networks::NetworkId};
 mod commands;
 
 #[derive(Parser)]
-#[command(name = "mktx", subcommand_required = true, disable_help_flag = true, version = nimiq_utils::CARGO_VERSION)]
+#[command(name = "mktx", subcommand_required = true, version = nimiq_utils::CARGO_VERSION)]
 #[command(about = "CLI tool to create and sign Nimiq transactions offline")]
+// `-V` is `--validity-start` here, so the auto-generated version flag (which also claims `-V`)
+// is replaced below by a long-only one; otherwise the two collide and debug builds panic.
+#[command(disable_version_flag = true)]
 pub struct Cli {
+    /// Print the version and exit
+    #[arg(long, short = 'v', action = clap::ArgAction::Version)]
+    version: Option<bool>,
+
     #[clap(flatten)]
     global_opts: CliGlobalOpts,
 
