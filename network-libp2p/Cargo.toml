@@ -21,7 +21,7 @@ workspace = true
 
 [dependencies]
 async-trait = "0.1"
-base64 = "0.22"
+base64 = "0.23"
 bytes = "1.11"
 futures = { workspace = true }
 hex = "0.4"
