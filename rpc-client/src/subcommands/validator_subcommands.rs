@@ -86,7 +86,9 @@ pub enum ValidatorCommand {
         #[clap(long)]
         new_reward_address: Option<Address>,
 
-        /// The new signal data showed by the validator.
+        /// The new signal data showed by the validator. For upgrade signaling prefer
+        /// `signal-version`, which is signed with the warm key and so does not need the
+        /// validator (cold) wallet unlocked.
         #[clap(short = 'd', long)]
         new_signal_data: Option<String>,
 
@@ -137,8 +139,7 @@ pub enum ValidatorCommand {
     /// Sends a transaction that sets the full `signal_data` of this validator, signed with the
     /// validator's signing (warm) key (so the cold key is not required). This replaces the entire
     /// signal data field, overwriting any signaled protocol version; use `signal-version` to
-    /// update only the version while preserving the rest. Omit the data to clear the signal. Only
-    /// valid once the chain has reached the protocol version that introduces this transaction.
+    /// update only the version while preserving the rest. Omit the data to clear the signal.
     /// The sender wallet must be unlocked prior to this command.
     SetSignalData {
         /// The fee will be paid from this address. This wallet must be already unlocked.
@@ -157,8 +158,7 @@ pub enum ValidatorCommand {
 
     /// Sends a transaction signalling support for a protocol upgrade `version`, signed with the
     /// validator's signing (warm) key (so the cold key is not required). This only updates the
-    /// version bytes; to clear the signal data use the `set-signal-data` command. Only valid once
-    /// the chain has reached the protocol version that introduces this transaction.
+    /// version bytes; to clear the signal data use the `set-signal-data` command.
     /// The sender wallet must be unlocked prior to this command.
     SignalVersion {
         /// The fee will be paid from this address. This wallet must be already unlocked.
