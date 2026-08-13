@@ -69,12 +69,6 @@ pub fn hex_to_signal_data(
     })
 }
 
-pub fn version_to_signal_data(supported_version: u16) -> Result<Blake2bHash, DeserializeError> {
-    let mut data = [0u8; 32];
-    data[..2].copy_from_slice(&supported_version.to_be_bytes());
-    Blake2bHash::deserialize_from_vec(&data)
-}
-
 #[derive(Debug, Error)]
 pub enum CommandError {
     #[error("Deserialize")]

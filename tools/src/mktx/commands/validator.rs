@@ -7,7 +7,6 @@ use super::{
     hex_secret_key_to_bls_pair, hex_secret_key_to_pair, hex_secret_key_to_public,
     hex_to_signal_data, CommandError, TransactionOrProof,
 };
-use crate::commands::version_to_signal_data;
 
 #[derive(Debug, Subcommand)]
 /// Builds validator-related transactions that move a validator through its lifecycle: created, active, inactive, retired, deleted
@@ -44,21 +43,49 @@ pub enum ValidatorCommands {
         #[arg(long)]
         new_reward_address: Option<Address>,
         /// Optional hex-encoded replacement of the validator's signal data; omit both this
-        /// and `--clear-signal-data` to leave the signal data unchanged
+        /// and `--clear-signal-data` to leave the signal data unchanged. For upgrade signaling
+        /// prefer `signal-version`, which does not need the cold key
         #[arg(long, conflicts_with = "clear_signal_data")]
         new_signal_data: Option<String>,
         /// Clear the validator's signal data; mutually exclusive with `--new-signal-data`
         #[arg(long)]
         clear_signal_data: bool,
     },
-    /// Creates a transaction that signals the validator's support for a new block version
-    SignalUpgrade {
-        /// Version this transaction will signal support for
-        version: u16,
+    /// Creates a transaction that sets the validator's signal data, signed with the validator's
+    /// signing (warm) key so that the cold key is not needed. This replaces the entire field,
+    /// overwriting any signaled protocol version; use `signal-version` to update only the version
+    /// and preserve the rest
+    SetSignalData {
         /// Hex-encoded private key of the account paying the fee
         secret_key: String,
-        /// Hex-encoded private key of the validator's cold key; this key proves ownership of the validator
-        secret_cold_key: String,
+        /// NQ address of the validator whose signal data is being set
+        validator_address: Address,
+        /// Hex-encoded private key of the validator's signing key to authorize the update
+        secret_signing_key: String,
+        /// Hex-encoded signal data to set; mutually exclusive with `--clear-signal-data`
+        #[arg(
+            long,
+            conflicts_with = "clear_signal_data",
+            required_unless_present = "clear_signal_data"
+        )]
+        signal_data: Option<String>,
+        /// Clear the validator's signal data; mutually exclusive with `--signal-data`
+        #[arg(long)]
+        clear_signal_data: bool,
+    },
+    /// Creates a transaction that signals the validator's support for a new block version, signed
+    /// with the validator's signing (warm) key so that the cold key is not needed. This rewrites
+    /// only the version bytes and preserves the rest of the signal data; clearing the field
+    /// entirely is a `set-signal-data --clear-signal-data`
+    SignalVersion {
+        /// Hex-encoded private key of the account paying the fee
+        secret_key: String,
+        /// NQ address of the validator signaling the support
+        validator_address: Address,
+        /// Hex-encoded private key of the validator's signing key to authorize the signaling
+        secret_signing_key: String,
+        /// Version this transaction will signal support for
+        version: u16,
     },
     /// Creates a transaction to deactivate an active validator; moves it to the inactive set
     Deactivate {
@@ -165,27 +192,42 @@ pub fn get_tx(
                 ),
             ))
         }
-        ValidatorCommands::SignalUpgrade {
-            version,
+        ValidatorCommands::SetSignalData {
             secret_key,
-            secret_cold_key,
-        } => {
-            let new_signal_data = Some(Some(version_to_signal_data(version)?));
-
-            Ok(TransactionOrProof::Transaction(
-                TransactionBuilder::new_update_validator(
-                    &hex_secret_key_to_pair(secret_key)?,
-                    &hex_secret_key_to_pair(secret_cold_key)?,
-                    None,
-                    None,
-                    None,
-                    new_signal_data,
-                    fee,
-                    validity_start_height,
-                    network_id,
-                ),
-            ))
-        }
+            validator_address,
+            secret_signing_key,
+            signal_data,
+            // Clap guarantees exactly one of `--signal-data` / `--clear-signal-data` is given, so
+            // an absent `signal_data` already means "clear"; the flag only makes that explicit
+            // rather than letting a forgotten value silently wipe the field.
+            clear_signal_data: _,
+        } => Ok(TransactionOrProof::Transaction(
+            TransactionBuilder::new_set_signal_data(
+                &hex_secret_key_to_pair(secret_key)?,
+                validator_address,
+                &hex_secret_key_to_pair(secret_signing_key)?,
+                hex_to_signal_data(signal_data)?,
+                fee,
+                validity_start_height,
+                network_id,
+            ),
+        )),
+        ValidatorCommands::SignalVersion {
+            secret_key,
+            validator_address,
+            secret_signing_key,
+            version,
+        } => Ok(TransactionOrProof::Transaction(
+            TransactionBuilder::new_signal_version(
+                &hex_secret_key_to_pair(secret_key)?,
+                validator_address,
+                &hex_secret_key_to_pair(secret_signing_key)?,
+                version,
+                fee,
+                validity_start_height,
+                network_id,
+            ),
+        )),
         ValidatorCommands::Deactivate {
             secret_key,
             validator_address,

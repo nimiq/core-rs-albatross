@@ -24,6 +24,14 @@ so that no combination can be misread:
 - `--clear-signal-data` → clear it
 - `--new-signal-data <hex>` → set it
 
+`validator set-signal-data` always writes the field, so it has no "leave unchanged" case:
+
+- `--signal-data <hex>` → set it
+- `--clear-signal-data` → clear it
+
+Exactly one of the two is required. Omitting both is an error rather than an implicit clear,
+so a forgotten value can never silently wipe the field.
+
 ## Global options
 
 - `-f`, `--fee <Lunas>` defaults to `0`; ensure the sender balance covers value plus fee.
@@ -39,6 +47,20 @@ so that no combination can be misread:
 - `vesting`: create vesting contracts or redeem vesting payouts with schedule parameters.
 
 Successful commands print a hex string → broadcast transactions through RPC or custom tooling.
+
+## Upgrade signaling
+
+Validators signal support for a chain (hard-fork) upgrade through their `signal_data` field.
+Since protocol version 2 this is done with the validator's signing (warm) key, so the cold key
+stays offline:
+
+- `validator signal-version` — rewrites only the version bytes and preserves the rest of the
+  field. This is the command to use for upgrade signaling.
+- `validator set-signal-data` — sets or clears the whole field, overwriting any signaled
+  version along with it.
+
+Setting the field with the cold key is still possible through `validator update
+--new-signal-data`, but it overwrites the whole field and is no longer needed for signaling.
 
 ## Security and troubleshooting
 
