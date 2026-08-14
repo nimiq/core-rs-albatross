@@ -220,6 +220,7 @@ fn create_validator(temp_producer: &TemporaryBlockProducer) -> Address {
 
     let blockchain_rg = blockchain.read();
     let mut staking_contract = blockchain_rg.get_staking_contract();
+    let block_number = blockchain_rg.head().block_number();
     let total_stake = staking_contract.balance;
     let current_stake =
         staking_contract.balance - Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
@@ -254,6 +255,7 @@ fn create_validator(temp_producer: &TemporaryBlockProducer) -> Address {
             None,
             None,
             false,
+            block_number,
             &mut TransactionLog::empty(),
         )
         .expect("Failed to create validator");

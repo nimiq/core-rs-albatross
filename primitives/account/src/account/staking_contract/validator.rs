@@ -170,6 +170,7 @@ pub struct Tombstone {
 impl StakingContract {
     /// Creates a new validator. The initial stake is always equal to the validator deposit
     /// and can only be retrieved by deleting the validator.
+    /// `block_number` is the height at which the supplied validator state is evaluated.
     /// This function is public to fill the genesis staking contract.
     pub fn create_validator(
         &mut self,
@@ -183,6 +184,7 @@ impl StakingContract {
         inactive_from: Option<u32>,
         jailed_from: Option<u32>,
         retired: bool,
+        block_number: u32,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Fail if the validator already exists.
@@ -190,6 +192,14 @@ impl StakingContract {
             return Err(AccountError::AlreadyExistentAddress {
                 address: validator_address.clone(),
             });
+        }
+        // A retired validator must be inactive because validator deletion relies on
+        // `inactive_from`. A validator whose jail is still active must also be inactive so
+        // that it is not included in `active_validators` below.
+        let is_currently_jailed = jailed_from
+            .is_some_and(|jailed_from| block_number < Policy::block_after_jail(jailed_from));
+        if inactive_from.is_none() && (retired || is_currently_jailed) {
+            return Err(AccountError::InvalidForRecipient);
         }
         // Fail if validator existed already.
         let tombstone = store.get_tombstone(validator_address);
@@ -217,7 +227,7 @@ impl StakingContract {
         // Update our balance.
         self.balance += deposit;
 
-        if !retired && inactive_from.is_none() {
+        if validator.is_active() {
             self.active_validators
                 .insert(validator_address.clone(), validator.total_stake);
         }

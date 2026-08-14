@@ -494,7 +494,8 @@ impl GenesisBuilder {
 
                 debug!("Staking contract");
                 // First generate the Staking contract in the Accounts.
-                let staking_contract = full.generate_staking_contract(&accounts, &mut txn)?;
+                let staking_contract =
+                    full.generate_staking_contract(&accounts, &mut txn, self.block_number)?;
 
                 // Update hashes in tree.
                 accounts
@@ -586,6 +587,7 @@ impl GenesisBuilderFullAccounts {
         &self,
         accounts: &Accounts,
         txn: &mut WriteTransactionProxy,
+        block_number: u32,
     ) -> Result<StakingContract, GenesisBuilderError> {
         let mut staking_contract = StakingContract::default();
 
@@ -608,6 +610,7 @@ impl GenesisBuilderFullAccounts {
                 validator.inactive_from,
                 validator.jailed_from,
                 validator.retired,
+                block_number,
                 &mut TransactionLog::empty(),
             )?;
         }
@@ -682,5 +685,47 @@ impl GenesisBuilder {
         }
 
         Ok((hash, have_accounts))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_bls::KeyPair as BlsKeyPair;
+    use nimiq_utils::key_rng::SecureGenerate;
+
+    use super::*;
+
+    fn genesis_with_jailed_validator(block_number: u32, jailed_from: u32) -> GenesisBuilder {
+        let mut builder = GenesisBuilder::default();
+        builder.with_genesis_block_number(block_number);
+        builder.with_genesis_validator(
+            Address::from([1u8; 20]),
+            SchnorrPublicKey::default(),
+            BlsKeyPair::generate_default_csprng().public_key,
+            Address::default(),
+            None,
+            Some(jailed_from),
+            false,
+        );
+        builder
+    }
+
+    #[test]
+    fn genesis_validator_jail_boundary_is_enforced() {
+        let jailed_from = 1;
+        let release_block = Policy::block_after_jail(jailed_from);
+
+        let still_jailed = genesis_with_jailed_validator(release_block - 1, jailed_from);
+        assert!(matches!(
+            still_jailed.generate(MdbxDatabase::new_volatile(Default::default()).unwrap()),
+            Err(GenesisBuilderError::StakingError(
+                AccountError::InvalidForRecipient
+            ))
+        ));
+
+        let released = genesis_with_jailed_validator(release_block, jailed_from);
+        released
+            .generate(MdbxDatabase::new_volatile(Default::default()).unwrap())
+            .expect("Validator should be active once its jail period is over");
     }
 }

@@ -184,6 +184,33 @@ fn can_get_validator() {
     );
 }
 
+fn create_validator_with_status(
+    staking_contract: &mut StakingContract,
+    mut data_store: DataStoreWrite,
+    validator_address: &Address,
+    inactive_from: Option<u32>,
+    jailed_from: Option<u32>,
+    retired: bool,
+    block_number: u32,
+    tx_logger: &mut TransactionLog,
+) -> Result<(), AccountError> {
+    let mut store = StakingContractStoreWrite::new(&mut data_store);
+    staking_contract.create_validator(
+        &mut store,
+        validator_address,
+        ed25519_public_key(VALIDATOR_SIGNING_KEY),
+        bls_public_key(VALIDATOR_VOTING_KEY),
+        Address::from([3u8; 20]),
+        None,
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+        inactive_from,
+        jailed_from,
+        retired,
+        block_number,
+        tx_logger,
+    )
+}
+
 #[test]
 fn create_validator_works() {
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
@@ -309,6 +336,184 @@ fn create_validator_works() {
         staking_contract.active_validators.get(&validator_address),
         None
     );
+}
+
+#[test]
+fn create_validator_rejects_active_retired_validator() {
+    let block_number = Policy::block_after_jail(1);
+
+    for jailed_from in [None, Some(1)] {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let accounts = Accounts::new(env.clone());
+        let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut db_txn = env.write_transaction();
+        let mut db_txn = (&mut db_txn).into();
+        let validator_address = validator_address();
+        let mut staking_contract = StakingContract::default();
+        let mut tx_logger = TransactionLog::empty();
+
+        assert_eq!(
+            create_validator_with_status(
+                &mut staking_contract,
+                data_store.write(&mut db_txn),
+                &validator_address,
+                None,
+                jailed_from,
+                true,
+                block_number,
+                &mut tx_logger,
+            ),
+            Err(AccountError::InvalidForRecipient)
+        );
+
+        assert_eq!(staking_contract.balance, Coin::ZERO);
+        assert!(staking_contract.active_validators.is_empty());
+        assert_eq!(
+            staking_contract.get_validator(&data_store.read(&db_txn), &validator_address),
+            None
+        );
+        assert!(tx_logger.logs.is_empty());
+    }
+}
+
+#[test]
+fn create_validator_rejects_active_validator_during_jail() {
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let accounts = Accounts::new(env.clone());
+    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let validator_address = validator_address();
+    let mut staking_contract = StakingContract::default();
+    let mut tx_logger = TransactionLog::empty();
+    let jailed_from = 1;
+    let block_number = Policy::block_after_jail(jailed_from) - 1;
+
+    assert_eq!(
+        create_validator_with_status(
+            &mut staking_contract,
+            data_store.write(&mut db_txn),
+            &validator_address,
+            None,
+            Some(jailed_from),
+            false,
+            block_number,
+            &mut tx_logger,
+        ),
+        Err(AccountError::InvalidForRecipient)
+    );
+
+    assert_eq!(staking_contract.balance, Coin::ZERO);
+    assert!(staking_contract.active_validators.is_empty());
+    assert_eq!(
+        staking_contract.get_validator(&data_store.read(&db_txn), &validator_address),
+        None
+    );
+    assert!(tx_logger.logs.is_empty());
+}
+
+#[test]
+fn create_validator_accepts_active_validator_after_jail() {
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let accounts = Accounts::new(env.clone());
+    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let validator_address = validator_address();
+    let mut staking_contract = StakingContract::default();
+    let mut tx_logger = TransactionLog::empty();
+    let jailed_from = 1;
+    let block_number = Policy::block_after_jail(jailed_from);
+    let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
+
+    create_validator_with_status(
+        &mut staking_contract,
+        data_store.write(&mut db_txn),
+        &validator_address,
+        None,
+        Some(jailed_from),
+        false,
+        block_number,
+        &mut tx_logger,
+    )
+    .unwrap();
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+    assert_eq!(validator.inactive_from, None);
+    assert_eq!(validator.jailed_from, Some(jailed_from));
+    assert!(!validator.retired);
+    assert_eq!(validator.deposit, deposit);
+    assert_eq!(validator.total_stake, deposit);
+    assert_eq!(staking_contract.balance, deposit);
+    assert_eq!(
+        staking_contract.active_validators.get(&validator_address),
+        Some(&deposit)
+    );
+    assert_eq!(
+        tx_logger.logs,
+        vec![Log::CreateValidator {
+            validator_address,
+            reward_address: Address::from([3u8; 20]),
+        }]
+    );
+}
+
+#[test]
+fn create_validator_accepts_inactive_status_combinations() {
+    let inactive_from = Policy::election_block_after(Policy::genesis_block_number());
+    let jailed_from = 1;
+    let block_number = Policy::block_after_jail(jailed_from) - 1;
+
+    for (jailed_from, retired) in [
+        (None, false),
+        (Some(jailed_from), false),
+        (None, true),
+        (Some(jailed_from), true),
+    ] {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let accounts = Accounts::new(env.clone());
+        let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut db_txn = env.write_transaction();
+        let mut db_txn = (&mut db_txn).into();
+        let validator_address = validator_address();
+        let mut staking_contract = StakingContract::default();
+        let mut tx_logger = TransactionLog::empty();
+        let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
+
+        create_validator_with_status(
+            &mut staking_contract,
+            data_store.write(&mut db_txn),
+            &validator_address,
+            Some(inactive_from),
+            jailed_from,
+            retired,
+            block_number,
+            &mut tx_logger,
+        )
+        .unwrap();
+
+        let validator = staking_contract
+            .get_validator(&data_store.read(&db_txn), &validator_address)
+            .expect("Validator should exist");
+        assert_eq!(validator.inactive_from, Some(inactive_from));
+        assert_eq!(validator.jailed_from, jailed_from);
+        assert_eq!(validator.retired, retired);
+        assert_eq!(validator.deposit, deposit);
+        assert_eq!(validator.total_stake, deposit);
+        assert_eq!(staking_contract.balance, deposit);
+        assert!(!staking_contract
+            .active_validators
+            .contains_key(&validator_address));
+        assert_eq!(
+            tx_logger.logs,
+            vec![Log::CreateValidator {
+                validator_address,
+                reward_address: Address::from([3u8; 20]),
+            }]
+        );
+    }
 }
 
 #[test]
@@ -3626,6 +3831,7 @@ fn version_upgrade_works() {
             None,
             None,
             false,
+            block_state.number,
             &mut TransactionLog::empty(),
         )
         .unwrap();

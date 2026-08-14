@@ -114,6 +114,7 @@ pub(crate) fn prepare_second_validator_for_redelegation(
             None,
             None,
             false,
+            Policy::genesis_block_number(),
             &mut TransactionLog::empty(),
         )
         .expect("Failed to create validator");
@@ -1418,6 +1419,7 @@ fn update_staker_with_stake_reactivation_works() {
             None,
             None,
             false,
+            Policy::genesis_block_number(),
             &mut TransactionLog::empty(),
         )
         .expect("Failed to create validator");

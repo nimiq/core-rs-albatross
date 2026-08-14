@@ -836,6 +836,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 None,
                 None,
                 false,
+                Policy::genesis_block_number(),
                 &mut TransactionLog::empty(),
             )
             .expect("Failed to create validator");

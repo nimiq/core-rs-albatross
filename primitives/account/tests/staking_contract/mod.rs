@@ -200,6 +200,7 @@ fn make_sample_contract_with_protocol_version(
             None,
             None,
             false,
+            Policy::genesis_block_number(),
             &mut TransactionLog::empty(),
         )
         .unwrap();

@@ -83,6 +83,7 @@ impl AccountTransactionInteraction for StakingContract {
                     None,
                     None,
                     false,
+                    block_state.number,
                     tx_logger,
                 )
                 .map(|_| None)
