@@ -228,7 +228,7 @@ impl StakingContract {
         }
 
         // Update balance.
-        self.balance += value;
+        self.balance += value + inactive_balance;
 
         // Build the return logs
         tx_logger.push_log(Log::CreateStaker {
@@ -256,7 +256,7 @@ impl StakingContract {
 
         // Update our balance.
         assert_eq!(value, staker.active_balance);
-        self.balance -= value;
+        self.balance -= value + staker.inactive_balance;
 
         // If we are delegating to a validator, we need to update it.
         if let Some(validator_address) = &staker.delegation {

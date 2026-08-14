@@ -309,6 +309,60 @@ fn create_staker_works() {
     );
 }
 
+#[test]
+fn create_staker_with_inactive_balance_works() {
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let accounts = Accounts::new(env.clone());
+    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
+    let staker_address = staker_address();
+    let active_balance = Coin::from_u64_unchecked(150_000_000);
+    let inactive_balance = Coin::from_u64_unchecked(50_000_000);
+    let validator_deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
+
+    staking_contract
+        .create_staker(
+            &mut StakingContractStoreWrite::new(&mut data_store.write(&mut db_txn)),
+            &staker_address,
+            active_balance,
+            Some(validator_address.clone()),
+            inactive_balance,
+            Some(1),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to create staker");
+
+    assert_eq!(
+        staking_contract.balance,
+        validator_deposit + active_balance + inactive_balance
+    );
+
+    let staker = staking_contract
+        .get_staker(&data_store.read(&db_txn), &staker_address)
+        .expect("Staker should exist");
+    assert_eq!(staker.inactive_balance, inactive_balance);
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+    assert_eq!(validator.total_stake, validator_deposit + active_balance);
+
+    staking_contract
+        .revert_create_staker(
+            &mut StakingContractStoreWrite::new(&mut data_store.write(&mut db_txn)),
+            &staker_address,
+            active_balance,
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to revert staker creation");
+
+    assert_eq!(staking_contract.balance, validator_deposit);
+}
+
 /// Updating inactive balance resets counter
 #[test]
 fn can_set_inactive_balance() {
