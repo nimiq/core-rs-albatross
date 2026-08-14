@@ -324,6 +324,37 @@ fn create_staker_with_inactive_balance_works() {
     let inactive_balance = Coin::from_u64_unchecked(50_000_000);
     let validator_deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
 
+    // An inactive balance and its inactivation height must either both be present or both be absent.
+    for (invalid_inactive_balance, invalid_inactive_from) in
+        [(inactive_balance, None), (Coin::ZERO, Some(1))]
+    {
+        let mut tx_logger = TransactionLog::empty();
+        assert_eq!(
+            staking_contract.create_staker(
+                &mut StakingContractStoreWrite::new(&mut data_store.write(&mut db_txn)),
+                &staker_address,
+                active_balance,
+                Some(validator_address.clone()),
+                invalid_inactive_balance,
+                invalid_inactive_from,
+                &mut tx_logger,
+            ),
+            Err(AccountError::InvalidForRecipient)
+        );
+        assert!(tx_logger.logs.is_empty());
+    }
+
+    assert_eq!(staking_contract.balance, validator_deposit);
+    assert_eq!(
+        staking_contract.get_staker(&data_store.read(&db_txn), &staker_address),
+        None
+    );
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+    assert_eq!(validator.total_stake, validator_deposit);
+    assert_eq!(validator.num_stakers, 0);
+
     staking_contract
         .create_staker(
             &mut StakingContractStoreWrite::new(&mut data_store.write(&mut db_txn)),
@@ -345,6 +376,7 @@ fn create_staker_with_inactive_balance_works() {
         .get_staker(&data_store.read(&db_txn), &staker_address)
         .expect("Staker should exist");
     assert_eq!(staker.inactive_balance, inactive_balance);
+    assert_eq!(staker.inactive_from, Some(1));
 
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)

@@ -203,6 +203,13 @@ impl StakingContract {
             });
         }
 
+        // Transaction-created stakers always use (zero, None), but genesis configurations can set
+        // these fields directly. Inactive stake and its inactivation height must either both be
+        // present or both be absent (invariants 3 and 4).
+        if inactive_balance.is_zero() != inactive_from.is_none() {
+            return Err(AccountError::InvalidForRecipient);
+        }
+
         // Check that the delegated validator exists.
         if let Some(validator_address) = &delegation {
             store.expect_validator(validator_address)?;
