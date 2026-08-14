@@ -49,6 +49,14 @@ use crate::{
 ///      in the first place.
 /// (**) The validator may be set to automatically reactivate itself upon inactivation.
 ///      If this setting is not enabled the state change can only be triggered manually.
+/// (***) The validator has a set of status invariants:
+///             (invariant 1) Retired validators are marked inactive:
+///                           `retired` implies `inactive_from.is_some()`
+///             (invariant 2) Validators whose jail period is still active are marked inactive:
+///                           `is_jailed(block_number)` implies `inactive_from.is_some()`
+///
+/// `jailed_from.is_some()` alone does not mean that a validator is currently jailed.
+/// The field is retained after the jail period and may coexist with an active validator.
 ///
 /// Create, Update, Deactivate, Retire and Re-activate are incoming transactions to the staking contract.
 /// Delete is an outgoing transaction from the staking contract.
@@ -193,8 +201,9 @@ impl StakingContract {
                 address: validator_address.clone(),
             });
         }
-        // A retired validator must be inactive because validator deletion relies on
-        // `inactive_from`. A validator whose jail is still active must also be inactive so
+        // Enforce invariant 1: a retired validator must be inactive because validator
+        // deletion relies on `inactive_from`.
+        // Enforce invariant 2: a validator whose jail is still active must be inactive so
         // that it is not included in `active_validators` below.
         let is_currently_jailed = jailed_from
             .is_some_and(|jailed_from| block_number < Policy::block_after_jail(jailed_from));
@@ -530,7 +539,7 @@ impl StakingContract {
 
         let next_election_block = Policy::election_block_after(block_number);
 
-        // Mark validator as inactive.
+        // Mark validator as inactive to preserve invariant 2.
         // A validator can only effectively become inactive on the next election block.
         if newly_deactivated {
             validator.inactive_from = Some(next_election_block);
@@ -629,13 +638,13 @@ impl StakingContract {
             return Err(AccountError::InvalidForRecipient);
         }
 
-        // Check that the validator is not retired.
+        // Check that reactivation would not violate invariant 1.
         if validator.retired {
             debug!(?validator_address, "Validator is retired");
             return Err(AccountError::InvalidForRecipient);
         }
 
-        // Check that the validator is not jailed.
+        // Check that reactivation would not violate invariant 2.
         if validator.is_jailed(block_number) {
             debug!(
                 ?validator_address,
@@ -728,7 +737,7 @@ impl StakingContract {
             validator_address: validator_address.clone(),
         });
 
-        // Mark validator as inactive if it is still active.
+        // Mark validator as inactive if it is still active to preserve invariant 1.
         let was_active = validator.is_active();
         if was_active {
             // A validator can only effectively become inactive on the next election block.
