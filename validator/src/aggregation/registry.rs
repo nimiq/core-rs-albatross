@@ -25,11 +25,18 @@ impl ValidatorRegistry {
     }
 }
 
+/// Narrows a slot number to the `u16` the `Validators` accessors take, rejecting slots that do not
+/// exist. The bound must be checked before the cast, as truncating first maps out of range slots
+/// onto existing ones. `Validators::get_band_from_slot` panics on anything this rejects.
+fn checked_slot(slot: usize) -> Option<u16> {
+    (slot < Policy::SLOTS as usize).then_some(slot as u16)
+}
+
 impl IdentityRegistry for ValidatorRegistry {
     fn public_key(&self, slot_number: usize) -> Option<PublicKey> {
         self.validators
-            // Get the validator for with id
-            .get_validator_by_slot_number(slot_number as u16)
+            // Get the validator owning the slot, if the slot exists
+            .get_validator_by_slot_number(checked_slot(slot_number)?)
             // Get the public key for this validator
             .voting_key
             // and uncompress it
@@ -46,8 +53,12 @@ impl IdentityRegistry for ValidatorRegistry {
         // Create a set of validator ids corresponding to the slots
         let mut ids: HashSet<u16> = HashSet::new();
         for slot in slots.iter() {
+            // Reject the whole set if it references a slot that does not exist.
+            let Some(slot) = checked_slot(slot) else {
+                return Identity::new(BitSet::default());
+            };
             // Insert each validator_address if there is one.
-            let _ = ids.insert(self.validators.get_band_from_slot(slot as u16));
+            let _ = ids.insert(self.validators.get_band_from_slot(slot));
         }
 
         // If there is no signer it needs to be rejected.
@@ -78,11 +89,8 @@ impl IdentityRegistry for ValidatorRegistry {
 
 impl WeightRegistry for ValidatorRegistry {
     fn weight(&self, id: usize) -> Option<usize> {
-        if (0..Policy::SLOTS).contains(&(id as u16)) {
-            Some(1)
-        } else {
-            None
-        }
+        // Every existing slot carries a single vote.
+        checked_slot(id).map(|_| 1)
     }
 }
 
