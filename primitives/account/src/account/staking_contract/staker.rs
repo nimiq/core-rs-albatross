@@ -6,7 +6,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::account::AccountError;
 use nimiq_primitives::coin::Coin;
 #[cfg(feature = "interaction-traits")]
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::policy::{upgrades, Policy};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "interaction-traits")]
@@ -26,8 +26,10 @@ use crate::{
 ///
 /// Actions concerning a staker are:
 /// 1. Create:           Creates a staker.
-/// 2. AddStake:         Adds coins from any outside address to the staker's active balance.
-///                      This action is only possible if:
+/// 2. AddStake:         Adds coins from any outside address to the staker.
+///                      The balance to accredit these funds is preferentially the active balance. If there is no
+///                      positive active balance, it credits the inactive balance instead.
+///                      This operation has a minimum value of minimum stake, thus it always respects the invariant:
 ///                        (a) the resulting non-retired funds respect the invariant 1 - minimum stake for non-retired funds.
 /// 3. SetActiveStake:   Re-balances between active and inactive stake by setting the amount of active stake.
 ///                      This action restarts the lock-up period of the inactive stake.
@@ -146,6 +148,7 @@ impl Staker {
     /// Invariants:
     ///         (1) active + inactive balances must be == 0 or >= minimum stake
     ///         (2) active + inactive + retired balances must be == 0 or >= minimum stake
+    /// IMPORTANT: This code is shared between new and legacy add stake versions.
     pub(crate) fn enforce_min_stake(
         active_balance: Coin,
         inactive_balance: Coin,
@@ -276,19 +279,35 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Adds more Coins to a staker's balance. It will be directly added to the staker's balance.
+    /// Adds more Coins to a staker's balance. It adds to the staker's active balance
+    /// if there are some funds on it (active balance >0). Otherwise, it credits the value to
+    /// the inactive balance.
     /// Anyone can add stake for a staker. The staker must already exist.
     pub fn add_stake(
         &mut self,
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
+        protocol_version: u16,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
+        if protocol_version < upgrades::v3::STAKING_CHANGE_ADD_STAKE_POLICY {
+            return self.legacy_add_stake_before_v3(store, staker_address, value, tx_logger);
+        }
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
-        // Fail if the minimum stake would be violated for the non-retired funds (invariant 1).
+        // Check that the delegation is still valid, i.e. the validator hasn't been deleted.
+        if let Some(validator_address) = &staker.delegation {
+            store.expect_validator(validator_address)?;
+        }
+
+        // Intrinsic checks normally ensure that add-stake transactions preserve the minimum non-retired stake
+        // (invariant 1). History sync replays transactions without re-running those checks, so we enforce
+        // the invariant here too as defense in depth.
+        // Add stake may be credited to either the active or inactive balance below. Both minimum-stake
+        // invariants only use these balances through their sum, so adding `value` to either active or inactive
+        // arguments is equivalent.
         Staker::enforce_min_stake(
             staker.active_balance + value,
             staker.inactive_balance,
@@ -297,22 +316,31 @@ impl StakingContract {
 
         // All checks passed, not allowed to fail from here on!
 
-        // If we are delegating to a validator, we need to update it.
-        if let Some(validator_address) = &staker.delegation {
-            // Check that the delegation is still valid, i.e. the validator hasn't been deleted.
-            store.expect_validator(validator_address)?;
+        // Update the staker's and staking contract's balances.
+        // We want to preferentially credit the active balance. Only if there is no active balance,
+        // then it will attribute the funds to the inactive balance.
+        let credited_to_active = !staker.active_balance.is_zero();
+        if credited_to_active {
+            staker.active_balance += value;
+        } else {
+            staker.inactive_balance += value;
+            if staker.inactive_from.is_none() {
+                staker.inactive_from = Some(0); // To uphold the (invariant 3)
+            }
+        }
+        self.balance += value;
+
+        // If we are actively delegating to a validator, we need to update it.
+        if credited_to_active && let Some(validator_address) = &staker.delegation {
             self.increase_stake_to_validator(store, validator_address, value);
         }
 
-        // Update the staker's and staking contract's balances.
-        staker.active_balance += value;
-        self.balance += value;
-
-        // Build the return logs
+        // Build the return logs.
         tx_logger.push_log(Log::Stake {
             staker_address: staker_address.clone(),
             validator_address: staker.delegation.clone(),
             value,
+            credited_to_active,
         });
 
         // Update the staker entry.
@@ -322,6 +350,14 @@ impl StakingContract {
     }
 
     /// Reverts a stake transaction.
+    ///
+    /// No receipt is needed to identify the balance credited by [`Self::add_stake`].
+    /// Transactions are reverted in reverse order, so the staker is in its state immediately
+    /// after this operation. If the active balance was credited, it was already non-zero and
+    /// remains non-zero; otherwise, it was zero and was left unchanged. Thus, the current active
+    /// balance identifies which balance to debit.
+    ///
+    /// IMPORTANT: This code is shared between new and legacy add stake versions.
     pub fn revert_add_stake(
         &mut self,
         store: &mut StakingContractStoreWrite,
@@ -333,18 +369,28 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // If we are delegating to a validator, we need to update it too.
-        if let Some(validator_address) = &staker.delegation {
+        let credited_to_active = !staker.active_balance.is_zero();
+        if credited_to_active && let Some(validator_address) = &staker.delegation {
             self.decrease_stake_from_validator(store, validator_address, value);
         }
 
         // Update the staker's and staking contract's balances.
-        staker.active_balance -= value;
+        if credited_to_active {
+            staker.active_balance -= value;
+        } else {
+            staker.inactive_balance -= value;
+            if staker.inactive_balance.is_zero() {
+                staker.inactive_from = None;
+            }
+        }
+
         self.balance -= value;
 
         tx_logger.push_log(Log::Stake {
             staker_address: staker_address.clone(),
             validator_address: staker.delegation.clone(),
             value,
+            credited_to_active,
         });
 
         // Update the staker entry.
@@ -949,6 +995,7 @@ impl StakingContract {
     }
 
     /// Adds `value` coins to a given validator's total stake.
+    /// IMPORTANT: This code is shared between new and legacy add stake versions.
     fn increase_stake_to_validator(
         &mut self,
         store: &mut StakingContractStoreWrite,
@@ -982,6 +1029,7 @@ impl StakingContract {
     }
 
     /// Removes `value` coins from a given validator's inactive total stake.
+    /// IMPORTANT: This code is shared between new and legacy add stake versions.
     fn decrease_stake_from_validator(
         &mut self,
         store: &mut StakingContractStoreWrite,
@@ -1014,5 +1062,59 @@ impl StakingContract {
 
         // Neither validator nor tombstone exist, this is an error.
         panic!("inconsistent contract state");
+    }
+
+    // Pre protocol upgrade.
+    // IMPORTANT: DO NOT REMOVE THIS CODE!
+    // It is needed for history nodes to sync.
+
+    /// Legacy add stake logic, it adds more Coins to a staker's active balance.
+    /// It will be directly added to the staker's balance.
+    /// Anyone can add stake for a staker. The staker must already exist.
+    /// This action is only possible if (a) the resulting non-retired funds respect
+    /// the invariant 1 - minimum stake for non-retired funds. This was not part of the
+    /// intrinsic add stake transaction checks on old versions, thus must be enforced at this level.
+    pub fn legacy_add_stake_before_v3(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        staker_address: &Address,
+        value: Coin,
+        tx_logger: &mut TransactionLog,
+    ) -> Result<(), AccountError> {
+        // Get the staker.
+        let mut staker = store.expect_staker(staker_address)?;
+
+        // Fail if the minimum stake would be violated for the non-retired funds (invariant 1).
+        Staker::enforce_min_stake(
+            staker.active_balance + value,
+            staker.inactive_balance,
+            staker.retired_balance,
+        )?;
+
+        // All checks passed, not allowed to fail from here on!
+
+        // If we are delegating to a validator, we need to update it.
+        if let Some(validator_address) = &staker.delegation {
+            // Check that the delegation is still valid, i.e. the validator hasn't been deleted.
+            store.expect_validator(validator_address)?;
+            self.increase_stake_to_validator(store, validator_address, value);
+        }
+
+        // Update the staker's and staking contract's balances.
+        staker.active_balance += value;
+        self.balance += value;
+
+        // Build the return logs
+        tx_logger.push_log(Log::Stake {
+            staker_address: staker_address.clone(),
+            validator_address: staker.delegation.clone(),
+            value,
+            credited_to_active: true,
+        });
+
+        // Update the staker entry.
+        store.put_staker(staker_address, staker);
+
+        Ok(())
     }
 }

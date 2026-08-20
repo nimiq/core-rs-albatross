@@ -113,6 +113,7 @@ pub enum Log {
         staker_address: Address,
         validator_address: Option<Address>,
         value: Coin,
+        credited_to_active: bool,
     },
 
     #[serde(rename_all = "camelCase")]

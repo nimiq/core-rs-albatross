@@ -742,6 +742,22 @@ fn stake() {
             Err(TransactionError::ZeroValue),
         );
     });
+
+    // Deposit too small (post upgrade restriction).
+    tx.value = Coin::from_u64_unchecked(Policy::MINIMUM_STAKE - 1);
+    for_each_protocol_version(|v| {
+        if v < upgrades::v3::STAKING_CHANGE_ADD_STAKE_POLICY {
+            assert_eq!(AccountType::verify_incoming_transaction(&tx, v), Ok(()));
+        } else {
+            assert_eq!(
+                AccountType::verify_incoming_transaction(
+                    &tx,
+                    upgrades::v3::STAKING_CHANGE_ADD_STAKE_POLICY
+                ),
+                Err(TransactionError::InvalidValue)
+            );
+        }
+    });
 }
 
 #[test]
