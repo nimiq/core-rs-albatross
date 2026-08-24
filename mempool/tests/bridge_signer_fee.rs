@@ -45,6 +45,9 @@ const SOURCE_CHAIN_ID: u32 = 1;
 const BRIDGE_BALANCE: u64 = 1_000_000;
 const RELEASE_VALUE: u64 = 100;
 const FEE: u64 = 10;
+/// Funding for the victim whose key is planted in `transaction.proof`. Deliberately far more
+/// than any fee, so a reservation that followed `transaction.proof` would succeed.
+const VICTIM_BALANCE: u64 = 1_000_000;
 
 fn bridge_address() -> Address {
     Address::from([0x0B; 20])
@@ -70,10 +73,13 @@ struct BridgeFixture {
     blockchain: Arc<RwLock<Blockchain>>,
     mempool: Mempool,
     signer: SchnorrKeyPair,
+    /// A richly funded third party, used only to spoof `transaction.proof`.
+    victim: SchnorrKeyPair,
     validity_start_height: u32,
 }
 
-/// Builds a blockchain whose genesis funds `signer_balance` to the burn-proof signer,
+/// Builds a blockchain whose genesis funds `signer_balance` to the burn-proof signer and
+/// `VICTIM_BALANCE` to the spoofing victim,
 /// seeds a `BridgeContract` (balance `BRIDGE_BALANCE`) directly into the accounts tree,
 /// and returns a fresh mempool over it.
 fn setup(signer_balance: u64) -> BridgeFixture {
@@ -81,6 +87,8 @@ fn setup(signer_balance: u64) -> BridgeFixture {
 
     let signer = SchnorrKeyPair::generate(&mut rng);
     let signer_address = Address::from(&signer.public);
+    let victim = SchnorrKeyPair::generate(&mut rng);
+    let victim_address = Address::from(&victim.public);
 
     let mut genesis_builder = GenesisBuilder::default();
     genesis_builder.with_network(NetworkId::UnitAlbatross);
@@ -88,6 +96,7 @@ fn setup(signer_balance: u64) -> BridgeFixture {
         signer_address.clone(),
         Coin::from_u64_unchecked(signer_balance),
     );
+    genesis_builder.with_basic_account(victim_address, Coin::from_u64_unchecked(VICTIM_BALANCE));
     // Genesis requires at least one validator.
     genesis_builder.with_genesis_validator(
         Address::from(&SchnorrKeyPair::generate(&mut rng)),
@@ -137,6 +146,7 @@ fn setup(signer_balance: u64) -> BridgeFixture {
         blockchain,
         mempool,
         signer,
+        victim,
         validity_start_height,
     }
 }
@@ -335,4 +345,71 @@ fn signer_fee_is_re_reserved_on_rebuild() {
         fixture.mempool.add_transaction(tx2, None).is_err(),
         "signer fee must remain reserved after the rebuild"
     );
+}
+
+/// Builds a burn-release whose `transaction.proof` names the victim instead of the real signer.
+/// The proof is signed by the victim over unrelated bytes, so it is a structurally valid proof
+/// that simply has nothing to do with this transaction — exactly what an attacker can produce
+/// from any public key they have seen on chain.
+fn spoofed_release(fixture: &BridgeFixture, value: u64, fee: u64) -> Transaction {
+    let mut tx = build_release(fixture, value, fee);
+    tx.proof = SignatureProof::from_ed25519(
+        fixture.victim.public,
+        fixture
+            .victim
+            .sign(b"a signature over something else entirely"),
+    )
+    .serialize_to_vec();
+    tx
+}
+
+/// Fee-payer spoofing at mempool admission.
+///
+/// `Blockchain::reserve_bridge_signer_fee` reserves the fee against the burn-proof signer via
+/// `Accounts::extract_signer_address`, which reads the *verified* proof in `sender_data`.
+/// `transaction.proof` is never verified for bridge senders, so if the reservation followed it an
+/// attacker could get releases admitted against a victim's balance — and the victim would then be
+/// charged, or the transaction would fail at commit after passing admission.
+///
+/// The signer here can afford exactly one fee and the victim can afford many, so the second
+/// release is admissible if and only if the reservation follows the spoofed proof. It must not.
+#[test]
+fn signer_fee_reservation_ignores_spoofed_transaction_proof() {
+    let fixture = setup(FEE);
+
+    let tx1 = build_release(&fixture, RELEASE_VALUE, FEE);
+    let tx2 = spoofed_release(&fixture, RELEASE_VALUE + 1, FEE);
+
+    assert!(
+        fixture.mempool.add_transaction(tx1.clone(), None).is_ok(),
+        "first burn-release should be admitted"
+    );
+
+    let res2 = fixture.mempool.add_transaction(tx2.clone(), None);
+    assert!(
+        matches!(res2, Err(VerifyErr::InvalidAccount(_))),
+        "the spoofed release must still be reserved against the signer, who cannot cover a \
+         second fee, got {res2:?}"
+    );
+
+    assert_eq!(fixture.mempool.num_transactions(), 1);
+    assert!(!fixture.mempool.contains_transaction_by_hash(&tx2.hash()));
+}
+
+/// Control for the test above: the spoofed `transaction.proof` is not itself a reason for
+/// rejection. With a signer who can cover both fees the same spoofed release is admitted, which
+/// pins that the rejection above comes from the signer's balance and not from the bogus proof.
+#[test]
+fn spoofed_transaction_proof_is_admitted_when_the_real_signer_can_pay() {
+    let fixture = setup(2 * FEE);
+
+    let tx1 = build_release(&fixture, RELEASE_VALUE, FEE);
+    let tx2 = spoofed_release(&fixture, RELEASE_VALUE + 1, FEE);
+
+    assert!(fixture.mempool.add_transaction(tx1, None).is_ok());
+    assert!(
+        fixture.mempool.add_transaction(tx2, None).is_ok(),
+        "a spoofed transaction.proof must not affect admission on its own"
+    );
+    assert_eq!(fixture.mempool.num_transactions(), 2);
 }
