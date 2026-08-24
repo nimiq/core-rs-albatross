@@ -630,6 +630,129 @@ fn bridge_outgoing_success_charges_fee_to_signer() {
     );
 }
 
+/// Fee-payer spoofing on the *successful* release path.
+///
+/// `transaction.proof` is never verified for `AccountType::Bridge` senders: the signature
+/// consensus actually checks lives in `sender_data` (`OutgoingBridgeTransactionData.proof`).
+/// Any submitter can therefore place an arbitrary public key in `transaction.proof`, so if the
+/// fee payer were derived from it an attacker could charge every burn-release fee to a victim
+/// who never authorized anything. `Accounts::extract_signer_address` guards against this; this
+/// test crafts the divergence and asserts the guard holds where the fee is taken by
+/// `Accounts::charge_fee_to_signer`.
+///
+/// The failed-transaction counterpart is
+/// `fee_for_failed_outgoing_tx_is_charged_to_sender_data_signer`. The attacker here is also not
+/// the bridge owner, mirroring a real permissionless submission.
+#[test]
+fn bridge_outgoing_success_fee_ignores_spoofed_transaction_proof() {
+    let attacker = KeyPair::generate_default_csprng(); // signs sender_data (the verified proof)
+    let victim = KeyPair::generate_default_csprng(); // key planted in transaction.proof
+    let owner = KeyPair::generate_default_csprng(); // bridge owner, uninvolved
+    let attacker_address = Address::from(&attacker.public);
+    let victim_address = Address::from(&victim.public);
+
+    let initial_attacker_balance = Coin::from_u64_unchecked(10_000);
+    let initial_victim_balance = Coin::from_u64_unchecked(5_000);
+
+    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let oracle = make_single_state_oracle(&burn_data);
+    let bridge = BridgeContract {
+        owner: Address::from(&owner.public),
+        oracle_address: oracle_addr(),
+        balance: Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        source_chain_id: SOURCE_CHAIN_ID,
+        chain_config: chain_config(),
+        transaction_count: 0,
+    };
+    // As in `bridge_outgoing_success_charges_fee_to_signer`, the release target is left
+    // unseeded so the post-revert trie matches the initial one.
+    let test = TestCommitRevert::with_initial_state(&[
+        (oracle_addr(), Account::Oracle(oracle)),
+        (bridge_addr(), Account::Bridge(bridge)),
+        (
+            attacker_address.clone(),
+            Account::Basic(BasicAccount {
+                balance: initial_attacker_balance,
+            }),
+        ),
+        (
+            victim_address.clone(),
+            Account::Basic(BasicAccount {
+                balance: initial_victim_balance,
+            }),
+        ),
+    ]);
+
+    let fee = Coin::from_u64_unchecked(10);
+    let outgoing = OutgoingTransaction {
+        burn_transaction_data: burn_data,
+        merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        oracle_state_index: 0,
+    };
+    let mut bridge_data = OutgoingBridgeTransactionData {
+        burn_proof: outgoing,
+        proof: SignatureProof::default(),
+    };
+    let mut tx = Transaction::new_extended(
+        bridge_addr(),
+        AccountType::Bridge,
+        bridge_data.serialize_to_vec(),
+        nimiq_target(),
+        AccountType::Basic,
+        vec![],
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+        fee,
+        1,
+        NetworkId::UnitAlbatross,
+    );
+
+    // The attacker signs the burn proof: this is the signature bridge verification checks.
+    let sig = attacker.sign(&tx.serialize_content());
+    bridge_data.set_signature(SignatureProof::from_ed25519(attacker.public, sig));
+    tx.sender_data = bridge_data.serialize_to_vec();
+
+    // The never-verified field is pointed at the victim.
+    tx.proof = SignatureProof::from_ed25519(
+        victim.public,
+        victim.sign(b"a signature over something else entirely"),
+    )
+    .serialize_to_vec();
+
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+    let receipts = test
+        .commit_and_test(&[tx], &[], &bs, &mut BlockLogger::empty())
+        .expect("release should succeed; the spoofed proof is simply ignored");
+
+    match &receipts.transactions[0] {
+        OperationReceipt::Ok(receipt) => assert_eq!(
+            receipt.fee_payer,
+            Some(attacker_address.clone()),
+            "fee payer must be the sender_data signer, not the key in transaction.proof",
+        ),
+        other => panic!("expected a successful receipt, got {other:?}"),
+    }
+
+    assert_eq!(
+        test.get_complete(&attacker_address, None).balance(),
+        initial_attacker_balance - fee,
+        "the attacker pays the fee they signed for",
+    );
+    assert_eq!(
+        test.get_complete(&victim_address, None).balance(),
+        initial_victim_balance,
+        "the victim named in transaction.proof must be untouched",
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT - RELEASE_AMOUNT),
+        "the bridge debits exactly the released value, never the fee",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+    );
+}
+
 /// Wrong chain_id in burn data → rejected.
 #[test]
 fn bridge_outgoing_rejects_wrong_chain_id() {
