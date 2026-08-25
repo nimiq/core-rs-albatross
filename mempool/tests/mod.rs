@@ -2042,6 +2042,50 @@ async fn assert_rebase_invalidates_mempool_tx(tx1: Transaction, tx2: Transaction
 }
 
 #[test(tokio::test)]
+// Transactions handed out for block building are taken out of the mempool. If that block is never
+// produced they have to go back in, otherwise a failed block production silently drops a whole
+// body worth of perfectly good transactions.
+async fn returns_transactions_of_a_block_that_was_never_produced() {
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let tx = TransactionBuilder::new_basic(
+        &key_pair,
+        Address::default(),
+        100.try_into().unwrap(),
+        Coin::ZERO,
+        1 + Policy::genesis_block_number(),
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    let temp_producer = TemporaryBlockProducer::new();
+    let mempool = Mempool::new(
+        Arc::clone(&temp_producer.blockchain),
+        MempoolConfig::default(),
+    );
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    send_txn_to_mempool(&mempool, mock_network, mock_id, vec![tx.clone()]).await;
+    assert_eq!(mempool.get_transactions(), vec![tx.clone()]);
+
+    // Picking transactions for a block takes them out of the mempool.
+    let (selected, _) = mempool.get_transactions_for_block(10_000);
+    assert_eq!(selected, vec![tx.clone()]);
+    assert!(mempool.get_transactions().is_empty());
+
+    // The block was never produced, so they belong back in.
+    mempool.return_transactions_locked(&temp_producer.blockchain.read(), selected);
+    assert_eq!(mempool.get_transactions(), vec![tx.clone()]);
+
+    // A transaction that did make it into a block is not put back, though.
+    let (selected, _) = mempool.get_transactions_for_block(10_000);
+    temp_producer.next_block_with_txs(vec![], false, selected.clone());
+    mempool.return_transactions_locked(&temp_producer.blockchain.read(), selected);
+    assert!(mempool.get_transactions().is_empty());
+}
+
+#[test(tokio::test)]
 // Check that txs are removed from the mempool if they become invalid due to a rebranch.
 // If the timestamp of the chain gets lower due to a rebranch, this can invalidate redeem txs for
 // HTLCs and Vesting contracts, which already released a balance on the former chain.

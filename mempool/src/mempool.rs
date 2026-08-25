@@ -617,6 +617,39 @@ impl Mempool {
         (txs, size)
     }
 
+    /// Puts transactions that were handed out for block building but never made it into a block
+    /// back into the mempool.
+    ///
+    /// `get_transactions_for_block*()` removes what it returns, so a block that then fails to be
+    /// produced would take those transactions with it even though nothing is wrong with them.
+    /// Transactions that are no longer applicable are silently dropped; they were verified when
+    /// they first entered the mempool, so only the state-dependent checks are repeated here.
+    ///
+    /// If the caller already holds a blockchain lock, it can be passed to this function to prevent
+    /// double-locking the blockchain.
+    pub fn return_transactions_locked(
+        &self,
+        blockchain: &Blockchain,
+        transactions: Vec<Transaction>,
+    ) {
+        let mut state = self.state.write();
+        let next_block_number = blockchain.block_number() + 1;
+
+        for tx in transactions {
+            let tx_hash = tx.hash();
+
+            if state.contains(&tx_hash)
+                || !tx.is_valid_at(next_block_number)
+                || blockchain.contains_tx_in_validity_window(&tx_hash.into(), None)
+            {
+                continue;
+            }
+
+            // Balance checks are performed within put().
+            state.put(blockchain, tx, TxPriority::Medium).ok();
+        }
+    }
+
     fn get_transactions_for_block_impl(
         transactions: &mut MempoolTransactions,
         max_bytes: usize,

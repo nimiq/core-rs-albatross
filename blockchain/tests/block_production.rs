@@ -12,8 +12,8 @@ use nimiq_keys::{
     Address, Ed25519PublicKey as SchnorrPublicKey, KeyPair as SchnorrKeyPair,
     PrivateKey as SchnorrPrivateKey, SecureGenerate,
 };
-use nimiq_primitives::{coin::Coin, policy::Policy};
-use nimiq_serde::Deserialize;
+use nimiq_primitives::{account::AccountType, coin::Coin, policy::Policy};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
@@ -23,7 +23,7 @@ use nimiq_test_utils::{
     },
     test_rng,
 };
-use nimiq_transaction::ExecutedTransaction;
+use nimiq_transaction::{ExecutedTransaction, SignatureProof, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
@@ -466,6 +466,164 @@ fn it_can_produce_a_chain_with_txns() {
             Ok(PushResult::Extended)
         );
     }
+}
+
+/// Builds a signed basic transfer from `key_pair`.
+fn basic_transfer(
+    key_pair: &SchnorrKeyPair,
+    value: u64,
+    validity_start_height: u32,
+) -> Transaction {
+    let mut tx = Transaction::new_basic(
+        Address::from(&key_pair.public),
+        Address::from([9u8; Address::SIZE]),
+        Coin::from_u64_unchecked(value),
+        Coin::from_u64_unchecked(1),
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    );
+
+    tx.proof =
+        SignatureProof::from_ed25519(key_pair.public, key_pair.sign(&tx.serialize_content()))
+            .serialize_to_vec();
+
+    tx
+}
+
+/// Builds a transaction that cannot be applied at all: it claims an HTLC sender while the sender
+/// is a basic account, so both the regular and the failed path reject it with a type mismatch.
+///
+/// The mempool would not admit this one, but it stands in for any transaction that it does admit
+/// and that later turns out to be unappliable in the block being built -- an HTLC redemption whose
+/// contract expired between the head block and this one, for instance.
+fn unappliable_transaction(key_pair: &SchnorrKeyPair, value: u64) -> Transaction {
+    let mut tx = basic_transfer(key_pair, value, Policy::genesis_block_number() + 1);
+    tx.sender_type = AccountType::HTLC;
+    tx
+}
+
+#[test]
+fn it_drops_unappliable_transactions_instead_of_failing_the_block() {
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+
+    let good_tx = basic_transfer(&key_pair, 100, Policy::genesis_block_number() + 1);
+    let poison_tx = unappliable_transaction(&key_pair, 200);
+
+    let bc = blockchain.upgradable_read();
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![poison_tx.clone(), good_tx.clone()],
+            vec![0x41],
+            None,
+        )
+        .expect("An unappliable transaction must not take the block down with it");
+
+    // The offender is gone, everything picked alongside it survives.
+    assert_eq!(
+        block.body.as_ref().unwrap().transactions,
+        vec![ExecutedTransaction::Ok(good_tx)]
+    );
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+}
+
+#[test]
+fn it_cuts_the_body_instead_of_failing_when_re_execution_would_cost_too_much() {
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+
+    // A prefix of good transactions followed by enough unappliable ones that dropping them one at
+    // a time -- each retry re-executing the whole good prefix -- exceeds the re-execution budget.
+    // Sized from the budget so the test does not depend on its exact value: with `good_count`
+    // ahead of them, each drop re-executes `good_count + 1` transactions, so more than
+    // `MAX_REEXECUTED_TRANSACTIONS / (good_count + 1)` unappliable ones force the cut.
+    let good_count = 40u64;
+    let unappliable_count =
+        (BlockProducer::MAX_REEXECUTED_TRANSACTIONS / (good_count as usize + 1)) + 3;
+
+    let good_prefix: Vec<_> = (0..good_count)
+        .map(|i| basic_transfer(&key_pair, 100 + i, Policy::genesis_block_number() + 1))
+        .collect();
+    let unappliable: Vec<_> = (0..unappliable_count as u64)
+        .map(|i| unappliable_transaction(&key_pair, 10_000 + i))
+        .collect();
+    // Two good transactions behind the unappliable ones. They distinguish cutting the body from
+    // merely dropping every unappliable one: dropping would keep them, the cut leaves them out.
+    let good_suffix = [
+        basic_transfer(&key_pair, 5000, Policy::genesis_block_number() + 1),
+        basic_transfer(&key_pair, 5001, Policy::genesis_block_number() + 1),
+    ];
+
+    let mut transactions = good_prefix.clone();
+    transactions.extend(unappliable.clone());
+    transactions.extend(good_suffix.iter().cloned());
+
+    let bc = blockchain.upgradable_read();
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            transactions,
+            vec![0x41],
+            None,
+        )
+        // Crucially, this is Ok: past the budget the producer cuts the body rather than failing
+        // and forfeiting the slot, which is what would let a flood of these spin block production.
+        .expect("Block production must not fail over unappliable transactions");
+
+    // The body is exactly the good prefix: the cut at the first unappliable transaction keeps
+    // everything ahead of it and drops the rest, including the two good transactions behind them.
+    let included = block.body.as_ref().unwrap().transactions.clone();
+    assert_eq!(
+        included,
+        good_prefix
+            .into_iter()
+            .map(ExecutedTransaction::Ok)
+            .collect::<Vec<_>>()
+    );
+    for tx in &good_suffix {
+        assert!(
+            !included
+                .iter()
+                .any(|included| included.get_raw_transaction() == tx),
+            "the cut must drop the transactions behind the first unappliable one"
+        );
+    }
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
 }
 
 #[test]

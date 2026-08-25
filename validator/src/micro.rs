@@ -1,5 +1,6 @@
 use std::{
     cmp,
+    collections::HashSet,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -10,7 +11,7 @@ use futures::{future::BoxFuture, ready, FutureExt, Stream};
 use nimiq_block::{Block, EquivocationProof, MicroBlock, SkipBlockInfo};
 use nimiq_blockchain::{BlockProducer, BlockProducerError, Blockchain};
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mempool::mempool::Mempool;
 use nimiq_primitives::policy::{upgrades, Policy};
 use nimiq_time::sleep;
@@ -403,14 +404,59 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         transactions.append(&mut extra_control_transactions);
         transactions.append(&mut regular_transactions);
 
-        self.block_producer.next_micro_block(
+        // The mempool has handed these transactions over to us, meaning they are gone from it.
+        // Whatever does not end up in the block would be lost even though nothing is wrong with
+        // it, so keep a copy to hand back. Cloning a block body once per production is cheap next
+        // to executing it.
+        let selected_transactions = transactions.clone();
+
+        let block = self.block_producer.next_micro_block(
             blockchain,
             timestamp,
             self.equivocation_proofs.clone(),
             transactions,
             vec![], // TODO: Allow validators to set extra data field.
             None,
-        )
+        );
+
+        match &block {
+            Ok(micro_block) => {
+                // Hand back the transactions we selected but did not include -- ones cut from the
+                // body because they turned out unappliable in this block, or that sit behind such
+                // a transaction. Unappliable ones are admitted again (the mempool checks against
+                // the head block, which is how they got in the first time), but the block we just
+                // produced advances the head past what made them unappliable, so the mempool
+                // eviction that runs when it is adopted drops them for good.
+                let included: HashSet<Blake2bHash> = micro_block
+                    .body
+                    .as_ref()
+                    .map(|body| {
+                        body.transactions
+                            .iter()
+                            .map(|tx| tx.get_raw_transaction().hash())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                let returned: Vec<_> = selected_transactions
+                    .into_iter()
+                    .filter(|tx| !included.contains(&tx.hash()))
+                    .collect();
+
+                if !returned.is_empty() {
+                    self.mempool
+                        .return_transactions_locked(blockchain, returned);
+                }
+            }
+            Err(_) => {
+                // The block was never built (not a transaction problem -- an unappliable
+                // transaction only fails itself now), so the whole selection goes back.
+                self.mempool
+                    .return_transactions_locked(blockchain, selected_transactions);
+            }
+        }
+
+        block
     }
 
     fn expected_next_timestamp(&self, blockchain: &Blockchain) -> u64 {

@@ -10,7 +10,7 @@ use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
-    historic_transaction::HistoricTransaction, inherent::Inherent, Transaction,
+    historic_transaction::HistoricTransaction, inherent::Inherent, ExecutedTransaction, Transaction,
 };
 use rand::{CryptoRng, Rng};
 use thiserror::Error;
@@ -61,11 +61,114 @@ pub struct BlockProducer {
 }
 
 impl BlockProducer {
+    /// Ceiling on the number of transactions the producer is willing to *re-execute* while dropping
+    /// unappliable ones from a single block (see `exercise_transactions_dropping_unappliable`).
+    ///
+    /// `Accounts::commit` stops at the first failing transaction, so a failure at index `i`
+    /// re-executes the `i` transactions ahead of it. Unappliable transactions never pay a fee, so
+    /// an attacker can price them to sort to the top of the body, where each one is a trivial
+    /// re-execution to drop; this cap is not what bounds that case (the body size does). It bounds
+    /// the adversarial case where they sit behind a long prefix of good transactions, forcing that
+    /// prefix to be re-executed on every drop. A few full bodies' worth keeps the worst case to a
+    /// few tens of milliseconds, far inside the slot.
+    pub const MAX_REEXECUTED_TRANSACTIONS: usize = 2000;
+
     /// Creates a new BlockProducer struct given a blockchain and a validator key.
     pub fn new(signing_key: SchnorrKeyPair, voting_key: BlsKeyPair) -> Self {
         BlockProducer {
             signing_key,
             voting_key,
+        }
+    }
+
+    /// Executes `transactions` against the given block state and returns the resulting state root,
+    /// diff root and execution results. On return, `transactions` has been reduced to exactly the
+    /// transactions that make up the produced body; any it no longer contains were left out and,
+    /// unless already in a block, belong back in the mempool.
+    ///
+    /// A transaction the mempool accepted can still be unappliable in the block we are building:
+    /// the mempool checks it against the head block, whereas we execute it against this one, whose
+    /// timestamp is later and whose balances the transactions ahead of it have already moved. Such
+    /// a transaction takes the whole block down with it rather than just failing, so we drop it and
+    /// try again instead of forfeiting our slot -- the transactions we picked alongside it are
+    /// already gone from the mempool and would be lost with the block.
+    ///
+    /// We never fail the block over this. Past `MAX_REEXECUTED_TRANSACTIONS` re-executed
+    /// transactions we stop dropping one at a time and simply cut the body at the first
+    /// still-unappliable transaction: the prefix ahead of it executed successfully this round and,
+    /// being deterministic, does so again. So every attempt yields a block, and the block advances
+    /// the head past the point that made those transactions unappliable -- an expired HTLC's
+    /// timeout, say -- so the mempool eviction that runs when it is adopted clears them for good.
+    fn exercise_transactions_dropping_unappliable(
+        blockchain: &Blockchain,
+        transactions: &mut Vec<Transaction>,
+        inherents: &[Inherent],
+        block_state: &BlockState,
+    ) -> Result<(Blake2bHash, Blake2bHash, Vec<ExecutedTransaction>), BlockProducerError> {
+        let mut reexecuted = 0;
+
+        loop {
+            let error = match blockchain.state.accounts.exercise_transactions(
+                transactions,
+                inherents,
+                block_state,
+                None,
+            ) {
+                Ok(result) => return Ok(result),
+                Err(error) => error,
+            };
+
+            // Only a transaction we picked ourselves is ours to drop; a failing inherent has to
+            // be reported. (`InvalidDiff` does not occur on this path: `Accounts::commit` only
+            // returns `InvalidTransaction` or `InvalidInherent`.)
+            let AccountsError::InvalidTransaction(_, offender) = &error else {
+                return Err(BlockProducerError::accounts_error(
+                    blockchain,
+                    error,
+                    transactions.clone(),
+                    inherents.to_vec(),
+                ));
+            };
+
+            // `Accounts::commit` stops at the first failure, so everything ahead of the offender
+            // executed successfully and was just re-executed.
+            let offender_index = transactions
+                .iter()
+                .position(|transaction| transaction == offender)
+                .expect("offending transaction must be in the body");
+            reexecuted += offender_index + 1;
+
+            if reexecuted <= Self::MAX_REEXECUTED_TRANSACTIONS {
+                warn!(
+                    transaction = %offender.hash::<Blake2bHash>(),
+                    %error,
+                    "Dropping unappliable transaction from the block being produced"
+                );
+                transactions.remove(offender_index);
+                continue;
+            }
+
+            // Dropping one at a time has become too expensive. Keep the successful prefix and drop
+            // the offender together with everything after it; re-executing the prefix cannot fail.
+            warn!(
+                transaction = %offender.hash::<Blake2bHash>(),
+                %error,
+                reexecuted,
+                "Cutting the block at the first unappliable transaction, too much re-execution"
+            );
+            transactions.truncate(offender_index);
+            return blockchain
+                .state
+                .accounts
+                .exercise_transactions(transactions, inherents, block_state, None)
+                .map_err(|error| {
+                    BlockProducerError::accounts_error(
+                        blockchain,
+                        error,
+                        transactions.clone(),
+                        inherents.to_vec(),
+                    )
+                });
         }
     }
 
@@ -109,8 +212,10 @@ impl BlockProducer {
         // during the batch when it happened or until the end of the reporting window, but not after
         // that.
         mut equivocation_proofs: Vec<EquivocationProof>,
-        // The transactions to be included in the block body.
-        transactions: Vec<Transaction>,
+        // The transactions to be included in the block body. Transactions that turn out to be
+        // unappliable in this block are dropped from it, see
+        // `exercise_transactions_dropping_unappliable()`.
+        mut transactions: Vec<Transaction>,
         // Extra data for this block.
         extra_data: Vec<u8>,
         // Skip block proof.
@@ -167,18 +272,13 @@ impl BlockProducer {
 
         // Update the state and calculate the state root.
         let block_state = BlockState::new(block_number, timestamp, version);
-        let (state_root, diff_root, executed_txns) = blockchain
-            .state
-            .accounts
-            .exercise_transactions(&transactions, &inherents, &block_state, None)
-            .map_err(|error| {
-                BlockProducerError::accounts_error(
-                    blockchain,
-                    error,
-                    transactions,
-                    inherents.clone(),
-                )
-            })?;
+        let (state_root, diff_root, executed_txns) =
+            Self::exercise_transactions_dropping_unappliable(
+                blockchain,
+                &mut transactions,
+                &inherents,
+                &block_state,
+            )?;
 
         // Calculate the historic transactions from the transactions and the inherents.
         let hist_txs = HistoricTransaction::from(
