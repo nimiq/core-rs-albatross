@@ -3,9 +3,15 @@ use nimiq_account::{
     OracleContract, Receipts, RevertInfo, TransactionLog,
 };
 use nimiq_database::traits::{Database, WriteTransaction};
-use nimiq_hash::{Blake2bHasher, HashOutput, Hasher};
+use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
 use nimiq_keys::{Address, KeyPair};
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+    networks::NetworkId,
+    policy::Policy,
+    transaction::TransactionError,
+};
 use nimiq_serde::Serialize;
 use nimiq_test_log::test;
 use nimiq_test_utils::accounts_revert::TestCommitRevert;
@@ -1507,4 +1513,361 @@ fn extract_only_rejects_push_expected_variants() {
             op
         );
     }
+}
+
+// =====================================================================
+// Safe reaction
+// =====================================================================
+//
+// These cover *degrading safely* rather than rejecting: the
+// bridge must stall, fail closed, or let the user retry, but never mis-pay. Each scenario ends by
+// showing the user's funds are still reachable, because a clean rejection that strands money is
+// not a safe reaction.
+
+/// Builds an oracle whose owner is a real key, so updates can be submitted as transactions.
+fn make_empty_oracle(owner: &KeyPair, hash_count: u16) -> OracleContract {
+    OracleContract {
+        owner: Address::from(&owner.public),
+        balance: Coin::from_u64_unchecked(1_000),
+        hash_count,
+        hashes: Vec::new(),
+        latest_index: None,
+    }
+}
+
+/// An owner-signed oracle `Update` publishing `hashes`, as the relayer submits it.
+fn make_oracle_update_tx(owner: &KeyPair, hashes: Vec<AnyHash>) -> Transaction {
+    let data = IncomingOracleTransactionData::Update {
+        hashes,
+        proof: SignatureProof::default(),
+    };
+    let mut tx = Transaction::new_signaling(
+        oracle_addr(),
+        AccountType::Oracle,
+        oracle_addr(),
+        AccountType::Oracle,
+        Coin::ZERO,
+        data.serialize_to_vec(),
+        1,
+        NetworkId::UnitAlbatross,
+    );
+    // The update itself is authenticated by a signature inside `recipient_data`, checked by the
+    // oracle's incoming path.
+    let proof = SignatureProof::from_ed25519(owner.public, owner.sign(&tx.serialize_content()));
+    tx.recipient_data =
+        IncomingOracleTransactionData::set_signature_on_data(&tx.recipient_data, proof)
+            .expect("failed to set signature on data");
+    // Sender and recipient are both the oracle, so the outgoing path runs too and reads
+    // `transaction.proof`. It is signed over the finalized content, as the relayer does.
+    let sender_proof =
+        SignatureProof::from_ed25519(owner.public, owner.sign(&tx.serialize_content()));
+    tx.proof = sender_proof.serialize_to_vec();
+    tx
+}
+
+fn bridge_with(oracle: &Address, owner: &KeyPair) -> BridgeContract {
+    BridgeContract {
+        owner: Address::from(&owner.public),
+        oracle_address: oracle.clone(),
+        balance: Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        source_chain_id: SOURCE_CHAIN_ID,
+        chain_config: chain_config(),
+        transaction_count: 0,
+    }
+}
+
+/// Commits `tx` directly against `bridge` so the exact `AccountError` is visible; the block-level
+/// helpers only surface a coarse fail reason.
+fn outgoing_error(
+    test: &TestCommitRevert,
+    bridge: &BridgeContract,
+    tx: &Transaction,
+    bs: &BlockState,
+) -> AccountError {
+    let mut bridge = bridge.clone();
+    test.test_commit_outgoing_transaction(&mut bridge, tx, bs, &mut TransactionLog::empty(), false)
+        .expect_err("expected the release to be rejected")
+}
+
+/// The most common real-world user path — the user submits their release before the relayer
+/// has published the root that proves it. The release must be refused without consuming anything,
+/// and must succeed unchanged once the root lands.
+#[test]
+fn release_submitted_before_the_root_lands_is_rejected_and_then_succeeds_on_retry() {
+    let bridge_owner = KeyPair::generate_default_csprng();
+    let oracle_owner = KeyPair::generate_default_csprng();
+
+    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = TestCommitRevert::with_initial_state(&[
+        // The oracle exists but has never been updated: the relayer has not published yet.
+        (
+            oracle_addr(),
+            Account::Oracle(make_empty_oracle(&oracle_owner, 10)),
+        ),
+        (
+            bridge_addr(),
+            Account::Bridge(bridge_with(&oracle_addr(), &bridge_owner)),
+        ),
+    ]);
+
+    let release = || {
+        make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            burn_data.clone(),
+            0,
+            &bridge_owner,
+        )
+    };
+
+    // Block 1: the release arrives too early.
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+    assert!(matches!(
+        outgoing_error(
+            &test,
+            &bridge_with(&oracle_addr(), &bridge_owner),
+            &release(),
+            &bs
+        ),
+        AccountError::InvalidTransaction(TransactionError::InvalidData)
+    ));
+
+    let receipts = commit_block(&test, &[release()], &bs);
+    assert!(matches!(
+        receipts.transactions[0],
+        OperationReceipt::Err(_, _)
+    ));
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        "a premature release must not move custody",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::ZERO,
+        "and must not credit the target",
+    );
+
+    // Block 2: the relayer publishes the burn tree's root.
+    let bs = BlockState::new(2, 2, Policy::max_supported_version());
+    let update = make_oracle_update_tx(&oracle_owner, vec![blake2b(&burn_data)]);
+    let receipts = commit_block(&test, &[update], &bs);
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+
+    // Block 3: the identical release now goes through. That it still uses nonce 1 is the proof
+    // that the failed attempt consumed nothing — a stored nonce would reject this as a gap.
+    let bs = BlockState::new(3, 3, Policy::max_supported_version());
+    let receipts = commit_block(&test, &[release()], &bs);
+    assert!(
+        matches!(receipts.transactions[0], OperationReceipt::Ok(_)),
+        "the retry must succeed once the root is on chain",
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT - RELEASE_AMOUNT),
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+    );
+}
+
+/// The oracle window rotates past the index the user's proof was built against. The stale
+/// index must be refused, and a fresh proof against the newest retained root must still release
+/// the funds — the relayer's burn tree is append-only, so such a proof always exists. This is what
+/// makes window rotation a delay rather than a way to strand money.
+#[test]
+fn a_release_whose_oracle_index_was_evicted_still_succeeds_against_the_newest_root() {
+    let owner = KeyPair::generate_default_csprng();
+    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+
+    // The burn's leaf, and the tree as it looked when the burn was first attested (alone) and
+    // after another burn joined it.
+    let leaf = Blake2bHasher::default().digest(&burn_data);
+    let sibling = Blake2bHasher::default().digest(b"a later burn");
+    let newest_path = MerklePath::<Blake2bHash>::from_sibling_hashes(vec![sibling], vec![false]);
+    let root_when_alone = AnyHash::from(leaf.clone());
+    let root_now = AnyHash::from(newest_path.compute_root_from_hash(leaf));
+
+    // Oracle chain over three updates into a two-slot ring: index 0 attested the burn alone,
+    // index 1 something unrelated, index 2 the tree the burn now lives in. With hash_count 2 the
+    // retained window is [1, 2], so the user's original index 0 is gone.
+    let zero = root_when_alone.zero_of_same_type();
+    let data_0 = zero.digest(&root_when_alone);
+    let data_1 = data_0.digest(&blake2b(b"an unrelated root"));
+    let data_2 = data_1.digest(&root_now);
+    let oracle = OracleContract {
+        owner: Address::from([0x01u8; 20]),
+        balance: Coin::from_u64_unchecked(1_000),
+        hash_count: 2,
+        hashes: vec![data_2, data_1], // ring positions 0 and 1 hold indices 2 and 1
+        latest_index: Some(2),
+    };
+    let test = TestCommitRevert::with_initial_state(&[
+        (oracle_addr(), Account::Oracle(oracle)),
+        (
+            bridge_addr(),
+            Account::Bridge(bridge_with(&oracle_addr(), &owner)),
+        ),
+    ]);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // The proof the user originally built, against the now-evicted index 0.
+    let stale = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        burn_data.clone(),
+        0,
+        &owner,
+    );
+    assert!(
+        matches!(
+            outgoing_error(&test, &bridge_with(&oracle_addr(), &owner), &stale, &bs),
+            AccountError::InvalidTransaction(TransactionError::InvalidData)
+        ),
+        "an index below the retained window must be refused",
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        "the refused release must not move custody",
+    );
+
+    // The same burn, re-proved against the newest retained root.
+    let mut bridge_data = OutgoingBridgeTransactionData {
+        burn_proof: OutgoingTransaction {
+            burn_transaction_data: burn_data,
+            merkle_proof: AnyMerkleProof::Blake2bPath(newest_path),
+            oracle_state_index: 2,
+        },
+        proof: SignatureProof::default(),
+    };
+    let mut fresh = Transaction::new_extended(
+        bridge_addr(),
+        AccountType::Bridge,
+        bridge_data.serialize_to_vec(),
+        nimiq_target(),
+        AccountType::Basic,
+        vec![],
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+        Coin::ZERO,
+        1,
+        NetworkId::UnitAlbatross,
+    );
+    let sig = owner.sign(&fresh.serialize_content());
+    bridge_data.set_signature(SignatureProof::from_ed25519(owner.public, sig));
+    fresh.sender_data = bridge_data.serialize_to_vec();
+
+    let receipts = test
+        .commit_and_test(&[fresh], &[], &bs, &mut BlockLogger::empty())
+        .expect("a fresh proof against the newest root must commit");
+    assert!(
+        matches!(receipts.transactions[0], OperationReceipt::Ok(_)),
+        "window rotation must delay a release, never strand it",
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT - RELEASE_AMOUNT),
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+    );
+}
+
+/// The oracle a bridge points at is deleted (its balance is withdrawn to zero, pruning the
+/// account). Releases must fail closed rather than verify against nothing, the locked funds must
+/// stay put, and they must become releasable again once a valid oracle exists at that address.
+#[test]
+fn releases_fail_closed_when_the_oracle_contract_is_gone_and_recover_when_it_returns() {
+    let owner = KeyPair::generate_default_csprng();
+    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    let release = || {
+        make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            burn_data.clone(),
+            0,
+            &owner,
+        )
+    };
+
+    // The oracle address holds nothing: the contract was pruned when its balance hit zero.
+    let test = TestCommitRevert::with_initial_state(&[(
+        bridge_addr(),
+        Account::Bridge(bridge_with(&oracle_addr(), &owner)),
+    )]);
+    assert!(
+        matches!(
+            outgoing_error(&test, &bridge_with(&oracle_addr(), &owner), &release(), &bs),
+            AccountError::InvalidForSender
+        ),
+        "a missing oracle must fail closed, not verify against nothing",
+    );
+    let receipts = commit_block(&test, &[release()], &bs);
+    assert!(matches!(
+        receipts.transactions[0],
+        OperationReceipt::Err(_, _)
+    ));
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        "the locked funds must remain intact while the oracle is gone",
+    );
+
+    // Someone later sends plain funds to the address, so it exists but is not an oracle. The
+    // release must still fail closed rather than treat it as one.
+    let test = TestCommitRevert::with_initial_state(&[
+        (
+            oracle_addr(),
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(500),
+            }),
+        ),
+        (
+            bridge_addr(),
+            Account::Bridge(bridge_with(&oracle_addr(), &owner)),
+        ),
+    ]);
+    assert!(
+        matches!(
+            outgoing_error(&test, &bridge_with(&oracle_addr(), &owner), &release(), &bs),
+            AccountError::InvalidForSender
+        ),
+        "a non-oracle account at the oracle address must fail closed too",
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+    );
+
+    // Once a valid oracle attesting the burn exists again, the same release goes through: the
+    // funds were never stranded, only unreachable while the oracle was missing.
+    let test = TestCommitRevert::with_initial_state(&[
+        (
+            oracle_addr(),
+            Account::Oracle(make_single_state_oracle(&burn_data)),
+        ),
+        (
+            bridge_addr(),
+            Account::Bridge(bridge_with(&oracle_addr(), &owner)),
+        ),
+    ]);
+    let receipts = test
+        .commit_and_test(&[release()], &[], &bs, &mut BlockLogger::empty())
+        .expect("release must commit once a valid oracle exists");
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT - RELEASE_AMOUNT),
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+    );
 }
