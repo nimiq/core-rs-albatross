@@ -4,6 +4,7 @@ use std::{
         hash_map::{Entry, HashMap},
         HashSet,
     },
+    mem,
     rc::Rc,
     str::FromStr,
     time::Duration,
@@ -22,7 +23,7 @@ pub use nimiq::{
 };
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_bls::LazyPublicKey;
-use nimiq_consensus::ConsensusEvent;
+use nimiq_consensus::{messages::AddressNotification, ConsensusEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::{CloseReason, Network, NetworkEvent},
@@ -63,6 +64,54 @@ use crate::{
 
 /// Maximum number of transactions that can be requested by address
 pub const MAX_TRANSACTIONS_BY_ADDRESS: u16 = 500;
+
+/// Maximum number of transaction receipts that are kept around while waiting for the blockchain to
+/// reach the block they refer to
+const MAX_PENDING_RECEIPTS: usize = 128;
+
+/// Events that drive the processing of transaction receipts
+enum TransactionEvent {
+    /// A notification with transaction receipts was received from a peer
+    Notification(AddressNotification),
+    /// The blockchain head changed, so previously deferred receipts might be provable now
+    BlockchainChanged,
+}
+
+/// Splits the receipts of an address notification into the ones that can be proven right away and
+/// the ones that need to be deferred until the blockchain has caught up with them.
+///
+/// Anybody can publish on our address subscription subtopic, so receipts are never waited for
+/// unconditionally: only those within one batch of our head are deferred, receipts further into the
+/// future are dropped.
+fn triage_receipts(
+    receipts: Vec<(Blake2bHash, u32)>,
+    current_block_number: u32,
+) -> (Vec<(Blake2bHash, u32)>, Vec<(Blake2bHash, u32)>) {
+    let max_block_number = current_block_number + Policy::blocks_per_batch();
+    let mut provable = vec![];
+    let mut deferred = vec![];
+
+    for (hash, block_number) in receipts {
+        if block_number <= current_block_number {
+            provable.push((hash, block_number));
+        } else if block_number <= max_block_number {
+            log::debug!(
+                block_number,
+                current_block_number,
+                "Received transaction receipt from the future, deferring it until the blockchain head is updated"
+            );
+            deferred.push((hash, block_number));
+        } else {
+            log::debug!(
+                block_number,
+                current_block_number,
+                "Dropping transaction receipt from the far future"
+            );
+        }
+    }
+
+    (provable, deferred)
+}
 
 fn is_transaction_expired(validity_start_height: u32, current_height: u32) -> bool {
     validity_start_height
@@ -1293,30 +1342,56 @@ impl Client {
         let transaction_oneshots = Rc::clone(&self.transaction_oneshots);
 
         spawn_local(async move {
-            let mut address_notifications = consensus.subscribe_address_notifications().await;
+            let address_notifications = consensus.subscribe_address_notifications().await;
+            let blockchain_events = consensus.blockchain.read().notifier_as_stream();
 
-            while let Some((notification, _)) = address_notifications.next().await {
-                {
-                    loop {
-                        let current_block_number =
-                            consensus.blockchain.read().head().block_number();
-                        if notification
-                            .receipts
-                            .iter()
-                            .any(|(_, block_number)| block_number > &current_block_number)
-                        {
-                            log::debug!("Received transaction receipt(s) from the future, waiting for the blockchain head to be updated...");
-                            let mut blockchain_events =
-                                consensus.blockchain.read().notifier_as_stream();
-                            let _ = blockchain_events.next().await;
-                        } else {
-                            break;
+            // Both sources are merged into a single stream so that processing one of them can never
+            // block the processing of the other one
+            let mut events = futures::stream::select(
+                address_notifications
+                    .map(|(notification, _)| TransactionEvent::Notification(notification)),
+                blockchain_events.map(|_| TransactionEvent::BlockchainChanged),
+            );
+
+            // Receipts that refer to blocks we have not adopted yet. They are retried whenever the
+            // blockchain advances
+            let mut pending_receipts: Vec<(Blake2bHash, u32)> = vec![];
+
+            while let Some(event) = events.next().await {
+                let current_block_number = consensus.blockchain.read().head().block_number();
+
+                let receipts = match event {
+                    TransactionEvent::Notification(notification) => {
+                        let (receipts, deferred) =
+                            triage_receipts(notification.receipts, current_block_number);
+
+                        for receipt in deferred {
+                            if pending_receipts.len() < MAX_PENDING_RECEIPTS {
+                                pending_receipts.push(receipt);
+                            } else {
+                                log::debug!(
+                                    "Too many pending transaction receipts, dropping receipt"
+                                );
+                            }
                         }
+
+                        receipts
                     }
+                    TransactionEvent::BlockchainChanged => {
+                        let (receipts, still_pending) = mem::take(&mut pending_receipts)
+                            .into_iter()
+                            .partition(|(_, block_number)| *block_number <= current_block_number);
+                        pending_receipts = still_pending;
+
+                        receipts
+                    }
+                };
+
+                if receipts.is_empty() {
+                    continue;
                 }
 
-                let receipts = notification
-                    .receipts
+                let receipts = receipts
                     .into_iter()
                     .map(|(hash, block_number)| (hash, Some(block_number)))
                     .collect();
@@ -1393,9 +1468,41 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
+    use nimiq_hash::Blake2bHash;
     use nimiq_primitives::policy::{Policy, TEST_POLICY};
 
-    use super::is_transaction_expired;
+    use super::{is_transaction_expired, triage_receipts};
+
+    #[test]
+    fn receipts_from_the_far_future_are_dropped() {
+        let _ = Policy::get_or_init(TEST_POLICY);
+
+        let current_block_number = 10_000;
+        let hash = Blake2bHash::default();
+
+        // A single receipt from the far future used to block the notification stream forever
+        let (provable, deferred) =
+            triage_receipts(vec![(hash.clone(), u32::MAX)], current_block_number);
+        assert!(provable.is_empty());
+        assert!(deferred.is_empty(), "far future receipts must not be kept");
+
+        // Receipts within one batch of our head are deferred until the blockchain catches up
+        let next_batch = current_block_number + Policy::blocks_per_batch();
+        let (provable, deferred) = triage_receipts(
+            vec![
+                (hash.clone(), current_block_number),
+                (hash.clone(), current_block_number + 1),
+                (hash.clone(), next_batch),
+                (hash.clone(), next_batch + 1),
+            ],
+            current_block_number,
+        );
+        assert_eq!(provable, vec![(hash.clone(), current_block_number)]);
+        assert_eq!(
+            deferred,
+            vec![(hash.clone(), current_block_number + 1), (hash, next_batch)]
+        );
+    }
 
     #[test]
     fn expiry_check_uses_block_count_not_batch_count() {
