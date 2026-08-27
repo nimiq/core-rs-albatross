@@ -1458,3 +1458,137 @@ fn it_rejects_unsigned_update() {
 // layer's `is_signed_by` only checks that the proof's public key derives to the owner address.
 // That half is covered by `oracle_update_rejects_signature_over_different_hashes` in
 // `primitives/transaction/tests/bridge_oracle_contract_verify.rs`.
+
+// =====================================================================
+// Append-only history
+// =====================================================================
+//
+// A compromised oracle owner can attest anything they like *next*, but they must not be able to
+// change what they already attested: a burn proof verified against index `i` yesterday must still
+// verify against it today, or a release that consensus already accepted could be retroactively
+// invalidated. The ring-buffer tests imply this; these assert it directly.
+//
+// Three properties together make an in-place rewrite impossible: the update payload carries only
+// hashes and no index, `latest_index` only ever moves forward, and each entry is
+// `H(previous_entry || attested_root)` so its value is fixed by its position in the chain.
+
+/// Applies an owner-signed update and leaves the contract in the committed state.
+fn apply_update(
+    accounts: &TestCommitRevert,
+    oracle: &mut OracleContract,
+    owner: &KeyPair,
+    hashes: Vec<AnyHash>,
+    block_state: &BlockState,
+) {
+    accounts
+        .test_commit_incoming_transaction(
+            oracle,
+            &make_update_transaction(Address([1u8; 20]), owner, hashes),
+            block_state,
+            &mut TransactionLog::empty(),
+            true,
+        )
+        .expect("owner update should commit");
+}
+
+#[test]
+fn oracle_updates_are_append_only_and_never_rewrite_a_retained_index() {
+    let (accounts, mut oracle, key_1, _key_2) = init_tree();
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // Six entries into a ten-slot ring: indices 0..=5, nothing evicted yet.
+    let first: Vec<AnyHash> = (1..=6).map(make_hash).collect();
+    apply_update(&accounts, &mut oracle, &key_1, first.clone(), &block_state);
+    assert_eq!(oracle.latest_index, Some(5));
+
+    let before: Vec<_> = (0..=5)
+        .map(|i| oracle.get_hash_at_index(i).cloned())
+        .collect();
+
+    // Six more. The ring now holds twelve writes in ten slots, so indices 0 and 1 fall out.
+    let second: Vec<AnyHash> = (7..=12).map(make_hash).collect();
+    apply_update(&accounts, &mut oracle, &key_1, second.clone(), &block_state);
+
+    assert_eq!(
+        oracle.latest_index,
+        Some(11),
+        "the index must only ever move forward"
+    );
+    assert_eq!(oracle.earliest_index(), Some(2));
+
+    // Everything still retained holds exactly the value it was written with. The owner's second
+    // update could not touch them.
+    for index in 2..=5u64 {
+        assert_eq!(
+            oracle.get_hash_at_index(index).cloned(),
+            before[index as usize],
+            "index {index} was rewritten by a later update"
+        );
+    }
+
+    // The two that fell out are gone, not silently replaced by a different value at the same
+    // index: a stale proof against them is refused rather than verified against new content.
+    for index in [0u64, 1] {
+        assert!(
+            oracle.get_hash_at_index(index).is_none(),
+            "evicted index {index} must not resolve at all"
+        );
+    }
+
+    // And the appended entries chain onto the previous head, so their values are determined by
+    // the history in front of them rather than chosen freely.
+    let mut expected = before[5].clone().expect("index 5 is retained");
+    for (offset, attested) in second.iter().enumerate() {
+        expected = expected.digest(attested);
+        assert_eq!(
+            oracle.get_hash_at_index(6 + offset as u64),
+            Some(&expected),
+            "entry {} is not the fold of its predecessor and the attested root",
+            6 + offset
+        );
+    }
+}
+
+/// Re-attesting a root the oracle already holds appends a new entry rather than replacing the old
+/// one — the update payload has no index to target — and the two entries differ, because each
+/// folds in a different predecessor.
+#[test]
+fn re_attesting_the_same_root_appends_instead_of_replacing() {
+    let (accounts, mut oracle, key_1, _key_2) = init_tree();
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
+    let root = make_hash(7);
+
+    apply_update(
+        &accounts,
+        &mut oracle,
+        &key_1,
+        vec![root.clone()],
+        &block_state,
+    );
+    let first_entry = oracle.get_hash_at_index(0).cloned().unwrap();
+
+    apply_update(
+        &accounts,
+        &mut oracle,
+        &key_1,
+        vec![root.clone()],
+        &block_state,
+    );
+
+    assert_eq!(oracle.latest_index, Some(1), "the update appended");
+    assert_eq!(
+        oracle.get_hash_at_index(0),
+        Some(&first_entry),
+        "the original entry is untouched",
+    );
+    assert_eq!(
+        oracle.get_hash_at_index(1),
+        Some(&first_entry.digest(&root)),
+        "the new entry folds the same root onto a different predecessor",
+    );
+    assert_ne!(
+        oracle.get_hash_at_index(1),
+        Some(&first_entry),
+        "so the same root at a new index is a distinct entry, not a replacement",
+    );
+}
