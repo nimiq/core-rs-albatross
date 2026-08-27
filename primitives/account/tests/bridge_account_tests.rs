@@ -1871,3 +1871,226 @@ fn releases_fail_closed_when_the_oracle_contract_is_gone_and_recover_when_it_ret
         Coin::from_u64_unchecked(RELEASE_AMOUNT),
     );
 }
+
+// =====================================================================
+// Compromised oracle owner
+// =====================================================================
+//
+// Oracle owners are trusted by design: nothing in consensus stops one from attesting a root for a
+// burn that never happened. These tests do not prevent that. They pin the *blast radius* so it is
+// known and bounded, and so a refactor that widened it would fail here.
+//
+// The bound has two halves. A forged root buys the attacker exactly one thing — the Merkle
+// inclusion check — and every other release rule still binds; and whatever they construct, the
+// bridge can only ever pay out NIM it already holds.
+
+/// The 20 raw bytes of `nimiq_target()`, which is how a burn payload names its target.
+fn target_bytes() -> [u8; 20] {
+    <[u8; 20]>::try_from(nimiq_target().as_bytes()).expect("a Nimiq address is 20 bytes")
+}
+
+/// Builds a bridge whose oracle attests `burn_data`, i.e. a compromised owner has published a root
+/// for it. `burn_data` need not correspond to anything that happened on the source chain.
+fn env_with_attested_burn(
+    burn_data: &[u8],
+    owner: &KeyPair,
+    bridge_balance: u64,
+) -> TestCommitRevert {
+    let bridge = BridgeContract {
+        owner: Address::from(&owner.public),
+        oracle_address: oracle_addr(),
+        balance: Coin::from_u64_unchecked(bridge_balance),
+        source_chain_id: SOURCE_CHAIN_ID,
+        chain_config: chain_config(),
+        transaction_count: 0,
+    };
+    TestCommitRevert::with_initial_state(&[
+        (
+            oracle_addr(),
+            Account::Oracle(make_single_state_oracle(burn_data)),
+        ),
+        (bridge_addr(), Account::Bridge(bridge)),
+    ])
+}
+
+/// A compromised oracle owner attests a burn that never happened. The loss is real — that is
+/// the trust assumption — but it is bounded to what the forged payload itself declares. Forging
+/// the root does not excuse the value, recipient, chain-id or nonce rules, all of which are
+/// checked before the oracle is even consulted.
+#[test]
+fn a_forged_oracle_root_still_only_pays_out_well_formed_releases() {
+    let attacker = KeyPair::generate_default_csprng();
+    // A burn that never occurred on the source chain, invented by the oracle owner.
+    let forged = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // Taking more than the forged payload declares is refused: the root proves inclusion, not
+    // amount.
+    let test = env_with_attested_burn(&forged, &attacker, BRIDGE_DEPOSIT);
+    // Signed for one luna more than the payload declares; the value has to be set before signing,
+    // since the burn proof commits to the transaction content.
+    let greedy = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT + 1,
+        forged.clone(),
+        0,
+        &attacker,
+    );
+    assert!(matches!(
+        outgoing_error(&test, &bridge_with(&oracle_addr(), &attacker), &greedy, &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidValue)
+    ));
+
+    // Redirecting the payout elsewhere is refused: the recipient is fixed by the payload.
+    let elsewhere = make_outgoing_tx(
+        &bridge_addr(),
+        &Address::from([0xEEu8; 20]),
+        RELEASE_AMOUNT,
+        forged.clone(),
+        0,
+        &attacker,
+    );
+    assert!(matches!(
+        outgoing_error(
+            &test,
+            &bridge_with(&oracle_addr(), &attacker),
+            &elsewhere,
+            &bs
+        ),
+        AccountError::InvalidTransaction(TransactionError::InvalidData)
+    ));
+
+    // A payload naming another chain is refused even though its root is genuinely attested: the
+    // owner can forge roots, not the bridge's identity.
+    let wrong_chain = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID + 1);
+    let other_chain_env = env_with_attested_burn(&wrong_chain, &attacker, BRIDGE_DEPOSIT);
+    let cross_chain = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        wrong_chain,
+        0,
+        &attacker,
+    );
+    assert!(matches!(
+        outgoing_error(
+            &other_chain_env,
+            &bridge_with(&oracle_addr(), &attacker),
+            &cross_chain,
+            &bs
+        ),
+        AccountError::InvalidTransaction(TransactionError::InvalidData)
+    ));
+
+    // Skipping the nonce sequence is refused: forged burns queue behind the target's real ones.
+    let nonce_gap = make_burn_data(target_bytes(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
+    let gap_env = env_with_attested_burn(&nonce_gap, &attacker, BRIDGE_DEPOSIT);
+    let skipped = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        nonce_gap,
+        0,
+        &attacker,
+    );
+    assert!(matches!(
+        outgoing_error(
+            &gap_env,
+            &bridge_with(&oracle_addr(), &attacker),
+            &skipped,
+            &bs
+        ),
+        AccountError::InvalidTransaction(TransactionError::InvalidData)
+    ));
+
+    // None of the above moved custody.
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+    );
+
+    // And the well-formed release does succeed — the blast radius is real, not theoretical.
+    let well_formed = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        forged,
+        0,
+        &attacker,
+    );
+    let receipts = test
+        .commit_and_test(&[well_formed], &[], &bs, &mut BlockLogger::empty())
+        .expect("a well-formed release against a forged root commits");
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT - RELEASE_AMOUNT),
+        "the forged burn drains exactly what it declared, and no more",
+    );
+}
+
+/// The ceiling on that loss is the NIM the bridge actually holds. A forged burn for more
+/// than the locked balance is refused with `InsufficientFunds` — the bridge cannot mint NIM to
+/// satisfy it — while a forged burn for exactly the balance succeeds, which is what
+/// makes "at most the locked balance" the precise bound.
+#[test]
+fn a_forged_oracle_root_cannot_pay_out_more_nim_than_the_bridge_holds() {
+    let attacker = KeyPair::generate_default_csprng();
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // One luna more than the bridge holds.
+    let too_much = make_burn_data(target_bytes(), BRIDGE_DEPOSIT + 1, 1, SOURCE_CHAIN_ID);
+    let test = env_with_attested_burn(&too_much, &attacker, BRIDGE_DEPOSIT);
+    let overdraw = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        BRIDGE_DEPOSIT + 1,
+        too_much,
+        0,
+        &attacker,
+    );
+    assert!(
+        matches!(
+            outgoing_error(
+                &test,
+                &bridge_with(&oracle_addr(), &attacker),
+                &overdraw,
+                &bs
+            ),
+            AccountError::InsufficientFunds { .. }
+        ),
+        "the bridge must refuse to pay out NIM it does not hold",
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        "and must not partially pay out either",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::ZERO,
+    );
+
+    // Exactly the locked balance is the ceiling, and it is reachable.
+    let everything = make_burn_data(target_bytes(), BRIDGE_DEPOSIT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_attested_burn(&everything, &attacker, BRIDGE_DEPOSIT);
+    let drain = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        BRIDGE_DEPOSIT,
+        everything,
+        0,
+        &attacker,
+    );
+    let receipts = commit_block(&test, &[drain], &bs);
+    assert!(
+        matches!(receipts.transactions[0], OperationReceipt::Ok(_)),
+        "draining the full locked balance is within the blast radius",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        "the whole custody, and not one luna more, can be taken",
+    );
+}
