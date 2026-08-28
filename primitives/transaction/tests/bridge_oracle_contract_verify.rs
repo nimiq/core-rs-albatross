@@ -9,7 +9,9 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     account::{
         htlc_contract::{AnyHash, AnyHash32, AnyHash64},
-        oracle_contract::CreationTransactionData as OracleCreationData,
+        oracle_contract::{
+            CreationTransactionData as OracleCreationData, IncomingOracleTransactionData,
+        },
         AccountTransactionVerification,
     },
     bridge_contract::{
@@ -237,4 +239,111 @@ fn bridge_outgoing_is_version_gated() {
             ));
         }
     });
+}
+
+// =====================================================================
+// Oracle update signature integrity
+// =====================================================================
+//
+// Authenticating an oracle `Update` takes two checks in two layers:
+//
+//   * this layer verifies the *signature* over the transaction content
+//     (`IncomingOracleTransactionData::verify` -> `verify_transaction_signature`);
+//   * `OracleContract::commit_incoming_transaction` then checks the signer *is the owner*
+//     (`proof.is_signed_by(&self.owner)`, which only compares the derived address).
+//
+// Neither check is sufficient alone: without this one a valid owner signature could be lifted onto
+// someone else's hashes; without the other, any well-signed update would be accepted. The owner
+// half is covered by `it_rejects_update_from_non_owner` and friends in
+// `primitives/account/tests/oracle_contract.rs`.
+
+fn oracle_contract_address() -> Address {
+    Address::from([1u8; 20])
+}
+
+fn any_hash(value: u8) -> AnyHash {
+    AnyHash::Blake2b(AnyHash32::from([value; 32]))
+}
+
+/// Builds a signalling oracle `Update` carrying `hashes`. The signature is taken over the
+/// transaction content with the proof field blanked, matching `verify_transaction_signature`.
+fn oracle_update_tx(key: &KeyPair, hashes: Vec<AnyHash>) -> Transaction {
+    let mut tx = unsigned_oracle_update_tx(hashes);
+    let proof = SignatureProof::from_ed25519(key.public, key.sign(&tx.serialize_content()));
+    tx.recipient_data =
+        IncomingOracleTransactionData::set_signature_on_data(&tx.recipient_data, proof)
+            .expect("failed to set signature on data");
+    tx
+}
+
+/// The same transaction with the default (all-zero) proof left in place.
+fn unsigned_oracle_update_tx(hashes: Vec<AnyHash>) -> Transaction {
+    let data = IncomingOracleTransactionData::Update {
+        hashes,
+        proof: SignatureProof::default(),
+    };
+    Transaction::new_signaling(
+        oracle_contract_address(),
+        AccountType::Oracle,
+        oracle_contract_address(),
+        AccountType::Oracle,
+        0.try_into().unwrap(),
+        data.serialize_to_vec(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+}
+
+/// Control: a correctly signed update passes, so the rejections below cannot be vacuous.
+#[test]
+fn oracle_update_accepts_a_correctly_signed_update() {
+    let tx = oracle_update_tx(&key_pair(), vec![any_hash(1), any_hash(2)]);
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx, ACTIVATION),
+        Ok(())
+    );
+}
+
+/// A signature is bound to the hashes it was made over. Lifting a valid signature onto a
+/// different set of hashes must fail — otherwise anyone who observed one legitimate update could
+/// attest arbitrary Merkle roots, and every burn proof verified against them would be forgeable.
+#[test]
+fn oracle_update_rejects_signature_over_different_hashes() {
+    let key = key_pair();
+
+    // A legitimate update, and the proof it carries.
+    let signed_tx = oracle_update_tx(&key, vec![any_hash(1)]);
+    let lifted_proof = match IncomingOracleTransactionData::parse(&signed_tx).unwrap() {
+        IncomingOracleTransactionData::Update { proof, .. } => proof,
+        other => panic!("expected an Update, got {other:?}"),
+    };
+    assert!(
+        lifted_proof.is_signed_by(&Address::from(&key.public)),
+        "sanity: the lifted proof really is the owner's"
+    );
+
+    // The attacker's hashes, carrying the owner's signature.
+    let mut forged_tx = unsigned_oracle_update_tx(vec![any_hash(0xEE)]);
+    forged_tx.recipient_data = IncomingOracleTransactionData::set_signature_on_data(
+        &forged_tx.recipient_data,
+        lifted_proof,
+    )
+    .expect("failed to set signature on data");
+
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&forged_tx, ACTIVATION),
+        Err(TransactionError::InvalidProof),
+    );
+}
+
+/// An update carrying the default, all-zero proof must be rejected here rather than relying on the
+/// account layer's owner-address comparison to catch it. The default Ed25519 key is a known
+/// verification-wildcard hazard, so this pins that it never satisfies signature verification.
+#[test]
+fn oracle_update_rejects_unsigned_update() {
+    let tx = unsigned_oracle_update_tx(vec![any_hash(1)]);
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&tx, ACTIVATION),
+        Err(TransactionError::InvalidProof),
+    );
 }
