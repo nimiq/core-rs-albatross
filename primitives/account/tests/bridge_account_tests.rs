@@ -2094,3 +2094,259 @@ fn a_forged_oracle_root_cannot_pay_out_more_nim_than_the_bridge_holds() {
         "the whole custody, and not one luna more, can be taken",
     );
 }
+
+// =====================================================================
+// Release-path adversarial cases
+// =====================================================================
+
+fn second_target() -> Address {
+    Address::from([0xBBu8; 20])
+}
+
+/// An oracle that attested one root per update: global index `i` commits to `burns[i]`'s leaf, so
+/// a release for that burn verifies against index `i` with an empty proof.
+fn make_chained_oracle(burns: &[&[u8]]) -> OracleContract {
+    assert!(!burns.is_empty());
+    let hash_count: u16 = 10;
+    let leaves: Vec<AnyHash> = burns.iter().map(|burn| blake2b(burn)).collect();
+    let zero = leaves[0].zero_of_same_type();
+
+    let mut hashes = vec![zero.clone(); hash_count as usize];
+    let mut head = zero;
+    for (index, leaf) in leaves.iter().enumerate() {
+        head = head.digest(leaf);
+        hashes[index % hash_count as usize] = head.clone();
+    }
+
+    OracleContract {
+        owner: Address::from([0x01u8; 20]),
+        balance: Coin::from_u64_unchecked(1_000),
+        hash_count,
+        hashes,
+        latest_index: Some(leaves.len() as u64 - 1),
+    }
+}
+
+fn env_with_chained_oracle(burns: &[&[u8]], owner: &KeyPair) -> TestCommitRevert {
+    TestCommitRevert::with_initial_state(&[
+        (oracle_addr(), Account::Oracle(make_chained_oracle(burns))),
+        (
+            bridge_addr(),
+            Account::Bridge(bridge_with(&oracle_addr(), owner)),
+        ),
+    ])
+}
+
+/// A burn payload declaring a zero amount is refused. Paying out nothing would still consume the
+/// target's nonce, stranding every later burn behind a number that can never be reused.
+#[test]
+fn a_release_for_a_zero_amount_burn_is_rejected() {
+    let owner = KeyPair::generate_default_csprng();
+    let zero_burn = make_burn_data(target_bytes(), 0, 1, SOURCE_CHAIN_ID);
+    let test = env_with_chained_oracle(&[&zero_burn], &owner);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    let tx = make_outgoing_tx(&bridge_addr(), &nimiq_target(), 0, zero_burn, 0, &owner);
+    assert!(matches!(
+        outgoing_error(&test, &bridge_with(&oracle_addr(), &owner), &tx, &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidData)
+    ));
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+    );
+}
+
+/// Nonces are per target address, not global. Two users whose burns happen to carry the same nonce
+/// must both be releasable — a global counter would make one user's activity block another's.
+#[test]
+fn two_targets_may_release_the_same_nonce_in_one_block() {
+    let owner = KeyPair::generate_default_csprng();
+    let first = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let second = make_burn_data([0xBBu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_chained_oracle(&[&first, &second], &owner);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    let txs = [
+        make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            first,
+            0,
+            &owner,
+        ),
+        make_outgoing_tx(
+            &bridge_addr(),
+            &second_target(),
+            RELEASE_AMOUNT,
+            second,
+            1,
+            &owner,
+        ),
+    ];
+    let receipts = commit_block(&test, &txs, &bs);
+
+    assert!(
+        receipts
+            .transactions
+            .iter()
+            .all(|r| matches!(r, OperationReceipt::Ok(_))),
+        "both targets must release at nonce 1: {receipts:?}",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+    );
+    assert_eq!(
+        test.get_complete(&second_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+    );
+}
+
+/// Two releases to the same target in one block are fine when their nonces are sequential, and the
+/// second is refused when it reuses the first's. The nonce store has to be updated within the
+/// block, not just between blocks, or a target's burns could be replayed inside a single block.
+#[test]
+fn two_releases_to_one_target_in_a_block_must_be_sequential() {
+    let owner = KeyPair::generate_default_csprng();
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // Sequential nonces: both settle, and the target is credited twice.
+    let first = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let second = make_burn_data(target_bytes(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
+    let test = env_with_chained_oracle(&[&first, &second], &owner);
+    let txs = [
+        make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            first,
+            0,
+            &owner,
+        ),
+        make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            second,
+            1,
+            &owner,
+        ),
+    ];
+    let receipts = commit_block(&test, &txs, &bs);
+    assert!(
+        receipts
+            .transactions
+            .iter()
+            .all(|r| matches!(r, OperationReceipt::Ok(_))),
+        "sequential nonces must both apply: {receipts:?}",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(2 * RELEASE_AMOUNT),
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT - 2 * RELEASE_AMOUNT),
+    );
+
+    // The same nonce twice: the second is refused inside the same block.
+    let burn = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_chained_oracle(&[&burn, &burn], &owner);
+    let txs = [
+        make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            burn.clone(),
+            0,
+            &owner,
+        ),
+        // A second, distinct transaction carrying the very same burn.
+        make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            burn,
+            1,
+            &owner,
+        ),
+    ];
+    let receipts = commit_block(&test, &txs, &bs);
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+    assert!(
+        matches!(receipts.transactions[1], OperationReceipt::Err(_, _)),
+        "a repeated nonce must be refused within the block: {receipts:?}",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+        "the target is credited once, not twice",
+    );
+}
+
+/// The burn proof's signature covers the transaction it was made for. Lifting it onto a different
+/// transaction must fail, or a signed release could be replayed with its terms altered.
+#[test]
+fn a_burn_proof_signature_from_another_transaction_is_rejected() {
+    let owner = KeyPair::generate_default_csprng();
+    let burn = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_chained_oracle(&[&burn], &owner);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // A valid release, and the proof it carries.
+    let signed = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        burn.clone(),
+        0,
+        &owner,
+    );
+    let lifted = OutgoingBridgeTransactionData::parse(&signed)
+        .expect("the signed release must parse")
+        .proof;
+
+    // The same release with a different validity window, carrying the other transaction's proof.
+    // Everything else about it is valid, so only the signature can reject it.
+    let mut bridge_data = OutgoingBridgeTransactionData {
+        burn_proof: OutgoingTransaction {
+            burn_transaction_data: burn,
+            merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+            oracle_state_index: 0,
+        },
+        proof: SignatureProof::default(),
+    };
+    let mut replayed = Transaction::new_extended(
+        bridge_addr(),
+        AccountType::Bridge,
+        bridge_data.serialize_to_vec(),
+        nimiq_target(),
+        AccountType::Basic,
+        vec![],
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+        Coin::ZERO,
+        2, // differs from the signed transaction's validity_start_height
+        NetworkId::UnitAlbatross,
+    );
+    bridge_data.set_signature(lifted);
+    replayed.sender_data = bridge_data.serialize_to_vec();
+
+    assert!(
+        matches!(
+            outgoing_error(&test, &bridge_with(&oracle_addr(), &owner), &replayed, &bs),
+            AccountError::InvalidTransaction(TransactionError::InvalidProof)
+        ),
+        "a signature made for another transaction must not authorize this one",
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+    );
+
+    // The transaction it was actually signed for still works, so the rejection is about the
+    // mismatch and not about the release itself.
+    let receipts = commit_block(&test, &[signed], &bs);
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+}
