@@ -1348,3 +1348,113 @@ fn it_rejects_revert_owner_change_with_invalid_receipt_serialization() {
     );
     assert_eq!(oracle_contract.owner, Address::from(&key_2.public));
 }
+
+// =====================================================================
+// Update authenticity: only the owner may attest state hashes
+// =====================================================================
+//
+// The owner signature on an `Update` is the oracle's entire authenticity boundary: every root
+// the bridge later verifies burn proofs against enters the ring buffer through this one check
+// (`proof.is_signed_by(&self.owner)` in `OracleContract::commit_incoming_transaction`). If it
+// could be bypassed, anyone could attest an arbitrary Merkle root and drain the bridge up to its
+// locked balance. Owner *changes* and withdrawals were already covered by
+// `it_rejects_owner_change_with_invalid_signature` and
+// `it_rejects_withdrawal_with_invalid_signature`; these cover the update path itself.
+
+/// A non-owner cannot attest state hashes: the existing ring buffer, its chained hashes and
+/// `latest_index` must all survive untouched, so they cannot overwrite or extend the chain the
+/// bridge verifies against.
+#[test]
+fn it_rejects_update_from_non_owner_without_disturbing_existing_hashes() {
+    let (accounts, mut oracle_contract, key_1, key_2) = init_tree();
+
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // A legitimate owner update first.
+    let owner_hashes = vec![make_hash(1), make_hash(2), make_hash(3)];
+    let owner_tx = make_update_transaction(Address([1u8; 20]), &key_1, owner_hashes.clone());
+    accounts
+        .test_commit_incoming_transaction(
+            &mut oracle_contract,
+            &owner_tx,
+            &block_state,
+            &mut TransactionLog::empty(),
+            true,
+        )
+        .expect("owner update should succeed");
+
+    let hashes_before = oracle_contract.hashes.clone();
+    let latest_before = oracle_contract.latest_index;
+    assert_eq!(latest_before, Some(2));
+
+    // Now the attacker tries to append their own hashes.
+    let attacker_tx = make_update_transaction(Address([1u8; 20]), &key_2, vec![make_hash(0xEE)]);
+
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_incoming_transaction(
+        &mut oracle_contract,
+        &attacker_tx,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+
+    assert_eq!(result, Err(AccountError::InvalidSignature));
+    assert_eq!(oracle_contract.hashes, hashes_before);
+    assert_eq!(oracle_contract.latest_index, latest_before);
+    assert_eq!(
+        oracle_contract.get_hashes_chronological(),
+        compute_chained_hashes(&owner_hashes),
+        "the attested chain must be exactly what the owner attested"
+    );
+    assert!(tx_logger.logs.is_empty());
+}
+
+/// An update carrying no signature at all (the default, all-zero proof) is rejected. Without this
+/// check the update path would be permissionless.
+#[test]
+fn it_rejects_unsigned_update() {
+    let (accounts, mut oracle_contract, _key_1, _key_2) = init_tree();
+
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
+    let contract_address = Address([1u8; 20]);
+
+    // Built exactly like `make_update_transaction`, but the default proof is left in place.
+    let update_data = IncomingOracleTransactionData::Update {
+        hashes: vec![make_hash(1)],
+        proof: SignatureProof::default(),
+    };
+    let tx = Transaction::new_signaling(
+        contract_address.clone(),
+        AccountType::Oracle,
+        contract_address,
+        AccountType::Oracle,
+        Coin::ZERO,
+        update_data.serialize_to_vec(),
+        0,
+        NetworkId::UnitAlbatross,
+    );
+
+    let mut tx_logger = TransactionLog::empty();
+    let result = accounts.test_commit_incoming_transaction(
+        &mut oracle_contract,
+        &tx,
+        &block_state,
+        &mut tx_logger,
+        true,
+    );
+
+    assert_eq!(result, Err(AccountError::InvalidSignature));
+    assert_eq!(oracle_contract.latest_index, None);
+    assert!(
+        oracle_contract.hashes.is_empty(),
+        "a rejected update must not initialize the ring buffer"
+    );
+    assert!(tx_logger.logs.is_empty(), "no log for a rejected update");
+}
+
+// Signature *integrity* for updates (a valid owner signature lifted onto different hashes) is
+// enforced one layer up, in `OracleContractVerifier::verify_incoming_transaction`: the account
+// layer's `is_signed_by` only checks that the proof's public key derives to the owner address.
+// That half is covered by `oracle_update_rejects_signature_over_different_hashes` in
+// `primitives/transaction/tests/bridge_oracle_contract_verify.rs`.
