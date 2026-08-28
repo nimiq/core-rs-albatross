@@ -3,7 +3,8 @@ mod common;
 use common::for_each_protocol_version;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
-    account::AccountType, networks::NetworkId, policy::upgrades, transaction::TransactionError,
+    account::AccountType, coin::Coin, networks::NetworkId, policy::upgrades,
+    transaction::TransactionError,
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
@@ -15,11 +16,13 @@ use nimiq_transaction::{
         AccountTransactionVerification,
     },
     bridge_contract::{
-        AddressFormat, ChainConfig, CreationTransactionData as BridgeCreationData, Endianness,
-        ValidationOp, ValidationProgram,
+        AddressFormat, AnyMerkleProof, ChainConfig, CreationTransactionData as BridgeCreationData,
+        Endianness, OutgoingBridgeTransactionData, OutgoingTransaction, ValidationOp,
+        ValidationProgram,
     },
     SignatureProof, Transaction,
 };
+use nimiq_utils::merkle::MerklePath;
 
 const ACTIVATION: u16 = upgrades::v3::BRIDGE_ORACLE_CONTRACTS;
 
@@ -403,5 +406,71 @@ fn oracle_update_rejects_unsigned_update() {
     assert_eq!(
         AccountType::verify_incoming_transaction(&tx, ACTIVATION),
         Err(TransactionError::InvalidProof),
+    );
+}
+
+// =====================================================================
+// Zero-value releases
+// =====================================================================
+
+/// A release moves NIM out of the bridge, so a zero value is meaningless — and worse than
+/// meaningless, since it would consume the burn's nonce while paying nothing, permanently
+/// stranding the real burn behind a nonce that can never be reused. Rejecting it at verification
+/// keeps it out of a block entirely.
+#[test]
+fn bridge_outgoing_rejects_a_zero_value_release() {
+    let key = key_pair();
+    let mut bridge_data = OutgoingBridgeTransactionData {
+        burn_proof: OutgoingTransaction {
+            burn_transaction_data: vec![0xABu8; 44],
+            merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+            oracle_state_index: 0,
+        },
+        proof: SignatureProof::default(),
+    };
+    let mut tx = Transaction::new_extended(
+        Address::from([2u8; 20]),
+        AccountType::Bridge,
+        bridge_data.serialize_to_vec(),
+        Address::from([3u8; 20]),
+        AccountType::Basic,
+        vec![],
+        Coin::ZERO,
+        0.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    );
+    let sig = key.sign(&tx.serialize_content());
+    bridge_data.set_signature(SignatureProof::from_ed25519(key.public, sig));
+    tx.sender_data = bridge_data.serialize_to_vec();
+
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, ACTIVATION),
+        Err(TransactionError::InvalidValue),
+    );
+
+    // The same transaction with a value is accepted, so the rejection is about the zero and not
+    // about the rest of the shape.
+    let mut funded = bridge_data.clone();
+    funded.set_signature(SignatureProof::default());
+    let mut tx = Transaction::new_extended(
+        Address::from([2u8; 20]),
+        AccountType::Bridge,
+        funded.serialize_to_vec(),
+        Address::from([3u8; 20]),
+        AccountType::Basic,
+        vec![],
+        1.try_into().unwrap(),
+        0.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    );
+    let sig = key.sign(&tx.serialize_content());
+    funded.set_signature(SignatureProof::from_ed25519(key.public, sig));
+    tx.sender_data = funded.serialize_to_vec();
+
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx, ACTIVATION),
+        Ok(())
     );
 }
