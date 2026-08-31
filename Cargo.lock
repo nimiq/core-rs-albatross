@@ -3742,7 +3742,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-account"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "hex",
  "nimiq-bls",
@@ -3772,7 +3772,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-block"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "ark-ec",
  "ark-serialize",
@@ -3803,7 +3803,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-blockchain"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "futures-util",
  "hex",
@@ -3843,7 +3843,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-blockchain-interface"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "futures-util",
  "nimiq-account",
@@ -3866,7 +3866,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-blockchain-proxy"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "futures-util",
  "nimiq-block",
@@ -3882,7 +3882,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-bls"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -3907,7 +3907,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-client"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "futures-util",
  "nimiq-lib",
@@ -3920,7 +3920,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-collections"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "hex",
  "nimiq-serde",
@@ -3931,7 +3931,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-consensus"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -3977,7 +3977,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-database"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "criterion",
  "libmdbx",
@@ -3991,11 +3991,11 @@ dependencies = [
 
 [[package]]
 name = "nimiq-database-value"
-version = "2.0.0"
+version = "2.1.0"
 
 [[package]]
 name = "nimiq-database-value-derive"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4004,7 +4004,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-dht"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "nimiq-blockchain-interface",
  "nimiq-blockchain-proxy",
@@ -4020,7 +4020,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-fuzz"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "afl",
  "curve25519-dalek 4.1.3",
@@ -4036,7 +4036,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-genesis"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "hex",
  "nimiq-block",
@@ -4059,7 +4059,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-genesis-builder"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "hex",
  "nimiq-account",
@@ -4084,7 +4084,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-handel"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -4109,7 +4109,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-hash"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "blake2-rfc",
  "byteorder",
@@ -4127,7 +4127,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-hash_derive"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4207,7 +4207,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-key-derivation"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "byteorder",
  "hex",
@@ -4221,7 +4221,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-keys"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "curve25519-dalek 5.0.0",
  "data-encoding",
@@ -4247,7 +4247,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-lib"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "clap",
  "console-subscriber",
@@ -4310,7 +4310,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-light-blockchain"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "futures-util",
  "nimiq-block",
@@ -4336,7 +4336,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-log"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "ansiterm",
  "time",
@@ -4347,7 +4347,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-macros"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "hex",
  "nimiq-serde",
@@ -4357,7 +4357,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-mempool"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "futures-util",
  "hashlink 0.12.1",
@@ -4396,7 +4396,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-mempool-task"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "futures-util",
  "nimiq-blockchain",
@@ -4425,7 +4425,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-metrics-server"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bytes",
  "futures-util",
@@ -4453,7 +4453,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-mmr"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
@@ -4462,7 +4462,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-mnemonic"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bitvec",
  "hex",
@@ -4479,7 +4479,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-network-interface"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "async-trait",
  "bitflags 2.13.1",
@@ -4496,7 +4496,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-network-libp2p"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -4532,7 +4532,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-network-mock"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -4554,7 +4554,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-primitives"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "ark-ec",
  "ark-mnt6-753",
@@ -4585,7 +4585,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-rpc-client"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4609,7 +4609,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-rpc-interface"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "ark-mnt6-753",
  "async-trait",
@@ -4642,7 +4642,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-rpc-server"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -4685,7 +4685,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-serde"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "hex",
  "nimiq-collections",
@@ -4697,7 +4697,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-serde-derive"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -4707,7 +4707,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-spammer"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "clap",
  "futures-util",
@@ -4731,7 +4731,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-subscription"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "hex",
  "nimiq-bls",
@@ -4748,7 +4748,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-tendermint"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "futures-util",
  "nimiq-collections",
@@ -4765,7 +4765,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-test-log"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "nimiq-log",
  "nimiq-primitives",
@@ -4777,7 +4777,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-test-log-proc-macro"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "darling 0.23.0",
  "nimiq-test-log",
@@ -4788,7 +4788,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-test-utils"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "async-trait",
  "clap",
@@ -4837,7 +4837,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-time"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "futures-util",
  "gloo-timers 0.4.0",
@@ -4850,7 +4850,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-tools"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4878,7 +4878,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-transaction"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "base64 0.23.1",
  "bitflags 2.13.1",
@@ -4908,7 +4908,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-transaction-builder"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "hex",
  "nimiq-bls",
@@ -4925,7 +4925,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-trie"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "hex",
  "nimiq-database",
@@ -4940,7 +4940,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-utils"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "build-data",
  "clear_on_drop",
@@ -4970,7 +4970,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-validator"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -5025,7 +5025,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-validator-network"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -5045,7 +5045,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-vrf"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "byteorder",
  "curve25519-dalek 4.1.3",
@@ -5067,7 +5067,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-wallet"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "hex",
  "itertools 0.15.0",
@@ -5087,7 +5087,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-web-client"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "futures-util",
  "getrandom 0.3.4",
