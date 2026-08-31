@@ -60,6 +60,14 @@ impl<F: Future> FuturesOrdered<F> {
         self.inner.push_back(future);
         self.waker.wake();
     }
+
+    /// Push a future into the front of the queue.
+    ///
+    /// See also [`futures::stream::FuturesOrdered::push_front`].
+    pub fn push_front(&mut self, future: F) {
+        self.inner.push_front(future);
+        self.waker.wake();
+    }
 }
 
 impl<F: Future> FromIterator<F> for FuturesOrdered<F> {

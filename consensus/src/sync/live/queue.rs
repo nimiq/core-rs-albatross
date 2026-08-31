@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::{future::BoxFuture, FutureExt, Stream};
+use futures::{future::BoxFuture, Stream};
 use nimiq_block::Block;
 #[cfg(feature = "full")]
 use nimiq_blockchain::{Blockchain, PostValidationHook};
@@ -64,6 +64,29 @@ impl<N: Network> fmt::Debug for ChunkAndSource<N> {
             .field("peer_id", &self.peer_id)
             .finish()
     }
+}
+
+pub enum BlockAndChunksPushResult<N: Network> {
+    Applied(
+        Result<PushResult, PushError>,
+        Result<ChunksPushResult, ChunksPushError>,
+        Blake2bHash,
+    ),
+    NeedsDiff(BlockAndSource<N>, Vec<ChunkAndSource<N>>, Blake2bHash),
+}
+
+pub enum MissingBlocksPushResult<N: Network> {
+    Applied(
+        Result<PushResult, PushError>,
+        Result<ChunksPushResult, ChunksPushError>,
+        Vec<Blake2bHash>,
+        HashSet<Blake2bHash>,
+    ),
+    NeedsDiff(
+        Result<ChunksPushResult, ChunksPushError>,
+        Vec<Blake2bHash>,
+        Vec<(BlockAndSource<N>, Vec<ChunkAndSource<N>>)>,
+    ),
 }
 
 impl<N: Network> ChunkAndSource<N> {
@@ -164,6 +187,7 @@ impl Default for QueueConfig {
 struct BlockchainPushResult<N: Network> {
     block_push_result: Option<Result<PushResult, PushError>>,
     push_chunks_result: Result<ChunksPushResult, ChunksPushError>,
+    retry_with_diff: Option<(BlockAndSource<N>, Vec<ChunkAndSource<N>>)>,
     #[allow(dead_code)] // TODO ban peer related
     chunk_error_peer: Option<<N as Network>::PeerId>,
     block_hash: Blake2bHash,
@@ -178,6 +202,7 @@ impl<N: Network> BlockchainPushResult<N> {
         Self {
             block_push_result: Some(push_result),
             push_chunks_result: Ok(ChunksPushResult::EmptyChunks),
+            retry_with_diff: None,
             block_hash,
             chunk_error_peer: None,
         }
@@ -204,6 +229,7 @@ impl<N: Network> BlockchainPushResult<N> {
         Self {
             block_push_result: Some(block_push_result),
             push_chunks_result,
+            retry_with_diff: None,
             block_hash,
             chunk_error_peer,
         }
@@ -226,8 +252,24 @@ impl<N: Network> BlockchainPushResult<N> {
         Self {
             block_push_result: None,
             push_chunks_result,
+            retry_with_diff: None,
             block_hash,
             chunk_error_peer: peer_id,
+        }
+    }
+
+    #[cfg(feature = "full")]
+    fn with_diff_retry(
+        block: BlockAndSource<N>,
+        chunks: Vec<ChunkAndSource<N>>,
+        block_hash: Blake2bHash,
+    ) -> Self {
+        Self {
+            block_push_result: None,
+            push_chunks_result: Ok(ChunksPushResult::EmptyChunks),
+            retry_with_diff: Some((block, chunks)),
+            block_hash,
+            chunk_error_peer: None,
         }
     }
 }
@@ -242,16 +284,12 @@ pub async fn push_block_and_chunks<N: Network>(
     block_source: BlockSource<N>,
     diff: Option<TrieDiff>,
     chunks: Vec<ChunkAndSource<N>>,
-) -> (
-    Result<PushResult, PushError>,
-    Result<ChunksPushResult, ChunksPushError>,
-    Blake2bHash,
-) {
+) -> BlockAndChunksPushResult<N> {
     let push_results = spawn_blocking(move || {
         blockchain_push(
             blockchain,
             bls_cache,
-            Some(block),
+            Some((block, block_source.clone())),
             diff,
             chunks,
             Some(MessageValidator {
@@ -263,12 +301,15 @@ pub async fn push_block_and_chunks<N: Network>(
     .await;
 
     // TODO Ban peer depending on type of chunk error?
-
-    (
-        push_results.block_push_result.unwrap(),
-        push_results.push_chunks_result,
-        push_results.block_hash,
-    )
+    if let Some((block, chunks)) = push_results.retry_with_diff {
+        BlockAndChunksPushResult::NeedsDiff(block, chunks, push_results.block_hash)
+    } else {
+        BlockAndChunksPushResult::Applied(
+            push_results.block_push_result.unwrap(),
+            push_results.push_chunks_result,
+            push_results.block_hash,
+        )
+    }
 }
 
 /// Pushes a single block into the blockchain and validates the message.
@@ -283,7 +324,7 @@ pub async fn push_block_only<N: Network>(
         blockchain_push::<N>(
             blockchain,
             bls_cache,
-            Some(block),
+            Some((block, block_source.clone())),
             None,
             vec![],
             Some(MessageValidator {
@@ -294,10 +335,16 @@ pub async fn push_block_only<N: Network>(
     })
     .await;
 
-    (
-        push_results.block_push_result.unwrap(),
-        push_results.block_hash,
-    )
+    match push_results.retry_with_diff {
+        Some(_) => (
+            Err(PushError::MissingAccountsTrieDiff),
+            push_results.block_hash,
+        ),
+        None => (
+            push_results.block_push_result.unwrap(),
+            push_results.block_hash,
+        ),
+    }
 }
 
 /// Pushes a sequence of blocks to the blockchain.
@@ -307,12 +354,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<BlsCache>>,
     blocks: Vec<(BlockAndSource<N>, Option<TrieDiff>, Vec<ChunkAndSource<N>>)>,
-) -> (
-    Result<PushResult, PushError>,
-    Result<ChunksPushResult, ChunksPushError>,
-    Vec<Blake2bHash>,
-    HashSet<Blake2bHash>,
-) {
+) -> MissingBlocksPushResult<N> {
     let mut block_iter = blocks.into_iter();
     // Hashes of adopted blocks
     let mut adopted_blocks = Vec::new();
@@ -323,7 +365,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
     let mut push_result = Err(PushError::Orphan);
     let mut push_chunk_result = Ok(ChunksPushResult::EmptyChunks);
     // Try to push blocks, until we encounter an invalid block.
-    for ((block, _), diff, mut chunks) in block_iter.by_ref() {
+    for ((block, block_source), diff, mut chunks) in block_iter.by_ref() {
         log::debug!("Pushing block {} from missing blocks response", block);
 
         let blockchain2 = blockchain.clone();
@@ -334,9 +376,30 @@ pub async fn push_multiple_blocks_impl<N: Network>(
             chunks.clear();
         }
         let push_results = spawn_blocking(move || {
-            blockchain_push::<N>(blockchain2, bls_cache2, Some(block), diff, chunks, None)
+            blockchain_push::<N>(
+                blockchain2,
+                bls_cache2,
+                Some((block, block_source)),
+                diff,
+                chunks,
+                None,
+            )
         })
         .await;
+
+        if let Some(retry_block) = push_results.retry_with_diff {
+            let mut retry_blocks = vec![retry_block];
+            retry_blocks.extend(
+                block_iter
+                    .map(|((block, block_source), _diff, chunks)| ((block, block_source), chunks)),
+            );
+
+            return MissingBlocksPushResult::NeedsDiff(
+                push_chunk_result,
+                adopted_blocks,
+                retry_blocks,
+            );
+        }
 
         push_result = push_results.block_push_result.unwrap();
         let block_hash = push_results.block_hash;
@@ -375,7 +438,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
     for ((block, _), ..) in block_iter {
         invalid_blocks.insert(block.hash());
     }
-    (
+    MissingBlocksPushResult::Applied(
         push_result,
         push_chunk_result,
         adopted_blocks,
@@ -388,12 +451,7 @@ pub async fn push_multiple_blocks_with_chunks<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<BlsCache>>,
     blocks: Vec<(BlockAndSource<N>, Option<TrieDiff>, Vec<ChunkAndSource<N>>)>,
-) -> (
-    Result<PushResult, PushError>,
-    Result<ChunksPushResult, ChunksPushError>,
-    Vec<Blake2bHash>,
-    HashSet<Blake2bHash>,
-) {
+) -> MissingBlocksPushResult<N> {
     push_multiple_blocks_impl(blockchain, bls_cache, blocks).await
 }
 
@@ -413,11 +471,22 @@ pub async fn push_multiple_blocks<N: Network>(
         .into_iter()
         .map(|block| (block, None, vec![]))
         .collect();
-    push_multiple_blocks_impl::<N>(blockchain, bls_cache, blocks)
-        .map(|(push_result, _, adopted_blocks, invalid_blocks)| {
-            (push_result, adopted_blocks, invalid_blocks)
-        })
-        .await
+    match push_multiple_blocks_impl::<N>(blockchain, bls_cache, blocks).await {
+        MissingBlocksPushResult::Applied(
+            push_result,
+            _push_chunk_result,
+            adopted_blocks,
+            invalid_blocks,
+        ) => (push_result, adopted_blocks, invalid_blocks),
+        MissingBlocksPushResult::NeedsDiff(_push_chunk_result, adopted_blocks, retry_blocks) => (
+            Err(PushError::MissingAccountsTrieDiff),
+            adopted_blocks,
+            retry_blocks
+                .into_iter()
+                .map(|((block, _), _chunks)| block.hash())
+                .collect(),
+        ),
+    }
 }
 
 /// Pushes the chunks to the current blockchain state.
@@ -486,45 +555,58 @@ fn update_cache(block: &Block, bls_cache: &mut BlsCache) {
 fn blockchain_push<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<BlsCache>>,
-    block: Option<Block>,
+    block: Option<BlockAndSource<N>>,
     diff: Option<TrieDiff>,
     chunks: Vec<ChunkAndSource<N>>,
     msg_validator: Option<MessageValidator<N>>,
 ) -> BlockchainPushResult<N> {
-    #[cfg(feature = "full")]
-    let (chunks, peer_ids): (Vec<_>, Vec<N::PeerId>) =
-        chunks.into_iter().map(ChunkAndSource::into_pair).unzip();
-
     // Push the block to the blockchain.
     let blockchain_push_result;
-    if let Some(block) = block {
+    if let Some((block, block_source)) = block {
         let block_hash = block.hash();
         update_cache(&block, &mut bls_cache.lock());
         match blockchain {
             #[cfg(feature = "full")]
             BlockchainProxy::Full(ref blockchain) => {
                 // We push the block and if it fails we return immediately, without committing chunks.
-                let push_result = match diff {
-                    Some(diff) => Blockchain::push_with_chunks(
-                        blockchain.upgradable_read(),
-                        block,
-                        diff,
-                        chunks,
-                        &msg_validator,
-                    ),
-                    None => {
-                        assert!(chunks.is_empty());
-                        Blockchain::push_with_hook(
+                match diff {
+                    Some(diff) => {
+                        let (chunks, peer_ids): (Vec<_>, Vec<N::PeerId>) =
+                            chunks.into_iter().map(ChunkAndSource::into_pair).unzip();
+                        let push_result = Blockchain::push_with_chunks(
                             blockchain.upgradable_read(),
                             block,
+                            diff,
+                            chunks,
                             &msg_validator,
-                        )
-                        .map(|r| (r, Ok(ChunksPushResult::EmptyChunks)))
+                        );
+                        blockchain_push_result = BlockchainPushResult::with_block_result(
+                            push_result,
+                            block_hash,
+                            &peer_ids,
+                        );
                     }
-                };
+                    None => {
+                        let blockchain = blockchain.upgradable_read();
+                        if !blockchain.accounts_complete() {
+                            return BlockchainPushResult::with_diff_retry(
+                                (block, block_source),
+                                chunks,
+                                block_hash,
+                            );
+                        }
 
-                blockchain_push_result =
-                    BlockchainPushResult::with_block_result(push_result, block_hash, &peer_ids);
+                        if !chunks.is_empty() {
+                            debug!(%block, "Discarded chunks when pushing block because accounts tree is complete.");
+                        }
+
+                        let push_result =
+                            Blockchain::push_with_hook(blockchain, block, &msg_validator)
+                                .map(|r| (r, Ok(ChunksPushResult::EmptyChunks)));
+                        blockchain_push_result =
+                            BlockchainPushResult::with_block_result(push_result, block_hash, &[]);
+                    }
+                }
             }
             BlockchainProxy::Light(ref blockchain) => {
                 let push_result = LightBlockchain::push(blockchain.upgradable_read(), block);
@@ -537,6 +619,8 @@ fn blockchain_push<N: Network>(
         match blockchain {
             #[cfg(feature = "full")]
             BlockchainProxy::Full(ref blockchain) => {
+                let (chunks, peer_ids): (Vec<_>, Vec<N::PeerId>) =
+                    chunks.into_iter().map(ChunkAndSource::into_pair).unzip();
                 let bc = blockchain.upgradable_read();
                 let block_hash = bc.head_hash();
                 // We push the chunks.
@@ -555,4 +639,60 @@ fn blockchain_push<N: Network>(
     }
 
     blockchain_push_result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use nimiq_blockchain_interface::AbstractBlockchain;
+    use nimiq_network_mock::{MockHub, MockPeerId};
+    use nimiq_test_log::test;
+    use nimiq_test_utils::block_production::TemporaryBlockProducer;
+    use parking_lot::Mutex;
+
+    use super::{push_block_and_chunks, BlockAndChunksPushResult};
+    use crate::{sync::live::block_queue::BlockSource, BlsCache};
+
+    #[test(tokio::test)]
+    async fn incomplete_trie_without_diff_requests_retry() {
+        let producer = TemporaryBlockProducer::new();
+        let incomplete = TemporaryBlockProducer::new_incomplete();
+        let block = producer.next_block(vec![], false);
+        let block_hash = block.hash();
+
+        let mut hub = MockHub::new();
+        let network = Arc::new(hub.new_network());
+
+        let result = push_block_and_chunks(
+            network,
+            incomplete.blockchain.clone().into(),
+            Arc::new(Mutex::new(BlsCache::new_test())),
+            block,
+            BlockSource::requested(MockPeerId(1)),
+            None,
+            vec![],
+        )
+        .await;
+
+        match result {
+            BlockAndChunksPushResult::NeedsDiff(
+                (retry_block, block_source),
+                chunks,
+                retry_hash,
+            ) => {
+                assert_eq!(retry_hash, block_hash);
+                assert_eq!(retry_block.hash(), block_hash);
+                assert!(chunks.is_empty());
+                assert!(
+                    matches!(block_source, BlockSource::Requested { id } if id == MockPeerId(1))
+                );
+            }
+            BlockAndChunksPushResult::Applied(..) => {
+                panic!("diffless push into an incomplete trie must request a retry")
+            }
+        }
+
+        assert!(!incomplete.blockchain.read().contains(&block_hash, true));
+    }
 }

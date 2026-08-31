@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 
 use self::chunk_request_component::ChunkRequestComponent;
 use super::{
-    block_queue::BlockAndSource,
+    block_queue::{BlockAndSource, QueuedBlock},
     queue::{ChunkAndSource, QueueConfig},
 };
 use crate::sync::live::diff_queue::{DiffQueue, QueuedDiff};
@@ -324,6 +324,60 @@ impl<N: Network> StateQueue<N> {
 
         chunks.push(ChunkAndSource::new(response.chunk, start_key, peer_id));
         self.buffer_size += 1;
+    }
+
+    pub(crate) fn retry_blocks_with_diff(
+        &mut self,
+        queued_block: QueuedBlock<N>,
+        chunks_by_block: Vec<Vec<ChunkAndSource<N>>>,
+    ) {
+        self.diff_queue.set_diff_needed(true);
+
+        match (&queued_block, chunks_by_block) {
+            (QueuedBlock::Head((block, _)), mut chunks) => {
+                if let Some(chunks) = chunks.pop() {
+                    self.restore_block_chunks(block, chunks);
+                }
+            }
+            (QueuedBlock::Buffered(blocks), chunks) | (QueuedBlock::Missing(blocks), chunks) => {
+                for ((block, _), chunks) in blocks.iter().zip(chunks) {
+                    self.restore_block_chunks(block, chunks);
+                }
+            }
+            (QueuedBlock::TooFarAhead(_), _) | (QueuedBlock::TooFarBehind(_), _) => return,
+        }
+
+        self.diff_queue.retry_with_diff(queued_block);
+    }
+
+    /// Reintroduces chunks to the buffer. This is used when we cannot yet push the block due to a missing diff.
+    ///
+    /// This intentionally bypasses `on_chunk_received`'s capacity and window checks. `LiveSyncer`
+    /// does not poll this queue while a push is pending, so no new chunks can occupy the slots
+    /// freed by `get_block_chunks` before these previously admitted chunks are restored.
+    ///
+    /// If the diff retry later returns `MaxTriesExceeded`, `DiffQueue` only clears the block's
+    /// pending marker. The chunks remain available for a later announcement of the same block;
+    /// otherwise state-sync completion, or a later chunk observing a newer macro height, removes
+    /// them.
+    fn restore_block_chunks(&mut self, block: &Block, chunks: Vec<ChunkAndSource<N>>) {
+        if chunks.is_empty() {
+            return;
+        }
+
+        let block_hash = block.hash();
+        let block_number = block.block_number();
+        for chunk in chunks {
+            self.insert_chunk_into_buffer(
+                Chunk {
+                    block_number,
+                    block_hash: block_hash.clone(),
+                    chunk: chunk.chunk,
+                },
+                chunk.start_key,
+                chunk.peer_id,
+            );
+        }
     }
 
     /// Order them inside our buffer if enough space and inside window.

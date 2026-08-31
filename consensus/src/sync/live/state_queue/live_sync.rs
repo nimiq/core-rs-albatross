@@ -18,8 +18,10 @@ use crate::{
     consensus::ResolveBlockRequest,
     sync::{
         live::{
-            block_queue::{live_sync::PushOpResult as BlockPushOpResult, BlockAndSource},
-            queue::{self, LiveSyncQueue},
+            block_queue::{
+                live_sync::PushOpResult as BlockPushOpResult, BlockAndSource, QueuedBlock,
+            },
+            queue::{self, BlockAndChunksPushResult, LiveSyncQueue, MissingBlocksPushResult},
         },
         sync_interface::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
     },
@@ -43,6 +45,13 @@ pub enum PushOpResult<N: Network> {
         Result<ChunksPushResult, ChunksPushError>,
         Vec<Blake2bHash>,
         HashSet<Blake2bHash>,
+    ),
+    HeadNeedsDiff(BlockAndSource<N>, Vec<ChunkAndSource<N>>),
+    BufferedNeedsDiff(BlockAndSource<N>, Vec<ChunkAndSource<N>>),
+    MissingNeedsDiff(
+        Result<ChunksPushResult, ChunksPushError>,
+        Vec<Blake2bHash>,
+        Vec<(BlockAndSource<N>, Vec<ChunkAndSource<N>>)>,
     ),
     PeerEvent(LiveSyncPeerEvent<N::PeerId>),
 }
@@ -91,6 +100,9 @@ impl<N: Network> PushOpResult<N> {
             PushOpResult::Missing(push_result, _, adopted_blocks, invalid_blocks) => Some(
                 BlockPushOpResult::Missing(push_result, adopted_blocks, invalid_blocks),
             ),
+            PushOpResult::HeadNeedsDiff(..)
+            | PushOpResult::BufferedNeedsDiff(..)
+            | PushOpResult::MissingNeedsDiff(..) => None,
             PushOpResult::PeerEvent(event) => Some(BlockPushOpResult::PeerEvent(event)),
         }
     }
@@ -120,8 +132,13 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                         diff,
                         chunks,
                     )
-                    .map(|(push_result, push_chunk_error, hash)| {
-                        PushOpResult::Head(push_result, push_chunk_error, hash)
+                    .map(|result| match result {
+                        BlockAndChunksPushResult::Applied(push_result, push_chunk_error, hash) => {
+                            PushOpResult::Head(push_result, push_chunk_error, hash)
+                        }
+                        BlockAndChunksPushResult::NeedsDiff(block, chunks, _hash) => {
+                            PushOpResult::HeadNeedsDiff(block, chunks)
+                        }
                     })
                     .boxed(),
                 );
@@ -137,8 +154,13 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                         diff,
                         chunks,
                     )
-                    .map(|(push_result, push_chunk_error, hash)| {
-                        PushOpResult::Buffered(push_result, push_chunk_error, hash)
+                    .map(|result| match result {
+                        BlockAndChunksPushResult::Applied(push_result, push_chunk_error, hash) => {
+                            PushOpResult::Buffered(push_result, push_chunk_error, hash)
+                        }
+                        BlockAndChunksPushResult::NeedsDiff(block, chunks, _hash) => {
+                            PushOpResult::BufferedNeedsDiff(block, chunks)
+                        }
                     })
                     .boxed();
                     future_results.push_back(res);
@@ -148,16 +170,28 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                 // Pushes multiple blocks.
                 future_results.push_back(
                     queue::push_multiple_blocks_with_chunks::<N>(blockchain, bls_cache, blocks)
-                        .map(
-                            |(push_result, push_chunk_error, adopted_blocks, invalid_blocks)| {
-                                PushOpResult::Missing(
-                                    push_result,
-                                    push_chunk_error,
-                                    adopted_blocks,
-                                    invalid_blocks,
-                                )
-                            },
-                        )
+                        .map(|result| match result {
+                            MissingBlocksPushResult::Applied(
+                                push_result,
+                                push_chunk_error,
+                                adopted_blocks,
+                                invalid_blocks,
+                            ) => PushOpResult::Missing(
+                                push_result,
+                                push_chunk_error,
+                                adopted_blocks,
+                                invalid_blocks,
+                            ),
+                            MissingBlocksPushResult::NeedsDiff(
+                                push_chunk_error,
+                                adopted_blocks,
+                                retry_blocks,
+                            ) => PushOpResult::MissingNeedsDiff(
+                                push_chunk_error,
+                                adopted_blocks,
+                                retry_blocks,
+                            ),
+                        })
                         .boxed(),
                 );
             }
@@ -206,6 +240,40 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
         }
 
         match item {
+            PushOpResult::HeadNeedsDiff(block, chunks) => {
+                self.retry_blocks_with_diff(QueuedBlock::Head(block), vec![chunks]);
+                None
+            }
+            PushOpResult::BufferedNeedsDiff(block, chunks) => {
+                self.retry_blocks_with_diff(QueuedBlock::Buffered(vec![block]), vec![chunks]);
+                None
+            }
+            PushOpResult::MissingNeedsDiff(push_chunks_result, adopted_blocks, retry_blocks) => {
+                if push_chunks_result.is_err() {
+                    self.reset_chunk_request_chain();
+                }
+
+                let queued_blocks = retry_blocks
+                    .iter()
+                    .map(|(block, _chunks)| block.clone())
+                    .collect();
+                let chunks_by_block = retry_blocks
+                    .into_iter()
+                    .map(|(_block, chunks)| chunks)
+                    .collect();
+                self.retry_blocks_with_diff(QueuedBlock::Missing(queued_blocks), chunks_by_block);
+
+                if adopted_blocks.is_empty() {
+                    None
+                } else {
+                    self.diff_queue
+                        .process_push_result(BlockPushOpResult::Missing(
+                            Ok(PushResult::Extended),
+                            adopted_blocks,
+                            HashSet::new(),
+                        ))
+                }
+            }
             PushOpResult::HeadChunk(Ok(ChunksPushResult::Chunks(committed, _)), block_hash)
                 if committed > 0 =>
             {

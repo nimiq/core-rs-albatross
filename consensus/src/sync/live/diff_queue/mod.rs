@@ -272,6 +272,16 @@ impl<N: Network> DiffQueue<N> {
         self.block_queue.acceptance_window_size()
     }
 
+    pub(crate) fn retry_with_diff(&mut self, block: QueuedBlock<N>) {
+        let get_diff = self.diff_request_component.request_diff();
+        // Prioritize retries over existing diff work. Repeated calls are therefore
+        // scheduled in LIFO order, but Buffered blocks are independently applicable
+        // because their parents are already stored. Ordered Missing chains are retried
+        // together and preserve their order.
+        self.diffs
+            .push_front(Box::pin(augment_block(block, get_diff)));
+    }
+
     /// Ignores announced blocks whose diff requests failed and clears their pending markers.
     /// A request failure is not proof of invalidity: `remove_invalid_blocks` would also reject
     /// buffered descendants. `Ignore` closes gossipsub validation without penalizing the source,

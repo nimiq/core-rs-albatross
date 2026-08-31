@@ -8,19 +8,24 @@ use futures::{join, poll, Future, Stream, StreamExt};
 use log::info;
 use nimiq_block::Block;
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
+use nimiq_blockchain_interface::{
+    AbstractBlockchain, BlockchainEvent, ChunksPushResult, PushResult,
+};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::{
     messages::RequestMissingBlocks,
     sync::{
         live::{
-            block_queue::BlockQueue,
+            block_queue::{BlockQueue, BlockSource},
             diff_queue::{
                 diff_request_component::{DiffRequestComponent, DiffRequestError},
                 DiffQueue, RequestTrieDiff, ResponseTrieDiff,
             },
-            queue::QueueConfig,
-            state_queue::{Chunk, ChunkRequestState, RequestChunk, ResponseChunk, StateQueue},
+            queue::{ChunkAndSource, LiveSyncQueue, QueueConfig},
+            state_queue::{
+                live_sync::PushOpResult, Chunk, ChunkRequestState, QueuedStateChunks, RequestChunk,
+                ResponseChunk, StateQueue,
+            },
             StateLiveSync,
         },
         peer_list::PeerList,
@@ -49,6 +54,7 @@ use nimiq_test_utils::{
     blockchain::{produce_macro_blocks, push_micro_block, signing_key, voting_key},
     mock_node::MockNode,
 };
+use nimiq_time::timeout;
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
@@ -56,7 +62,6 @@ use parking_lot::{Mutex, RwLock};
 use tokio::{
     sync::mpsc::{self, Sender},
     task::yield_now,
-    time::timeout,
 };
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -122,6 +127,31 @@ fn get_incomplete_live_sync(
     );
 
     (incomplete_blockchain, live_sync, network, block_tx)
+}
+
+fn get_state_queue(
+    network: Arc<MockNetwork>,
+    blockchain: Arc<RwLock<Blockchain>>,
+) -> (StateQueue<MockNetwork>, Sender<(Block, MockId<MockPeerId>)>) {
+    let blockchain_proxy = BlockchainProxy::from(&blockchain);
+    let (block_tx, block_rx) = mpsc::channel(32);
+
+    let block_queue = BlockQueue::with_gossipsub_block_stream(
+        blockchain_proxy,
+        Arc::clone(&network),
+        ReceiverStream::new(block_rx).boxed(),
+        QueueConfig::default(),
+    );
+    let diff_queue = DiffQueue::with_block_queue(Arc::clone(&network), block_queue);
+    let state_queue = StateQueue::with_diff_queue(
+        network,
+        blockchain,
+        diff_queue,
+        QueueConfig::default(),
+        Arc::new(AtomicU32::new(0)),
+    );
+
+    (state_queue, block_tx)
 }
 
 async fn gossip_head_block(
@@ -479,13 +509,10 @@ async fn gives_up_diff_request_if_only_source_knows_block_and_never_serves_diff(
     let mut get_diff = diff_request_component.request_diff();
     let source_peer_id = source_node.network.get_local_peer_id();
     // Drive the request in the background so we can observe which peers it contacts.
-    let diff_request = tokio::spawn(async move {
-        get_diff(&(
-            block,
-            nimiq_consensus::sync::live::block_queue::BlockSource::requested(source_peer_id),
-        ))
-        .await
-    });
+    let diff_request =
+        tokio::spawn(
+            async move { get_diff(&(block, BlockSource::requested(source_peer_id))).await },
+        );
 
     // The source peer is asked first.
     assert_eq!(source_node.next().await, Some(RequestTrieDiff::TYPE_ID));
@@ -506,6 +533,424 @@ async fn gives_up_diff_request_if_only_source_knows_block_and_never_serves_diff(
             .is_err(),
         "diff request should not retry once the maximum number of tries is reached"
     );
+}
+
+#[test(tokio::test)]
+async fn buffered_diffless_block_is_retried_after_state_reset() {
+    let mut hub = Some(MockHub::new());
+    let (target, mut live_sync, network, block_tx) =
+        get_incomplete_live_sync(hub.as_mut().unwrap());
+
+    let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
+    let genesis_block = network_info.genesis_block();
+    let genesis_accounts = network_info.genesis_accounts();
+    let mut source =
+        MockNode::<MockNetwork>::new(2, genesis_block, genesis_accounts, &mut hub).await;
+    let source_id = source.network.get_local_peer_id();
+    let source_mock_id = MockId::new(source_id);
+
+    network.dial_mock(&source.network);
+    live_sync.add_peer(source_id);
+
+    // Hold a diff request at the front of the ordered queue while the account state finishes
+    // syncing, so the buffered child can remain queued behind it once released.
+    source.request_partial_diff_handler.pause();
+    let blocker = TemporaryBlockProducer::new().next_block(vec![0x42], false);
+    let blocker_hash = blocker.hash();
+    block_tx
+        .send((blocker, source_mock_id.clone()))
+        .await
+        .unwrap();
+    yield_now().await;
+    assert!(matches!(poll!(live_sync.next()), Poll::Pending));
+
+    let size = source.blockchain.read().state.accounts.size();
+    let num_chunks = size.div_ceil(Policy::state_chunks_max_size() as u64);
+    for _ in 0..num_chunks {
+        let (request, event) = timeout(Duration::from_secs(5), async {
+            join!(source.next(), live_sync.next())
+        })
+        .await
+        .expect("state chunks should continue while the front diff request is pending");
+        assert_eq!(request, Some(RequestChunk::TYPE_ID));
+        assert!(matches!(
+            event,
+            Some(LiveSyncEvent::PushEvent(LiveSyncPushEvent::AcceptedChunks(
+                _
+            )))
+        ));
+    }
+    assert!(target.read().accounts_complete());
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    push_micro_block(&producer, &source.blockchain);
+    let applied_parent = source.blockchain.read().head().clone();
+    let applied_parent_hash = applied_parent.hash();
+    push_micro_block(&producer, &source.blockchain);
+    let retried_block = source.blockchain.read().head().clone();
+    let retried_hash = retried_block.hash();
+    assert_ne!(blocker_hash, retried_hash);
+    assert_eq!(retried_block.parent_hash(), &applied_parent_hash);
+
+    // Announce the child first so BlockQueue buffers it until the parent is applied.
+    source.request_missing_block_handler.pause();
+    block_tx
+        .send((retried_block, source_mock_id))
+        .await
+        .unwrap();
+    timeout(Duration::from_secs(5), async {
+        loop {
+            yield_now().await;
+            assert!(matches!(poll!(live_sync.next()), Poll::Pending));
+            if live_sync.queue().num_buffered_heights() == 1 {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("the child should be buffered while its parent is unknown");
+
+    // Applying the parent emits the real `Extended` event that marks state sync complete and
+    // releases the child as `QueuedBlock::Buffered`. Yield to BlockQueue's proxy task and then
+    // poll live sync before checking the raw buffer count; this guarantees DiffQueue classifies
+    // the child as diffless before the state reset.
+    assert_eq!(
+        Blockchain::push(target.upgradable_read(), applied_parent),
+        Ok(PushResult::Extended)
+    );
+    timeout(Duration::from_secs(5), async {
+        loop {
+            yield_now().await;
+            assert!(matches!(poll!(live_sync.next()), Poll::Pending));
+            if live_sync.queue().num_buffered_heights() == 0 {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("the buffered child should enter DiffQueue before state is reset");
+    assert!(matches!(poll!(live_sync.next()), Poll::Pending));
+    assert_eq!(target.read().head_hash(), applied_parent_hash);
+    assert!(live_sync.queue().chunk_request_state().is_complete());
+
+    // Notify the live-sync event handler about the reset, then let the new chunk response pair
+    // with the stale diffless block that is still waiting behind the blocker.
+    {
+        let blockchain = target.read();
+        let mut txn = blockchain.write_transaction();
+        blockchain
+            .state
+            .accounts
+            .reinitialize_as_incomplete(&mut (&mut txn).into());
+        txn.commit();
+        blockchain
+            .notifier
+            .send(BlockchainEvent::Rebranched(vec![], vec![]))
+            .unwrap();
+    }
+    assert!(matches!(poll!(live_sync.next()), Poll::Pending));
+    assert!(matches!(poll!(live_sync.next()), Poll::Pending));
+    assert_eq!(
+        target
+            .read()
+            .get_missing_accounts_range(None)
+            .map(|range| range.start),
+        Some(KeyNibbles::ROOT)
+    );
+
+    let expected_missing_start = source
+        .blockchain
+        .read()
+        .state
+        .accounts
+        .get_chunk(
+            KeyNibbles::ROOT,
+            Policy::state_chunks_max_size() as usize,
+            None,
+        )
+        .end_key
+        .expect("the fixture should need more than one state chunk");
+    assert_eq!(
+        timeout(Duration::from_secs(5), source.next())
+            .await
+            .expect("state reset should request a fresh chunk"),
+        Some(RequestChunk::TYPE_ID)
+    );
+    source.request_chunk_handler.pause();
+    assert!(matches!(poll!(live_sync.next()), Poll::Pending));
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
+
+    // Queue a new diff request after the reset and leave it unresolved. It sits behind the stale
+    // no-diff item, but must not remain ahead of that item's retry.
+    let competing_network = Arc::new(hub.as_mut().unwrap().new_network_with_address(3_u64));
+    let mut competing_diff_requests = competing_network.receive_requests::<RequestTrieDiff>();
+    let _competing_chunk_requests = competing_network.receive_requests::<RequestChunk>();
+    network.dial_mock(&competing_network);
+    let competing_id = competing_network.get_local_peer_id();
+    live_sync.add_peer(competing_id);
+
+    let competing_block = TemporaryBlockProducer::new().next_block(vec![0x48], false);
+    let competing_hash = competing_block.hash();
+    block_tx
+        .send((competing_block, MockId::new(competing_id)))
+        .await
+        .unwrap();
+    let (competing_request, _competing_request_id, _) = timeout(Duration::from_secs(5), async {
+        loop {
+            if let Poll::Ready(request) = poll!(competing_diff_requests.next()) {
+                break request.expect("competing diff request stream should stay open");
+            }
+            assert!(matches!(poll!(live_sync.next()), Poll::Pending));
+            yield_now().await;
+        }
+    })
+    .await
+    .expect("post-reset competing diff request should be dispatched");
+    assert_eq!(competing_request.block_hash, competing_hash);
+
+    // Drop the original blocker across both peers, then serve the real diff for the stale block.
+    // With `push_back`, the unresolved competing request remains ahead and this operation times out.
+    source
+        .request_partial_diff_handler
+        .set(|_, _, _| ResponseTrieDiff::IncompleteState);
+    source.request_partial_diff_handler.unpause();
+    let source_requests = async {
+        let blocker_request = source.next().await;
+        source.request_partial_diff_handler.unset();
+        let retry_request = source.next().await;
+        (blocker_request, retry_request)
+    };
+    let competing_blocker_response = async {
+        let (request, request_id, _) = competing_diff_requests
+            .next()
+            .await
+            .expect("blocker should fall back to the competing peer");
+        assert_eq!(request.block_hash, blocker_hash);
+        competing_network
+            .respond::<RequestTrieDiff>(request_id, ResponseTrieDiff::IncompleteState)
+            .await
+            .unwrap();
+        RequestTrieDiff::TYPE_ID
+    };
+    let ((blocker_request, retry_request), fallback_request, event) =
+        timeout(Duration::from_secs(3), async {
+            join!(
+                source_requests,
+                competing_blocker_response,
+                live_sync.next()
+            )
+        })
+        .await
+        .expect("retried block should be prioritized over the unresolved diff request");
+
+    assert_eq!(blocker_request, Some(RequestTrieDiff::TYPE_ID));
+    assert_eq!(retry_request, Some(RequestTrieDiff::TYPE_ID));
+    assert_eq!(fallback_request, RequestTrieDiff::TYPE_ID);
+    assert!(matches!(
+        event,
+        Some(LiveSyncEvent::PushEvent(
+            LiveSyncPushEvent::AcceptedBufferedBlock(hash, 0)
+        )) if hash == retried_hash
+    ));
+
+    let target = target.read();
+    assert_eq!(target.head_hash(), retried_hash);
+    assert!(target.contains(&applied_parent_hash, true));
+    assert!(target.contains(&retried_hash, true));
+    assert_eq!(
+        target
+            .get_missing_accounts_range(None)
+            .map(|range| range.start),
+        Some(expected_missing_start)
+    );
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+}
+
+#[test(tokio::test)]
+async fn missing_needs_diff_reports_prefix_and_retries_paired_suffix() {
+    let source_producer = TemporaryBlockProducer::new();
+    let target_producer = TemporaryBlockProducer::new_incomplete();
+
+    let first_block = source_producer.next_block(vec![], false);
+    let first_hash = first_block.hash();
+    let first_diff = source_producer
+        .blockchain
+        .read()
+        .chain_store
+        .get_accounts_diff(&first_hash, None)
+        .unwrap();
+    let first_retry_block = source_producer.next_block(vec![0x01], false);
+    let first_retry_hash = first_retry_block.hash();
+    let second_retry_block = source_producer.next_block(vec![0x02], false);
+    let second_retry_hash = second_retry_block.hash();
+    // These blocks have no transactions, so their accounts roots are identical and the chunks
+    // read at the final suffix block are also valid for the first suffix block.
+    let first_retry_chunk =
+        source_producer.get_chunk(KeyNibbles::ROOT, Policy::state_chunks_max_size() as usize);
+    let second_retry_start = first_retry_chunk
+        .chunk
+        .end_key
+        .clone()
+        .expect("the fixture should need exactly two state chunks");
+    let second_retry_chunk = source_producer.get_chunk(
+        second_retry_start.clone(),
+        Policy::state_chunks_max_size() as usize,
+    );
+    assert!(second_retry_chunk.chunk.end_key.is_none());
+    assert_eq!(second_retry_chunk.start_key, second_retry_start);
+
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
+    let source_network = Arc::new(hub.new_network());
+    let mut source = MockNode::<MockNetwork>::with_network_and_blockchain(
+        source_network,
+        Arc::clone(&source_producer.blockchain),
+    );
+    let target = Arc::clone(&target_producer.blockchain);
+    let target_proxy = BlockchainProxy::from(&target);
+    let (mut state_queue, _block_tx) = get_state_queue(Arc::clone(&network), Arc::clone(&target));
+
+    network.dial_mock(&source.network);
+    let source_id = source.network.get_local_peer_id();
+    state_queue.add_peer(source_id);
+    source.request_chunk_handler.pause();
+
+    // Reproduce `MissingNeedsDiff`: the first block has a diff and is adopted, while the two-block
+    // suffix arrives diffless with paired chunks and must be returned for retry.
+    let initial_item = QueuedStateChunks::Missing(vec![
+        (
+            (first_block, BlockSource::requested(source_id)),
+            Some(first_diff),
+            vec![],
+        ),
+        (
+            (first_retry_block, BlockSource::requested(source_id)),
+            None,
+            vec![ChunkAndSource::new(
+                first_retry_chunk.chunk,
+                first_retry_chunk.start_key,
+                source_id,
+            )],
+        ),
+        (
+            (second_retry_block, BlockSource::requested(source_id)),
+            None,
+            vec![ChunkAndSource::new(
+                second_retry_chunk.chunk,
+                second_retry_start.clone(),
+                source_id,
+            )],
+        ),
+    ]);
+    let mut initial_push = StateQueue::push_queue_result(
+        Arc::clone(&network),
+        target_proxy.clone(),
+        Arc::new(Mutex::new(BlsCache::new_test())),
+        initial_item,
+    );
+    assert_eq!(initial_push.len(), 1);
+    let initial_result = initial_push.pop_front().unwrap().await;
+    assert!(matches!(
+        &initial_result,
+        PushOpResult::MissingNeedsDiff(
+            Ok(ChunksPushResult::EmptyChunks),
+            adopted_blocks,
+            retry_blocks,
+        ) if adopted_blocks == &vec![first_hash.clone()]
+            && retry_blocks.len() == 2
+            && retry_blocks[0].0.0.hash() == first_retry_hash
+            && retry_blocks[0].1.len() == 1
+            && retry_blocks[0].1[0].start_key == KeyNibbles::ROOT
+            && retry_blocks[1].0.0.hash() == second_retry_hash
+            && retry_blocks[1].1.len() == 1
+            && retry_blocks[1].1[0].start_key == second_retry_start
+    ));
+    assert!(target.read().contains(&first_hash, true));
+    assert_eq!(target.read().head_hash(), first_hash);
+    assert!(!target.read().contains(&first_retry_hash, true));
+    assert!(!target.read().contains(&second_retry_hash, true));
+    assert!(!target.read().accounts_complete());
+
+    // Handling the result must report only the applied prefix, restore both suffix chunks under
+    // their original block hashes, and retry only the suffix.
+    assert!(matches!(
+        state_queue.process_push_result(initial_result),
+        Some(LiveSyncEvent::PushEvent(
+            LiveSyncPushEvent::ReceivedMissingBlocks(adopted_blocks)
+        )) if adopted_blocks == vec![first_hash.clone()]
+    ));
+    assert_eq!(state_queue.num_buffered_chunks(), 2);
+
+    let (request, retried_item) = timeout(Duration::from_secs(5), async {
+        join!(next(&mut source, 2), state_queue.next())
+    })
+    .await
+    .expect("missing suffix should be retried with a diff");
+    assert_eq!(
+        request,
+        Some(vec![RequestTrieDiff::TYPE_ID, RequestTrieDiff::TYPE_ID])
+    );
+    let retried_item = retried_item.expect("retry should produce the missing suffix");
+    assert!(matches!(
+        &retried_item,
+        QueuedStateChunks::Missing(blocks)
+            if blocks.len() == 2
+                && blocks[0].0.0.hash() == first_retry_hash
+                && blocks[0].0.1.peer_id() == source_id
+                && blocks[0].1.is_some()
+                && blocks[0].2.len() == 1
+                && blocks[0].2[0].start_key == KeyNibbles::ROOT
+                && blocks[0].2[0].peer_id == source_id
+                && blocks[1].0.0.hash() == second_retry_hash
+                && blocks[1].0.1.peer_id() == source_id
+                && blocks[1].1.is_some()
+                && blocks[1].2.len() == 1
+                && blocks[1].2[0].start_key == second_retry_start
+                && blocks[1].2[0].peer_id == source_id
+    ));
+    assert_eq!(state_queue.num_buffered_chunks(), 0);
+
+    let mut retried_push = StateQueue::push_queue_result(
+        network,
+        target_proxy,
+        Arc::new(Mutex::new(BlsCache::new_test())),
+        retried_item,
+    );
+    assert_eq!(retried_push.len(), 1);
+    let final_result = retried_push.pop_front().unwrap().await;
+    assert!(matches!(
+        &final_result,
+        PushOpResult::Missing(
+            Ok(PushResult::Extended),
+            Ok(ChunksPushResult::Chunks(2, 0)),
+            adopted_blocks,
+            invalid_blocks,
+        ) if adopted_blocks == &vec![first_retry_hash.clone(), second_retry_hash.clone()]
+            && invalid_blocks.is_empty()
+    ));
+    assert!(matches!(
+        state_queue.process_push_result(final_result),
+        Some(LiveSyncEvent::PushEvent(
+            LiveSyncPushEvent::ReceivedMissingBlocks(adopted_blocks)
+        )) if adopted_blocks == vec![first_retry_hash.clone(), second_retry_hash.clone()]
+    ));
+
+    let target = target.read();
+    assert_eq!(target.head_hash(), second_retry_hash);
+    assert!(target.contains(&first_hash, true));
+    assert!(target.contains(&first_retry_hash, true));
+    assert!(target.contains(&second_retry_hash, true));
+    assert!(target.accounts_complete());
+    assert_eq!(
+        target.state.accounts.get_root_hash_assert(None),
+        source
+            .blockchain
+            .read()
+            .state
+            .accounts
+            .get_root_hash_assert(None)
+    );
+    assert_eq!(state_queue.num_buffered_chunks(), 0);
 }
 
 #[test(tokio::test)]
