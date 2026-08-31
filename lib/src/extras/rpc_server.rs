@@ -78,7 +78,9 @@ pub fn initialize_rpc_server(
     Ok(Server::new(
         Config {
             bind_to: (config.bind_to.unwrap_or_else(default_bind), config.port).into(),
-            enable_websocket: false,
+            // The RPC client connects over `/ws` and the subscription methods are only available
+            // there, so websocket support must stay enabled
+            enable_websocket: true,
             ip_whitelist: config.allow_ips.map(|ips| ips.into_iter().collect()),
             basic_auth,
             cors: Some(cors_config),
