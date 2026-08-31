@@ -1,6 +1,7 @@
 use std::{
     sync::{atomic::AtomicU32, Arc},
     task::Poll,
+    time::Duration,
 };
 
 use futures::{join, poll, Future, Stream, StreamExt};
@@ -14,11 +15,15 @@ use nimiq_consensus::{
     sync::{
         live::{
             block_queue::BlockQueue,
-            diff_queue::{DiffQueue, RequestTrieDiff, ResponseTrieDiff},
+            diff_queue::{
+                diff_request_component::{DiffRequestComponent, DiffRequestError},
+                DiffQueue, RequestTrieDiff, ResponseTrieDiff,
+            },
             queue::QueueConfig,
             state_queue::{Chunk, ChunkRequestState, RequestChunk, ResponseChunk, StateQueue},
             StateLiveSync,
         },
+        peer_list::PeerList,
         sync_interface::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
     },
     BlsCache,
@@ -51,6 +56,7 @@ use parking_lot::{Mutex, RwLock};
 use tokio::{
     sync::mpsc::{self, Sender},
     task::yield_now,
+    time::timeout,
 };
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -429,6 +435,77 @@ async fn can_sync_state() {
     assert!(blockchain_rg.accounts_complete());
     assert!(live_sync.queue().chunk_request_state().is_complete());
     drop(blockchain_rg);
+}
+
+#[test(tokio::test)]
+async fn gives_up_diff_request_if_only_source_knows_block_and_never_serves_diff() {
+    let mut hub = Some(MockHub::new());
+    let network = Arc::new(hub.as_mut().unwrap().new_network());
+
+    let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
+    let genesis_block = network_info.genesis_block();
+    let genesis_accounts = network_info.genesis_accounts();
+
+    let mut source_node =
+        MockNode::<MockNetwork>::new(2, genesis_block.clone(), genesis_accounts.clone(), &mut hub)
+            .await;
+    let mut other_node =
+        MockNode::<MockNetwork>::new(3, genesis_block, genesis_accounts, &mut hub).await;
+
+    network.dial_mock(&source_node.network);
+    network.dial_mock(&other_node.network);
+
+    // Only the source node has the block whose diff we are going to request.
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    push_micro_block(&producer, &source_node.blockchain);
+    let block = source_node.blockchain.read().state.main_chain.head.clone();
+
+    // The source peer knows the block but never serves a usable diff for it.
+    source_node
+        .request_partial_diff_handler
+        .set(|_, _, _| ResponseTrieDiff::IncompleteState);
+
+    let peers = Arc::new(RwLock::new(PeerList::default()));
+    // Insert a different peer first to prove that the request logic still prioritizes
+    // the original sender before falling back to the rest of the peer set.
+    peers
+        .write()
+        .add_peer(other_node.network.get_local_peer_id());
+    peers
+        .write()
+        .add_peer(source_node.network.get_local_peer_id());
+
+    let mut diff_request_component = DiffRequestComponent::new(Arc::clone(&network), peers);
+    let mut get_diff = diff_request_component.request_diff();
+    let source_peer_id = source_node.network.get_local_peer_id();
+    // Drive the request in the background so we can observe which peers it contacts.
+    let diff_request = tokio::spawn(async move {
+        get_diff(&(
+            block,
+            nimiq_consensus::sync::live::block_queue::BlockSource::requested(source_peer_id),
+        ))
+        .await
+    });
+
+    // The source peer is asked first.
+    assert_eq!(source_node.next().await, Some(RequestTrieDiff::TYPE_ID));
+    // Once that fails, the requester falls back to the next peer, which does not know the block.
+    assert_eq!(other_node.next().await, Some(RequestTrieDiff::TYPE_ID));
+    // After all peers fail to provide a valid diff, the request gives up instead of starting another pass.
+    assert!(
+        matches!(
+            diff_request.await.unwrap(),
+            Err(DiffRequestError::MaxTriesExceeded)
+        ),
+        "diff request should fail after exhausting the peer set"
+    );
+    // No new request should be sent to the source peer after the request gives up.
+    assert!(
+        timeout(Duration::from_millis(100), source_node.next())
+            .await
+            .is_err(),
+        "diff request should not retry once the maximum number of tries is reached"
+    );
 }
 
 #[test(tokio::test)]

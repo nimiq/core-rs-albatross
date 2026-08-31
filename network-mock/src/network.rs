@@ -77,6 +77,7 @@ pub struct MockNetwork {
     peers: Arc<RwLock<ObservableHashMap<MockPeerId, PeerInfo>>>,
     hub: Arc<Mutex<MockHubInner>>,
     is_connected: Arc<AtomicBool>,
+    validation_results: Mutex<Vec<(&'static str, MockId<MockPeerId>, MsgAcceptance)>>,
 }
 
 impl MockNetwork {
@@ -105,6 +106,7 @@ impl MockNetwork {
             peers,
             hub,
             is_connected,
+            validation_results: Mutex::new(Vec::new()),
         }
     }
 
@@ -114,6 +116,13 @@ impl MockNetwork {
 
     pub fn peer_id(&self) -> MockPeerId {
         self.address.into()
+    }
+
+    /// Returns and clears all reported gossipsub validation results.
+    pub fn take_validation_results(
+        &self,
+    ) -> Vec<(&'static str, MockId<MockPeerId>, MsgAcceptance)> {
+        std::mem::take(&mut self.validation_results.lock())
     }
 
     fn dial_mock_address(&self, address: MockAddress) -> Result<(), MockNetworkError> {
@@ -527,11 +536,13 @@ impl Network for MockNetwork {
         self.publish_with_name::<T>(topic_name, item).await
     }
 
-    fn validate_message<TTopic>(&self, _id: Self::PubsubId, _acceptance: MsgAcceptance)
+    fn validate_message<TTopic>(&self, id: Self::PubsubId, acceptance: MsgAcceptance)
     where
         TTopic: Topic + Sync,
     {
-        // TODO implement
+        self.validation_results
+            .lock()
+            .push((TTopic::NAME, id, acceptance));
     }
 
     async fn dht_get<K, V, T>(&self, k: &K) -> Result<Option<V>, Self::Error>

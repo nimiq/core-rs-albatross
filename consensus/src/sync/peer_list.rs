@@ -147,12 +147,10 @@ impl<N: Network> PeerList<N> {
 
     /// Returns a future that resolves when the list becomes nonempty.
     ///
-    /// Returns `None` is the list has peers already.
+    /// Returns `None` if the list has peers already.
     pub fn wait_for_peers(&self) -> Option<BoxFuture<'static, ()>> {
-        self.is_empty().then(|| {
-            let notify = self.notify_nonempty.clone();
-            Box::pin(async move { notify.notified().await }) as _
-        })
+        self.is_empty()
+            .then(|| Box::pin(self.notify_nonempty.clone().notified_owned()) as _)
     }
 }
 
@@ -161,5 +159,32 @@ impl<N: Network, I: SliceIndex<[N::PeerId]>> Index<I> for PeerList<N> {
 
     fn index(&self, index: I) -> &Self::Output {
         self.peers.index(index)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use nimiq_network_mock::{MockNetwork, MockPeerId};
+    use nimiq_test_log::test;
+    use tokio::time::timeout;
+
+    use super::PeerList;
+
+    #[test(tokio::test)]
+    async fn wait_for_peers_observes_notification_before_first_poll() {
+        let mut peers = PeerList::<MockNetwork>::default();
+        let peers_became_nonempty = peers
+            .wait_for_peers()
+            .expect("an empty peer list should return a wait future");
+
+        // Notify before polling the future to cover the handoff from the peer-list read lock to
+        // the asynchronous wait. The notification must not be lost during that window.
+        assert!(peers.add_peer(MockPeerId(0)));
+
+        timeout(Duration::from_secs(1), peers_became_nonempty)
+            .await
+            .expect("the pre-poll notification should resolve the wait future");
     }
 }
