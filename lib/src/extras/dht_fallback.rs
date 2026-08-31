@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, sync::Arc};
 
 use http::Uri;
 use http_body_util::{BodyExt, Empty, Limited};
@@ -32,9 +32,16 @@ pub struct DhtFallback {
 
 impl DhtFallback {
     fn new_inner(url: Url) -> io::Result<DhtFallback> {
-        let tls = rustls::ClientConfig::builder()
-            .with_native_roots()?
-            .with_no_client_auth();
+        // rustls can only determine the process-level `CryptoProvider` on its own if exactly one
+        // provider is enabled in the dependency graph, which we don't control. Select ours
+        // explicitly instead of relying on that.
+        let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .map_err(io::Error::other)?
+        .with_native_roots()?
+        .with_no_client_auth();
 
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config(tls)
