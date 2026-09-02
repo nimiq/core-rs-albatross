@@ -4004,7 +4004,7 @@ version = "2.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -4136,7 +4136,7 @@ version = "2.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -4707,7 +4707,7 @@ dependencies = [
  "darling 0.23.0",
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -4787,7 +4787,7 @@ dependencies = [
  "darling 0.23.0",
  "nimiq-test-log",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.2",
  "tokio",
 ]
 
@@ -4875,7 +4875,7 @@ dependencies = [
  "schemars 1.2.2",
  "serde",
  "serde_json",
- "syn 2.0.119",
+ "syn 3.0.2",
  "thiserror 2.0.20",
  "toml",
  "tracing",
