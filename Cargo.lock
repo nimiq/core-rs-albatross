@@ -4704,7 +4704,7 @@ dependencies = [
 name = "nimiq-serde-derive"
 version = "2.1.0"
 dependencies = [
- "darling 0.23.0",
+ "darling 0.24.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -4784,7 +4784,7 @@ dependencies = [
 name = "nimiq-test-log-proc-macro"
 version = "2.1.0"
 dependencies = [
- "darling 0.23.0",
+ "darling 0.24.0",
  "nimiq-test-log",
  "quote",
  "syn 2.0.119",
