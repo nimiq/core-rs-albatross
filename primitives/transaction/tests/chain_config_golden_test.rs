@@ -1,4 +1,4 @@
-//! Golden tests for the shipped Polygon Amoy `ChainConfig`.
+//! Golden tests for the Polygon Amoy `ChainConfig`.
 //!
 //! A bridge is created with its `ChainConfig` serialized into an opaque hex blob. The validation
 //! program embedded in that blob is what turns an EVM `TokensBurned` event into the amount,
@@ -25,7 +25,7 @@ use nimiq_utils::merkle::MerklePath;
 /// The serialized `ChainConfig` for Polygon Amoy. Redefining it means every bridge instance
 /// deployed with the old blob has to be redeployed, and whatever emits it has to be updated to
 /// match.
-const POLYGON_AMOY_CHAIN_CONFIG: &str = "82f10405000000000000000000000000000000000000000000000000000000000000000001010200120034050080c0caf384a3020d1b06616d6f756e740000041b0e7461726765745f616464726573730014051b0c7461726765745f6e6f6e636500140500ffffffff0f131b116275726e5f626c6f636b5f6865696768740082f1041b0f7461726765745f636861696e5f696420";
+const POLYGON_AMOY_CHAIN_CONFIG: &str = "82f104050000000000000000000000000000000000000000000000000000000000000000010102001000340680c0caf384a3021c06616d6f756e740000041c0e7461726765745f616464726573730014051c0c7461726765745f6e6f6e636500140500ffffffff0f141c116275726e5f626c6f636b5f6865696768740082f1041c0f7461726765745f636861696e5f696420";
 
 const AMOY_CHAIN_ID: u32 = 80002;
 
@@ -68,11 +68,11 @@ fn burn_payload(target: [u8; 20], nimiq_nonce: u128, amount_wei: u128) -> Vec<u8
 /// changed opcode shows up as a diff rather than as a silently-accepted new program.
 fn expected_amoy_program() -> ValidationProgram {
     ValidationProgram::new(vec![
-        // amount: the 32-byte word at offset 52, scaled from wei down to luna.
+        // amount: the 32-byte word at offset 52, divided down to luna at full 256-bit width
+        // before narrowing. Reading it with `LoadEvmU64` and dividing afterwards would require
+        // the *wei* figure to fit a u64, capping a burn at about 18.44 NIM.
         ValidationOp::PushConst(AMOUNT_OFFSET),
-        ValidationOp::LoadEvmU64,
-        ValidationOp::PushConst(WEI_PER_LUNA),
-        ValidationOp::Div,
+        ValidationOp::LoadEvmU64Scaled(WEI_PER_LUNA),
         ValidationOp::Store("amount".to_string()),
         // target_address: the 20 raw bytes at offset 0.
         ValidationOp::PushConst(TARGET_OFFSET),
@@ -129,7 +129,7 @@ fn extract(config: &ChainConfig, payload: &[u8], name: &str) -> StackValue {
 }
 
 // ---------------------------------------------------------------------------------------------
-// 1. Golden decode: every field of the shipped blob.
+// 1. Golden decode: every field of the blob.
 // ---------------------------------------------------------------------------------------------
 
 #[test]
@@ -155,8 +155,8 @@ fn amoy_chain_config_decodes_to_the_expected_fields() {
     );
     assert_eq!(
         config.validation_program.operations.len(),
-        18,
-        "the Amoy program is 18 opcodes"
+        16,
+        "the Amoy program is 16 opcodes"
     );
     assert_eq!(
         config.validation_program,
@@ -215,7 +215,7 @@ fn amoy_program_extracts_expected_values_from_burn_events() {
     let config = amoy_chain_config();
 
     // (description, target, nonce, amount_wei, expected luna)
-    let vectors: [(&str, [u8; 20], u128, u128, u64); 5] = [
+    let vectors: [(&str, [u8; 20], u128, u128, u64); 6] = [
         (
             "1 NIM",
             [0x11; 20],
@@ -232,11 +232,22 @@ fn amoy_program_extracts_expected_values_from_burn_events() {
             12 * LUNA_PER_NIM + 50_000,
         ),
         (
-            "largest whole-luna burn that fits in a u64 word",
+            // 1,000 NIM is 10^21 wei, some 54 times more than a u64 holds. Dividing at full
+            // width is what makes an ordinary transfer expressible at all.
+            "1,000 NIM",
             [0xFF; 20],
             u32::MAX as u128,
-            1_844_674 * WEI_PER_LUNA as u128,
-            1_844_674,
+            1_000 * LUNA_PER_NIM as u128 * WEI_PER_LUNA as u128,
+            1_000 * LUNA_PER_NIM,
+        ),
+        (
+            // The largest amount a release can carry at all: above this the value is no longer a
+            // valid `Coin`, so `Coin::MAX` is the real ceiling rather than the EVM word.
+            "the Coin ceiling",
+            [0xCD; 20],
+            11,
+            Coin::MAX_SAFE_VALUE as u128 * WEI_PER_LUNA as u128,
+            Coin::MAX_SAFE_VALUE,
         ),
         (
             "nonce above u32, still a valid u64",
@@ -348,37 +359,49 @@ fn amoy_burn_block_height_is_a_logical_flag_not_a_masked_nonce() {
 // 4. Boundary: the per-burn ceiling this program imposes.
 // ---------------------------------------------------------------------------------------------
 
-/// `LoadEvmU64` requires the top 24 bytes of a 32-byte word to be zero, so the largest burn the
-/// Amoy program can express is `u64::MAX` wei -- about 18.44674 NIM. Anything above it is rejected
-/// rather than truncated. This ceiling is a property of the deployed program, not of the bridge,
-/// and must never move silently.
+/// The amount is divided at full 256-bit width before it is narrowed, so what has to fit a u64 is
+/// the *luna* figure and not the wei one. Extraction therefore tops out at `u64::MAX` luna, and
+/// `Coin` is stricter still, so `Coin` is the limit a user can actually meet. Both are pinned:
+/// they are properties of this program, and neither must move silently.
+///
+/// Reading the word with `LoadEvmU64` and dividing afterwards would put the ceiling at `u64::MAX`
+/// *wei* — about 18.44674 NIM, below any ordinary transfer.
 #[test]
-fn amoy_program_rejects_burn_amounts_above_the_u64_word_ceiling() {
+fn amoy_program_ceiling_is_the_coin_limit_rather_than_the_evm_word() {
     let config = amoy_chain_config();
 
-    // The documented ceiling, stated independently of the code under test.
-    let max_luna = 1_844_674;
-    assert_eq!(max_luna, u64::MAX / WEI_PER_LUNA);
-    assert_eq!(max_luna * LUNA_PER_NIM, 184_467_400_000); // 18.44674 NIM, in luna * 10^5
-
-    // The 32-byte word is the binding limit, not the `Coin` type: the largest amount this program
-    // can express is roughly five billion times smaller than `Coin::MAX`, so the `Coin::try_from`
-    // in `parse_burn_data` can never reject an amount that came through this program. A vector at
-    // `Coin::MAX` is therefore unconstructible here — the word ceiling is reached first.
-    assert!(
-        max_luna < Coin::MAX_SAFE_VALUE,
-        "the program's ceiling must stay below the Coin limit for the word to be the binding one"
+    // The entire supply is expressible, which is the point of the width.
+    let total_supply_luna = 21_000_000_000u64 * LUNA_PER_NIM;
+    assert!(total_supply_luna < Coin::MAX_SAFE_VALUE);
+    let payload = burn_payload(
+        [0x55; 20],
+        1,
+        total_supply_luna as u128 * WEI_PER_LUNA as u128,
     );
-
-    // Largest amount that still fits: u64::MAX wei exactly.
-    let payload = burn_payload([0x55; 20], 1, u64::MAX as u128);
     assert_eq!(
         extract(&config, &payload, "amount"),
-        StackValue::U64(max_luna)
+        StackValue::U64(total_supply_luna),
     );
 
-    // One wei more sets the 25th byte from the end and is refused outright.
-    for amount_wei in [u64::MAX as u128 + 1, (u64::MAX as u128 + 1) * 2, u128::MAX] {
+    // Extraction tops out at u64::MAX luna exactly...
+    let payload = burn_payload([0x55; 20], 1, u64::MAX as u128 * WEI_PER_LUNA as u128);
+    assert_eq!(
+        extract(&config, &payload, "amount"),
+        StackValue::U64(u64::MAX)
+    );
+    // ...and a remainder below one luna does not push it over.
+    let payload = burn_payload(
+        [0x55; 20],
+        1,
+        u64::MAX as u128 * WEI_PER_LUNA as u128 + WEI_PER_LUNA as u128 - 1,
+    );
+    assert_eq!(
+        extract(&config, &payload, "amount"),
+        StackValue::U64(u64::MAX)
+    );
+
+    // One luna more and the quotient no longer fits: refused, never truncated.
+    for amount_wei in [(u64::MAX as u128 + 1) * WEI_PER_LUNA as u128, u128::MAX] {
         let payload = burn_payload([0x55; 20], 1, amount_wei);
         assert!(
             matches!(
@@ -387,14 +410,38 @@ fn amoy_program_rejects_burn_amounts_above_the_u64_word_ceiling() {
             ),
             "amount {amount_wei} wei must be rejected, not truncated"
         );
-        assert!(matches!(
+    }
+
+    // `Coin` binds first, so that is the ceiling a release can actually reach.
+    let above_coin = (Coin::MAX_SAFE_VALUE as u128 + 1) * WEI_PER_LUNA as u128;
+    let payload = burn_payload([0x55; 20], 1, above_coin);
+    assert_eq!(
+        extract(&config, &payload, "amount"),
+        StackValue::U64(Coin::MAX_SAFE_VALUE + 1),
+        "extraction still reads it..."
+    );
+    assert!(
+        matches!(
             outgoing_tx(payload).parse_burn_data(&config),
             Err(BridgeError::InvalidAmount)
-        ));
-    }
+        ),
+        "...but it cannot become a Coin, so the release is refused"
+    );
+    // Exactly at the Coin limit still parses.
+    let payload = burn_payload(
+        [0x55; 20],
+        1,
+        Coin::MAX_SAFE_VALUE as u128 * WEI_PER_LUNA as u128,
+    );
+    assert_eq!(
+        outgoing_tx(payload)
+            .parse_burn_data(&config)
+            .unwrap()
+            .amount,
+        Coin::from_u64_unchecked(Coin::MAX_SAFE_VALUE),
+    );
 }
 
-/// The same ceiling applies to the nonce word, which shares the `LoadEvmU64` decoder.
 #[test]
 fn amoy_program_rejects_nonces_above_the_u64_word_ceiling() {
     let config = amoy_chain_config();
