@@ -1258,6 +1258,15 @@ pub enum ValidationOp {
     /// Stack: [offset] -> [u64_value]
     LoadEvmU64,
 
+    /// Load a 32-byte big-endian EVM word and divide it by `divisor` at full 256-bit width
+    /// Stack: [offset] -> [value]
+    ///
+    /// The narrowing to u64 happens *after* the division, so the reachable range is `u64::MAX`
+    /// units of the divided quantity rather than `u64::MAX` of the token's base unit. Reading an
+    /// amount with `LoadEvmU64` and dividing afterwards caps a wNIM burn at roughly 18.44 NIM;
+    /// this reads the same word and lifts that ceiling above the total supply.
+    LoadEvmU64Scaled(u64),
+
     // ============================================================================
     // Expected Value Operations
     // ============================================================================
@@ -1604,6 +1613,19 @@ impl ValidationProgram {
                 let mut evm_bytes = [0u8; 32];
                 evm_bytes.copy_from_slice(&data[range]);
                 let value = crate::bridge_contract::decode_arithmetic::bytes32_to_u64(&evm_bytes)?;
+                ctx.stack_mut().push(StackValue::U64(value));
+            }
+
+            ValidationOp::LoadEvmU64Scaled(divisor) => {
+                let offset = ctx.pop_u64()?;
+                let data = ctx.burn_tx_data();
+                let range = checked_data_range(offset, 32, data.len())?;
+
+                let mut evm_bytes = [0u8; 32];
+                evm_bytes.copy_from_slice(&data[range]);
+                let value = crate::bridge_contract::decode_arithmetic::divide_bytes32_by_u64(
+                    &evm_bytes, *divisor,
+                )?;
                 ctx.stack_mut().push(StackValue::U64(value));
             }
 

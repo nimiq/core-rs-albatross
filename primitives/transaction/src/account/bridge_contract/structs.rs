@@ -50,17 +50,26 @@ impl CreationTransactionData {
                 return Err(TransactionError::InvalidData);
             }
         }
-        // Reject programs that contain Assert or PushExpected* operations.
-        // These require a ValidationContext (full execution mode) and cause
-        // parse_burn_data → extract_only to always fail, permanently locking funds.
+        // Reject programs that can never complete a release. Such a bridge would accept deposits
+        // and fail every withdrawal, locking user funds permanently, so the screen belongs at
+        // creation time where it is still recoverable.
         for op in &self.chain_config.validation_program.operations {
             match op {
+                // Assert and PushExpected* require a ValidationContext (full execution mode) and
+                // cause parse_burn_data → extract_only to always fail.
                 super::core::ValidationOp::Assert
                 | super::core::ValidationOp::PushExpectedAmount
                 | super::core::ValidationOp::PushExpectedAddress
                 | super::core::ValidationOp::PushExpectedNonce
                 | super::core::ValidationOp::PushExpectedValidityHeight => {
                     warn!("Validation program contains an operation incompatible with extraction-only mode");
+                    return Err(TransactionError::InvalidData);
+                }
+                // A zero divisor fails on every burn payload. It is caught here rather than only
+                // at runtime because the divisor is an immediate operand and is therefore known
+                // at creation time — a stack-supplied one could not be screened statically.
+                super::core::ValidationOp::LoadEvmU64Scaled(0) => {
+                    warn!("Validation program divides by zero and could never process a release");
                     return Err(TransactionError::InvalidData);
                 }
                 _ => {}

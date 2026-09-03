@@ -7,7 +7,7 @@
 use nimiq_transaction::bridge_contract::{
     decode_arithmetic::{
         bytes32_to_u64, checked_add_u256, checked_div_u256, checked_mod_u256, checked_mul_u256,
-        checked_pow_u256, checked_sub_u256, u64_to_bytes32,
+        checked_pow_u256, checked_sub_u256, divide_bytes32_by_u64, u64_to_bytes32,
     },
     BridgeError,
 };
@@ -387,4 +387,102 @@ fn test_decode_arithmetic_blockchain_values() {
 
     let diff = checked_sub_u256(amount1, amount2).unwrap();
     assert_eq!(diff, 500_000_000);
+}
+
+// =================================================================================================
+// Wide division: dividing a 256-bit word before narrowing it
+// =================================================================================================
+
+/// wNIM carries 18 decimals and NIM has 5, so one luna is 10^13 wei.
+const WEI_PER_LUNA: u64 = 10_000_000_000_000;
+
+/// A 32-byte big-endian word holding `value`.
+fn word(value: u128) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    bytes[16..].copy_from_slice(&value.to_be_bytes());
+    bytes
+}
+
+fn divided(value: u128, divisor: u64) -> Result<u64, BridgeError> {
+    divide_bytes32_by_u64(&word(value), divisor)
+}
+
+#[test]
+fn divide_bytes32_divides_exactly_and_truncates_the_remainder() {
+    assert_eq!(divided(0, 7).unwrap(), 0);
+    assert_eq!(divided(42 * 7, 7).unwrap(), 42);
+    // Truncation, not rounding — one short of the next whole unit.
+    assert_eq!(divided(42 * 7 + 6, 7).unwrap(), 42);
+    // Dividing by one is the identity, and still requires the word to fit a u64.
+    assert_eq!(divided(12_345, 1).unwrap(), 12_345);
+    assert!(matches!(
+        divided(u64::MAX as u128 + 1, 1).unwrap_err(),
+        BridgeError::InvalidAmount
+    ));
+}
+
+/// The reason the operation exists: a word far beyond `u64::MAX` divides down into range, where
+/// narrowing first would have rejected it outright.
+#[test]
+fn divide_bytes32_reaches_amounts_that_narrowing_first_would_reject() {
+    // 1,000 NIM as wNIM: 10^8 luna, i.e. 10^21 wei — about 54 times u64::MAX.
+    let thousand_nim_in_wei = 100_000_000u128 * WEI_PER_LUNA as u128;
+    assert!(thousand_nim_in_wei > u64::MAX as u128);
+
+    assert_eq!(
+        divided(thousand_nim_in_wei, WEI_PER_LUNA).unwrap(),
+        100_000_000
+    );
+    // The same word read without dividing is refused, which is the ceiling being fixed.
+    assert!(matches!(
+        bytes32_to_u64(&word(thousand_nim_in_wei)).unwrap_err(),
+        BridgeError::InvalidAmount
+    ));
+}
+
+/// The quotient is what must fit a u64 now, so the ceiling moved up by exactly the divisor.
+#[test]
+fn divide_bytes32_rejects_only_quotients_that_overflow_a_u64() {
+    let largest = u64::MAX as u128 * WEI_PER_LUNA as u128;
+    assert_eq!(divided(largest, WEI_PER_LUNA).unwrap(), u64::MAX);
+    // Remainders below the divisor do not push it over.
+    assert_eq!(
+        divided(largest + WEI_PER_LUNA as u128 - 1, WEI_PER_LUNA).unwrap(),
+        u64::MAX
+    );
+    // One divisor more and the quotient no longer fits.
+    assert!(matches!(
+        divided(largest + WEI_PER_LUNA as u128, WEI_PER_LUNA).unwrap_err(),
+        BridgeError::InvalidAmount
+    ));
+}
+
+#[test]
+fn divide_bytes32_rejects_division_by_zero() {
+    assert!(matches!(
+        divided(1_000, 0).unwrap_err(),
+        BridgeError::InvalidAmount
+    ));
+}
+
+/// The long division is exact across the whole 256-bit width, not just the low 128 bits a
+/// u128-based shortcut could hold.
+#[test]
+fn divide_bytes32_is_exact_across_the_full_width() {
+    // 2^100, well outside u128-free arithmetic on the low half of the word.
+    let high = 1u128 << 100;
+    assert_eq!(divided(high, 1u64 << 40).unwrap(), (high >> 40) as u64);
+    assert_eq!(
+        divided(high + (1 << 40) - 1, 1u64 << 40).unwrap(),
+        (high >> 40) as u64
+    );
+
+    // A word with its top byte set is 2^248. Even the largest possible divisor leaves a quotient
+    // far beyond a u64, so it is refused rather than silently truncated.
+    let mut top = [0u8; 32];
+    top[0] = 1;
+    assert!(matches!(
+        divide_bytes32_by_u64(&top, u64::MAX).unwrap_err(),
+        BridgeError::InvalidAmount
+    ));
 }
