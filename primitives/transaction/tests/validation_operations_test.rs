@@ -552,3 +552,80 @@ fn load_within_bounds_still_succeeds_after_fix() {
         42
     );
 }
+
+// =================================================================================================
+// LoadEvmU64Scaled — reading a 256-bit word and dividing before narrowing
+// =================================================================================================
+
+/// A 32-byte big-endian word at offset 0 of an otherwise empty payload.
+fn evm_word_payload(value: u128) -> Vec<u8> {
+    let mut data = vec![0u8; 32];
+    data[16..32].copy_from_slice(&value.to_be_bytes());
+    data
+}
+
+fn scaled(value: u128, divisor: u64) -> Result<u64, ()> {
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(0),
+        ValidationOp::LoadEvmU64Scaled(divisor),
+        ValidationOp::Store("value".to_string()),
+    ]);
+    program
+        .extract_only(&evm_word_payload(value))
+        .map_err(|_| ())
+        .and_then(|r| r.extracted_values["value"].as_u64().map_err(|_| ()))
+}
+
+#[test]
+fn load_evm_u64_scaled_divides_before_narrowing() {
+    // The whole point: a word beyond u64::MAX is readable once divided, where `LoadEvmU64`
+    // followed by `Div` would have rejected the word before ever dividing it.
+    // 1,000 NIM is 10^8 luna, i.e. 10^21 wei — about 54 times more than a u64 can hold.
+    let wei = 10_000_000_000_000u64;
+    let luna = 100_000_000u64;
+    assert!(luna as u128 * wei as u128 > u64::MAX as u128);
+    assert_eq!(scaled(luna as u128 * wei as u128, wei), Ok(luna));
+
+    let unscaled = ValidationProgram::new(vec![
+        ValidationOp::PushConst(0),
+        ValidationOp::LoadEvmU64,
+        ValidationOp::PushConst(wei),
+        ValidationOp::Div,
+        ValidationOp::Store("value".to_string()),
+    ]);
+    assert!(
+        unscaled
+            .extract_only(&evm_word_payload(luna as u128 * wei as u128))
+            .is_err(),
+        "narrowing first must reject what dividing first accepts"
+    );
+}
+
+#[test]
+fn load_evm_u64_scaled_truncates_and_rejects_a_zero_divisor() {
+    assert_eq!(scaled(999, 10), Ok(99));
+    assert_eq!(scaled(0, 10), Ok(0));
+    assert_eq!(scaled(5, 1), Ok(5));
+    assert_eq!(
+        scaled(1_000, 0),
+        Err(()),
+        "division by zero must be refused"
+    );
+}
+
+#[test]
+fn load_evm_u64_scaled_bounds_check_the_read() {
+    // Offset overflow must be refused rather than panic, like every other load.
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(u64::MAX),
+        ValidationOp::LoadEvmU64Scaled(10),
+    ]);
+    assert!(program.extract_only(&[0u8; 64]).is_err());
+
+    // And a word that runs one byte past the end is an ordinary out-of-range read.
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(1),
+        ValidationOp::LoadEvmU64Scaled(10),
+    ]);
+    assert!(program.extract_only(&[0u8; 32]).is_err());
+}

@@ -16,7 +16,7 @@ use nimiq_transaction::{
     },
     bridge_contract::{
         AddressFormat, ChainConfig, CreationTransactionData as BridgeCreationData, Endianness,
-        ValidationProgram,
+        ValidationOp, ValidationProgram,
     },
     SignatureProof, Transaction,
 };
@@ -183,6 +183,64 @@ fn bridge_creation_rejects_unsupported_hash_function() {
             Ok(()),
         );
     }
+}
+
+/// A zero divisor makes `LoadEvmU64Scaled` fail on every burn payload, so the bridge would accept
+/// deposits and never complete a release — the same permanent fund lock the `Assert` and
+/// `PushExpected*` screen exists to prevent. The divisor is an immediate operand, so it is known
+/// at creation time and the program can be refused while that is still recoverable; a divisor
+/// taken from the stack could not be screened this way.
+#[test]
+fn bridge_creation_rejects_a_program_that_divides_by_zero() {
+    let make_tx = |program: ValidationProgram| {
+        let data = BridgeCreationData {
+            owner: Address::from(&key_pair().public),
+            oracle_address: Address::from([4u8; 20]),
+            source_chain_id: 1,
+            chain_config: ChainConfig {
+                chain_id: 1,
+                hash_function: AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
+                address_format: AddressFormat::Ethereum,
+                endianness: Endianness::LittleEndian,
+                block_time: std::time::Duration::from_secs(60),
+                validation_program: program,
+                max_proof_depth: 64,
+            },
+        };
+        Transaction::new_contract_creation(
+            Address::from([1u8; 20]),
+            AccountType::Basic,
+            vec![],
+            AccountType::Bridge,
+            data.serialize_to_vec(),
+            1000.try_into().unwrap(),
+            0.try_into().unwrap(),
+            1,
+            NetworkId::UnitAlbatross,
+        )
+    };
+
+    let zero_divisor = make_tx(ValidationProgram::new(vec![
+        ValidationOp::PushConst(52),
+        ValidationOp::LoadEvmU64Scaled(0),
+        ValidationOp::Store("amount".to_string()),
+    ]));
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&zero_divisor, ACTIVATION),
+        Err(TransactionError::InvalidData),
+    );
+
+    // Any other divisor is a usable program, so the rejection is about the zero and not about the
+    // operation itself.
+    let usable = make_tx(ValidationProgram::new(vec![
+        ValidationOp::PushConst(52),
+        ValidationOp::LoadEvmU64Scaled(10_000_000_000_000),
+        ValidationOp::Store("amount".to_string()),
+    ]));
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&usable, ACTIVATION),
+        Ok(())
+    );
 }
 
 #[test]
