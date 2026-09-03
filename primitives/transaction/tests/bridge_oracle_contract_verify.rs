@@ -3,7 +3,10 @@ mod common;
 use common::for_each_protocol_version;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
-    account::AccountType, coin::Coin, networks::NetworkId, policy::upgrades,
+    account::AccountType,
+    coin::Coin,
+    networks::NetworkId,
+    policy::{upgrades, Policy},
     transaction::TransactionError,
 };
 use nimiq_serde::{Deserialize, Serialize};
@@ -473,4 +476,26 @@ fn bridge_outgoing_rejects_a_zero_value_release() {
         AccountType::verify_outgoing_transaction(&tx, ACTIVATION),
         Ok(())
     );
+}
+
+/// The oracle contract accepts a replayed update happily — see
+/// `an_update_replayed_at_the_contract_is_appended_rather_than_refused`. What actually prevents a
+/// replay is that the transaction is only admissible inside its validity window, and the block
+/// rule that refuses a transaction hash already seen within that window. Pin the window here, so
+/// the bound the oracle depends on is asserted somewhere.
+#[test]
+fn oracle_update_is_only_accepted_inside_its_validity_window() {
+    let window = Policy::transaction_validity_window_blocks();
+    let start = 10 * Policy::blocks_per_batch();
+    let mut tx = oracle_update_tx(&key_pair(), vec![any_hash(1)]);
+    tx.validity_start_height = start;
+
+    // Accepted from one batch before the start height through to the end of the window.
+    assert!(tx.is_valid_at(start));
+    assert!(tx.is_valid_at(start - Policy::blocks_per_batch()));
+    assert!(tx.is_valid_at(start + window - 1));
+
+    // And nowhere else, so a replay cannot simply be resubmitted later.
+    assert!(!tx.is_valid_at(start + window));
+    assert!(!tx.is_valid_at(start - Policy::blocks_per_batch() - 1));
 }
