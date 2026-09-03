@@ -199,54 +199,55 @@ impl Blockchain {
         let mut block_state = vec![];
         let mut block_transactions = vec![];
         let mut block_inherents = vec![];
-
-        let mut prev_batch = 0;
-        let mut prev_block = 0;
+        let mut prev_batch = this
+            .chain_store
+            .get_block(&this.state.head_hash, false, Some(&txn))
+            .map_or(0, |head| Policy::batch_at(head.block_number()));
 
         for hist_tx in history.iter().skip(first_new_hist_tx) {
+            let prev_block = block_state
+                .last()
+                .map_or(Policy::genesis_block_number(), |b: &BlockState| b.number);
+
             if hist_tx.block_number > prev_block {
+                let new_batch = Policy::batch_at(hist_tx.block_number);
                 // If a macro block does not have any history items, we need to add it here so that
-                // we always commit FinalizeBatch/FinalizeEpoch inherents.
-                // FIXME We're missing the block timestamp to do this correctly.
-                // Also, this works only if a single macro block is missing between history items.
-                let batch_number = Policy::batch_at(hist_tx.block_number);
-                if batch_number > prev_batch
-                    && block_state.last().is_some_and(|block_state: &BlockState| {
-                        !Policy::is_macro_block_at(block_state.number)
-                    })
-                {
+                // we always commit FinalizeBatch/FinalizeEpoch inherents. The first checkpoint block
+                // of the first epoch is special because it may legitimately be missing entirely due
+                // to the reward payout delay.
+                if prev_batch <= 1 && new_batch == 2 {
                     debug!(
                         history_item_block_number = hist_tx.block_number,
                         prev_block,
-                        history_item_batch = batch_number,
                         prev_batch,
-                        last_block = ?block_state.last(),
-                        "Inserting macro block"
+                        history_item_batch = new_batch,
+                        "Adding the first checkpoint block manually since there weren't any txs on it."
                     );
-                    if batch_number != prev_batch + 1 {
-                        warn!(
-                            %block,
-                            reason = "missing batch in history",
-                            history_item_block_number = hist_tx.block_number,
-                            history_item_batch = batch_number,
-                            prev_batch,
-                            "Rejecting block",
-                        );
-                        txn.abort();
-                        #[cfg(feature = "metrics")]
-                        this.metrics.note_invalid_block();
-                        return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
-                    }
 
+                    // Push the omitted macro block (checkpoint 1).
                     block_state.push(BlockState {
-                        number: Policy::macro_block_of(prev_batch).unwrap(),
-                        time: 0,                                        // FIXME
+                        number: Policy::macro_block_before(hist_tx.block_number),
+                        time: 0,
                         protocol_version: this.state.current_version(), // Cannot change, protocol version upgrades only on election blocks.
                     });
                     block_transactions.push(vec![]);
                     block_inherents.push(vec![]);
+                } else if prev_batch < new_batch && !Policy::is_macro_block_at(prev_block) {
+                    warn!(
+                        %block,
+                        reason = "missing macro block in history",
+                        history_item_block_number = hist_tx.block_number,
+                        history_item_batch = new_batch,
+                        prev_batch,
+                        "Rejecting block",
+                    );
+                    txn.abort();
+                    #[cfg(feature = "metrics")]
+                    this.metrics.note_invalid_block();
+                    return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
                 }
 
+                // Push the block of the historic transaction.
                 block_state.push(BlockState {
                     number: hist_tx.block_number,
                     time: hist_tx.block_time,
@@ -255,8 +256,7 @@ impl Blockchain {
                 block_transactions.push(vec![]);
                 block_inherents.push(vec![]);
 
-                prev_batch = batch_number;
-                prev_block = hist_tx.block_number;
+                prev_batch = new_batch;
             }
 
             match &hist_tx.data {
