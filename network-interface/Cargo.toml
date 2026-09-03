@@ -24,7 +24,7 @@ async-trait = "0.1"
 bitflags = { version = "2.12", features = ["serde"] }
 futures = { workspace = true }
 log = { workspace = true }
-multiaddr = "0.18"
+multiaddr = "0.19"
 serde = "1.0"
 thiserror = "2.0"
 tokio = { version = "1.52", features = ["rt"] }
