@@ -186,6 +186,27 @@ impl Network {
         }
     }
 
+    /// Tells the network to listen on one address and waits until the transport reports the
+    /// resolved listen address.
+    ///
+    /// This is useful for addresses such as `/memory/0`, for which the transport allocates an
+    /// available address.
+    pub async fn listen_on_address(
+        &self,
+        listen_address: Multiaddr,
+    ) -> Result<Multiaddr, NetworkError> {
+        let (output_tx, output_rx) = oneshot::channel();
+
+        self.action_tx
+            .clone()
+            .send(NetworkAction::ListenOnAddress {
+                listen_address,
+                output: output_tx,
+            })
+            .await?;
+        output_rx.await?
+    }
+
     /// Tells the network to start connecting to any available peer or seed
     /// until meeting the configured number of desired peer connections.
     /// If there are no dial attempts being made and no connections to any
