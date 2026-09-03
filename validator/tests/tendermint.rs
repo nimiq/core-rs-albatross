@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use nimiq_account::{Account, StakingContractStoreWrite, TransactionLog};
 use nimiq_block::BlockError;
@@ -586,5 +589,65 @@ async fn it_rejects_unsupported_version_upgrade_blocks() {
             Err(PushError::InvalidBlock(BlockError::InvalidVersionUpgrade))
         ),
         "Expected InvalidVersionUpgrade, got {result:?}"
+    );
+}
+
+/// A macro block's timestamp must be at least one block separation time after its predecessor,
+/// so a batch does not lose a second at the macro block.
+#[test(tokio::test)]
+async fn it_ensures_macro_block_observes_block_separation_time() {
+    // Genesis at `now` so the chain tracks wall-clock time; otherwise (the fixed historical genesis
+    // timestamp) the proposer stamps `now()` either way and the regression stays hidden.
+    let genesis_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let temp_producer = TemporaryBlockProducer::new_with_genesis_timestamp(genesis_timestamp);
+
+    // Move to just before the first (checkpoint) macro block.
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        let block = temp_producer.next_block(vec![], false);
+        temp_producer
+            .push(block)
+            .expect("Should be able to push block");
+    }
+
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+    let (predecessor_timestamp, macro_block_number, current_validators) = {
+        let bc = blockchain.read();
+        (
+            bc.timestamp(),
+            bc.block_number() + 1,
+            bc.current_validators().unwrap().clone(),
+        )
+    };
+
+    // Build a `TendermintProtocol` and let it create the macro block proposal.
+    let hub = MockHub::default();
+    let nw: Arc<Network> = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
+    let interface = TendermintProtocol::new(
+        Arc::clone(&blockchain),
+        val_net,
+        temp_producer.producer.clone(),
+        current_validators,
+        0,
+        NetworkId::UnitAlbatross,
+        macro_block_number,
+    );
+
+    let proposal = interface
+        .create_proposal(0)
+        .expect("Should have created proposal");
+    let macro_header = &proposal.0.proposal.0;
+
+    assert_eq!(macro_header.block_number, macro_block_number);
+    assert!(
+        macro_header.timestamp >= predecessor_timestamp + Policy::BLOCK_SEPARATION_TIME,
+        "macro block timestamp {} must be at least one block separation time ({} ms) after its \
+         predecessor's timestamp {}",
+        macro_header.timestamp,
+        Policy::BLOCK_SEPARATION_TIME,
+        predecessor_timestamp,
     );
 }

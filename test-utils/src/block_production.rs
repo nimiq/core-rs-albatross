@@ -108,6 +108,25 @@ impl TemporaryBlockProducer {
         Self::with_blockchain(blockchain)
     }
 
+    /// Creates a temporary block producer whose genesis block uses the given timestamp (ms since
+    /// the unix epoch), for timing-sensitive tests that need the chain to track wall-clock time.
+    pub fn new_with_genesis_timestamp(timestamp: u64) -> Self {
+        let time = Arc::new(OffsetTime::new());
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let (genesis_block, genesis_accounts) = unit_genesis_with_timestamp(timestamp);
+        let blockchain = Blockchain::with_genesis(
+            env,
+            BlockchainConfig::default(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_block,
+            genesis_accounts,
+        )
+        .unwrap();
+
+        Self::with_blockchain(blockchain)
+    }
+
     fn with_blockchain(blockchain: Blockchain) -> Self {
         let blockchain = Arc::new(RwLock::new(blockchain));
 
@@ -373,6 +392,23 @@ fn unit_genesis_with_protocol_version(
     let mut genesis_block = network_info.genesis_block();
     let header = &mut genesis_block.unwrap_macro_ref_mut().header;
     header.version = initial_protocol_version;
+    header.cached_hash = None;
+    let genesis_hash = header.hash();
+    genesis_block.populate_cached_hash(genesis_hash);
+
+    (genesis_block, network_info.genesis_accounts())
+}
+
+/// Like [`unit_genesis_with_protocol_version`], but overrides the genesis timestamp (ms since the
+/// unix epoch) instead of the protocol version. Accounts and state root are unchanged.
+fn unit_genesis_with_timestamp(
+    timestamp: u64,
+) -> (Block, Option<Vec<nimiq_primitives::trie::TrieItem>>) {
+    let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
+
+    let mut genesis_block = network_info.genesis_block();
+    let header = &mut genesis_block.unwrap_macro_ref_mut().header;
+    header.timestamp = timestamp;
     header.cached_hash = None;
     let genesis_hash = header.hash();
     genesis_block.populate_cached_hash(genesis_hash);
