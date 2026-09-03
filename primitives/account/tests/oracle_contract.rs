@@ -1592,3 +1592,121 @@ fn re_attesting_the_same_root_appends_instead_of_replacing() {
         "so the same root at a new index is a distinct entry, not a replacement",
     );
 }
+
+// =====================================================================
+// Revert receipts for evicting updates
+// =====================================================================
+//
+// An update that wraps the ring buffer overwrites entries, so reverting it needs the receipt to
+// put the evicted hashes back. Getting that wrong is a consensus fault rather than a lost
+// transfer: two nodes replaying the same blocks would reach different accounts-tree roots. Owner
+// changes already had receipt-rejection tests; these cover the eviction receipt.
+
+/// Commits an update and hands back the receipt it produced.
+fn commit_update_returning_receipt(
+    accounts: &TestCommitRevert,
+    oracle: &mut OracleContract,
+    owner: &KeyPair,
+    hashes: Vec<AnyHash>,
+    block_state: &BlockState,
+) -> (Transaction, Option<AccountReceipt>) {
+    let tx = make_update_transaction(Address([1u8; 20]), owner, hashes);
+    let receipt = accounts
+        .test_commit_incoming_transaction(
+            oracle,
+            &tx,
+            block_state,
+            &mut TransactionLog::empty(),
+            true,
+        )
+        .expect("owner update should commit");
+    (tx, receipt)
+}
+
+/// Fills the ten-slot ring and then writes `follow_up` more hashes, every one of which evicts.
+/// Returns the environment, the contract, the evicting transaction and its receipt.
+fn evicting_update(
+    follow_up: &[u8],
+) -> (
+    TestCommitRevert,
+    OracleContract,
+    Transaction,
+    Option<AccountReceipt>,
+) {
+    let (accounts, mut oracle, key_1, _key_2) = init_tree();
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // Ten hashes fill indices 0..=9 without evicting anything.
+    let initial: Vec<AnyHash> = (1..=10).map(make_hash).collect();
+    apply_update(&accounts, &mut oracle, &key_1, initial, &block_state);
+    assert_eq!(oracle.latest_index, Some(9));
+
+    let hashes: Vec<AnyHash> = follow_up.iter().copied().map(make_hash).collect();
+    let (tx, receipt) =
+        commit_update_returning_receipt(&accounts, &mut oracle, &key_1, hashes, &block_state);
+    assert!(
+        receipt.is_some(),
+        "an update that evicts must produce a receipt"
+    );
+    (accounts, oracle, tx, receipt)
+}
+
+fn revert_with(
+    accounts: &TestCommitRevert,
+    oracle: &mut OracleContract,
+    tx: &Transaction,
+    receipt: Option<AccountReceipt>,
+) -> Result<(), AccountError> {
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
+    let mut db_txn = accounts.env().write_transaction();
+    let mut txn: nimiq_trie::WriteTransactionProxy = (&mut db_txn).into();
+    let data_store = accounts.data_store(&Address([1u8; 20]));
+    oracle.revert_incoming_transaction(
+        tx,
+        &block_state,
+        receipt,
+        data_store.write(&mut txn),
+        &mut TransactionLog::empty(),
+    )
+}
+
+/// Without the receipt the evicted hashes are unrecoverable, so the revert must refuse rather than
+/// leave the ring holding the newer values.
+#[test]
+fn it_rejects_revert_of_an_evicting_update_without_receipt() {
+    let (accounts, mut oracle, tx, receipt) = evicting_update(&[11, 12, 13]);
+    let before = oracle.clone();
+
+    assert_eq!(
+        revert_with(&accounts, &mut oracle, &tx, None),
+        Err(AccountError::InvalidReceipt),
+    );
+    assert_eq!(oracle, before, "a refused revert must not touch the ring");
+
+    // The genuine receipt does revert it, so the refusal above is about the missing receipt.
+    assert_eq!(revert_with(&accounts, &mut oracle, &tx, receipt), Ok(()));
+    assert_eq!(oracle.latest_index, Some(9));
+    assert_eq!(
+        oracle.get_hashes_chronological(),
+        compute_chained_hashes(&(1..=10).map(make_hash).collect::<Vec<_>>()),
+        "the pre-update ring is restored exactly",
+    );
+}
+
+/// A receipt that decodes but carries the wrong number of evicted hashes must be refused: the
+/// count is what ties the receipt to the update being reverted, and restoring a different number
+/// of slots would leave the ring in a state no commit ever produced.
+#[test]
+fn it_rejects_revert_of_an_evicting_update_whose_receipt_has_the_wrong_length() {
+    let (accounts, mut oracle, tx, _receipt) = evicting_update(&[11, 12, 13]);
+    let before = oracle.clone();
+
+    // A genuine receipt from a *different* update, which evicted two hashes rather than three.
+    let (_other_accounts, _other_oracle, _other_tx, shorter) = evicting_update(&[11, 12]);
+
+    assert_eq!(
+        revert_with(&accounts, &mut oracle, &tx, shorter),
+        Err(AccountError::InvalidReceipt),
+    );
+    assert_eq!(oracle, before);
+}
