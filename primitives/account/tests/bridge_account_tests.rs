@@ -129,6 +129,27 @@ fn make_outgoing_tx(
     oracle_state_index: u64,
     owner: &KeyPair,
 ) -> Transaction {
+    make_outgoing_tx_with_fee(
+        bridge,
+        target,
+        amount,
+        Coin::ZERO,
+        burn_data,
+        oracle_state_index,
+        owner,
+    )
+}
+
+/// Like `make_outgoing_tx`, with a fee — which the burn-proof signer (`owner`) pays.
+fn make_outgoing_tx_with_fee(
+    bridge: &Address,
+    target: &Address,
+    amount: u64,
+    fee: Coin,
+    burn_data: Vec<u8>,
+    oracle_state_index: u64,
+    owner: &KeyPair,
+) -> Transaction {
     let outgoing = OutgoingTransaction {
         burn_transaction_data: burn_data,
         merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
@@ -146,7 +167,7 @@ fn make_outgoing_tx(
         AccountType::Basic,
         vec![],
         Coin::from_u64_unchecked(amount),
-        Coin::ZERO,
+        fee,
         1,
         NetworkId::UnitAlbatross,
     );
@@ -2349,4 +2370,220 @@ fn a_burn_proof_signature_from_another_transaction_is_rejected() {
     // mismatch and not about the release itself.
     let receipts = commit_block(&test, &[signed], &bs);
     assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+}
+
+// =====================================================================
+// Custody limits at commit time
+// =====================================================================
+
+/// Commits a block without unwrapping, and without keeping the write, so callers can assert on a
+/// rejection and on the state it left behind.
+fn try_commit_block(
+    test: &TestCommitRevert,
+    txs: &[Transaction],
+    bs: &BlockState,
+) -> Result<Receipts, nimiq_account::AccountsError> {
+    let env = test.env();
+    let mut raw = env.write_transaction();
+    let mut txn: nimiq_trie::WriteTransactionProxy = (&mut raw).into();
+    test.commit(&mut txn, txs, &[], bs, &mut BlockLogger::empty())
+}
+
+/// A release can only ever pay out what the bridge still holds, not what it held to begin with. A
+/// first release drains most of the balance; a second one for more than the remainder is refused
+/// and pays out nothing at all — no partial payout — but still costs its fee.
+#[test]
+fn a_release_beyond_the_remaining_balance_is_refused_without_partial_payout() {
+    let owner = KeyPair::generate_default_csprng();
+    let signer_address = Address::from(&owner.public);
+    const SIGNER_FUNDS: u64 = 1_000;
+    const FEE: u64 = 10;
+    // Enough for one release and one luna short of a second.
+    let balance = 2 * RELEASE_AMOUNT - 1;
+    let first = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let second = make_burn_data(target_bytes(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    let bridge_holding = |bridge_balance: u64| BridgeContract {
+        owner: Address::from(&owner.public),
+        oracle_address: oracle_addr(),
+        balance: Coin::from_u64_unchecked(bridge_balance),
+        source_chain_id: SOURCE_CHAIN_ID,
+        chain_config: chain_config(),
+        transaction_count: 0,
+    };
+    let env = |bridge_balance: u64| {
+        TestCommitRevert::with_initial_state(&[
+            (
+                oracle_addr(),
+                Account::Oracle(make_chained_oracle(&[&first, &second])),
+            ),
+            (
+                bridge_addr(),
+                Account::Bridge(bridge_holding(bridge_balance)),
+            ),
+            // The burn-proof signer pays the fee, on the failed path too.
+            (
+                signer_address.clone(),
+                Account::Basic(BasicAccount {
+                    balance: Coin::from_u64_unchecked(SIGNER_FUNDS),
+                }),
+            ),
+        ])
+    };
+
+    // Measured against what the bridge holds: one luna short and the release is refused outright,
+    // rather than paying out what is left.
+    let drained = env(RELEASE_AMOUNT - 1);
+    let too_big = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        first.clone(),
+        0,
+        &owner,
+    );
+    assert!(
+        matches!(
+            outgoing_error(&drained, &bridge_holding(RELEASE_AMOUNT - 1), &too_big, &bs),
+            AccountError::InsufficientFunds { .. }
+        ),
+        "a release is bounded by the balance the bridge still holds",
+    );
+
+    // End to end: the first release fits, the second does not, and the second pays out nothing.
+    let test = env(balance);
+    let receipts = commit_block(
+        &test,
+        &[make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            first,
+            0,
+            &owner,
+        )],
+        &bs,
+    );
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT - 1),
+    );
+
+    let overdraw = make_outgoing_tx_with_fee(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        Coin::from_u64_unchecked(FEE),
+        second,
+        1,
+        &owner,
+    );
+    let receipts = commit_block(&test, &[overdraw], &bs);
+    assert!(
+        matches!(receipts.transactions[0], OperationReceipt::Err(_, _)),
+        "the second release must fail: {receipts:?}",
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT - 1),
+        "the remainder stays put; there is no partial payout",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+        "and the target is credited only for the release that fitted",
+    );
+    assert_eq!(
+        test.get_complete(&signer_address, None).balance(),
+        Coin::from_u64_unchecked(SIGNER_FUNDS - FEE),
+        "the refused release still costs its fee, paid by the burn-proof signer",
+    );
+}
+
+/// The mempool reserves the release fee against the burn-proof signer at admission, but the signer
+/// can spend that balance elsewhere before the release reaches a block. What must not happen is
+/// the bridge covering the shortfall: custody is only ever debited by the released value.
+#[test]
+fn a_release_whose_signer_cannot_cover_the_fee_leaves_custody_untouched() {
+    let signer = KeyPair::generate_default_csprng();
+    let signer_address = Address::from(&signer.public);
+    let burn_data = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let fee = 10;
+
+    let test = TestCommitRevert::with_initial_state(&[
+        (
+            oracle_addr(),
+            Account::Oracle(make_single_state_oracle(&burn_data)),
+        ),
+        (
+            bridge_addr(),
+            Account::Bridge(bridge_with(&oracle_addr(), &signer)),
+        ),
+        // Admitted when it could cover the fee; by commit time it is down to one luna short.
+        (
+            signer_address.clone(),
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(fee - 1),
+            }),
+        ),
+    ]);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    let outgoing = OutgoingTransaction {
+        burn_transaction_data: burn_data,
+        merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        oracle_state_index: 0,
+    };
+    let mut bridge_data = OutgoingBridgeTransactionData {
+        burn_proof: outgoing,
+        proof: SignatureProof::default(),
+    };
+    let mut tx = Transaction::new_extended(
+        bridge_addr(),
+        AccountType::Bridge,
+        bridge_data.serialize_to_vec(),
+        nimiq_target(),
+        AccountType::Basic,
+        vec![],
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+        Coin::from_u64_unchecked(fee),
+        1,
+        NetworkId::UnitAlbatross,
+    );
+    let sig = signer.sign(&tx.serialize_content());
+    bridge_data.set_signature(SignatureProof::from_ed25519(signer.public, sig));
+    tx.sender_data = bridge_data.serialize_to_vec();
+
+    // The release cannot be applied at all: the successful path reverts the bridge and propagates
+    // the shortfall, and the failed path charges the same signer, so it fails too. The block
+    // carrying it is rejected rather than the transaction landing as a failed one — which is why
+    // the mempool reserves this fee against the signer at admission in the first place.
+    assert!(
+        matches!(
+            try_commit_block(&test, &[tx], &bs),
+            Err(nimiq_account::AccountsError::InvalidTransaction(
+                AccountError::InsufficientFunds { .. },
+                _
+            ))
+        ),
+        "a signer who cannot cover the fee must not be able to get the release committed",
+    );
+
+    // The bridge must not have covered the signer's shortfall.
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        "custody is only ever debited by the released value",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::ZERO,
+    );
+    assert_eq!(
+        test.get_complete(&signer_address, None).balance(),
+        Coin::from_u64_unchecked(fee - 1),
+        "and the signer keeps what it could not pay",
+    );
 }
