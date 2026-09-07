@@ -499,3 +499,64 @@ fn oracle_update_is_only_accepted_inside_its_validity_window() {
     assert!(!tx.is_valid_at(start + window));
     assert!(!tx.is_valid_at(start - Policy::blocks_per_batch() - 1));
 }
+
+/// A bridge is bound to one source chain, and two fields have to agree on which: `source_chain_id`
+/// on the creation data, which the release path compares every burn's declared chain against, and
+/// `chain_id` inside the `ChainConfig`, which is read nowhere at runtime. Both are screened here.
+///
+/// A zero `source_chain_id` locks funds outright: `ParsedBurnData` refuses a burn declaring chain
+/// 0, so no release could ever match and the bridge would take deposits it can never pay out. A
+/// disagreeing `chain_id` is quieter — nothing downstream reads it, so a config describing one
+/// chain while the bridge enforces another would go unnoticed after creation.
+#[test]
+fn bridge_creation_rejects_a_zero_or_inconsistent_source_chain_id() {
+    let make_tx = |source_chain_id: u32, config_chain_id: u32| {
+        let data = BridgeCreationData {
+            owner: Address::from(&key_pair().public),
+            oracle_address: Address::from([4u8; 20]),
+            source_chain_id,
+            chain_config: ChainConfig {
+                chain_id: config_chain_id,
+                hash_function: AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
+                address_format: AddressFormat::Ethereum,
+                endianness: Endianness::LittleEndian,
+                block_time: std::time::Duration::from_secs(60),
+                validation_program: ValidationProgram::empty(),
+                max_proof_depth: 64,
+            },
+        };
+        Transaction::new_contract_creation(
+            Address::from([1u8; 20]),
+            AccountType::Basic,
+            vec![],
+            AccountType::Bridge,
+            data.serialize_to_vec(),
+            1000.try_into().unwrap(),
+            0.try_into().unwrap(),
+            1,
+            NetworkId::UnitAlbatross,
+        )
+    };
+    let verify = |tx| AccountType::verify_incoming_transaction(&tx, ACTIVATION);
+
+    // Zero is refused whether or not the config agrees with it.
+    assert_eq!(verify(make_tx(0, 0)), Err(TransactionError::InvalidData));
+    assert_eq!(verify(make_tx(0, 1)), Err(TransactionError::InvalidData));
+
+    // So is a non-zero id the config contradicts, in either direction.
+    assert_eq!(verify(make_tx(1, 2)), Err(TransactionError::InvalidData));
+    assert_eq!(
+        verify(make_tx(80002, 1)),
+        Err(TransactionError::InvalidData)
+    );
+    assert_eq!(
+        verify(make_tx(1, 80002)),
+        Err(TransactionError::InvalidData)
+    );
+
+    // Agreeing and non-zero is what a real deployment looks like, and is accepted — so the
+    // rejections above are about the chain id and not about the rest of the creation data.
+    assert_eq!(verify(make_tx(1, 1)), Ok(()));
+    assert_eq!(verify(make_tx(80002, 80002)), Ok(()));
+    assert_eq!(verify(make_tx(u32::MAX, u32::MAX)), Ok(()));
+}
