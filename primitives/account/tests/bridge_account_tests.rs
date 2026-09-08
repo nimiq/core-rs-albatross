@@ -2587,3 +2587,89 @@ fn a_release_whose_signer_cannot_cover_the_fee_leaves_custody_untouched() {
         "and the signer keeps what it could not pay",
     );
 }
+
+// =====================================================================
+// A hostile validation program must not be able to hang block validation
+// =====================================================================
+// The bridge's validation program is chosen at creation, creation is permissionless, and the
+// program is never re-screened afterwards — so the VM itself has to stay bounded. `JumpIfZero`
+// only ever moves forward; the one way to loop was a `skip` large enough to wrap the program
+// counter back inside the program. The VM's own tests cover the wrap; this one pins the
+// consensus-layer consequence: the release is refused like any other malformed proof and the
+// bridge is untouched, rather than every validating node hanging on it.
+
+/// Runs `body` on a worker thread and fails if it has not finished within ten seconds, so a
+/// regression fails this test instead of stalling the whole test binary.
+fn within_timeout<T: Send + 'static>(body: impl FnOnce() -> T + Send + 'static) -> T {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = sender.send(body());
+    });
+    receiver
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .expect("a release against a hostile program must be rejected, not hang")
+}
+
+#[test]
+fn a_release_against_a_bridge_whose_program_wraps_the_program_counter_is_rejected_not_hung() {
+    let (error, bridge_after, bridge_before) = within_timeout(|| {
+        let owner = KeyPair::generate_default_csprng();
+        // `pc` is 1 at the jump: `1 + (usize::MAX - 1)` parks it on `usize::MAX`, where an
+        // unchecked increment wraps to 0 and the stack-balanced pair runs again, forever.
+        let mut hostile = chain_config();
+        hostile.validation_program = ValidationProgram::new(vec![
+            ValidationOp::PushConst(0),
+            ValidationOp::JumpIfZero(usize::MAX - 1),
+        ]);
+        let bridge_before = BridgeContract {
+            owner: Address::from(&owner.public),
+            oracle_address: oracle_addr(),
+            balance: Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+            source_chain_id: SOURCE_CHAIN_ID,
+            chain_config: hostile,
+            transaction_count: 0,
+        };
+        let burn = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+        let test = TestCommitRevert::with_initial_state(&[
+            (
+                oracle_addr(),
+                Account::Oracle(make_single_state_oracle(&burn)),
+            ),
+            (bridge_addr(), Account::Bridge(bridge_before.clone())),
+        ]);
+        // Well-formed and correctly signed, so it clears the signature check and reaches the VM.
+        let tx = make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            burn,
+            0,
+            &owner,
+        );
+        let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+        let mut bridge_after = bridge_before.clone();
+        let error = test
+            .test_commit_outgoing_transaction(
+                &mut bridge_after,
+                &tx,
+                &bs,
+                &mut TransactionLog::empty(),
+                false,
+            )
+            .expect_err("a program that extracts nothing cannot describe a valid burn");
+        (error, bridge_after, bridge_before)
+    });
+
+    assert!(
+        matches!(
+            error,
+            AccountError::InvalidTransaction(TransactionError::InvalidData)
+        ),
+        "refused as a malformed burn proof, got {error:?}",
+    );
+    assert_eq!(
+        bridge_after, bridge_before,
+        "a refused release leaves the bridge untouched",
+    );
+}
