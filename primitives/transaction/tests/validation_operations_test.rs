@@ -554,6 +554,153 @@ fn load_within_bounds_still_succeeds_after_fix() {
 }
 
 // =================================================================================================
+// Program-counter overflow — a hostile validation program must still terminate
+// =================================================================================================
+// `JumpIfZero` only ever moves the program counter forward, so a program is
+// guaranteed to terminate — unless the jump wraps. `pc += skip` on a large
+// `skip` wraps in release builds (no overflow-checks) and drops the counter
+// back inside the program, so a two-instruction program can loop forever. The
+// validation program is chosen by whoever created the bridge and creation is
+// permissionless, so every node validating a release against that bridge would
+// hang. Jumps must stay forward-only.
+
+/// Runs `program` on a short payload, failing the test if it does not finish.
+///
+/// A hung VM would otherwise stall the whole test binary rather than fail, so
+/// execution happens on a worker thread that the test only waits on briefly.
+fn assert_terminates(program: ValidationProgram) {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        // Errors are fine — the property under test is that this returns at all.
+        let _ = sender.send(program.extract_only(&[0u8; 64]).is_ok());
+    });
+    receiver
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .expect("validation program must terminate");
+}
+
+#[test]
+fn jump_skip_that_overflows_the_program_counter_terminates() {
+    // `pc` is 1 at the jump, so with a wrapping add `1 + (usize::MAX - 1)`
+    // landed exactly on `usize::MAX` and the loop's own increment wrapped it
+    // back to 0. The stack stays balanced across passes, so nothing ever errored
+    // out to break the cycle: before the jump became saturating this spun
+    // forever in release and panicked in debug. Now it is a jump past the end.
+    assert_terminates(ValidationProgram::new(vec![
+        ValidationOp::PushConst(0),
+        ValidationOp::JumpIfZero(usize::MAX - 1),
+    ]));
+}
+
+#[test]
+fn maximal_jump_skip_terminates() {
+    // The largest possible skip. With a wrapping add it could not spin forever
+    // on its own — the wrap landed back on the jump itself, which drains one
+    // stack value per pass — but the addition overflowed, a panic under debug
+    // assertions. Saturating makes it a plain jump past the end.
+    assert_terminates(ValidationProgram::new(vec![
+        ValidationOp::PushConst(0),
+        ValidationOp::JumpIfZero(usize::MAX),
+    ]));
+}
+
+#[test]
+fn jump_overflow_behind_a_taken_branch_terminates() {
+    // Same wrap, reached with a larger `pc` and through a loaded (rather than
+    // pushed) condition: `LoadU64` reads zero out of the all-zero payload, so
+    // the branch is always taken and the three operations are stack-balanced.
+    // `2 + (usize::MAX - 2)` lands on `usize::MAX`, the increment wraps to 0.
+    assert_terminates(ValidationProgram::new(vec![
+        ValidationOp::PushConst(0),
+        ValidationOp::LoadU64(Endianness::LittleEndian),
+        ValidationOp::JumpIfZero(usize::MAX - 2),
+        ValidationOp::PushConst(7),
+    ]));
+}
+
+#[test]
+fn forward_jump_past_the_end_still_ends_the_program() {
+    // A skip beyond the last operation is the ordinary way to end a program
+    // early. It must keep working, and the values stored before the jump must
+    // survive — the fix must not turn an over-long jump into an error.
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(11),
+        ValidationOp::Store("kept".to_string()),
+        ValidationOp::PushConst(0),
+        ValidationOp::JumpIfZero(100),
+        ValidationOp::PushConst(0),
+        ValidationOp::LoadU64(Endianness::LittleEndian),
+        ValidationOp::Store("skipped".to_string()),
+    ]);
+    let result = program
+        .extract_only(&[0u8; 64])
+        .expect("jumping past the end ends the program cleanly");
+    assert_eq!(
+        result
+            .extracted_values
+            .get("kept")
+            .expect("value stored before the jump")
+            .as_u64()
+            .expect("value is a u64"),
+        11
+    );
+    assert!(
+        !result.extracted_values.contains_key("skipped"),
+        "operations after the jump must not run"
+    );
+}
+
+#[test]
+fn in_range_jump_skips_exactly_the_intended_operations() {
+    // Guard against an over-broad fix: a normal short jump must still land on
+    // the right operation rather than ending the program.
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(0),
+        ValidationOp::JumpIfZero(2),
+        ValidationOp::PushConst(1),
+        ValidationOp::Store("skipped".to_string()),
+        ValidationOp::PushConst(5),
+        ValidationOp::Store("landed".to_string()),
+    ]);
+    let result = program
+        .extract_only(&[0u8; 64])
+        .expect("in-range jump must succeed");
+    assert!(!result.extracted_values.contains_key("skipped"));
+    assert_eq!(
+        result
+            .extracted_values
+            .get("landed")
+            .expect("landed on the operation after the skipped pair")
+            .as_u64()
+            .expect("value is a u64"),
+        5
+    );
+}
+
+#[test]
+fn jump_is_not_taken_when_the_condition_is_non_zero() {
+    // The condition still gates the jump: a non-zero value falls through.
+    let program = ValidationProgram::new(vec![
+        ValidationOp::PushConst(1),
+        ValidationOp::JumpIfZero(usize::MAX),
+        ValidationOp::PushConst(9),
+        ValidationOp::Store("fell_through".to_string()),
+    ]);
+    let result = program
+        .extract_only(&[0u8; 64])
+        .expect("untaken jump must not affect execution");
+    assert_eq!(
+        result
+            .extracted_values
+            .get("fell_through")
+            .expect("operations after an untaken jump run")
+            .as_u64()
+            .expect("value is a u64"),
+        9
+    );
+}
+
+// =================================================================================================
 // LoadEvmU64Scaled — reading a 256-bit word and dividing before narrowing
 // =================================================================================================
 
