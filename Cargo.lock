@@ -4899,6 +4899,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-utils",
+ "rand 0.10.2",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
