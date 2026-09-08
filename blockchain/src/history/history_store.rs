@@ -1741,6 +1741,37 @@ mod tests {
         create_transaction_with_validity_start(block, value, 0)
     }
 
+    /// A reverted block's transactions must leave the validity store even when that block is the
+    /// only one the store knows about — the situation right after genesis or a fresh sync. Left
+    /// behind, the hashes make this node reject the canonical block that re-includes them, which
+    /// every other node accepts.
+    #[test]
+    fn reverting_the_only_tracked_block_frees_its_transactions() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross, false);
+
+        let block_number = Policy::genesis_block_number() + 1;
+        let hist_tx = create_transaction_with_validity_start(block_number, 0, block_number);
+
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, block_number, std::slice::from_ref(&hist_tx));
+        assert!(history_store.tx_in_validity_window(&hist_tx.tx_hash(), Some(&txn)));
+
+        let validity_store = history_store.validity_store.as_ref().unwrap();
+        assert_eq!(
+            validity_store.first_bn(&txn),
+            validity_store.last_bn(&txn),
+            "the block must be the only one tracked for this test to mean anything"
+        );
+
+        validity_store.delete_block_transactions(&mut txn, block_number);
+
+        assert!(
+            !history_store.tx_in_validity_window(&hist_tx.tx_hash(), Some(&txn)),
+            "a reverted transaction must be admissible again"
+        );
+    }
+
     fn create_transaction_with_validity_start(
         block: u32,
         value: u64,
