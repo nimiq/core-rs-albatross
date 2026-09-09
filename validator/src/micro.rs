@@ -373,19 +373,34 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             systemtime_to_timestamp(SystemTime::now()),
         );
 
-        // First we try to fill the block with control transactions
-        let mut block_available_bytes = MicroBlock::get_available_bytes(&self.equivocation_proofs);
+        let block_available_bytes = MicroBlock::get_available_bytes(&self.equivocation_proofs);
 
-        let (mut transactions, txn_size) = self
+        // Control transactions are prioritized over regular ones, but they must not be able to
+        // claim the whole body: signaling staking transactions are valueless and may carry a zero
+        // fee, so an unbounded priority would let free spam starve regular transactions out of
+        // every block. Hence the first pass gives control transactions at most half of the body.
+        let control_bytes = block_available_bytes / 2;
+
+        let (mut transactions, control_size) = self
             .mempool
-            .get_control_transactions_for_block_locked(blockchain, block_available_bytes);
+            .get_control_transactions_for_block_locked(blockchain, control_bytes);
 
-        block_available_bytes = block_available_bytes.saturating_sub(txn_size);
+        // Regular transactions get everything the control transactions did not use.
+        let (mut regular_transactions, regular_size) =
+            self.mempool.get_transactions_for_block_locked(
+                blockchain,
+                block_available_bytes.saturating_sub(control_size),
+            );
 
-        let (mut regular_transactions, _) = self
-            .mempool
-            .get_transactions_for_block_locked(blockchain, block_available_bytes);
+        // Whatever the regular transactions did not use is handed back to the control
+        // transactions, so that block space is never wasted.
+        let (mut extra_control_transactions, _) =
+            self.mempool.get_control_transactions_for_block_locked(
+                blockchain,
+                block_available_bytes.saturating_sub(control_size + regular_size),
+            );
 
+        transactions.append(&mut extra_control_transactions);
         transactions.append(&mut regular_transactions);
 
         self.block_producer.next_micro_block(
