@@ -294,6 +294,12 @@ impl StakingContract {
         if protocol_version < upgrades::v3::STAKING_CHANGE_ADD_STAKE_POLICY {
             return self.legacy_add_stake_before_v3(store, staker_address, value, tx_logger);
         }
+
+        // Recheck the intrinsic minimum stake here as defense in depth.
+        if value < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE) {
+            return Err(AccountError::InvalidCoinValue);
+        }
+
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
@@ -1074,7 +1080,7 @@ impl StakingContract {
     /// This action is only possible if (a) the resulting non-retired funds respect
     /// the invariant 1 - minimum stake for non-retired funds. This was not part of the
     /// intrinsic add stake transaction checks on old versions, thus must be enforced at this level.
-    pub fn legacy_add_stake_before_v3(
+    fn legacy_add_stake_before_v3(
         &mut self,
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,

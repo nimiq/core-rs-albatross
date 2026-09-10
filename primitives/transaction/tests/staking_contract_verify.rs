@@ -750,10 +750,7 @@ fn stake() {
             assert_eq!(AccountType::verify_incoming_transaction(&tx, v), Ok(()));
         } else {
             assert_eq!(
-                AccountType::verify_incoming_transaction(
-                    &tx,
-                    upgrades::v3::STAKING_CHANGE_ADD_STAKE_POLICY
-                ),
+                AccountType::verify_incoming_transaction(&tx, v),
                 Err(TransactionError::InvalidValue)
             );
         }
