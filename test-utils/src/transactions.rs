@@ -244,7 +244,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             IncomingType::SetActiveStake => {
                 value = Coin::ZERO;
             }
-            IncomingType::CreateStaker | IncomingType::RetireStake => {
+            IncomingType::CreateStaker | IncomingType::AddStake | IncomingType::RetireStake => {
                 value = Coin::from_u64_unchecked(Policy::MINIMUM_STAKE);
             }
             _ => {}

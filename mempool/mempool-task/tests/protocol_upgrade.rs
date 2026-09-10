@@ -7,14 +7,19 @@ use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_mempool::config::MempoolConfig;
+use nimiq_mempool::{config::MempoolConfig, verify::VerifyErr};
 use nimiq_mempool_task::MempoolTask;
 use nimiq_network_mock::{MockHub, MockNetwork};
-use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_primitives::{
+    account::AccountError,
+    coin::Coin,
+    networks::NetworkId,
+    policy::{upgrades, Policy},
+};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{
-        fill_micro_blocks_with_txns, next_election_block_with_version,
+        fill_micro_blocks_with_txns, next_election_block_with_version, next_protocol_upgrade_block,
         produce_macro_blocks_with_txns, signal_next_protocol_version_via_tx, signing_key,
         validator_address, voting_key,
     },
@@ -23,7 +28,6 @@ use nimiq_test_utils::{
     test_transaction::generate_accounts,
 };
 use nimiq_time::timeout;
-use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
 
 #[test(tokio::test)]
@@ -138,20 +142,20 @@ async fn mempool_task_resyncs_protocol_version_on_activation() {
 }
 
 #[test(tokio::test)]
-#[ignore = "Enable once a protocol-gated transaction verification rule exists"]
 async fn mempool_task_transactions_evicted_after_protocol_upgrade() {
-    // TODO: Once a protocol-gated transaction verification rule exists, add a
-    // transaction that verifies before the protocol upgrade and fails
-    // verification after it, then assert that it is evicted from the mempool
-    // when the protocol upgrade is processed.
-    todo!("Add a protocol-upgrade eviction test case once a real tx rule exists");
     let mut rng = test_rng(true);
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
+    let initial_protocol_version = upgrades::v3::STAKING_CHANGE_ADD_STAKE_POLICY - 1;
     genesis_builder.with_network(NetworkId::UnitAlbatross);
     genesis_builder.with_genesis_block_number(Policy::genesis_block_number());
 
-    let sender_accounts = generate_accounts(vec![100, 100], &mut genesis_builder, true, &mut rng);
+    let sender_accounts = generate_accounts(
+        vec![Policy::MINIMUM_STAKE + 100, 100],
+        &mut genesis_builder,
+        true,
+        &mut rng,
+    );
     let recipient_accounts = generate_accounts(vec![0, 0], &mut genesis_builder, false, &mut rng);
 
     genesis_builder.with_genesis_validator(
@@ -163,8 +167,25 @@ async fn mempool_task_transactions_evicted_after_protocol_upgrade() {
         None,
         false,
     );
+    genesis_builder.with_genesis_staker(
+        recipient_accounts[1].address.clone(),
+        validator_address(),
+        Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
+        Coin::ZERO,
+        None,
+    );
 
-    let genesis_info = genesis_builder.generate(env).unwrap();
+    let mut genesis_info = genesis_builder.generate(env).unwrap();
+    {
+        let header = &mut genesis_info.block.unwrap_macro_ref_mut().header;
+        header.version = initial_protocol_version;
+        header.cached_hash = None;
+    }
+    let genesis_hash = genesis_info.block.hash();
+    genesis_info
+        .block
+        .populate_cached_hash(genesis_hash.clone());
+    genesis_info.hash = genesis_hash;
     let mut hub = Some(MockHub::default());
     let mut node = Node::<MockNetwork>::history_with_genesis_info(0, genesis_info, &mut hub).await;
 
@@ -179,25 +200,41 @@ async fn mempool_task_transactions_evicted_after_protocol_upgrade() {
         0,
         0,
     );
-    let upgrade_version = signal_next_protocol_version_via_tx(&producer, &blockchain);
+    assert_eq!(
+        blockchain.read().protocol_version(),
+        initial_protocol_version
+    );
     fill_micro_blocks_with_txns(&producer, &blockchain, 0, 0);
+    let (upgrade_block, _) = next_protocol_upgrade_block(&producer, &blockchain);
 
     let validity_start_height = blockchain.read().block_number() + 1;
-    let txs: Vec<Transaction> = sender_accounts
-        .iter()
-        .zip(recipient_accounts.iter())
-        .map(|(sender, recipient)| {
-            TransactionBuilder::new_basic(
-                &sender.keypair,
-                recipient.address.clone(),
-                Coin::from_u64_unchecked(10),
-                Coin::ZERO,
-                validity_start_height,
-                NetworkId::UnitAlbatross,
-            )
-            .unwrap()
-        })
-        .collect();
+    let valid_basic_tx = TransactionBuilder::new_basic(
+        &sender_accounts[1].keypair,
+        recipient_accounts[0].address.clone(),
+        Coin::from_u64_unchecked(10),
+        Coin::ZERO,
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+    let evicted_tx = TransactionBuilder::new_add_stake(
+        &sender_accounts[0].keypair,
+        recipient_accounts[1].address.clone(),
+        Coin::from_u64_unchecked(Policy::MINIMUM_STAKE - 1),
+        Coin::ZERO,
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+    let post_released_balance_tx = TransactionBuilder::new_basic(
+        &sender_accounts[0].keypair,
+        recipient_accounts[0].address.clone(),
+        Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
+        Coin::ZERO,
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
 
     consensus.force_established();
 
@@ -207,18 +244,31 @@ async fn mempool_task_transactions_evicted_after_protocol_upgrade() {
         MempoolConfig::default(),
     );
 
-    for tx in &txs {
-        mempool_task
-            .mempool
-            .add_transaction(tx.clone(), None)
-            .unwrap();
-    }
+    mempool_task
+        .mempool
+        .add_transaction(valid_basic_tx.clone(), None)
+        .unwrap();
+    mempool_task
+        .mempool
+        .add_transaction(evicted_tx.clone(), None)
+        .unwrap();
     assert_eq!(mempool_task.mempool.num_transactions(), 2);
 
-    let evicted_hash: Blake2bHash = txs[1].hash();
-    assert!(mempool_task.mempool.is_filtered(&evicted_hash));
+    let evicted_hash: Blake2bHash = evicted_tx.hash();
+    let valid_basic_hash: Blake2bHash = valid_basic_tx.hash();
+    let post_released_balance_hash: Blake2bHash = post_released_balance_tx.hash();
+    let upgrade_block_hash = upgrade_block.hash();
 
-    let upgrade_block = next_election_block_with_version(&producer, &blockchain, upgrade_version);
+    // This spend from the same sender only fails because the add-stake transaction still reserves
+    // almost the entire sender balance in the mempool.
+    assert!(matches!(
+        mempool_task
+            .mempool
+            .add_transaction(post_released_balance_tx.clone(), None),
+        Err(VerifyErr::InvalidAccount(
+            AccountError::InsufficientFunds { .. }
+        ))
+    ));
 
     assert_eq!(
         Blockchain::push(blockchain.upgradable_read(), upgrade_block),
@@ -232,25 +282,34 @@ async fn mempool_task_transactions_evicted_after_protocol_upgrade() {
             .unwrap();
 
         match BlockchainEvent::from(event) {
-            BlockchainEvent::Extended(_) | BlockchainEvent::EpochFinalized(_) => {}
-            BlockchainEvent::ProtocolUpgrade(_, version) => {
-                assert_eq!(version, upgrade_version);
-                assert_eq!(mempool_task.mempool.protocol_version(), upgrade_version);
+            BlockchainEvent::Extended(block_hash) => {
+                assert_eq!(block_hash, upgrade_block_hash);
                 break;
             }
+            BlockchainEvent::EpochFinalized(_) | BlockchainEvent::ProtocolUpgrade(..) => {}
             other => panic!("unexpected event while waiting for protocol upgrade: {other:?}"),
         }
     }
 
+    // Once the protocol upgrade evicts the add-stake transaction, its reserved balance must be
+    // released so this second spend becomes admissible.
+    mempool_task
+        .mempool
+        .add_transaction(post_released_balance_tx.clone(), None)
+        .unwrap();
+
     let remaining_hashes = mempool_task.mempool.get_transaction_hashes();
     assert_eq!(remaining_hashes.len(), 2);
-    assert!(remaining_hashes.contains(&txs[0].hash::<Blake2bHash>()));
-    assert!(remaining_hashes.contains(&evicted_hash));
+    assert!(remaining_hashes.contains(&valid_basic_hash));
+    assert!(remaining_hashes.contains(&post_released_balance_hash));
+    assert!(!remaining_hashes.contains(&evicted_hash));
     assert!(mempool_task
         .mempool
-        .contains_transaction_by_hash(&txs[0].hash::<Blake2bHash>()));
+        .contains_transaction_by_hash(&valid_basic_hash));
     assert!(mempool_task
+        .mempool
+        .contains_transaction_by_hash(&post_released_balance_hash));
+    assert!(!mempool_task
         .mempool
         .contains_transaction_by_hash(&evicted_hash));
-    assert!(mempool_task.mempool.is_filtered(&evicted_hash));
 }

@@ -169,7 +169,13 @@ impl AccountTransactionInteraction for StakingContract {
                 .map(|_| None)
             }
             IncomingStakingTransactionData::AddStake { staker_address } => self
-                .add_stake(&mut store, &staker_address, transaction.value, tx_logger)
+                .add_stake(
+                    &mut store,
+                    &staker_address,
+                    transaction.value,
+                    block_state.protocol_version,
+                    tx_logger,
+                )
                 .map(|_| None),
             IncomingStakingTransactionData::UpdateStaker {
                 new_delegation,
