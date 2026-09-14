@@ -545,11 +545,22 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use futures::StreamExt;
+    use nimiq_block::{ForkProof, MicroJustification};
+    use nimiq_consensus::messages::{BlockHeaderMessage, BlockHeaderTopic};
     use nimiq_database::traits::WriteTransaction;
+    use nimiq_keys::{KeyPair, PrivateKey};
     use nimiq_mempool::config::MempoolConfig;
+    use nimiq_network_interface::network::Network;
     use nimiq_network_mock::MockHub;
+    use nimiq_primitives::networks::NetworkId;
     use nimiq_test_log::test;
-    use nimiq_test_utils::block_production::TemporaryBlockProducer;
+    use nimiq_test_utils::{
+        block_production::TemporaryBlockProducer,
+        blockchain::{generate_transactions, validator_address, REWARD_KEY},
+    };
     use nimiq_time::timeout;
     use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 
@@ -609,5 +620,103 @@ mod tests {
             .await
             .expect("Producer must abstain instead of aggregating");
         assert!(produced.is_none());
+    }
+
+    /// Two signed micro headers for the same height from one validator always form a valid fork
+    /// proof, because their VRF entropy is the same. So even when our own push of a produced block
+    /// fails and we retry, the network must only ever see the block we accepted.
+    #[test(tokio::test)]
+    async fn it_only_publishes_the_micro_block_it_accepted() {
+        let temp_producer = TemporaryBlockProducer::new();
+        let blockchain = Arc::clone(&temp_producer.blockchain);
+        let mempool = Arc::new(Mempool::new(
+            Arc::clone(&blockchain),
+            MempoolConfig::default(),
+        ));
+
+        // Add a transaction to the mempool, then include it in a block behind the mempool's back.
+        // Our next block picks it up again and our own push rejects it as a duplicate.
+        let key_pair = KeyPair::from(PrivateKey::from_str(REWARD_KEY).unwrap());
+        let height = blockchain.read().block_number();
+        let tx = generate_transactions(&key_pair, height, NetworkId::UnitAlbatross, 1, 7)
+            .pop()
+            .unwrap();
+        mempool.add_transaction(tx.clone(), None).unwrap();
+        temp_producer.next_block_with_txs(vec![], false, vec![tx]);
+
+        let mut hub = MockHub::default();
+        let network = hub.new_network();
+        let observer = hub.new_network();
+        network.dial_mock(&observer);
+        let mut headers = observer.subscribe::<BlockHeaderTopic>().await.unwrap();
+
+        let (prev_seed, block_number) = {
+            let blockchain = blockchain.read();
+            (
+                blockchain.head().seed().clone(),
+                blockchain.block_number() + 1,
+            )
+        };
+
+        // Slot band 0 is the single genesis validator, so it is our turn.
+        let mut producer = ProduceMicroBlock::new(
+            Arc::clone(&blockchain),
+            mempool,
+            Arc::new(ValidatorNetworkImpl::new(Arc::new(network))),
+            temp_producer.producer.clone(),
+            0,
+            vec![],
+            prev_seed,
+            block_number,
+            Duration::from_secs(60),
+            Duration::ZERO,
+        );
+        let event = timeout(Duration::from_secs(10), producer.next())
+            .await
+            .expect("Producer must produce the block");
+        assert!(
+            event.is_some(),
+            "The slot must still be filled after the failed push"
+        );
+        assert_eq!(blockchain.read().block_number(), block_number);
+
+        // Everything the network saw for this height, signed with our key.
+        let mut published = Vec::new();
+        while let Ok(Some((message, _))) = timeout(Duration::from_secs(1), headers.next()).await {
+            if let BlockHeaderMessage::Micro {
+                header,
+                justification: MicroJustification::Micro(signature),
+            } = message
+                && header.block_number == block_number
+            {
+                published.push((header, signature));
+            }
+        }
+
+        let signing_key = &temp_producer.producer.signing_key.public;
+        for (i, (header1, signature1)) in published.iter().enumerate() {
+            for (header2, signature2) in &published[i + 1..] {
+                let proof = ForkProof::new(
+                    validator_address(),
+                    header1.clone(),
+                    signature1.clone(),
+                    header2.clone(),
+                    signature2.clone(),
+                );
+                assert!(
+                    proof
+                        .verify_excluding_address_and_network(signing_key)
+                        .is_err(),
+                    "Published headers for #{block_number} are a valid fork proof against us"
+                );
+            }
+        }
+        let published: Vec<Blake2bHash> =
+            published.iter().map(|(header, _)| header.hash()).collect();
+        assert_eq!(
+            published,
+            vec![blockchain.read().head_hash()],
+            "Only the accepted block may be published"
+        );
     }
 }
