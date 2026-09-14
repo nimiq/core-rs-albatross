@@ -98,15 +98,17 @@ impl ValidityStore {
     }
 
     /// Delete the transactions associated to the given block number
+    ///
+    /// Also reached when a rebranch reverts the newest block, which may be the only one tracked
+    /// (right after genesis or a fresh sync). Deleting must still happen then: a hash left behind
+    /// makes this node reject the canonical block that re-includes the transaction, which every
+    /// other node accepts. An emptied store is harmless — `first_bn`/`last_bn` fall back to 0 and
+    /// `update_validity_store` repopulates it with the next block.
     pub(crate) fn delete_block_transactions(
         &self,
         db_txn: &mut MdbxWriteTransaction,
         block_number: u32,
     ) {
-        if self.first_bn(db_txn) == self.last_bn(db_txn) {
-            return;
-        }
-
         log::trace!(bn = block_number, "Deleting block from validity store");
 
         let cursor = WriteTransaction::dup_cursor(db_txn, &self.block_txns);
