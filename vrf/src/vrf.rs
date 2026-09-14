@@ -607,4 +607,21 @@ mod tests {
             Err(VrfError::Forged)
         );
     }
+
+    #[test]
+    fn entropy_does_not_depend_on_the_signing_randomness() {
+        let mut rng = test_rng(true);
+        let key_pair = KeyPair::generate(&mut rng);
+        let prev_seed = VrfSeed::default();
+
+        let seed1 = prev_seed.sign_next_with_rng(&key_pair, 1, &mut rng);
+        let seed2 = prev_seed.sign_next_with_rng(&key_pair, 1, &mut rng);
+
+        // Re-signing yields a different seed with the same entropy, which is what makes two blocks
+        // signed for the same height a provable fork.
+        assert_ne!(seed1.signature, seed2.signature);
+        assert_eq!(seed1.entropy(), seed2.entropy());
+        assert!(seed1.verify(&prev_seed, &key_pair.public, 1).is_ok());
+        assert!(seed2.verify(&prev_seed, &key_pair.public, 1).is_ok());
+    }
 }
