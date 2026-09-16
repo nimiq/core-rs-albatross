@@ -25,16 +25,17 @@ use nimiq_utils::merkle::MerklePath;
 /// The serialized `ChainConfig` for Polygon Amoy. Redefining it means every bridge instance
 /// deployed with the old blob has to be redeployed, and whatever emits it has to be updated to
 /// match.
-const POLYGON_AMOY_CHAIN_CONFIG: &str = "82f104050000000000000000000000000000000000000000000000000000000000000000010102001000340680c0caf384a3021c06616d6f756e740000041c0e7461726765745f616464726573730014051c0c7461726765745f6e6f6e636500140500ffffffff0f141c116275726e5f626c6f636b5f6865696768740082f1041c0f7461726765745f636861696e5f696420";
+const POLYGON_AMOY_CHAIN_CONFIG: &str = "82f104050000000000000000000000000000000000000000000000000000000000000000010102001100340680c0caf384a3021c06616d6f756e740000041c0e7461726765745f616464726573730014051c0c7461726765745f6e6f6e636500140500ffffffff0f141c116275726e5f626c6f636b5f6865696768740054051c0f7461726765745f636861696e5f696420";
 
 const AMOY_CHAIN_ID: u32 = 80002;
 
 /// Layout of the burn payload a relayer derives from a `TokensBurned` event: the indexed target
-/// followed by the two non-indexed words, 84 bytes, tightly packed and with no header.
+/// followed by the three non-indexed words, 116 bytes, tightly packed and with no header.
 const TARGET_OFFSET: u64 = 0; // 20 raw address bytes
 const NONCE_OFFSET: u64 = 20; // 32-byte big-endian word
 const AMOUNT_OFFSET: u64 = 52; // 32-byte big-endian word
-const BURN_PAYLOAD_LEN: usize = 84;
+const CHAIN_ID_OFFSET: u64 = 84; // 32-byte big-endian word, `block.chainid` at burn time
+const BURN_PAYLOAD_LEN: usize = 116;
 
 /// wNIM carries 18 decimals and NIM has 5 (luna), so one luna is 10^13 wei.
 const WEI_PER_LUNA: u64 = 10_000_000_000_000;
@@ -54,12 +55,24 @@ fn evm_word(value: u128) -> [u8; 32] {
     word
 }
 
-/// Builds the 84-byte burn payload for a `TokensBurned(to, nimiq_nonce, amount)` event.
+/// Builds the 116-byte burn payload for a `TokensBurned(to, nimiq_nonce, amount, chain_id)` event
+/// emitted on Amoy.
 fn burn_payload(target: [u8; 20], nimiq_nonce: u128, amount_wei: u128) -> Vec<u8> {
+    burn_payload_on(AMOY_CHAIN_ID as u128, target, nimiq_nonce, amount_wei)
+}
+
+/// Same as `burn_payload`, for a burn emitted on `chain_id`.
+fn burn_payload_on(
+    chain_id: u128,
+    target: [u8; 20],
+    nimiq_nonce: u128,
+    amount_wei: u128,
+) -> Vec<u8> {
     let mut payload = Vec::with_capacity(BURN_PAYLOAD_LEN);
     payload.extend_from_slice(&target);
     payload.extend_from_slice(&evm_word(nimiq_nonce));
     payload.extend_from_slice(&evm_word(amount_wei));
+    payload.extend_from_slice(&evm_word(chain_id));
     assert_eq!(payload.len(), BURN_PAYLOAD_LEN);
     payload
 }
@@ -89,8 +102,10 @@ fn expected_amoy_program() -> ValidationProgram {
         ValidationOp::PushConst(u32::MAX as u64),
         ValidationOp::And,
         ValidationOp::Store("burn_block_height".to_string()),
-        // target_chain_id: the constant the bridge matches against its own source_chain_id.
-        ValidationOp::PushConst(AMOY_CHAIN_ID as u64),
+        // target_chain_id: the `block.chainid` word at offset 84, so the bridge's
+        // source_chain_id check rejects burns from other chains.
+        ValidationOp::PushConst(CHAIN_ID_OFFSET),
+        ValidationOp::LoadEvmU64,
         ValidationOp::Store("target_chain_id".to_string()),
     ])
 }
@@ -155,8 +170,8 @@ fn amoy_chain_config_decodes_to_the_expected_fields() {
     );
     assert_eq!(
         config.validation_program.operations.len(),
-        16,
-        "the Amoy program is 16 opcodes"
+        17,
+        "the Amoy program is 17 opcodes"
     );
     assert_eq!(
         config.validation_program,
@@ -453,14 +468,14 @@ fn amoy_program_rejects_nonces_above_the_u64_word_ceiling() {
     ));
 }
 
-/// The program indexes fixed offsets into an 84-byte payload. A short payload must produce a typed
+/// The program indexes fixed offsets into a 116-byte payload. A short payload must produce a typed
 /// error, never an out-of-bounds read.
 #[test]
 fn amoy_program_rejects_payloads_shorter_than_the_event_layout() {
     let config = amoy_chain_config();
     let full = burn_payload([0x77; 20], 1, 1_000_000_000_000_000_000);
 
-    for len in [0, 1, 20, 52, 83] {
+    for len in [0, 1, 20, 52, 83, 84, 115] {
         assert!(
             matches!(
                 config.validation_program.extract_only(&full[..len]),
@@ -471,4 +486,60 @@ fn amoy_program_rejects_payloads_shorter_than_the_event_layout() {
     }
 
     assert!(config.validation_program.extract_only(&full).is_ok());
+}
+
+/// A burn from another chain carries that chain's id, so the bridge's source_chain_id check
+/// refuses it. With a constant in the program that check could never fail.
+#[test]
+fn amoy_program_reads_the_chain_id_from_the_payload() {
+    let config = amoy_chain_config();
+
+    for chain_id in [1u128, 137, 31337, u32::MAX as u128] {
+        let payload = burn_payload_on(chain_id, [0x88; 20], 1, 1_000_000_000_000_000_000);
+        assert_eq!(
+            extract(&config, &payload, "target_chain_id"),
+            StackValue::U64(chain_id as u64),
+        );
+        assert_eq!(
+            outgoing_tx(payload)
+                .parse_burn_data(&config)
+                .unwrap()
+                .target_chain_id,
+            chain_id as u32,
+        );
+    }
+}
+
+/// Chain ids above u32 are refused rather than truncated, and zero is malformed.
+#[test]
+fn amoy_program_rejects_chain_ids_outside_u32() {
+    let config = amoy_chain_config();
+
+    let payload = burn_payload_on(
+        u32::MAX as u128 + 1,
+        [0x99; 20],
+        1,
+        1_000_000_000_000_000_000,
+    );
+    assert!(matches!(
+        outgoing_tx(payload).parse_burn_data(&config),
+        Err(BridgeError::InvalidRecipientData)
+    ));
+
+    let payload = burn_payload_on(
+        u64::MAX as u128 + 1,
+        [0x99; 20],
+        1,
+        1_000_000_000_000_000_000,
+    );
+    assert!(matches!(
+        config.validation_program.extract_only(&payload),
+        Err(BridgeError::InvalidAmount)
+    ));
+
+    let payload = burn_payload_on(0, [0x99; 20], 1, 1_000_000_000_000_000_000);
+    assert!(matches!(
+        outgoing_tx(payload).parse_burn_data(&config),
+        Err(BridgeError::InvalidChainId)
+    ));
 }
