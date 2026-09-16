@@ -107,6 +107,9 @@ pub enum Error {
 
     #[error("Invalid data: {0}")]
     InvalidData(String),
+
+    #[error("Bridge release would fail: {0}")]
+    BridgeReleaseRejected(String),
 }
 
 impl From<Error> for RpcError {

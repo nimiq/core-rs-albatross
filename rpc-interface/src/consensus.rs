@@ -651,4 +651,151 @@ pub trait ConsensusInterface {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
+    /// Returns a serialized transaction that deposits `value` into an existing bridge contract,
+    /// locking it for transfer to the bridge's destination chain. The deposit and the fee are paid
+    /// by `wallet`.
+    ///
+    /// `data` is a hex string that is stored in the transaction's recipient data. The bridge
+    /// contract does not interpret it; the off-chain relayer reads the destination of the deposit
+    /// from it.
+    async fn create_bridge_deposit_transaction(
+        &self,
+        wallet: Address,
+        bridge_address: Address,
+        data: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Sends a transaction that deposits `value` into an existing bridge contract to the network.
+    /// See `create_bridge_deposit_transaction` for the parameters.
+    async fn send_bridge_deposit_transaction(
+        &self,
+        wallet: Address,
+        bridge_address: Address,
+        data: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
+    /// Returns a serialized transaction that releases funds from a bridge contract against a proof
+    /// that the corresponding tokens were burned on the source chain.
+    ///
+    /// Releases are permissionless: `signer_wallet` signs the burn proof and pays the fee, which is
+    /// charged even if the release later fails.
+    ///
+    /// - `recipient` and `value` must match the target address and amount encoded in the burn
+    ///   transaction.
+    /// - `burn_transaction_data` is the raw burn transaction as a hex string.
+    /// - `merkle_proof` is a hex-encoded, serialized `AnyMerkleProof` of the burn transaction.
+    /// - `oracle_state_index` is the index of the oracle state the proof is verified against.
+    async fn create_bridge_release_transaction(
+        &self,
+        signer_wallet: Address,
+        bridge_address: Address,
+        recipient: Address,
+        burn_transaction_data: String,
+        merkle_proof: String,
+        oracle_state_index: u64,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Sends a transaction that releases funds from a bridge contract to the network. See
+    /// `create_bridge_release_transaction` for the parameters.
+    ///
+    /// If the node has the full state, the burn transaction is checked against the bridge first,
+    /// so that a release that would fail is not broadcast and does not cost the signer a fee.
+    async fn send_bridge_release_transaction(
+        &self,
+        signer_wallet: Address,
+        bridge_address: Address,
+        recipient: Address,
+        burn_transaction_data: String,
+        merkle_proof: String,
+        oracle_state_index: u64,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
+    /// Returns a serialized transaction that appends `hashes` to an existing oracle contract.
+    /// The update is signed by `owner_wallet`, while the fee is paid by `sender_wallet`.
+    /// All hashes must use the oracle's hash algorithm.
+    async fn create_update_oracle_transaction(
+        &self,
+        sender_wallet: Address,
+        owner_wallet: Address,
+        oracle_address: Address,
+        hashes: Vec<AnyHash>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Sends a transaction that appends `hashes` to an existing oracle contract to the network.
+    /// See `create_update_oracle_transaction` for the parameters.
+    async fn send_update_oracle_transaction(
+        &self,
+        sender_wallet: Address,
+        owner_wallet: Address,
+        oracle_address: Address,
+        hashes: Vec<AnyHash>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
+    /// Returns a serialized transaction that transfers ownership of an existing oracle contract to
+    /// `new_owner`. The change is signed by `owner_wallet`, the current owner, while the fee is paid
+    /// by `sender_wallet`.
+    async fn create_change_oracle_owner_transaction(
+        &self,
+        sender_wallet: Address,
+        owner_wallet: Address,
+        oracle_address: Address,
+        new_owner: Address,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Sends a transaction that transfers ownership of an existing oracle contract to the network.
+    /// See `create_change_oracle_owner_transaction` for the parameters.
+    async fn send_change_oracle_owner_transaction(
+        &self,
+        sender_wallet: Address,
+        owner_wallet: Address,
+        oracle_address: Address,
+        new_owner: Address,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
+    /// Returns a serialized transaction that withdraws the deposit of an oracle contract to
+    /// `recipient`, which deletes the contract. The transaction is signed by `owner_wallet`.
+    /// Note that in order for this transaction to be accepted, `value` must equal the full balance
+    /// of the contract, so `fee` must currently be zero.
+    async fn create_delete_oracle_transaction(
+        &self,
+        owner_wallet: Address,
+        oracle_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    /// Sends a transaction that withdraws the deposit of an oracle contract to the network. See
+    /// `create_delete_oracle_transaction` for the parameters.
+    async fn send_delete_oracle_transaction(
+        &self,
+        owner_wallet: Address,
+        oracle_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
 }

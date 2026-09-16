@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use nimiq_account::{Account, BridgeContract, OracleContract};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
@@ -15,7 +16,10 @@ use nimiq_rpc_interface::{
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
-    account::htlc_contract::{AnyHash, PreImage},
+    account::{
+        bridge_contract::{AnyMerkleProof, OutgoingTransaction},
+        htlc_contract::{AnyHash, PreImage},
+    },
     SignatureProof, Transaction,
 };
 use nimiq_transaction_builder::TransactionBuilder;
@@ -62,10 +66,159 @@ impl ConsensusDispatcher {
     fn validity_start_height(&self, validity_start_height: ValidityStartHeight) -> u32 {
         validity_start_height.block_number(self.consensus.blockchain.read().block_number())
     }
+
+    /// Checks a bridge release against the current state of the bridge and its oracle, so that a
+    /// release that would fail is not broadcast: a failed release still costs the signer its fee.
+    ///
+    /// The check needs the full state, so it is skipped on other nodes.
+    fn check_bridge_release(
+        &self,
+        bridge_address: &Address,
+        recipient: &Address,
+        value: Coin,
+        burn_proof: &OutgoingTransaction,
+    ) -> Result<(), Error> {
+        let BlockchainReadProxy::Full(blockchain) = self.consensus.blockchain.read() else {
+            return Ok(());
+        };
+
+        let bridge = match blockchain
+            .get_account_if_complete(bridge_address)
+            .ok_or(Error::NoConsensus)?
+        {
+            Account::Bridge(bridge) => bridge,
+            _ => {
+                return Err(Error::BridgeReleaseRejected(format!(
+                    "{bridge_address} is not a bridge contract"
+                )))
+            }
+        };
+        let oracle = match blockchain
+            .get_account_if_complete(&bridge.oracle_address)
+            .ok_or(Error::NoConsensus)?
+        {
+            Account::Oracle(oracle) => Some(oracle),
+            _ => None,
+        };
+        let nonce = {
+            let data_store = blockchain.state.accounts.data_store(bridge_address);
+            let db_txn = blockchain.read_transaction();
+            bridge.get_nonce(&data_store.read(&db_txn), recipient)
+        };
+
+        verify_bridge_release(
+            &bridge,
+            oracle.as_ref(),
+            nonce,
+            recipient,
+            value,
+            burn_proof,
+        )
+        .map_err(Error::BridgeReleaseRejected)
+    }
 }
 
 fn transaction_to_hex_string(transaction: &Transaction) -> String {
     hex::encode(transaction.serialize_to_vec())
+}
+
+/// Parses the hex-encoded parts of a bridge burn proof.
+fn parse_burn_proof(
+    burn_transaction_data: &str,
+    merkle_proof: &str,
+    oracle_state_index: u64,
+) -> Result<OutgoingTransaction, Error> {
+    let merkle_proof = AnyMerkleProof::deserialize_all(&hex::decode(merkle_proof)?)
+        .map_err(|_| Error::InvalidArgument("Merkle Proof".to_string()))?;
+
+    OutgoingTransaction::new(
+        hex::decode(burn_transaction_data)?,
+        merkle_proof,
+        oracle_state_index,
+    )
+    .map_err(|error| Error::InvalidArgument(format!("Burn Transaction Data: {error}")))
+}
+
+/// Checks a bridge release against the bridge, its oracle and the last `nonce` released to
+/// `recipient`. The checks mirror `BridgeContract::commit_outgoing_transaction`.
+///
+/// Returns the reason why the release would fail.
+fn verify_bridge_release(
+    bridge: &BridgeContract,
+    oracle: Option<&OracleContract>,
+    nonce: u64,
+    recipient: &Address,
+    value: Coin,
+    burn_proof: &OutgoingTransaction,
+) -> Result<(), String> {
+    let burn = burn_proof
+        .parse_burn_data(&bridge.chain_config)
+        .map_err(|error| format!("invalid burn transaction: {error}"))?;
+    if burn.amount != value {
+        return Err(format!("the burned amount is {}, not {value}", burn.amount));
+    }
+    if &burn.target_address != recipient {
+        return Err(format!(
+            "the burn transaction pays {}, not {recipient}",
+            burn.target_address
+        ));
+    }
+    if burn.target_chain_id != bridge.source_chain_id {
+        return Err(format!(
+            "the burn transaction is for chain {}, but the bridge serves chain {}",
+            burn.target_chain_id, bridge.source_chain_id
+        ));
+    }
+    if Some(burn.target_nonce) != nonce.checked_add(1) {
+        return Err(format!(
+            "the burn transaction has nonce {}, but the last nonce released to {recipient} is {nonce}",
+            burn.target_nonce
+        ));
+    }
+    if !burn_proof.is_proof_depth_valid(bridge.chain_config.max_proof_depth) {
+        return Err(format!(
+            "the Merkle proof is deeper than the maximum of {}",
+            bridge.chain_config.max_proof_depth
+        ));
+    }
+
+    // The proof is verified against the oracle state at `index`, chained onto the state before it
+    // (or onto a zero hash for the very first state).
+    let oracle = oracle.ok_or_else(|| {
+        format!(
+            "the bridge's oracle {} does not exist",
+            bridge.oracle_address
+        )
+    })?;
+    let index = burn_proof.oracle_state_index;
+    let unavailable = |index: u64| format!("oracle state {index} is not available");
+    let state = oracle
+        .get_hash_at_index(index)
+        .ok_or_else(|| unavailable(index))?;
+    let leaf = burn_proof
+        .extract_burn_transaction_hash(&bridge.chain_config.hash_function)
+        .map_err(|error| format!("cannot hash the burn transaction: {error}"))?;
+    let previous_state = match index.checked_sub(1) {
+        Some(previous) => oracle
+            .get_hash_at_index(previous)
+            .cloned()
+            .ok_or_else(|| unavailable(previous))?,
+        None => leaf.zero_of_same_type(),
+    };
+    let root = burn_proof
+        .compute_merkle_root(leaf)
+        .map_err(|error| format!("invalid Merkle proof: {error}"))?;
+    if *state != previous_state.digest(&root) {
+        return Err(format!(
+            "the Merkle proof does not match oracle state {index}"
+        ));
+    }
+
+    if bridge.balance < value {
+        return Err(format!("the bridge only holds {}", bridge.balance));
+    }
+
+    Ok(())
 }
 
 #[nimiq_jsonrpc_derive::service(rename_all = "camelCase")]
@@ -1379,5 +1532,486 @@ impl ConsensusInterface for ConsensusDispatcher {
             .await?
             .data;
         self.send_raw_transaction(raw_tx).await
+    }
+
+    async fn create_bridge_deposit_transaction(
+        &self,
+        wallet: Address,
+        bridge_address: Address,
+        data: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        let transaction = TransactionBuilder::new_bridge_deposit(
+            &self.get_wallet_keypair(&wallet)?,
+            bridge_address,
+            hex::decode(data)?,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        )?;
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    async fn send_bridge_deposit_transaction(
+        &self,
+        wallet: Address,
+        bridge_address: Address,
+        data: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        let raw_tx = self
+            .create_bridge_deposit_transaction(
+                wallet,
+                bridge_address,
+                data,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    async fn create_bridge_release_transaction(
+        &self,
+        signer_wallet: Address,
+        bridge_address: Address,
+        recipient: Address,
+        burn_transaction_data: String,
+        merkle_proof: String,
+        oracle_state_index: u64,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        let transaction = TransactionBuilder::new_bridge_release(
+            &self.get_wallet_keypair(&signer_wallet)?,
+            bridge_address,
+            recipient,
+            parse_burn_proof(&burn_transaction_data, &merkle_proof, oracle_state_index)?,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        )?;
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    async fn send_bridge_release_transaction(
+        &self,
+        signer_wallet: Address,
+        bridge_address: Address,
+        recipient: Address,
+        burn_transaction_data: String,
+        merkle_proof: String,
+        oracle_state_index: u64,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        let burn_proof =
+            parse_burn_proof(&burn_transaction_data, &merkle_proof, oracle_state_index)?;
+        self.check_bridge_release(&bridge_address, &recipient, value, &burn_proof)?;
+
+        let raw_tx = self
+            .create_bridge_release_transaction(
+                signer_wallet,
+                bridge_address,
+                recipient,
+                burn_transaction_data,
+                merkle_proof,
+                oracle_state_index,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    async fn create_update_oracle_transaction(
+        &self,
+        sender_wallet: Address,
+        owner_wallet: Address,
+        oracle_address: Address,
+        hashes: Vec<AnyHash>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        let transaction = TransactionBuilder::new_update_oracle(
+            &self.get_wallet_keypair(&sender_wallet)?,
+            &self.get_wallet_keypair(&owner_wallet)?,
+            oracle_address,
+            hashes,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    async fn send_update_oracle_transaction(
+        &self,
+        sender_wallet: Address,
+        owner_wallet: Address,
+        oracle_address: Address,
+        hashes: Vec<AnyHash>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        let raw_tx = self
+            .create_update_oracle_transaction(
+                sender_wallet,
+                owner_wallet,
+                oracle_address,
+                hashes,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    async fn create_change_oracle_owner_transaction(
+        &self,
+        sender_wallet: Address,
+        owner_wallet: Address,
+        oracle_address: Address,
+        new_owner: Address,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        let transaction = TransactionBuilder::new_change_oracle_owner(
+            &self.get_wallet_keypair(&sender_wallet)?,
+            &self.get_wallet_keypair(&owner_wallet)?,
+            oracle_address,
+            new_owner,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    async fn send_change_oracle_owner_transaction(
+        &self,
+        sender_wallet: Address,
+        owner_wallet: Address,
+        oracle_address: Address,
+        new_owner: Address,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        let raw_tx = self
+            .create_change_oracle_owner_transaction(
+                sender_wallet,
+                owner_wallet,
+                oracle_address,
+                new_owner,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    async fn create_delete_oracle_transaction(
+        &self,
+        owner_wallet: Address,
+        oracle_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        // The oracle contract only accepts a withdrawal of its full balance with no fee on top. A
+        // withdrawal with a fee fails, and the contract cannot even charge the fee of the failed
+        // transaction, so such a transaction must not be built.
+        if !fee.is_zero() {
+            return Err(Error::InvalidArgument(
+                "Fee: withdrawing an oracle deposit requires a zero fee".to_string(),
+            ));
+        }
+
+        let transaction = TransactionBuilder::new_delete_oracle(
+            &self.get_wallet_keypair(&owner_wallet)?,
+            oracle_address,
+            recipient,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        )?;
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    async fn send_delete_oracle_transaction(
+        &self,
+        owner_wallet: Address,
+        oracle_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        // If the node is in the position of having a full state, it can check upfront if this transaction makes sense
+        if let BlockchainReadProxy::Full(blockchain) = self.consensus.blockchain.read() {
+            match blockchain
+                .get_account_if_complete(&oracle_address)
+                .ok_or(Error::NoConsensus)?
+            {
+                Account::Oracle(oracle) if oracle.balance != value => {
+                    return Err(Error::InvalidArgument(format!(
+                        "Value: must equal the oracle balance of {}",
+                        oracle.balance
+                    )));
+                }
+                Account::Oracle(_) => {}
+                _ => return Err(Error::InvalidAddress(oracle_address)),
+            }
+        }
+
+        let raw_tx = self
+            .create_delete_oracle_transaction(
+                owner_wallet,
+                oracle_address,
+                recipient,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_account::{BridgeContract, OracleContract};
+    use nimiq_hash::{Blake2bHasher, HashOutput, Hasher};
+    use nimiq_keys::Address;
+    use nimiq_primitives::coin::Coin;
+    use nimiq_transaction::account::{
+        bridge_contract::{
+            AddressFormat, AnyMerkleProof, ChainConfig, Endianness, OutgoingTransaction,
+            ValidationOp, ValidationProgram,
+        },
+        htlc_contract::{AnyHash, AnyHash32},
+    };
+    use nimiq_utils::merkle::MerklePath;
+
+    use super::verify_bridge_release;
+
+    const CHAIN_ID: u32 = 1;
+    const AMOUNT: u64 = 500;
+
+    fn target() -> Address {
+        Address::from([0xAAu8; 20])
+    }
+
+    fn blake2b(data: &[u8]) -> AnyHash {
+        AnyHash::Blake2b(AnyHash32::from(
+            Blake2bHasher::default().digest(data).as_bytes(),
+        ))
+    }
+
+    /// Reads `[0..20]` target address, `[20..28]` amount, `[28..36]` nonce,
+    /// `[36..40]` burn block height and `[40..44]` target chain ID.
+    fn bridge(balance: u64) -> BridgeContract {
+        let load = |offset, op, name: &str| {
+            [
+                ValidationOp::PushConst(offset),
+                op,
+                ValidationOp::Store(name.to_string()),
+            ]
+        };
+        let operations = [
+            load(0, ValidationOp::LoadAddress, "target_address"),
+            load(
+                20,
+                ValidationOp::LoadU64(Endianness::LittleEndian),
+                "amount",
+            ),
+            load(
+                28,
+                ValidationOp::LoadU64(Endianness::LittleEndian),
+                "target_nonce",
+            ),
+            load(
+                36,
+                ValidationOp::LoadU32(Endianness::LittleEndian),
+                "burn_block_height",
+            ),
+            load(
+                40,
+                ValidationOp::LoadU32(Endianness::LittleEndian),
+                "target_chain_id",
+            ),
+        ]
+        .concat();
+
+        BridgeContract {
+            owner: Address::from([0x01u8; 20]),
+            oracle_address: Address::from([0x0Eu8; 20]),
+            balance: Coin::from_u64_unchecked(balance),
+            source_chain_id: CHAIN_ID,
+            chain_config: ChainConfig {
+                chain_id: CHAIN_ID,
+                hash_function: AnyHash::Blake2b(AnyHash32::default()),
+                address_format: AddressFormat::Nimiq,
+                endianness: Endianness::LittleEndian,
+                block_time: std::time::Duration::from_secs(60),
+                validation_program: ValidationProgram::new(operations),
+                max_proof_depth: 64,
+            },
+            transaction_count: 0,
+        }
+    }
+
+    fn burn_data(nonce: u64) -> Vec<u8> {
+        let mut data = target().as_bytes().to_vec();
+        data.extend_from_slice(&AMOUNT.to_le_bytes());
+        data.extend_from_slice(&nonce.to_le_bytes());
+        data.extend_from_slice(&42u32.to_le_bytes());
+        data.extend_from_slice(&CHAIN_ID.to_le_bytes());
+        data
+    }
+
+    fn burn_proof(burn_data: Vec<u8>, oracle_state_index: u64) -> OutgoingTransaction {
+        OutgoingTransaction::new(
+            burn_data,
+            AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+            oracle_state_index,
+        )
+        .unwrap()
+    }
+
+    /// An oracle whose states commit to single-leaf trees holding the given burn transactions,
+    /// chained the same way the oracle contract chains its updates.
+    fn oracle(burns: &[Vec<u8>]) -> OracleContract {
+        let hash_count = 4;
+        let mut hashes = vec![blake2b(&[]).zero_of_same_type(); hash_count];
+        let mut state = hashes[0].clone();
+        for (index, burn) in burns.iter().enumerate() {
+            state = state.digest(&blake2b(burn));
+            hashes[index] = state.clone();
+        }
+        OracleContract {
+            owner: Address::from([0x01u8; 20]),
+            balance: Coin::from_u64_unchecked(1_000),
+            hash_count: hash_count as u16,
+            hashes,
+            latest_index: Some(burns.len() as u64 - 1),
+        }
+    }
+
+    fn verify(
+        bridge: &BridgeContract,
+        oracle: Option<&OracleContract>,
+        nonce: u64,
+        value: u64,
+        burn_proof: &OutgoingTransaction,
+    ) -> Result<(), String> {
+        verify_bridge_release(
+            bridge,
+            oracle,
+            nonce,
+            &target(),
+            Coin::from_u64_unchecked(value),
+            burn_proof,
+        )
+    }
+
+    #[test]
+    fn accepts_releases_proven_against_the_first_and_a_chained_state() {
+        let oracle = oracle(&[burn_data(1), burn_data(2)]);
+
+        let first = burn_proof(burn_data(1), 0);
+        assert_eq!(
+            verify(&bridge(10_000), Some(&oracle), 0, AMOUNT, &first),
+            Ok(())
+        );
+
+        let second = burn_proof(burn_data(2), 1);
+        assert_eq!(
+            verify(&bridge(10_000), Some(&oracle), 1, AMOUNT, &second),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn rejects_releases_that_consensus_would_reject() {
+        let oracle = oracle(&[burn_data(1)]);
+        let proof = burn_proof(burn_data(1), 0);
+        let rejects = |result: Result<(), String>, reason: &str| {
+            let error = result.expect_err("the release must be rejected");
+            assert!(
+                error.contains(reason),
+                "{error:?} does not mention {reason:?}"
+            );
+        };
+
+        rejects(
+            verify(&bridge(10_000), Some(&oracle), 0, AMOUNT + 1, &proof),
+            "burned amount",
+        );
+        rejects(
+            verify_bridge_release(
+                &bridge(10_000),
+                Some(&oracle),
+                0,
+                &Address::from([0xBBu8; 20]),
+                Coin::from_u64_unchecked(AMOUNT),
+                &proof,
+            ),
+            "pays",
+        );
+        rejects(
+            verify(&bridge(10_000), Some(&oracle), 1, AMOUNT, &proof),
+            "nonce",
+        );
+        rejects(
+            verify(&bridge(10_000), None, 0, AMOUNT, &proof),
+            "does not exist",
+        );
+        rejects(
+            verify(
+                &bridge(10_000),
+                Some(&oracle),
+                0,
+                AMOUNT,
+                &burn_proof(burn_data(1), 1),
+            ),
+            "not available",
+        );
+        rejects(
+            verify(
+                &bridge(10_000),
+                Some(&oracle),
+                1,
+                AMOUNT,
+                &burn_proof(burn_data(2), 0),
+            ),
+            "does not match",
+        );
+        rejects(
+            verify(&bridge(AMOUNT - 1), Some(&oracle), 0, AMOUNT, &proof),
+            "only holds",
+        );
     }
 }

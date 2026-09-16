@@ -64,3 +64,6 @@ nimiq-validator = { workspace = true }
 nimiq-validator-network = { workspace = true }
 nimiq-vrf = { workspace = true, features = ["serde-derive"] }
 nimiq-wallet = { workspace = true, features = ["store"] }
+
+[dev-dependencies]
+nimiq-utils = { workspace = true, features = ["merkle"] }
