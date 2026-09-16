@@ -386,6 +386,51 @@ pub enum TransactionCommand {
         tx_commons: TxCommonWithValue,
     },
 
+    /// Sends a transaction depositing funds into an existing bridge contract to the network.
+    /// The funds are locked for transfer to the bridge's destination chain.
+    BridgeDeposit {
+        /// The deposit and the fee are sent from this wallet.
+        /// The sender wallet must be unlocked prior to this action.
+        sender_wallet: Address,
+
+        /// The address of the bridge contract.
+        bridge_address: Address,
+
+        /// The data (in hex) read by the bridge relayer. It describes where the funds go on the
+        /// destination chain.
+        data: String,
+
+        #[clap(flatten)]
+        tx_commons: TxCommonWithValue,
+    },
+
+    /// Sends a transaction releasing funds from a bridge contract to the network.
+    /// The release is proven by a burn of the corresponding tokens on the source chain, and its
+    /// value must match the burned amount.
+    BridgeRelease {
+        /// This wallet signs the burn proof and pays the fee.
+        /// The signer wallet must be unlocked prior to this action.
+        signer_wallet: Address,
+
+        /// The address of the bridge contract.
+        bridge_address: Address,
+
+        /// The address that receives the funds. It must match the burn transaction.
+        recipient: Address,
+
+        /// The raw burn transaction (in hex).
+        burn_transaction_data: String,
+
+        /// The serialized `AnyMerkleProof` of the burn transaction (in hex).
+        merkle_proof: String,
+
+        /// The index of the oracle state the Merkle proof is verified against.
+        oracle_state_index: u64,
+
+        #[clap(flatten)]
+        tx_commons: TxCommonWithValue,
+    },
+
     /* Oracle contract transactions */
     /// Sends a transaction creating a new oracle contract to the network.
     CreateOracle {
@@ -398,6 +443,69 @@ pub enum TransactionCommand {
 
         /// The number of hashes that can be stored (ring buffer size).
         hash_count: u16,
+
+        #[clap(flatten)]
+        tx_commons: TxCommonWithValue,
+    },
+
+    /// Sends a transaction appending hashes to an existing oracle contract to the network.
+    UpdateOracle {
+        /// The fee will be paid from this wallet.
+        /// The sender wallet must be unlocked prior to this action.
+        sender_wallet: Address,
+
+        /// The owner of the oracle contract, who signs the update.
+        /// The owner wallet must be unlocked prior to this action.
+        owner_wallet: Address,
+
+        /// The address of the oracle contract.
+        oracle_address: Address,
+
+        /// The hashing algorithm of the hashes. It must match the one used by the oracle.
+        #[clap(value_enum)]
+        hash_algorithm: HashAlgorithm,
+
+        /// The hashes to append.
+        #[clap(required = true)]
+        hashes: Vec<String>,
+
+        #[clap(flatten)]
+        tx_commons: TxCommon,
+    },
+
+    /// Sends a transaction transferring ownership of an oracle contract to the network.
+    ChangeOracleOwner {
+        /// The fee will be paid from this wallet.
+        /// The sender wallet must be unlocked prior to this action.
+        sender_wallet: Address,
+
+        /// The current owner of the oracle contract, who signs the change.
+        /// The owner wallet must be unlocked prior to this action.
+        owner_wallet: Address,
+
+        /// The address of the oracle contract.
+        oracle_address: Address,
+
+        /// The address of the new owner.
+        new_owner: Address,
+
+        #[clap(flatten)]
+        tx_commons: TxCommon,
+    },
+
+    /// Sends a transaction withdrawing the deposit of an oracle contract to the network.
+    /// This deletes the contract. The value must equal the full balance of the contract and the
+    /// fee must be zero.
+    DeleteOracle {
+        /// The owner of the oracle contract, who signs the transaction.
+        /// The owner wallet must be unlocked prior to this action.
+        owner_wallet: Address,
+
+        /// The address of the oracle contract.
+        oracle_address: Address,
+
+        /// The address of the basic account that receives the deposit.
+        recipient: Address,
 
         #[clap(flatten)]
         tx_commons: TxCommonWithValue,
@@ -1016,6 +1124,192 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             owner,
                             hash_count,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+            TransactionCommand::BridgeDeposit {
+                sender_wallet,
+                bridge_address,
+                data,
+                tx_commons,
+            } => {
+                if tx_commons.common_tx_fields.dry {
+                    let tx = client
+                        .consensus
+                        .create_bridge_deposit_transaction(
+                            sender_wallet,
+                            bridge_address,
+                            data,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_bridge_deposit_transaction(
+                            sender_wallet,
+                            bridge_address,
+                            data,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+            TransactionCommand::BridgeRelease {
+                signer_wallet,
+                bridge_address,
+                recipient,
+                burn_transaction_data,
+                merkle_proof,
+                oracle_state_index,
+                tx_commons,
+            } => {
+                if tx_commons.common_tx_fields.dry {
+                    let tx = client
+                        .consensus
+                        .create_bridge_release_transaction(
+                            signer_wallet,
+                            bridge_address,
+                            recipient,
+                            burn_transaction_data,
+                            merkle_proof,
+                            oracle_state_index,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_bridge_release_transaction(
+                            signer_wallet,
+                            bridge_address,
+                            recipient,
+                            burn_transaction_data,
+                            merkle_proof,
+                            oracle_state_index,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+            TransactionCommand::UpdateOracle {
+                sender_wallet,
+                owner_wallet,
+                oracle_address,
+                hash_algorithm,
+                hashes,
+                tx_commons,
+            } => {
+                let hashes = hashes
+                    .into_iter()
+                    .map(|hash| Self::parse_hash(&hash_algorithm, hash))
+                    .collect::<Result<Vec<_>, _>>()?;
+                if tx_commons.dry {
+                    let tx = client
+                        .consensus
+                        .create_update_oracle_transaction(
+                            sender_wallet,
+                            owner_wallet,
+                            oracle_address,
+                            hashes,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_update_oracle_transaction(
+                            sender_wallet,
+                            owner_wallet,
+                            oracle_address,
+                            hashes,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+            TransactionCommand::ChangeOracleOwner {
+                sender_wallet,
+                owner_wallet,
+                oracle_address,
+                new_owner,
+                tx_commons,
+            } => {
+                if tx_commons.dry {
+                    let tx = client
+                        .consensus
+                        .create_change_oracle_owner_transaction(
+                            sender_wallet,
+                            owner_wallet,
+                            oracle_address,
+                            new_owner,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_change_oracle_owner_transaction(
+                            sender_wallet,
+                            owner_wallet,
+                            oracle_address,
+                            new_owner,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+            TransactionCommand::DeleteOracle {
+                owner_wallet,
+                oracle_address,
+                recipient,
+                tx_commons,
+            } => {
+                if tx_commons.common_tx_fields.dry {
+                    let tx = client
+                        .consensus
+                        .create_delete_oracle_transaction(
+                            owner_wallet,
+                            oracle_address,
+                            recipient,
+                            tx_commons.value,
+                            tx_commons.common_tx_fields.fee,
+                            tx_commons.common_tx_fields.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_delete_oracle_transaction(
+                            owner_wallet,
+                            oracle_address,
+                            recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
                             tx_commons.common_tx_fields.validity_start_height,
