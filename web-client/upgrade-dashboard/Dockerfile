@@ -8,7 +8,7 @@
 FROM rust:1-bookworm
 
 # clang provides the WebAssembly backend that cc-rs uses to compile C dependencies
-# (e.g. clear_on_drop) to wasm32. Debian's clang ships the wasm target; Apple clang on
+# (e.g. zeroize) to wasm32. Debian's clang ships the wasm target; Apple clang on
 # macOS does not, which is why building directly on the host fails.
 # nodejs/npm + yarn (via corepack) are needed by build.sh's launcher/lib steps (tsup),
 # so that the full dist is regenerated consistently. They live only in this image.

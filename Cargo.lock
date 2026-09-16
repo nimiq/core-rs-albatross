@@ -948,15 +948,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
-name = "clear_on_drop"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38508a63f4979f0048febc9966fadbd48e5dab31fd0ec6a3f151bbf4a74f7423"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "cmov"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4998,7 +4989,6 @@ name = "nimiq-utils"
 version = "2.2.0"
 dependencies = [
  "build-data",
- "clear_on_drop",
  "futures-util",
  "hex",
  "instant",
@@ -5021,6 +5011,7 @@ dependencies = [
  "tokio",
  "tracing",
  "wasm-bindgen-futures",
+ "zeroize",
 ]
 
 [[package]]

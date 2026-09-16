@@ -9,9 +9,11 @@ use hex::FromHex;
 use nimiq_utils::key_rng::SecureGenerate;
 use rand::{CryptoRng, Rng};
 use sha2::{Digest as _, Sha512};
+use zeroize::Zeroize;
 
 use crate::errors::{KeysError, ParseError};
 
+#[derive(Zeroize)]
 #[cfg_attr(feature = "serde-derive", derive(nimiq_hash_derive::SerializeContent))]
 pub struct PrivateKey(pub ed25519_zebra::SigningKey);
 

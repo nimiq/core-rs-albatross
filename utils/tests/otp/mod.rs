@@ -8,6 +8,13 @@ struct DummyU32 {
     checksum: u32,
 }
 
+impl Zeroize for DummyU32 {
+    fn zeroize(&mut self) {
+        self.value.zeroize();
+        self.checksum.zeroize();
+    }
+}
+
 impl DummyU32 {
     fn new(value: u32) -> Self {
         DummyU32 {

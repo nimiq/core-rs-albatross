@@ -4,7 +4,7 @@ use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, KeyPair, SecureGen
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::Serialize;
 use nimiq_transaction::{SignatureProof, Transaction};
-use nimiq_utils::otp::Verify;
+use nimiq_utils::otp::{Verify, Zeroize};
 
 pub const NIMIQ_SIGN_MESSAGE_PREFIX: &[u8] = b"\x16Nimiq Signed Message:\n";
 
@@ -13,6 +13,13 @@ pub struct WalletAccount {
     pub key_pair: KeyPair,
     #[serde(skip)]
     pub address: Address,
+}
+
+impl Zeroize for WalletAccount {
+    fn zeroize(&mut self) {
+        self.key_pair.zeroize();
+        self.address.0.zeroize();
+    }
 }
 
 impl Verify for WalletAccount {

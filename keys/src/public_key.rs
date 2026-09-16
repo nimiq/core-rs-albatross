@@ -5,6 +5,7 @@ use std::{
 };
 
 use hex::FromHex;
+use zeroize::Zeroize;
 
 use crate::{
     errors::{KeysError, ParseError},
@@ -80,6 +81,12 @@ impl FromStr for Ed25519PublicKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ed25519PublicKey::from_hex(s)
+    }
+}
+
+impl Zeroize for Ed25519PublicKey {
+    fn zeroize(&mut self) {
+        *self = Self::default();
     }
 }
 
