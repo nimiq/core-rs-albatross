@@ -4,30 +4,39 @@ use nimiq_hash::{HashOutput, SerializeContent};
 use nimiq_keys::KeyPair;
 use nimiq_primitives::account::AccountType;
 use nimiq_serde::Serialize;
-use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_transaction::{SignatureProof, Transaction, TransactionFlags};
 
 use crate::proof::{
+    bridge_contract::BridgeProofBuilder,
     htlc_contract::HtlcProofBuilder,
+    oracle_contract::OracleDataBuilder,
     staking_contract::{StakingDataBuilder, StakingProofBuilder},
 };
 
+pub mod bridge_contract;
 pub mod htlc_contract;
+pub mod oracle_contract;
 pub mod staking_contract;
 
 /// The `TransactionProofBuilder` subsumes the builders used to populate a transaction
 /// with the required proof to be valid.
-/// The proof mostly depends on the sender account (with the exception of incoming staking transactions).
+/// The proof mostly depends on the sender account (with the exception of incoming staking and
+/// oracle signaling transactions).
 ///
-/// Thus, there exist four different types of proof builders:
-/// - [`BasicProofBuilder`] (for basic and vesting sender accounts)
+/// Thus, there exist six different types of proof builders:
+/// - [`BasicProofBuilder`] (for basic, vesting and oracle sender accounts)
 /// - [`HtlcProofBuilder`] (for HTLC sender accounts)
 /// - [`StakingProofBuilder`] (for outgoing staking transactions)
 /// - [`StakingDataBuilder`] (that build the staking data and return a normal proof builder)
+/// - [`OracleDataBuilder`] (that build the oracle signaling data and return a normal proof builder)
+/// - [`BridgeProofBuilder`] (for bridge releases)
 ///
 /// [`StakingDataBuilder`]: staking_contract/struct.StakingDataBuilder.html
 /// [`BasicProofBuilder`]: struct.BasicProofBuilder.html
 /// [`HtlcProofBuilder`]: htlc_contract/struct.HtlcProofBuilder.html
 /// [`StakingProofBuilder`]: staking_contract/struct.StakingProofBuilder.html
+/// [`OracleDataBuilder`]: oracle_contract/struct.OracleDataBuilder.html
+/// [`BridgeProofBuilder`]: bridge_contract/struct.BridgeProofBuilder.html
 #[derive(Clone, Debug)]
 pub enum TransactionProofBuilder {
     Basic(BasicProofBuilder),
@@ -35,11 +44,14 @@ pub enum TransactionProofBuilder {
     Htlc(HtlcProofBuilder),
     OutStaking(StakingProofBuilder),
     InStaking(StakingDataBuilder),
+    InOracle(OracleDataBuilder),
+    OutBridge(BridgeProofBuilder),
 }
 
 impl TransactionProofBuilder {
-    /// Internal method that ignores incoming staking transactions.
-    fn without_in_staking(transaction: Transaction) -> Self {
+    /// Internal method that picks the proof builder for the sender account, ignoring any
+    /// signature required inside the recipient data.
+    fn for_sender(transaction: Transaction) -> Self {
         match transaction.sender_type {
             AccountType::Basic => {
                 TransactionProofBuilder::Basic(BasicProofBuilder::new(transaction))
@@ -55,8 +67,7 @@ impl TransactionProofBuilder {
                 TransactionProofBuilder::Basic(BasicProofBuilder::new(transaction))
             }
             AccountType::Bridge => {
-                // Bridge contracts use basic proof builder for now
-                TransactionProofBuilder::Basic(BasicProofBuilder::new(transaction))
+                TransactionProofBuilder::OutBridge(BridgeProofBuilder::new(transaction))
             }
         }
     }
@@ -68,7 +79,13 @@ impl TransactionProofBuilder {
             return TransactionProofBuilder::InStaking(StakingDataBuilder::new(transaction));
         }
 
-        TransactionProofBuilder::without_in_staking(transaction)
+        if transaction.recipient_type == AccountType::Oracle
+            && transaction.flags.contains(TransactionFlags::SIGNALING)
+        {
+            return TransactionProofBuilder::InOracle(OracleDataBuilder::new(transaction));
+        }
+
+        TransactionProofBuilder::for_sender(transaction)
     }
 
     /// This method returns a reference to the preliminary transaction without the required
@@ -107,6 +124,8 @@ impl TransactionProofBuilder {
             TransactionProofBuilder::Htlc(builder) => &builder.transaction,
             TransactionProofBuilder::OutStaking(builder) => &builder.transaction,
             TransactionProofBuilder::InStaking(builder) => &builder.transaction,
+            TransactionProofBuilder::InOracle(builder) => &builder.transaction,
+            TransactionProofBuilder::OutBridge(builder) => &builder.transaction,
         }
     }
 
@@ -311,6 +330,31 @@ impl TransactionProofBuilder {
             _ => panic!("TransactionProofBuilder was not a StakingProofBuilder"),
         }
     }
+
+    /// This method has to be used for signaling transactions to an existing oracle contract.
+    /// It is used to populate the owner signature in the data field and can generate
+    /// another proof builder for the actual proof field.
+    /// This method returns the underlying [`OracleDataBuilder`].
+    ///
+    /// [`OracleDataBuilder`]: oracle_contract/struct.OracleDataBuilder.html
+    pub fn unwrap_in_oracle(self) -> OracleDataBuilder {
+        match self {
+            TransactionProofBuilder::InOracle(builder) => builder,
+            _ => panic!("TransactionProofBuilder was not an OracleDataBuilder"),
+        }
+    }
+
+    /// This kind of proof builder is used for transactions that release funds
+    /// from a bridge contract.
+    /// The method returns the underlying [`BridgeProofBuilder`].
+    ///
+    /// [`BridgeProofBuilder`]: bridge_contract/struct.BridgeProofBuilder.html
+    pub fn unwrap_out_bridge(self) -> BridgeProofBuilder {
+        match self {
+            TransactionProofBuilder::OutBridge(builder) => builder,
+            _ => panic!("TransactionProofBuilder was not a BridgeProofBuilder"),
+        }
+    }
 }
 
 impl SerializeContent for TransactionProofBuilder {
@@ -329,6 +373,12 @@ impl SerializeContent for TransactionProofBuilder {
                 SerializeContent::serialize_content::<_, H>(&builder.transaction, writer)
             }
             TransactionProofBuilder::OutStaking(builder) => {
+                SerializeContent::serialize_content::<_, H>(&builder.transaction, writer)
+            }
+            TransactionProofBuilder::InOracle(builder) => {
+                SerializeContent::serialize_content::<_, H>(&builder.transaction, writer)
+            }
+            TransactionProofBuilder::OutBridge(builder) => {
                 SerializeContent::serialize_content::<_, H>(&builder.transaction, writer)
             }
         }

@@ -1,12 +1,17 @@
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountType, policy::Policy};
 use nimiq_serde::Serialize;
-use nimiq_transaction::account::{
-    bridge_contract::CreationTransactionData as BridgeCreationData,
-    htlc_contract::CreationTransactionData as HtlcCreationData,
-    oracle_contract::CreationTransactionData as OracleCreationData,
-    staking_contract::IncomingStakingTransactionData,
-    vesting_contract::CreationTransactionData as VestingCreationData,
+use nimiq_transaction::{
+    account::{
+        bridge_contract::CreationTransactionData as BridgeCreationData,
+        htlc_contract::{AnyHash, CreationTransactionData as HtlcCreationData},
+        oracle_contract::{
+            CreationTransactionData as OracleCreationData, IncomingOracleTransactionData,
+        },
+        staking_contract::IncomingStakingTransactionData,
+        vesting_contract::CreationTransactionData as VestingCreationData,
+    },
+    SignatureProof,
 };
 
 use crate::recipient::{
@@ -26,20 +31,26 @@ pub mod vesting_contract;
 ///
 /// New contracts can be created using dedicated builders as described below.
 ///
-/// There are six types of recipients:
+/// There are eight types of recipients:
 /// - basic recipients that can be built with [`new_basic`]
 /// - HTLC contracts that can be set up with a builder using [`new_htlc_builder`]
 /// - vesting contracts that can be set up with a builder using [`new_vesting_builder`]
 /// - actions on the staking contract that built with [`new_staking_builder`]
 /// - bridge contracts that can be set up with a builder using [`new_bridge_builder`]
+/// - deposits into an existing bridge contract built with [`new_bridge_deposit`]
 /// - oracle contracts that can be set up with a builder using [`new_oracle_builder`]
+/// - actions on an existing oracle contract built with [`new_oracle_update`] and
+///   [`new_oracle_change_owner`]
 ///
 /// [`new_basic`]: enum.Recipient.html#method.new_basic
 /// [`new_htlc_builder`]: enum.Recipient.html#method.new_htlc_builder
 /// [`new_vesting_builder`]: enum.Recipient.html#method.new_vesting_builder
 /// [`new_staking_builder`]: enum.Recipient.html#method.new_staking_builder
 /// [`new_bridge_builder`]: enum.Recipient.html#method.new_bridge_builder
+/// [`new_bridge_deposit`]: enum.Recipient.html#method.new_bridge_deposit
 /// [`new_oracle_builder`]: enum.Recipient.html#method.new_oracle_builder
+/// [`new_oracle_update`]: enum.Recipient.html#method.new_oracle_update
+/// [`new_oracle_change_owner`]: enum.Recipient.html#method.new_oracle_change_owner
 #[derive(Clone, Debug)]
 pub enum Recipient {
     Basic {
@@ -58,8 +69,16 @@ pub enum Recipient {
     BridgeCreation {
         data: BridgeCreationData,
     },
+    Bridge {
+        address: Address,
+        data: Vec<u8>,
+    },
     OracleCreation {
         data: OracleCreationData,
+    },
+    Oracle {
+        address: Address,
+        data: IncomingOracleTransactionData,
     },
 }
 
@@ -202,6 +221,48 @@ impl Recipient {
         OracleRecipientBuilder::with_owner_init(owner)
     }
 
+    /// Creates a `Recipient` that deposits funds into the existing bridge contract at `address`,
+    /// locking them for transfer to the bridge's destination chain.
+    ///
+    /// The bridge contract does not interpret `data`; it is carried in the transaction for the
+    /// off-chain relayer, which reads the destination of the deposit from it.
+    pub fn new_bridge_deposit(address: Address, data: Vec<u8>) -> Self {
+        Recipient::Bridge { address, data }
+    }
+
+    /// Creates a `Recipient` that appends `hashes` to the existing oracle contract at `address`.
+    ///
+    /// This is a signaling transaction that must be signed by the oracle owner using an
+    /// [`OracleDataBuilder`].
+    ///
+    /// [`OracleDataBuilder`]: crate::proof::oracle_contract::OracleDataBuilder
+    pub fn new_oracle_update(address: Address, hashes: Vec<AnyHash>) -> Self {
+        Recipient::Oracle {
+            address,
+            data: IncomingOracleTransactionData::Update {
+                hashes,
+                proof: SignatureProof::default(),
+            },
+        }
+    }
+
+    /// Creates a `Recipient` that transfers ownership of the existing oracle contract at
+    /// `address` to `new_owner`.
+    ///
+    /// This is a signaling transaction that must be signed by the current oracle owner using an
+    /// [`OracleDataBuilder`].
+    ///
+    /// [`OracleDataBuilder`]: crate::proof::oracle_contract::OracleDataBuilder
+    pub fn new_oracle_change_owner(address: Address, new_owner: Address) -> Self {
+        Recipient::Oracle {
+            address,
+            data: IncomingOracleTransactionData::ChangeOwner {
+                new_owner,
+                proof: SignatureProof::default(),
+            },
+        }
+    }
+
     /// This method checks whether the transaction is a contract creation.
     /// Vesting, HTLC, Bridge, and Oracle recipients do create new contracts.
     /// Basic recipients and the staking contract do not create new contracts.
@@ -217,7 +278,8 @@ impl Recipient {
 
     /// This method checks whether the transaction is a signaling transaction
     /// (i.e., requires a zero value).
-    /// Only the following transactions on the staking contract are signaling transactions:
+    /// All transactions to an existing oracle contract are signaling transactions, as are the
+    /// following transactions on the staking contract:
     /// * [`update validator`]
     /// * [`retire validator`]
     /// * [`re-activate validator`]
@@ -227,6 +289,7 @@ impl Recipient {
     pub fn is_signaling(&self) -> bool {
         match self {
             Recipient::Staking { data } => data.is_signaling(),
+            Recipient::Oracle { .. } => true,
             _ => false,
         }
     }
@@ -238,15 +301,17 @@ impl Recipient {
             Recipient::HtlcCreation { .. } => AccountType::HTLC,
             Recipient::VestingCreation { .. } => AccountType::Vesting,
             Recipient::Staking { .. } => AccountType::Staking,
-            Recipient::BridgeCreation { .. } => AccountType::Bridge,
-            Recipient::OracleCreation { .. } => AccountType::Oracle,
+            Recipient::BridgeCreation { .. } | Recipient::Bridge { .. } => AccountType::Bridge,
+            Recipient::OracleCreation { .. } | Recipient::Oracle { .. } => AccountType::Oracle,
         }
     }
 
     /// Returns the recipient address if this is not a contract creation.
     pub fn address(&self) -> Option<Address> {
         match self {
-            Recipient::Basic { address, .. } => Some(address.clone()),
+            Recipient::Basic { address, .. }
+            | Recipient::Bridge { address, .. }
+            | Recipient::Oracle { address, .. } => Some(address.clone()),
             Recipient::Staking { .. } => Some(Policy::STAKING_CONTRACT_ADDRESS),
             _ => None,
         }
@@ -255,12 +320,13 @@ impl Recipient {
     /// Returns the data field for the transaction.
     pub fn data(&self) -> Vec<u8> {
         match self {
-            Recipient::Basic { data, .. } => data.clone(),
+            Recipient::Basic { data, .. } | Recipient::Bridge { data, .. } => data.clone(),
             Recipient::HtlcCreation { data } => data.serialize_to_vec(),
             Recipient::VestingCreation { data } => data.to_tx_data(),
             Recipient::Staking { data } => data.serialize_to_vec(),
             Recipient::BridgeCreation { data } => data.serialize_to_vec(),
             Recipient::OracleCreation { data } => data.serialize_to_vec(),
+            Recipient::Oracle { data, .. } => data.serialize_to_vec(),
         }
     }
 }

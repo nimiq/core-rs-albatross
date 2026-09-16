@@ -2,6 +2,11 @@ use std::str::FromStr;
 
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_serde::Deserialize;
+use nimiq_transaction::account::{
+    bridge_contract::{AnyMerkleProof, ChainConfig, OutgoingTransaction},
+    htlc_contract::{AnyHash, AnyHash32, AnyHash64},
+};
 use nimiq_transaction_builder::{Recipient, Sender};
 use wasm_bindgen::prelude::*;
 
@@ -552,4 +557,270 @@ impl TransactionBuilder {
         let tx = proof_builder.preliminary_transaction().to_owned();
         Ok(Transaction::from(tx))
     }
+
+    /// Creates a new oracle contract owned by `owner` that stores up to `hash_count` hashes, and
+    /// transfers `value` amount of luna (NIM's smallest unit) from the sender to it as its deposit.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when `hash_count` is zero, the numbers given for value and fee do not fit within a u64
+    /// or the networkId is unknown.
+    #[wasm_bindgen(js_name = newCreateOracle)]
+    pub fn new_create_oracle(
+        sender: &Address,
+        owner: &Address,
+        hash_count: u16,
+        value: u64,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut recipient = Recipient::new_oracle_builder(owner.native_cloned());
+        recipient.with_hash_count(hash_count);
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_cloned()))
+            .with_recipient(recipient.generate()?)
+            .with_value(Coin::try_from(value)?)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from(tx))
+    }
+
+    /// Appends `hashes` to an oracle contract. The hashes are given as hex strings and must all use
+    /// the oracle's `hash_algorithm`, one of `blake2b`, `sha256`, `sha512` or `keccak256`. This is a
+    /// signaling transaction and as such does not transfer any value.
+    ///
+    /// The returned transaction is not yet signed. Sign it with the key pair of the sender and of
+    /// the oracle owner, e.g. with `tx.sign(senderKeyPair, ownerKeyPair)`.
+    ///
+    /// Throws when a hash cannot be parsed, the number given for fee does not fit within a u64 or
+    /// the networkId is unknown.
+    #[wasm_bindgen(js_name = newUpdateOracle)]
+    pub fn new_update_oracle(
+        sender: &Address,
+        oracle: &Address,
+        hash_algorithm: &str,
+        hashes: Vec<String>,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let hashes = hashes
+            .iter()
+            .map(|hash| parse_hash(hash_algorithm, hash))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_cloned()))
+            .with_recipient(Recipient::new_oracle_update(oracle.native_cloned(), hashes))
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from(tx))
+    }
+
+    /// Transfers the ownership of an oracle contract to `new_owner`. This is a signaling
+    /// transaction and as such does not transfer any value.
+    ///
+    /// The returned transaction is not yet signed. Sign it with the key pair of the sender and of
+    /// the current oracle owner, e.g. with `tx.sign(senderKeyPair, ownerKeyPair)`.
+    ///
+    /// Throws when the number given for fee does not fit within a u64 or the networkId is unknown.
+    #[wasm_bindgen(js_name = newChangeOracleOwner)]
+    pub fn new_change_oracle_owner(
+        sender: &Address,
+        oracle: &Address,
+        new_owner: &Address,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_cloned()))
+            .with_recipient(Recipient::new_oracle_change_owner(
+                oracle.native_cloned(),
+                new_owner.native_cloned(),
+            ))
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from(tx))
+    }
+
+    /// Withdraws the deposit of an oracle contract to `recipient`, which deletes the contract.
+    /// `value` must equal the full balance of the contract. The contract does not accept a fee on
+    /// this transaction, so none is set.
+    ///
+    /// The returned transaction is not yet signed. Sign it with the key pair of the oracle owner,
+    /// e.g. with `tx.sign(ownerKeyPair)`.
+    ///
+    /// Throws when the number given for value does not fit within a u64 or the networkId is unknown.
+    #[wasm_bindgen(js_name = newDeleteOracle)]
+    pub fn new_delete_oracle(
+        oracle: &Address,
+        recipient: &Address,
+        value: u64,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_oracle(oracle.native_cloned()))
+            .with_recipient(Recipient::new_basic(recipient.native_cloned()))
+            .with_value(Coin::try_from(value)?)
+            .with_fee(Coin::ZERO)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from(tx))
+    }
+
+    /// Creates a new bridge contract owned by `owner` for the source chain `source_chain_id`, and
+    /// transfers `value` amount of luna (NIM's smallest unit) from the sender to it as its initial
+    /// balance. `chain_config` is the serialized `ChainConfig` of the source chain, and `oracle` the
+    /// oracle contract whose states the bridge verifies burn proofs against.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the chain config cannot be deserialized, the numbers given for value and fee do
+    /// not fit within a u64 or the networkId is unknown.
+    #[wasm_bindgen(js_name = newCreateBridge)]
+    pub fn new_create_bridge(
+        sender: &Address,
+        owner: &Address,
+        oracle: &Address,
+        source_chain_id: u32,
+        chain_config: &[u8],
+        value: u64,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut recipient = Recipient::new_bridge_builder();
+        recipient
+            .with_owner(owner.native_cloned())
+            .with_oracle_address(oracle.native_cloned())
+            .with_source_chain_id(source_chain_id)
+            .with_chain_config(ChainConfig::deserialize_all(chain_config)?);
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_cloned()))
+            .with_recipient(recipient.generate()?)
+            .with_value(Coin::try_from(value)?)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from(tx))
+    }
+
+    /// Deposits `value` amount of luna (NIM's smallest unit) from the sender into a bridge contract,
+    /// locking it for transfer to the bridge's destination chain. The bridge contract does not
+    /// interpret `data`; the bridge relayer reads the destination of the deposit from it.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the numbers given for value and fee do not fit within a u64 or the networkId is unknown.
+    #[wasm_bindgen(js_name = newBridgeDeposit)]
+    pub fn new_bridge_deposit(
+        sender: &Address,
+        bridge: &Address,
+        data: Vec<u8>,
+        value: u64,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_cloned()))
+            .with_recipient(Recipient::new_bridge_deposit(bridge.native_cloned(), data))
+            .with_value(Coin::try_from(value)?)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from(tx))
+    }
+
+    /// Releases `value` amount of luna (NIM's smallest unit) from a bridge contract to `recipient`,
+    /// against a proof that the corresponding tokens were burned on the source chain. `value` and
+    /// `recipient` must match the burn transaction. `merkle_proof` is the serialized
+    /// `AnyMerkleProof` of the burn transaction, and `oracle_state_index` the index of the oracle
+    /// state it is verified against.
+    ///
+    /// The returned transaction is not yet signed. Anyone can sign it, e.g. with `tx.sign(keyPair)`;
+    /// the fee is paid by the account of that key pair, even if the release fails.
+    ///
+    /// Throws when the burn proof is invalid, the numbers given for value and fee do not fit within
+    /// a u64 or the networkId is unknown.
+    #[wasm_bindgen(js_name = newBridgeRelease)]
+    pub fn new_bridge_release(
+        bridge: &Address,
+        recipient: &Address,
+        burn_transaction_data: Vec<u8>,
+        merkle_proof: &[u8],
+        oracle_state_index: u64,
+        value: u64,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let burn_proof = OutgoingTransaction::new(
+            burn_transaction_data,
+            AnyMerkleProof::deserialize_all(merkle_proof)?,
+            oracle_state_index,
+        )?;
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_bridge(bridge.native_cloned(), burn_proof))
+            .with_recipient(Recipient::new_basic(recipient.native_cloned()))
+            .with_value(Coin::try_from(value)?)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from(tx))
+    }
+}
+
+/// Parses a hex-encoded hash of the given algorithm.
+fn parse_hash(hash_algorithm: &str, hash: &str) -> Result<AnyHash, JsError> {
+    Ok(match hash_algorithm {
+        "blake2b" => AnyHash::Blake2b(AnyHash32::from_str(hash)?),
+        "sha256" => AnyHash::Sha256(AnyHash32::from_str(hash)?),
+        "sha512" => AnyHash::Sha512(AnyHash64::from_str(hash)?),
+        "keccak256" => AnyHash::Keccak256(AnyHash32::from_str(hash)?),
+        _ => {
+            return Err(JsError::new(&format!(
+                "Unknown hash algorithm: {hash_algorithm}"
+            )))
+        }
+    })
 }
