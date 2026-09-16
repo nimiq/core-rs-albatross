@@ -43,6 +43,7 @@ tempfile = "3.27"
 nimiq-genesis-builder = { workspace = true }
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
+nimiq-transaction-builder = { workspace = true }
 
 [features]
 accounts = ["interaction-traits", "nimiq-database", "nimiq-trie"]

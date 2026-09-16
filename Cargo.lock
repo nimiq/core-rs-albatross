@@ -3818,6 +3818,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",
+ "nimiq-transaction-builder",
  "nimiq-trie",
  "nimiq-utils",
  "nimiq-vrf",
