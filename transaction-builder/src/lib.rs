@@ -3,12 +3,17 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, Ed25519PublicKey, KeyPair};
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_transaction::{
-    account::htlc_contract::{AnyHash, PreImage},
+    account::{
+        bridge_contract::OutgoingTransaction,
+        htlc_contract::{AnyHash, PreImage},
+    },
     SignatureProof, Transaction,
 };
 use thiserror::Error;
 
-use crate::recipient::staking_contract::StakingRecipientBuilder;
+use crate::recipient::{
+    oracle_contract::OracleRecipientBuilderError, staking_contract::StakingRecipientBuilder,
+};
 pub use crate::{proof::TransactionProofBuilder, recipient::Recipient, sender::Sender};
 
 pub mod proof;
@@ -72,6 +77,9 @@ pub enum TransactionBuilderError {
     /// The `num_steps` argument passed to a vesting-contract helper was zero.
     #[error("The number of vesting steps must be greater than zero.")]
     InvalidNumSteps,
+    /// The data for a new oracle contract is invalid (e.g., its hash count is zero).
+    #[error(transparent)]
+    InvalidOracleCreation(#[from] OracleRecipientBuilderError),
 }
 
 /// A helper to build arbitrary transactions.
@@ -1746,7 +1754,7 @@ impl TransactionBuilder {
         let mut builder = Self::new();
         builder
             .with_sender(Sender::new_basic(Address::from(key_pair)))
-            .with_recipient(recipient.generate().unwrap())
+            .with_recipient(recipient.generate()?)
             .with_value(value)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
@@ -1756,6 +1764,274 @@ impl TransactionBuilder {
         match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(key_pair);
+                Ok(builder.generate().unwrap())
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that deposits funds into an existing bridge contract, locking them
+    /// for transfer to the bridge's destination chain.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction. The deposit and the
+    ///                             fee are sent from the basic account belonging to this key pair.
+    ///  - `bridge_address`:        The address of the bridge contract.
+    ///  - `data`:                  The recipient data read by the off-chain relayer, which
+    ///                             describes where the funds go on the destination chain. The
+    ///                             bridge contract itself does not interpret it.
+    ///  - `value`:                 The value to deposit.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_bridge_deposit(
+        key_pair: &KeyPair,
+        bridge_address: Address,
+        data: Vec<u8>,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Result<Transaction, TransactionBuilderError> {
+        let mut builder = Self::new();
+        builder
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
+            .with_recipient(Recipient::new_bridge_deposit(bridge_address, data))
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate()?;
+        match proof_builder {
+            TransactionProofBuilder::Basic(mut builder) => {
+                builder.sign_with_key_pair(key_pair);
+                Ok(builder.generate().unwrap())
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that releases funds from a bridge contract against a proof that the
+    /// corresponding tokens were burned on the source chain.
+    ///
+    /// Releases are permissionless: any key pair may sign the burn proof. The fee is not taken from
+    /// the bridge but from the basic account belonging to `key_pair`.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the burn proof. The transaction fee is
+    ///                             taken from the basic account belonging to this key pair.
+    ///  - `bridge_address`:        The address of the bridge contract.
+    ///  - `recipient`:             The address that receives the funds. Must match the target
+    ///                             address encoded in the burn transaction.
+    ///  - `burn_proof`:            The burn transaction, its Merkle proof and the index of the
+    ///                             oracle state it is proven against.
+    ///  - `value`:                 The value to release. Must match the amount encoded in the burn
+    ///                             transaction.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_bridge_release(
+        key_pair: &KeyPair,
+        bridge_address: Address,
+        recipient: Address,
+        burn_proof: OutgoingTransaction,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Result<Transaction, TransactionBuilderError> {
+        let mut builder = Self::new();
+        builder
+            .with_sender(Sender::new_bridge(bridge_address, burn_proof))
+            .with_recipient(Recipient::new_basic(recipient))
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate()?;
+        match proof_builder {
+            TransactionProofBuilder::OutBridge(mut builder) => {
+                builder.sign_with_key_pair(key_pair);
+                Ok(builder.generate().unwrap())
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that appends hashes to an existing oracle contract.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
+    ///                             is taken from the basic account belonging to this key pair.
+    ///  - `owner_key_pair`:        The key pair of the oracle owner. The data is signed using this
+    ///                             key pair.
+    ///  - `oracle_address`:        The address of the oracle contract.
+    ///  - `hashes`:                The hashes to append. They must all use the oracle's hash
+    ///                             algorithm.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    /// # Note
+    ///
+    /// This is a *signaling transaction*.
+    ///
+    pub fn new_update_oracle(
+        key_pair: &KeyPair,
+        owner_key_pair: &KeyPair,
+        oracle_address: Address,
+        hashes: Vec<AnyHash>,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        Self::finalize_oracle_signaling_transaction(
+            key_pair,
+            owner_key_pair,
+            Recipient::new_oracle_update(oracle_address, hashes),
+            fee,
+            validity_start_height,
+            network_id,
+        )
+    }
+
+    /// Creates a transaction that transfers ownership of an existing oracle contract.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
+    ///                             is taken from the basic account belonging to this key pair.
+    ///  - `owner_key_pair`:        The key pair of the current oracle owner. The data is signed
+    ///                             using this key pair.
+    ///  - `oracle_address`:        The address of the oracle contract.
+    ///  - `new_owner`:             The address of the new oracle owner.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    /// # Note
+    ///
+    /// This is a *signaling transaction*.
+    ///
+    pub fn new_change_oracle_owner(
+        key_pair: &KeyPair,
+        owner_key_pair: &KeyPair,
+        oracle_address: Address,
+        new_owner: Address,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        Self::finalize_oracle_signaling_transaction(
+            key_pair,
+            owner_key_pair,
+            Recipient::new_oracle_change_owner(oracle_address, new_owner),
+            fee,
+            validity_start_height,
+            network_id,
+        )
+    }
+
+    /// Assembles and signs a signaling transaction to an oracle contract. Shared by
+    /// [`new_update_oracle`](Self::new_update_oracle) and
+    /// [`new_change_oracle_owner`](Self::new_change_oracle_owner).
+    fn finalize_oracle_signaling_transaction(
+        key_pair: &KeyPair,
+        owner_key_pair: &KeyPair,
+        recipient: Recipient,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut builder = Self::new();
+        builder
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
+            .with_recipient(recipient)
+            .with_value(Coin::ZERO)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::InOracle(mut builder) => {
+                builder.sign_with_key_pair(owner_key_pair);
+                let mut builder = builder.generate().unwrap().unwrap_basic();
+                builder.sign_with_key_pair(key_pair);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that withdraws the deposit of an oracle contract, which deletes the
+    /// contract.
+    ///
+    /// # Arguments
+    ///
+    ///  - `owner_key_pair`:        The key pair of the oracle owner. The transaction is signed
+    ///                             using this key pair.
+    ///  - `oracle_address`:        The address of the oracle contract.
+    ///  - `recipient`:             The address of the basic account that receives the deposit.
+    ///  - `value`:                 The value to withdraw.
+    ///  - `fee`:                   Transaction fee. The fee is paid from the deposit.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    /// # Note
+    ///
+    /// The oracle contract only accepts this transaction if `value` equals its full balance, which
+    /// means the `fee` must currently be zero.
+    ///
+    pub fn new_delete_oracle(
+        owner_key_pair: &KeyPair,
+        oracle_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Result<Transaction, TransactionBuilderError> {
+        let mut builder = Self::new();
+        builder
+            .with_sender(Sender::new_oracle(oracle_address))
+            .with_recipient(Recipient::new_basic(recipient))
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate()?;
+        match proof_builder {
+            TransactionProofBuilder::Basic(mut builder) => {
+                builder.sign_with_key_pair(owner_key_pair);
                 Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),

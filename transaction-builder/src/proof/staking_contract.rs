@@ -57,7 +57,7 @@ impl StakingDataBuilder {
     pub fn generate(self) -> Option<TransactionProofBuilder> {
         let mut tx = self.transaction;
         tx.recipient_data = self.data?.serialize_to_vec();
-        Some(TransactionProofBuilder::without_in_staking(tx))
+        Some(TransactionProofBuilder::for_sender(tx))
     }
 }
 

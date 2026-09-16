@@ -146,6 +146,11 @@ impl Transaction {
     /// of a transaction can be different key pairs (addresses). If no inner key pair is provided, the outer
     /// key pair is used for both signatures.
     ///
+    /// The same applies to updates and owner changes of an oracle contract, where the inner key pair
+    /// represents the oracle owner.
+    ///
+    /// For releases from a bridge contract, the key pair signs the burn proof and pays the fee.
+    ///
     /// ### Limitations
     /// - HTLC redemption is not supported and will throw.
     #[cfg(feature = "primitives")]
@@ -436,6 +441,27 @@ impl Transaction {
                 let tx = builder.generate().unwrap();
                 // Set the recipient data to the data with the added signature
                 self.set_recipient_data(tx.recipient_data);
+                tx.proof
+            }
+            TransactionProofBuilder::InOracle(mut builder) => {
+                builder.sign_with_key_pair(inner_key_pair.unwrap_or(key_pair).native_ref());
+                let mut builder = builder
+                    .generate()
+                    .ok_or_else(|| JsError::new("Invalid oracle transaction data"))?
+                    .unwrap_basic();
+                builder.sign_with_key_pair(key_pair.native_ref());
+                let tx = builder.generate().unwrap();
+                // Set the recipient data to the data with the added signature
+                self.set_recipient_data(tx.recipient_data);
+                tx.proof
+            }
+            TransactionProofBuilder::OutBridge(mut builder) => {
+                builder.sign_with_key_pair(key_pair.native_ref());
+                let tx = builder
+                    .generate()
+                    .ok_or_else(|| JsError::new("Invalid bridge release sender data"))?;
+                // Set the sender data to the burn proof with the added signature
+                self.inner.sender_data = tx.sender_data;
                 tx.proof
             }
         };

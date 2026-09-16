@@ -32,7 +32,7 @@ nimiq-transaction = { workspace = true }
 hex = "0.4"
 
 nimiq-test-log = { workspace = true }
-nimiq-utils = { workspace = true, features = ["otp", "key-rng"]}
+nimiq-utils = { workspace = true, features = ["key-rng", "merkle", "otp"] }
 
 
 [features]
