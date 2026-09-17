@@ -116,10 +116,10 @@ impl NetworkInfo {
 /// yet return `None`, in which case clients behave exactly as without checkpoints.
 fn checkpoint_for_network(network_id: NetworkId) -> Option<HardcodedElection> {
     match network_id {
-        // Election block #59140800 (2026-08-17), refreshed per release from a trusted node.
+        // Election block #60652800 (2026-09-03), refreshed per release from a trusted node.
         NetworkId::MainAlbatross => Some(HardcodedElection {
-            block_number: 59_140_800,
-            hash: "afbf37f27c8a03e6c73f78bb9fabe5a6181ab0183d94399bbdd03f60f115e425"
+            block_number: 60_652_800,
+            hash: "7ae76a5034d9a582b7c9a171852afc54d45f16f00a77f87087d8446565cb84da"
                 .parse()
                 .expect("valid checkpoint hash"),
         }),
