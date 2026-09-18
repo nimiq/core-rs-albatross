@@ -1,14 +1,28 @@
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_keys::{Address, KeyPair};
+use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, KeyPair};
+use nimiq_network_interface::validator_record::ValidatorRecord;
 use nimiq_network_libp2p::{
     dht::{DhtRecord, DhtVerifierError, Verifier as DhtVerifier},
+    discovery::{
+        InvalidReason, SignedValidatorClaim, UnverifiableReason, ValidatorClaimVerifier,
+        ValidatorVerification,
+    },
     libp2p::kad::Record,
     PeerId,
 };
 use nimiq_serde::Deserialize;
 use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSigned};
-use nimiq_validator_network::validator_record::ValidatorRecord;
 use time::OffsetDateTime;
+
+/// Why the signing key of a validator could not be looked up.
+enum SigningKeyError {
+    /// This node runs a light blockchain and has no staking contract.
+    LightClient,
+    /// The staking contract is not complete on this node (yet).
+    StateIncomplete,
+    /// The staking contract knows no validator with this address.
+    UnknownValidator,
+}
 
 /// Maximum allowed future drift for `ValidatorRecord::timestamp` (milliseconds).
 /// Records timestamped beyond `now + MAX_TIMESTAMP_DRIFT_MS` are rejected to
@@ -23,6 +37,33 @@ pub struct Verifier {
 impl Verifier {
     pub fn new(blockchain: BlockchainProxy) -> Self {
         Self { blockchain }
+    }
+
+    /// Looks up a validator's current signing key in the staking contract.
+    ///
+    /// This takes the blockchain read lock and a database transaction, so callers must not hold
+    /// any other contended lock while calling it.
+    fn lookup_signing_key(
+        &self,
+        validator_address: &Address,
+    ) -> Result<Ed25519PublicKey, SigningKeyError> {
+        // Acquire blockchain read access. For now exclude Light clients.
+        let BlockchainProxy::Full(ref blockchain) = self.blockchain else {
+            return Err(SigningKeyError::LightClient);
+        };
+        let blockchain_read = blockchain.read();
+
+        // Get the staking contract to retrieve the public key for verification.
+        let staking_contract = blockchain_read
+            .get_staking_contract_if_complete(None)
+            .ok_or(SigningKeyError::StateIncomplete)?;
+
+        let data_store = blockchain_read.get_staking_contract_store();
+        let txn = blockchain_read.read_transaction();
+        Ok(staking_contract
+            .get_validator(&data_store.read(&txn), validator_address)
+            .ok_or(SigningKeyError::UnknownValidator)?
+            .signing_key)
     }
 
     fn verify_validator_record(&self, record: &Record) -> Result<DhtRecord, DhtVerifierError> {
@@ -65,27 +106,23 @@ impl Verifier {
             return Err(DhtVerifierError::InvalidTimestamp);
         }
 
-        // Acquire blockchain read access. For now exclude Light clients.
-        let blockchain = match self.blockchain {
-            BlockchainProxy::Light(ref _light_blockchain) => {
-                return Err(DhtVerifierError::UnknownTag)
-            }
-            BlockchainProxy::Full(ref full_blockchain) => full_blockchain,
-        };
-        let blockchain_read = blockchain.read();
-
-        // Get the staking contract to retrieve the public key for verification.
-        let staking_contract = blockchain_read
-            .get_staking_contract_if_complete(None)
-            .ok_or(DhtVerifierError::StateIncomplete)?;
+        // A signature of any other size can never verify, so reject it before looking up the
+        // validator's signing key.
+        if validator_record.signature.as_bytes().len() != Ed25519Signature::SIZE {
+            return Err(DhtVerifierError::InvalidSignature);
+        }
 
         // Get the public key needed for verification.
-        let data_store = blockchain_read.get_staking_contract_store();
-        let txn = blockchain_read.read_transaction();
-        let public_key = staking_contract
-            .get_validator(&data_store.read(&txn), &validator_address)
-            .ok_or(DhtVerifierError::UnknownValidator(validator_address))?
-            .signing_key;
+        let public_key =
+            self.lookup_signing_key(&validator_address)
+                .map_err(|error| match error {
+                    // Keep returning `UnknownTag` for light clients, as this path did before.
+                    SigningKeyError::LightClient => DhtVerifierError::UnknownTag,
+                    SigningKeyError::StateIncomplete => DhtVerifierError::StateIncomplete,
+                    SigningKeyError::UnknownValidator => {
+                        DhtVerifierError::UnknownValidator(validator_address.clone())
+                    }
+                })?;
 
         // Verify the record.
         validator_record
@@ -117,6 +154,43 @@ impl DhtVerifier for Verifier {
                 log::error!(tag, "DHT invalid record tag received");
                 Err(DhtVerifierError::UnknownTag)
             }
+        }
+    }
+}
+
+impl ValidatorClaimVerifier for Verifier {
+    /// Checks a validator claim taken from a peer contact.
+    ///
+    /// This only binds the validator address to its current signing key. The checks that are
+    /// specific to DHT records (publisher, record key, timestamp drift) do not apply here: a peer
+    /// contact has no publisher, and its timestamp is in seconds rather than milliseconds and is
+    /// already bounded by the peer contact book.
+    fn verify_validator_claim(&self, signed_claim: &SignedValidatorClaim) -> ValidatorVerification {
+        // A signature of any other size can never verify, so reject it before looking up the
+        // validator's signing key.
+        if signed_claim.signature.as_bytes().len() != Ed25519Signature::SIZE {
+            return ValidatorVerification::Invalid(InvalidReason::InvalidSignature);
+        }
+
+        let public_key = match self.lookup_signing_key(&signed_claim.record.validator_address) {
+            Ok(public_key) => public_key,
+            // We cannot tell yet whether this claim is good, so it has to be re-checked later.
+            Err(SigningKeyError::LightClient) => {
+                return ValidatorVerification::Unverifiable(UnverifiableReason::LightClient)
+            }
+            Err(SigningKeyError::StateIncomplete) => {
+                return ValidatorVerification::Unverifiable(UnverifiableReason::StateIncomplete)
+            }
+            // The validator may still be registered later, but as things stand the claim is bogus.
+            Err(SigningKeyError::UnknownValidator) => {
+                return ValidatorVerification::Invalid(InvalidReason::UnknownValidator)
+            }
+        };
+
+        if signed_claim.verify(&public_key) {
+            ValidatorVerification::Verified
+        } else {
+            ValidatorVerification::Invalid(InvalidReason::InvalidSignature)
         }
     }
 }

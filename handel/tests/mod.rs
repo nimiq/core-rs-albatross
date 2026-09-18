@@ -1,7 +1,15 @@
-use std::{fmt::Formatter, future::Future, sync::Arc, time::Duration};
+use std::{
+    fmt::Formatter,
+    future::Future,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use nimiq_bls::PublicKey;
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::{
@@ -78,13 +86,40 @@ impl IdentityRegistry for Registry {
     }
 }
 
-/// A dump Verifier who is happy with everything.
-pub struct DumbVerifier {}
+/// The value of a contribution that [`DumbVerifier`] rejects as forged right away, like the
+/// verifier of skip blocks does.
+const FORGED: u64 = u64::MAX;
+
+/// The value of a contribution that [`DumbVerifier`] rejects as forged only after yielding once,
+/// like the verifier of Tendermint does, which verifies on a blocking thread.
+const FORGED_SLOWLY: u64 = u64::MAX - 1;
+
+/// A dump Verifier who is happy with everything but contributions valued [`FORGED`] or
+/// [`FORGED_SLOWLY`], and counts how often it was asked about those.
+#[derive(Default)]
+pub struct DumbVerifier {
+    forged_checks: AtomicUsize,
+}
+
+impl DumbVerifier {
+    fn forged_checks(&self) -> usize {
+        self.forged_checks.load(Ordering::Relaxed)
+    }
+}
 
 #[async_trait]
 impl Verifier for DumbVerifier {
     type Contribution = Contribution;
-    async fn verify(&self, _contribution: &Self::Contribution) -> VerificationResult {
+    async fn verify(&self, contribution: &Self::Contribution) -> VerificationResult {
+        if contribution.value == FORGED_SLOWLY {
+            self.forged_checks.fetch_add(1, Ordering::Relaxed);
+            tokio::task::yield_now().await;
+            return VerificationResult::Forged;
+        }
+        if contribution.value == FORGED {
+            self.forged_checks.fetch_add(1, Ordering::Relaxed);
+            return VerificationResult::Forged;
+        }
         VerificationResult::Ok
     }
 }
@@ -119,7 +154,7 @@ impl Protocol {
         ));
 
         Protocol {
-            verifier: Arc::new(DumbVerifier {}),
+            verifier: Arc::new(DumbVerifier::default()),
             partitioner,
             evaluator,
             store,
@@ -212,6 +247,7 @@ struct NetworkWrapper<N: NetworkInterface<PeerId = MockPeerId>>(Arc<N>);
 impl<N: NetworkInterface<PeerId = MockPeerId>> Network for NetworkWrapper<N> {
     type Contribution = Contribution;
     type Error = RequestError;
+    type Sender = MockPeerId;
 
     fn send_update(
         &self,
@@ -237,12 +273,15 @@ impl<N: NetworkInterface<PeerId = MockPeerId>> Network for NetworkWrapper<N> {
         }
     }
 
-    fn ban_node(&self, node_id: u16) -> impl Future<Output = ()> + Send + 'static {
-        let peer_id = MockPeerId(node_id as u64);
+    fn ban_node(
+        &self,
+        _node_id: u16,
+        sender: Self::Sender,
+    ) -> impl Future<Output = ()> + Send + 'static {
         let network = Arc::clone(&self.0);
         async move {
             network
-                .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                .disconnect_peer(sender, CloseReason::MaliciousPeer)
                 .await
         }
     }
@@ -274,7 +313,7 @@ fn create_handel_instance(
         contribution,
         network
             .receive_messages::<Update<Contribution>>()
-            .map(move |msg| msg.0 .0.into_level_update(msg.1 .0 as u16))
+            .map(move |msg| (msg.0 .0.into_level_update(msg.1 .0 as u16), msg.1))
             .boxed(),
         NetworkWrapper(network),
     )
@@ -533,4 +572,269 @@ async fn handel_netsplit() {
 
     // Wait for all aggregations to complete.
     wait_for_contributions(num_contributors, num_contributors, &mut rx).await;
+}
+
+/// A network that sends nothing and records which nodes were banned, and which of their senders.
+#[derive(Clone, Default)]
+struct RecordingNetwork {
+    bans: Arc<parking_lot::Mutex<Vec<(u16, u64)>>>,
+}
+
+impl Network for RecordingNetwork {
+    type Contribution = Contribution;
+    type Error = RequestError;
+    type Sender = u64;
+
+    fn send_update(
+        &self,
+        _node_id: u16,
+        _update: LevelUpdate<Self::Contribution>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send + 'static {
+        futures::future::ready(Ok(()))
+    }
+
+    fn ban_node(
+        &self,
+        node_id: u16,
+        sender: Self::Sender,
+    ) -> impl Future<Output = ()> + Send + 'static {
+        self.bans.lock().push((node_id, sender));
+        futures::future::ready(())
+    }
+}
+
+/// Collects the aggregates the aggregation produces until one names every contributor.
+async fn full_aggregate(
+    aggregation: &mut Aggregation<usize, Protocol, RecordingNetwork>,
+    num_contributors: usize,
+) -> Contribution {
+    timeout(Duration::from_secs(1), async {
+        loop {
+            let aggregate = aggregation.next().await.expect("the aggregation ended");
+            if aggregate.num_contributors() == num_contributors {
+                return aggregate;
+            }
+        }
+    })
+    .await
+    .expect("the honest aggregation was not accepted")
+}
+
+#[test(tokio::test)]
+async fn a_peer_that_sent_a_forged_contribution_is_ignored_afterwards() {
+    const NUM_CONTRIBUTORS: usize = 4;
+    let protocol = Protocol::new(0, NUM_CONTRIBUTORS);
+    let verifier = protocol::Protocol::verifier(&protocol);
+    let full_level = protocol::Protocol::partitioner(&protocol).levels();
+    let network = RecordingNetwork::default();
+    let bans = Arc::clone(&network.bans);
+
+    let mut own_contributors = BitSet::new();
+    own_contributors.insert(0);
+    let mut all_contributors = BitSet::new();
+    for id in 0..NUM_CONTRIBUTORS {
+        all_contributors.insert(id);
+    }
+
+    let (input, mut receiver) = mpsc::unbounded_channel();
+    let input_stream = futures::stream::poll_fn(move |cx| receiver.poll_recv(cx));
+    let mut aggregation = Aggregation::new(
+        protocol,
+        Config::default(),
+        Contribution {
+            value: 1,
+            contributors: own_contributors,
+        },
+        input_stream.boxed(),
+        network,
+    );
+
+    // Peers 11 and 13, speaking for origins 1 and 3, keep sending forged full aggregations, which
+    // only have to name enough signers to be considered, and are considered before anything else.
+    // The ones of peer 11 take a while to be rejected, so that more of them arrive in the
+    // meantime.
+    for (origin, sender, value, expected_checks, expected_bans) in [
+        (1, 11, FORGED_SLOWLY, 1, vec![(1, 11)]),
+        (3, 13, FORGED, 2, vec![(1, 11), (3, 13)]),
+    ] {
+        for _ in 0..10 {
+            let forged = Contribution {
+                value,
+                contributors: all_contributors.clone(),
+            };
+            // An individual contribution takes a pending slot of its own, which has to be dropped
+            // along with the rest once the peer is rejected.
+            let mut own_slot = BitSet::new();
+            own_slot.insert(origin);
+            let individual = Contribution {
+                value,
+                contributors: own_slot,
+            };
+            input
+                .send((
+                    LevelUpdate::new(forged, Some(individual), full_level, origin),
+                    sender,
+                ))
+                .unwrap();
+            let _ = timeout(Duration::from_millis(20), aggregation.next()).await;
+        }
+
+        // Only the first one was verified. The peer is ignored afterwards and banned just once.
+        assert_eq!(verifier.forged_checks(), expected_checks);
+        assert_eq!(*bans.lock(), expected_bans);
+    }
+
+    // Other origins are still heard.
+    let honest = Contribution {
+        value: 10,
+        contributors: all_contributors.clone(),
+    };
+    input
+        .send((LevelUpdate::new(honest, None, full_level, 2), 12))
+        .unwrap();
+    let result = full_aggregate(&mut aggregation, NUM_CONTRIBUTORS).await;
+    assert_eq!(result.value, 10);
+}
+
+// Once a peer that forged a contribution for an origin is rejected, the origin's other peer is
+// still heard.
+#[test(tokio::test)]
+async fn the_origins_other_peer_is_heard_after_a_forger_was_rejected() {
+    const NUM_CONTRIBUTORS: usize = 4;
+    let protocol = Protocol::new(0, NUM_CONTRIBUTORS);
+    let verifier = protocol::Protocol::verifier(&protocol);
+    let full_level = protocol::Protocol::partitioner(&protocol).levels();
+    let network = RecordingNetwork::default();
+    let bans = Arc::clone(&network.bans);
+
+    let mut own_contributors = BitSet::new();
+    own_contributors.insert(0);
+    let mut all_contributors = BitSet::new();
+    for id in 0..NUM_CONTRIBUTORS {
+        all_contributors.insert(id);
+    }
+
+    let (input, mut receiver) = mpsc::unbounded_channel();
+    let input_stream = futures::stream::poll_fn(move |cx| receiver.poll_recv(cx));
+    let mut aggregation = Aggregation::new(
+        protocol,
+        Config::default(),
+        Contribution {
+            value: 1,
+            contributors: own_contributors,
+        },
+        input_stream.boxed(),
+        network,
+    );
+
+    let forged = Contribution {
+        value: FORGED,
+        contributors: all_contributors.clone(),
+    };
+    input
+        .send((LevelUpdate::new(forged, None, full_level, 1), 11))
+        .unwrap();
+    let _ = timeout(Duration::from_millis(20), aggregation.next()).await;
+    assert_eq!(*bans.lock(), vec![(1, 11)]);
+
+    let honest = Contribution {
+        value: 10,
+        contributors: all_contributors.clone(),
+    };
+    input
+        .send((LevelUpdate::new(honest, None, full_level, 1), 21))
+        .unwrap();
+    let result = full_aggregate(&mut aggregation, NUM_CONTRIBUTORS).await;
+    assert_eq!(result.value, 10);
+    assert_eq!(verifier.forged_checks(), 1);
+}
+
+// More than one peer can speak for the same origin, and the one that forged a contribution need
+// not be one the origin controls. Only that peer is blamed, and the origin's other peer is still
+// heard.
+#[test(tokio::test)]
+async fn a_forged_contribution_bans_its_sender_and_not_the_origins_other_peer() {
+    const NUM_CONTRIBUTORS: usize = 4;
+    let protocol = Protocol::new(0, NUM_CONTRIBUTORS);
+    let verifier = protocol::Protocol::verifier(&protocol);
+    let full_level = protocol::Protocol::partitioner(&protocol).levels();
+    let network = RecordingNetwork::default();
+    let bans = Arc::clone(&network.bans);
+
+    let mut own_contributors = BitSet::new();
+    own_contributors.insert(0);
+    let mut all_contributors = BitSet::new();
+    for id in 0..NUM_CONTRIBUTORS {
+        all_contributors.insert(id);
+    }
+
+    let (input, mut receiver) = mpsc::unbounded_channel();
+    let input_stream = futures::stream::poll_fn(move |cx| receiver.poll_recv(cx));
+    let mut aggregation = Aggregation::new(
+        protocol,
+        Config::default(),
+        Contribution {
+            value: 1,
+            contributors: own_contributors,
+        },
+        input_stream.boxed(),
+        network,
+    );
+
+    // Our own contribution comes first.
+    assert!(aggregation.next().now_or_never().flatten().is_some());
+
+    // Peer 11 forges a full aggregation for origin 1. It takes a while to be rejected.
+    let forged = Contribution {
+        value: FORGED_SLOWLY,
+        contributors: all_contributors.clone(),
+    };
+    input
+        .send((LevelUpdate::new(forged, None, full_level, 1), 11))
+        .unwrap();
+    assert!(aggregation.next().now_or_never().is_none());
+    assert_eq!(verifier.forged_checks(), 1);
+
+    // While it is being verified, origin 1's other peer 21 sends an honest update. It is still
+    // pending when peer 11 is rejected, and it is kept.
+    input
+        .send((
+            LevelUpdate::new(
+                Contribution {
+                    value: 10,
+                    contributors: all_contributors.clone(),
+                },
+                None,
+                full_level,
+                1,
+            ),
+            21,
+        ))
+        .unwrap();
+
+    let result = full_aggregate(&mut aggregation, NUM_CONTRIBUTORS).await;
+    assert_eq!(result.value, 10);
+    assert_eq!(verifier.forged_checks(), 1);
+    assert_eq!(*bans.lock(), vec![(1, 11)]);
+
+    // Peer 11 stays ignored.
+    for _ in 0..5 {
+        input
+            .send((
+                LevelUpdate::new(
+                    Contribution {
+                        value: FORGED,
+                        contributors: all_contributors.clone(),
+                    },
+                    None,
+                    full_level,
+                    1,
+                ),
+                11,
+            ))
+            .unwrap();
+        let _ = timeout(Duration::from_millis(20), aggregation.next()).await;
+    }
+    assert_eq!(verifier.forged_checks(), 1);
+    assert_eq!(*bans.lock(), vec![(1, 11)]);
 }

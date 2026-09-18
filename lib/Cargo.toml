@@ -97,7 +97,7 @@ nimiq-validator-network = { workspace = true, optional = true }
 nimiq-wallet = { workspace = true, optional = true, features = ["store"] }
 
 [dev-dependencies]
-tokio = { version = "1.52", features = ["macros"] }
+tokio = { version = "1.52", features = ["macros", "net", "test-util"] }
 nimiq-test-log = { workspace = true }
 
 [features]

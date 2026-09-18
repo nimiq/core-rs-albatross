@@ -31,19 +31,19 @@ struct PendingKey {
 /// A PendingContribution represents a contribution which has not yet been aggregated into the store.
 /// For the most part a wrapper for the contribution within.
 #[derive(Clone)]
-pub(crate) struct PendingContribution<C: AggregatableContribution> {
+pub(crate) struct PendingContribution<C: AggregatableContribution, S> {
     /// The pending contribution
     pub contribution: C,
     /// The level the contribution belongs to.
     pub level: usize,
-    /// The sender of this contribution.
+    /// The node this contribution comes from.
     pub origin: usize,
-    /// Indicates if the LevelUpdates is added from a trusted source.
-    /// If so the signature does not need to be verified
-    trusted: bool,
+    /// The peer that delivered this contribution, or `None` if it was created locally. A local
+    /// contribution is trusted, so its signature does not need to be verified.
+    pub sender: Option<S>,
 }
 
-impl<C: AggregatableContribution> fmt::Debug for PendingContribution<C> {
+impl<C: AggregatableContribution, S> fmt::Debug for PendingContribution<C, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut dbg = f.debug_struct("PendingContribution");
         dbg.field("level", &self.level);
@@ -52,7 +52,7 @@ impl<C: AggregatableContribution> fmt::Debug for PendingContribution<C> {
     }
 }
 
-impl<C: AggregatableContribution> PendingContribution<C> {
+impl<C: AggregatableContribution, S> PendingContribution<C, S> {
     /// Evaluates the contribution of the PendingContribution. It returns a score representing how useful
     /// the contribution is, with `0` meaning not useful at all -> can be discarded and `> 0`
     /// meaning more useful the higher the number.
@@ -66,17 +66,16 @@ impl<C: AggregatableContribution> PendingContribution<C> {
         evaluator.evaluate(&self.contribution, self.level, id)
     }
 
-    /// Returns true if the LevelUpdate was created by a trusted source.
-    /// One example would be the LevelUpdate was created locally.
-    /// Returns false otherwise.
+    /// Returns true if the LevelUpdate was created by a trusted source, which is the case if it
+    /// was created locally. Returns false otherwise.
     pub fn trusted(&self) -> bool {
-        self.trusted
+        self.sender.is_none()
     }
 }
 
 /// Implements Stream to poll for the next best scoring PendingContribution.
 /// Will dry the input stream every time a PendingContribution is polled.
-pub(crate) struct PendingContributionList<TId, TProtocol>
+pub(crate) struct PendingContributionList<TId, TProtocol, S>
 where
     TId: Identifier,
     TProtocol: Protocol<TId>,
@@ -85,17 +84,18 @@ where
     id: TId,
     /// PendingContributions already polled from input stream, keyed by `(level, origin, kind)` so
     /// each sender occupies at most one slot per kind.
-    list: HashMap<PendingKey, PendingContribution<TProtocol::Contribution>>,
+    list: HashMap<PendingKey, PendingContribution<TProtocol::Contribution, S>>,
     /// The evaluator used for scoring an individual PendingContribution.
     evaluator: Arc<TProtocol::Evaluator>,
     /// Waker to wake the task when a contribution is added manually.
     waker: Option<Waker>,
 }
 
-impl<TId, TProtocol> PendingContributionList<TId, TProtocol>
+impl<TId, TProtocol, S> PendingContributionList<TId, TProtocol, S>
 where
     TId: Identifier,
     TProtocol: Protocol<TId>,
+    S: PartialEq,
 {
     /// Create a new PendingContributionList:
     /// * `evaluator` - The evaluator which will be used for contribution scoring
@@ -114,8 +114,8 @@ where
         contribution: TProtocol::Contribution,
         level: usize,
         origin: usize,
+        sender: Option<S>,
         kind: Kind,
-        trusted: bool,
     ) {
         // Keep at most one entry per (level, origin, kind); a newer update replaces the sender's
         // previous one instead of accumulating.
@@ -129,12 +129,18 @@ where
                 contribution,
                 level,
                 origin,
-                trusted,
+                sender,
             },
         );
 
         // Wake the task to process this contribution.
         self.waker.wake();
+    }
+
+    /// Removes every pending contribution that `sender` delivered as coming from `origin`.
+    pub fn remove_sender(&mut self, origin: usize, sender: &S) {
+        self.list
+            .retain(|_, item| item.origin != origin || item.sender.as_ref() != Some(sender));
     }
 
     /// Number of pending contributions currently stored.
@@ -144,12 +150,13 @@ where
     }
 }
 
-impl<TId, TProtocol> Stream for PendingContributionList<TId, TProtocol>
+impl<TId, TProtocol, S> Stream for PendingContributionList<TId, TProtocol, S>
 where
     TId: Identifier,
     TProtocol: Protocol<TId>,
+    S: Unpin,
 {
-    type Item = PendingContribution<TProtocol::Contribution>;
+    type Item = PendingContribution<TProtocol::Contribution, S>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // The current best score.
@@ -359,15 +366,15 @@ mod tests {
     fn one_origin_cannot_inflate_the_pool() {
         let protocol = Protocol::new(0, 8);
         let mut list =
-            PendingContributionList::<usize, Protocol>::new(0, protocol.evaluator.clone());
+            PendingContributionList::<usize, Protocol, ()>::new(0, protocol.evaluator.clone());
 
         for signer in 0..1_000 {
             list.add_contribution(
                 Contribution::with_signer(signer),
                 1,
                 1,
+                Some(()),
                 Kind::Aggregate,
-                false,
             );
         }
 
@@ -379,15 +386,15 @@ mod tests {
     fn distinct_origins_are_retained() {
         let protocol = Protocol::new(0, 8);
         let mut list =
-            PendingContributionList::<usize, Protocol>::new(0, protocol.evaluator.clone());
+            PendingContributionList::<usize, Protocol, ()>::new(0, protocol.evaluator.clone());
 
         for origin in 1..=3 {
             list.add_contribution(
                 Contribution::with_signer(origin),
                 1,
                 origin,
+                Some(()),
                 Kind::Aggregate,
-                false,
             );
         }
 

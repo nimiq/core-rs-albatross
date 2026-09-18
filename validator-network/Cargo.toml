@@ -37,4 +37,9 @@ nimiq-utils = { workspace = true, features = ["futures", "spawn", "tagged-signin
 url = "2.5.8"
 
 [dev-dependencies]
-tokio = { version = "1.52", features = ["macros"] }
+tokio = { version = "1.52", features = ["macros", "rt"] }
+
+nimiq-bls = { workspace = true }
+nimiq-network-mock = { workspace = true }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }

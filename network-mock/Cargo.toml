@@ -34,12 +34,12 @@ tokio = { version = "1.52", features = [
 ] }
 tokio-stream = "0.1"
 
+nimiq-keys = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-time = { workspace = true }
 nimiq-utils = { workspace = true, features = ["tagged-signing"] }
 
 [dev-dependencies]
-nimiq-keys = { workspace = true }
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
