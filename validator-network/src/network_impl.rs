@@ -15,7 +15,7 @@ use parking_lot::RwLock;
 use time::OffsetDateTime;
 
 use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
-use crate::validator_record::ValidatorRecord;
+use crate::validator_record::{ValidatorRecord, ValidatorRecordSigner};
 
 /// Validator `PeerId` cache state
 #[derive(Clone, Copy)]
@@ -114,19 +114,65 @@ where
         validators.and_then(|validators| validators.get_validator_by_slot_band(validator_id))
     }
 
-    /// Looks up the peer ID for a validator address in the DHT.
+    /// Looks up the peer ID for a validator address.
+    ///
+    /// Sources are tried cheapest first. A peer we are already connected to whose gossiped
+    /// contact carries a verified claim for this validator answers immediately, while a DHT
+    /// lookup can take seconds or time out entirely. A contact for a peer we are *not* connected
+    /// to is only consulted after the DHT and the HTTPS fallback, so that a contact left behind
+    /// by a validator that moved can never win over the record the validator published itself.
+    ///
+    /// `exclude` is the peer ID we used for this validator before, when a request to it failed.
     async fn resolve_peer_id(
         network: &N,
         validator_address: &Address,
         fallback: Arc<DhtFallback<N>>,
+        exclude: Option<N::PeerId>,
     ) -> Result<Option<N::PeerId>, NetworkError<N::Error>> {
-        let result = Self::resolve_peer_id_dht(network, validator_address).await;
-        if !matches!(result, Ok(Some(_)))
-            && let Some(peer_id) = fallback(validator_address.clone()).await
+        if let Some(peer_id) =
+            Self::resolve_peer_id_contact_book(network, validator_address, exclude, true)
         {
+            log::debug!(%peer_id, %validator_address, "Resolved validator peer ID from a connected peer contact");
             return Ok(Some(peer_id));
         }
+
+        let result = Self::resolve_peer_id_dht(network, validator_address).await;
+        if let Ok(Some(peer_id)) = result {
+            log::debug!(%peer_id, %validator_address, "Resolved validator peer ID from the DHT");
+            return result;
+        }
+
+        if let Some(peer_id) = fallback(validator_address.clone()).await {
+            log::debug!(%peer_id, %validator_address, "Resolved validator peer ID from the DHT fallback");
+            return Ok(Some(peer_id));
+        }
+
+        if let Some(peer_id) =
+            Self::resolve_peer_id_contact_book(network, validator_address, exclude, false)
+        {
+            log::debug!(%peer_id, %validator_address, "Resolved validator peer ID from a peer contact");
+            return Ok(Some(peer_id));
+        }
+
         result
+    }
+
+    /// Looks up the peer ID for a validator address in the peer contact book.
+    ///
+    /// Only contacts whose validator claim this node verified are considered. With
+    /// `connected_only`, the peer must already be connected, which makes the answer both instant
+    /// and known to be reachable.
+    fn resolve_peer_id_contact_book(
+        network: &N,
+        validator_address: &Address,
+        exclude: Option<N::PeerId>,
+        connected_only: bool,
+    ) -> Option<N::PeerId> {
+        network
+            .get_validator_peer_ids(validator_address)
+            .into_iter()
+            .filter(|peer_id| Some(*peer_id) != exclude)
+            .find(|peer_id| !connected_only || network.has_peer(*peer_id))
     }
 
     async fn resolve_peer_id_dht(
@@ -150,11 +196,17 @@ where
     /// caller, will panic otherwise.
     ///
     /// The given `validator_id` is used for logging purposes only.
-    async fn update_peer_id_cache(&self, validator_id: u16, validator_address: &Address) {
+    async fn update_peer_id_cache(
+        &self,
+        validator_id: u16,
+        validator_address: &Address,
+        exclude: Option<N::PeerId>,
+    ) {
         let cache_value = match Self::resolve_peer_id(
             &self.network,
             validator_address,
             Arc::clone(&self.dht_fallback),
+            exclude,
         )
         .await
         {
@@ -168,7 +220,7 @@ where
                 Ok(peer_id)
             }
             Ok(None) => {
-                log::debug!(validator_id, %validator_address, "Unable to resolve validator peer ID: Entry not found in DHT");
+                log::debug!(validator_id, %validator_address, "Unable to resolve validator peer ID: Not found in the DHT nor in the peer contact book");
                 Err(())
             }
             Err(error) => {
@@ -256,10 +308,31 @@ where
 
         let self_ = self.arc_clone();
         let validator_address = validator.address.clone();
+        // Do not resolve back to the peer ID we just failed to reach.
+        let exclude = new_cache_state.potentially_outdated_peer_id();
         spawn(async move {
-            Self::update_peer_id_cache(&self_, validator_id, &validator_address).await;
+            Self::update_peer_id_cache(&self_, validator_id, &validator_address, exclude).await;
         });
         new_cache_state
+    }
+
+    /// The address of the validator occupying `validator_id` in the current epoch.
+    fn validator_address(&self, validator_id: u16) -> Option<Address> {
+        let validators = self.validators.read();
+        Self::get_validator(validators.as_ref(), validator_id)
+            .map(|validator| validator.address.clone())
+    }
+
+    /// Whether `peer_id` is known to belong to `validator_id` through a verified peer contact.
+    fn is_verified_validator_peer(&self, validator_id: u16, peer_id: &N::PeerId) -> bool {
+        let Some(validator_address) = self.validator_address(validator_id) else {
+            return false;
+        };
+        // Note that the validators lock is released before we ask the network, so that the
+        // contact book lock is never taken while holding it.
+        self.network
+            .get_validator_peer_ids(&validator_address)
+            .contains(peer_id)
     }
 
     /// Clears the validator->peer_id cache on a `RequestError`.
@@ -436,15 +509,16 @@ where
                 .filter_map(move |(message, peer_id)| {
                     let self_ = self_.arc_clone();
                     async move {
-                        let validator_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                        let cached_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
                         // Check that each message actually comes from the peer that it
-                        // claims it comes from. Reject it otherwise.
-                        if validator_peer_id
-                            .as_ref()
-                            .map(|pid| *pid != peer_id)
-                            .unwrap_or(true)
+                        // claims it comes from. Reject it otherwise. Besides the peer ID we
+                        // resolved, accept any peer whose gossiped contact carries a verified
+                        // claim for this validator, so a validator that moved to another node is
+                        // not ignored until our cache catches up.
+                        if cached_peer_id != Some(peer_id)
+                            && !self_.is_verified_validator_peer(message.validator_id, &peer_id)
                         {
-                            warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator message");
+                            warn!(%peer_id, ?cached_peer_id, claimed_validator_id = message.validator_id, "Dropping validator message");
                             return None;
                         }
                         Some((message.inner, message.validator_id))
@@ -463,15 +537,14 @@ where
             .filter_map(move |(message, request_id, peer_id)| {
                 let self_ = self_.arc_clone();
                 async move {
-                    let validator_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
-                    // Check that each message actually comes from the peer that it
-                    // claims it comes from. Reject it otherwise.
-                    if validator_peer_id
-                        .as_ref()
-                        .map(|pid| *pid != peer_id)
-                        .unwrap_or(true)
+                    let cached_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                    // Check that each request actually comes from the peer that it
+                    // claims it comes from. Reject it otherwise. See `receive` above for why the
+                    // peer contact book is consulted as well.
+                    if cached_peer_id != Some(peer_id)
+                        && !self_.is_verified_validator_peer(message.validator_id, &peer_id)
                     {
-                        warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator request");
+                        warn!(%peer_id, ?cached_peer_id, claimed_validator_id = message.validator_id, "Dropping validator request");
                         return None;
                     }
                     Some((message.inner, request_id, message.validator_id))
@@ -544,5 +617,155 @@ where
     fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId> {
         self.get_validator_cache(validator_id)
             .potentially_outdated_peer_id()
+    }
+
+    fn set_validator_record_signer(&self, signer: Option<ValidatorRecordSigner>) {
+        self.network.set_validator_record_signer(signer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::future;
+    use nimiq_keys::{KeyPair, SecureGenerate};
+    use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
+    use nimiq_test_log::test;
+    use nimiq_test_utils::test_rng;
+
+    use super::*;
+
+    type ValNet = ValidatorNetworkImpl<MockNetwork>;
+
+    fn validator_address(seed: u8) -> Address {
+        let mut bytes = [0u8; 20];
+        bytes[0] = seed;
+        Address::from(bytes)
+    }
+
+    fn no_fallback() -> Arc<DhtFallback<MockNetwork>> {
+        Arc::new(|_| Box::pin(future::ready(None)))
+    }
+
+    /// Makes `advertiser` claim `address` in the (mock) peer contact book.
+    fn advertise(advertiser: &MockNetwork, address: &Address) {
+        let key_pair = KeyPair::generate(&mut test_rng(false));
+        advertiser.set_validator_record_signer(Some(ValidatorRecordSigner::new(
+            address.clone(),
+            key_pair,
+        )));
+    }
+
+    /// Publishes a DHT record pointing `address` at `peer_id`.
+    async fn publish_dht(network: &MockNetwork, address: &Address, peer_id: MockPeerId) {
+        let key_pair = KeyPair::generate(&mut test_rng(false));
+        let record = ValidatorRecord::new(peer_id, address.clone(), 1);
+        network.dht_put(address, &record, &key_pair).await.unwrap();
+    }
+
+    #[test(tokio::test)]
+    async fn a_connected_contact_resolves_without_the_dht() {
+        let mut hub = MockHub::default();
+        let us = hub.new_network();
+        let peer = hub.new_network();
+        let stale = hub.new_network();
+        us.dial_mock(&peer);
+
+        let address = validator_address(1);
+        advertise(&peer, &address);
+        // The DHT points somewhere else; the connected contact must win.
+        publish_dht(&us, &address, stale.get_local_peer_id()).await;
+
+        let resolved = ValNet::resolve_peer_id(&us, &address, no_fallback(), None)
+            .await
+            .unwrap();
+
+        assert_eq!(resolved, Some(peer.get_local_peer_id()));
+    }
+
+    #[test(tokio::test)]
+    async fn an_unconnected_contact_does_not_beat_the_dht() {
+        let mut hub = MockHub::default();
+        let us = hub.new_network();
+        let unconnected = hub.new_network();
+        let published = hub.new_network();
+        // `published` makes no validator claim; it is only here so that we have a connection,
+        // which the mock network requires before it accepts a DHT put.
+        us.dial_mock(&published);
+
+        let address = validator_address(1);
+        advertise(&unconnected, &address);
+        publish_dht(&us, &address, published.get_local_peer_id()).await;
+
+        let resolved = ValNet::resolve_peer_id(&us, &address, no_fallback(), None)
+            .await
+            .unwrap();
+
+        assert_eq!(resolved, Some(published.get_local_peer_id()));
+    }
+
+    #[test(tokio::test)]
+    async fn an_unconnected_contact_resolves_when_the_dht_is_empty() {
+        let mut hub = MockHub::default();
+        let us = hub.new_network();
+        let unconnected = hub.new_network();
+
+        let address = validator_address(1);
+        advertise(&unconnected, &address);
+
+        let resolved = ValNet::resolve_peer_id(&us, &address, no_fallback(), None)
+            .await
+            .unwrap();
+
+        assert_eq!(resolved, Some(unconnected.get_local_peer_id()));
+    }
+
+    #[test(tokio::test)]
+    async fn the_peer_that_just_failed_is_skipped() {
+        let mut hub = MockHub::default();
+        let us = hub.new_network();
+        let failed = hub.new_network();
+        let other = hub.new_network();
+        us.dial_mock(&failed);
+        us.dial_mock(&other);
+
+        let address = validator_address(1);
+        advertise(&failed, &address);
+        advertise(&other, &address);
+
+        let resolved = ValNet::resolve_peer_id(
+            &us,
+            &address,
+            no_fallback(),
+            Some(failed.get_local_peer_id()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(resolved, Some(other.get_local_peer_id()));
+    }
+
+    #[test(tokio::test)]
+    async fn we_never_resolve_to_ourselves() {
+        let mut hub = MockHub::default();
+        let us = hub.new_network();
+
+        let address = validator_address(1);
+        advertise(&us, &address);
+
+        assert!(us.get_validator_peer_ids(&address).is_empty());
+    }
+
+    #[test(tokio::test)]
+    async fn dropping_the_signer_stops_the_advertisement() {
+        let mut hub = MockHub::default();
+        let us = hub.new_network();
+        let peer = hub.new_network();
+
+        let address = validator_address(1);
+        advertise(&peer, &address);
+        assert_eq!(us.get_validator_peer_ids(&address).len(), 1);
+
+        peer.set_validator_record_signer(None);
+        assert!(us.get_validator_peer_ids(&address).is_empty());
     }
 }

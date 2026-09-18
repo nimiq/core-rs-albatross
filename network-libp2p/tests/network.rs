@@ -12,9 +12,14 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, Topic},
     peer_info::Services,
+    validator_record::{ValidatorRecord, ValidatorRecordSigner},
 };
 use nimiq_network_libp2p::{
     dht,
+    discovery::{
+        InvalidReason, NoopValidatorRecordVerifier, SignedValidatorRecord, ValidatorRecordVerifier,
+        ValidatorVerification,
+    },
     discovery::{self, peer_contacts::PeerContact},
     Config, Network, NetworkError,
 };
@@ -27,7 +32,6 @@ use nimiq_utils::{
     spawn,
     tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned},
 };
-use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::RwLock;
 
 mod helper;
@@ -101,7 +105,12 @@ impl TestNetwork {
         let address = multiaddr![Memory(self.next_address)];
         self.next_address += 1;
 
-        let net = Network::new(network_config(address.clone()), ()).await;
+        let net = Network::new(
+            network_config(address.clone()),
+            Arc::new(NoopValidatorRecordVerifier),
+            (),
+        )
+        .await;
         net.listen_on(vec![address.clone()]).await;
 
         log::debug!(address = %address, peer_id = %net.get_local_peer_id(), "Creating node");
@@ -128,10 +137,20 @@ async fn create_connected_networks() -> (Network, Network) {
     let addr1 = multiaddr![Memory(rand::random::<u64>())];
     let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
-    let net1 = Network::new(network_config(addr1.clone()), ()).await;
+    let net1 = Network::new(
+        network_config(addr1.clone()),
+        Arc::new(NoopValidatorRecordVerifier),
+        (),
+    )
+    .await;
     net1.listen_on(vec![addr1.clone()]).await;
 
-    let net2 = Network::new(network_config(addr2.clone()), ()).await;
+    let net2 = Network::new(
+        network_config(addr2.clone()),
+        Arc::new(NoopValidatorRecordVerifier),
+        (),
+    )
+    .await;
     net2.listen_on(vec![addr2.clone()]).await;
 
     log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -161,10 +180,20 @@ async fn create_double_connected_networks() -> (Network, Network) {
     let addr1 = multiaddr![Memory(rand::random::<u64>())];
     let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
-    let net1 = Network::new(network_config(addr1.clone()), ()).await;
+    let net1 = Network::new(
+        network_config(addr1.clone()),
+        Arc::new(NoopValidatorRecordVerifier),
+        (),
+    )
+    .await;
     net1.listen_on(vec![addr1.clone()]).await;
 
-    let net2 = Network::new(network_config(addr2.clone()), ()).await;
+    let net2 = Network::new(
+        network_config(addr2.clone()),
+        Arc::new(NoopValidatorRecordVerifier),
+        (),
+    )
+    .await;
     net2.listen_on(vec![addr2.clone()]).await;
 
     log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -189,6 +218,7 @@ async fn create_double_connected_networks() -> (Network, Network) {
     (net1, net2)
 }
 
+#[derive(Clone)]
 struct Verifier {
     keys: Arc<RwLock<BTreeMap<Address, <KeyPair as TaggedKeyPair>::PublicKey>>>,
 }
@@ -245,7 +275,35 @@ impl dht::Verifier for Verifier {
     }
 }
 
+impl ValidatorRecordVerifier for Verifier {
+    fn verify_validator_record(
+        &self,
+        signed_record: &SignedValidatorRecord,
+    ) -> ValidatorVerification {
+        let keys = self.keys.read();
+        let Some(public_key) = keys.get(&signed_record.record.validator_address) else {
+            return ValidatorVerification::Invalid(InvalidReason::UnknownValidator);
+        };
+
+        if signed_record.verify(public_key) {
+            ValidatorVerification::Verified
+        } else {
+            ValidatorVerification::Invalid(InvalidReason::InvalidSignature)
+        }
+    }
+}
+
+#[derive(Clone)]
 struct RejectingVerifier;
+
+impl ValidatorRecordVerifier for RejectingVerifier {
+    fn verify_validator_record(
+        &self,
+        _signed_record: &SignedValidatorRecord,
+    ) -> ValidatorVerification {
+        ValidatorVerification::Invalid(InvalidReason::InvalidSignature)
+    }
+}
 
 impl dht::Verifier for RejectingVerifier {
     fn verify(
@@ -276,7 +334,12 @@ async fn create_network_with_n_peers(
 
         addresses.push(addr.clone());
 
-        let network = Network::new(network_config(addr.clone()), Verifier::new(&keys)).await;
+        let network = Network::new(
+            network_config(addr.clone()),
+            Arc::new(Verifier::new(&keys)),
+            Verifier::new(&keys),
+        )
+        .await;
         network.listen_on(vec![addr.clone()]).await;
 
         log::debug!(address = %addr, peer_id = %network.get_local_peer_id(), "Network {}", peer);
@@ -533,10 +596,20 @@ async fn dht_get_with_verifier_failure_returns_error() {
     let addr2 = multiaddr![Memory(rand::random::<u64>())];
     let keys = Arc::new(RwLock::new(BTreeMap::default()));
 
-    let net1 = Network::new(network_config(addr1.clone()), Verifier::new(&keys)).await;
+    let net1 = Network::new(
+        network_config(addr1.clone()),
+        Arc::new(Verifier::new(&keys)),
+        Verifier::new(&keys),
+    )
+    .await;
     net1.listen_on(vec![addr1.clone()]).await;
 
-    let net2 = Network::new(network_config(addr2.clone()), RejectingVerifier).await;
+    let net2 = Network::new(
+        network_config(addr2.clone()),
+        Arc::new(RejectingVerifier),
+        RejectingVerifier,
+    )
+    .await;
     net2.listen_on(vec![addr2.clone()]).await;
 
     let mut events1 = net1.subscribe_events();
@@ -662,4 +735,85 @@ async fn test_gossipsub() {
         net2.publish::<TestTopic>(msg.clone()).await.unwrap();
     }
     net1.network_info().await.unwrap();
+}
+
+/// Brings up two networks, the second one using `verifier` to check validator claims, with the
+/// first one advertising itself as the validator whose key is registered in `keys`.
+#[cfg(feature = "kad")]
+async fn create_networks_with_validator_claim<V>(
+    keys: &Arc<RwLock<BTreeMap<Address, <KeyPair as TaggedKeyPair>::PublicKey>>>,
+    verifier: V,
+) -> (Network, Network, Address)
+where
+    V: dht::Verifier + ValidatorRecordVerifier + Clone + 'static,
+{
+    let addr1 = multiaddr![Memory(rand::random::<u64>())];
+    let addr2 = multiaddr![Memory(rand::random::<u64>())];
+
+    // Register a validator and let the first network advertise it. This happens before the two
+    // are connected, so the claim travels in the discovery handshake rather than in a later
+    // periodic update.
+    let key_pair = KeyPair::generate(&mut test_rng(false));
+    let validator_address: Address = (&key_pair.public).into();
+    keys.write()
+        .insert(validator_address.clone(), key_pair.public);
+
+    let net1 = Network::new(
+        network_config(addr1.clone()),
+        Arc::new(Verifier::new(keys)),
+        Verifier::new(keys),
+    )
+    .await;
+    net1.listen_on(vec![addr1.clone()]).await;
+    net1.set_validator_record_signer(Some(ValidatorRecordSigner::new(
+        validator_address.clone(),
+        key_pair,
+    )));
+
+    let net2 = Network::new(
+        network_config(addr2.clone()),
+        Arc::new(verifier.clone()),
+        verifier,
+    )
+    .await;
+    net2.listen_on(vec![addr2.clone()]).await;
+
+    let mut events2 = net2.subscribe_events();
+    net2.dial_address(addr1).await.unwrap();
+
+    let event2 = helper::get_next_peer_event(&mut events2).await;
+    helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
+
+    (net1, net2, validator_address)
+}
+
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn a_verified_validator_claim_is_resolvable() {
+    let keys = Arc::new(RwLock::new(BTreeMap::default()));
+    let (net1, net2, validator_address) =
+        create_networks_with_validator_claim(&keys, Verifier::new(&keys)).await;
+
+    assert_eq!(
+        net2.get_validator_peer_ids(&validator_address),
+        vec![net1.get_local_peer_id()],
+    );
+
+    // We never report ourselves, even though we are the one advertising the claim.
+    assert!(net1.get_validator_peer_ids(&validator_address).is_empty());
+}
+
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn an_unverifiable_validator_claim_costs_no_connection() {
+    let keys = Arc::new(RwLock::new(BTreeMap::default()));
+    let (net1, net2, validator_address) =
+        create_networks_with_validator_claim(&keys, RejectingVerifier).await;
+
+    // The claim does not check out for this node, so it is not resolvable...
+    assert!(net2.get_validator_peer_ids(&validator_address).is_empty());
+
+    // ...but the peer keeps its connection and stays a normal peer.
+    assert!(net2.has_peer(net1.get_local_peer_id()));
+    assert_eq!(net2.get_peers(), vec![net1.get_local_peer_id()]);
 }

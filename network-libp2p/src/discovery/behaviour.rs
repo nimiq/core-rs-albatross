@@ -23,6 +23,7 @@ use parking_lot::RwLock;
 use super::{
     handler::{Handler, HandlerOutEvent},
     peer_contacts::{PeerContact, PeerContactBook},
+    validator_verifier::{ValidatorClaimBudget, ValidatorRecordVerifier},
 };
 
 #[derive(Clone, Debug)]
@@ -115,13 +116,36 @@ pub struct Behaviour {
 
     /// Timer to do house-keeping in the peer address book.
     house_keeping_timer: Interval,
+
+    /// Checks the validator claims carried by peer contacts.
+    validator_verifier: Arc<dyn ValidatorRecordVerifier>,
+
+    /// Bounds how many validator claims are verified per house-keeping tick, across every
+    /// discovery connection combined. Shared with each [`Handler`].
+    validator_claim_budget: Arc<ValidatorClaimBudget>,
 }
 
 impl Behaviour {
+    /// Maximum number of validator claims re-checked per house-keeping tick.
+    ///
+    /// Re-checking reads blockchain state, and house-keeping runs on the swarm task, so this
+    /// bounds how long a single tick can hold it up.
+    const MAX_RECHECKED_CLAIMS_PER_TICK: usize = 128;
+
+    /// Maximum number of validator claims verified per house-keeping tick across all discovery
+    /// connections combined, when they arrive via a handshake or a peer-address update.
+    ///
+    /// Unlike the re-check above, this path is driven directly by untrusted peers: the very
+    /// first message on a new connection can carry up to `Config::update_limit` claims, and
+    /// nothing else bounds how many connections can be open at once. Claims beyond the budget
+    /// are left unverified and picked up by the re-check sweep on a later tick.
+    const MAX_INBOUND_CLAIMS_VERIFIED_PER_TICK: usize = 256;
+
     pub fn new(
         config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
+        validator_verifier: Arc<dyn ValidatorRecordVerifier>,
     ) -> Self {
         let house_keeping_timer = interval(config.house_keeping_interval);
         peer_contact_book.write().update_own_contact(&keypair);
@@ -139,6 +163,10 @@ impl Behaviour {
             peer_contact_book,
             events,
             house_keeping_timer,
+            validator_verifier,
+            validator_claim_budget: Arc::new(ValidatorClaimBudget::new(
+                Self::MAX_INBOUND_CLAIMS_VERIFIED_PER_TICK,
+            )),
         }
     }
 
@@ -176,6 +204,8 @@ impl NetworkBehaviour for Behaviour {
             self.config.clone(),
             self.keypair.clone(),
             self.peer_contact_book(),
+            Arc::clone(&self.validator_verifier),
+            Arc::clone(&self.validator_claim_budget),
             remote_addr.clone(),
         ))
     }
@@ -193,6 +223,8 @@ impl NetworkBehaviour for Behaviour {
             self.config.clone(),
             self.keypair.clone(),
             self.peer_contact_book(),
+            Arc::clone(&self.validator_verifier),
+            Arc::clone(&self.validator_claim_budget),
             addr.clone(),
         ))
     }
@@ -226,9 +258,32 @@ impl NetworkBehaviour for Behaviour {
         match self.house_keeping_timer.poll_next_unpin(cx) {
             Poll::Ready(Some(_)) => {
                 trace!("Doing house-keeping in peer address book");
+
+                // Refill the budget that bounds how many validator claims arriving via
+                // handshakes and peer-address updates get verified before the next tick.
+                self.validator_claim_budget
+                    .reset(Self::MAX_INBOUND_CLAIMS_VERIFIED_PER_TICK);
+
+                // Re-check the claims we could not verify before, for example because the
+                // staking contract was still incomplete when the contact arrived. Checking reads
+                // blockchain state, so take a snapshot, check outside the lock, and apply the
+                // results afterwards.
+                let unverified = self.peer_contact_book.read().unverified_validator_contacts();
+                let verifications = unverified
+                    .iter()
+                    .take(Self::MAX_RECHECKED_CLAIMS_PER_TICK)
+                    .filter_map(|contact| {
+                        let verification = contact
+                            .signed()
+                            .check_validator_claim(&*self.validator_verifier)?;
+                        Some((*contact.peer_id(), contact.contact().timestamp(), verification))
+                    })
+                    .collect::<Vec<_>>();
+
                 let mut peer_address_book = self.peer_contact_book.write();
                 peer_address_book.update_own_contact(&self.keypair);
                 peer_address_book.house_keeping();
+                peer_address_book.apply_validator_verifications(verifications);
             }
             Poll::Ready(None) => unreachable!(),
             Poll::Pending => {}

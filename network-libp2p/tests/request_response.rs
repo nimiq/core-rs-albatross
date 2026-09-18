@@ -16,7 +16,7 @@ use nimiq_network_interface::{
     },
 };
 use nimiq_network_libp2p::{
-    discovery::{self, peer_contacts::PeerContact},
+    discovery::{self, peer_contacts::PeerContact, NoopValidatorRecordVerifier},
     Config, Network,
 };
 use nimiq_serde::{Deserialize, Serialize};
@@ -77,10 +77,20 @@ impl TestNetwork {
         let addr1 = multiaddr![Memory(rand::random::<u64>())];
         let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
-        let net1 = Network::new(network_config(addr1.clone()), ()).await;
+        let net1 = Network::new(
+            network_config(addr1.clone()),
+            Arc::new(NoopValidatorRecordVerifier),
+            (),
+        )
+        .await;
         net1.listen_on(vec![addr1.clone()]).await;
 
-        let net2 = Network::new(network_config(addr2.clone()), ()).await;
+        let net2 = Network::new(
+            network_config(addr2.clone()),
+            Arc::new(NoopValidatorRecordVerifier),
+            (),
+        )
+        .await;
         net2.listen_on(vec![addr2.clone()]).await;
 
         log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -117,16 +127,36 @@ impl TestNetwork {
         let addr3 = multiaddr![Memory(rand::random::<u64>())];
         let addr4 = multiaddr![Memory(rand::random::<u64>())];
 
-        let net1 = Network::new(network_config(addr1.clone()), ()).await;
+        let net1 = Network::new(
+            network_config(addr1.clone()),
+            Arc::new(NoopValidatorRecordVerifier),
+            (),
+        )
+        .await;
         net1.listen_on(vec![addr1.clone()]).await;
 
-        let net2 = Network::new(network_config(addr2.clone()), ()).await;
+        let net2 = Network::new(
+            network_config(addr2.clone()),
+            Arc::new(NoopValidatorRecordVerifier),
+            (),
+        )
+        .await;
         net2.listen_on(vec![addr2.clone()]).await;
 
-        let net3 = Network::new(network_config(addr3.clone()), ()).await;
+        let net3 = Network::new(
+            network_config(addr3.clone()),
+            Arc::new(NoopValidatorRecordVerifier),
+            (),
+        )
+        .await;
         net3.listen_on(vec![addr3.clone()]).await;
 
-        let net4 = Network::new(network_config(addr4.clone()), ()).await;
+        let net4 = Network::new(
+            network_config(addr4.clone()),
+            Arc::new(NoopValidatorRecordVerifier),
+            (),
+        )
+        .await;
         net4.listen_on(vec![addr4.clone()]).await;
 
         log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");

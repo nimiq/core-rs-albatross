@@ -49,9 +49,9 @@ nimiq-time = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "tagged-signing",
     "libp2p",
+    "spawn",
     "time",
 ] }
-nimiq-validator-network = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 libp2p = { version = "0.56", default-features = false, features = [

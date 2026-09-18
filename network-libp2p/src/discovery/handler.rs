@@ -33,7 +33,8 @@ use thiserror::Error;
 use super::{
     behaviour::Config,
     message_codec::{MessageReader, MessageWriter},
-    peer_contacts::{PeerContactBook, SignedPeerContact},
+    peer_contacts::{CheckedPeerContact, PeerContactBook, SignedPeerContact},
+    validator_verifier::{ValidatorClaimBudget, ValidatorRecordVerifier},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
 use crate::{AUTONAT_DIAL_BACK_PROTOCOL, AUTONAT_DIAL_REQUEST_PROTOCOL};
@@ -143,6 +144,13 @@ pub struct Handler {
     /// The peer contact book
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
+    /// Checks the validator claims carried by the contacts this peer sends us.
+    validator_verifier: Arc<dyn ValidatorRecordVerifier>,
+
+    /// Bounds how many validator claims this and every other discovery connection may verify
+    /// per house-keeping tick.
+    validator_claim_budget: Arc<ValidatorClaimBudget>,
+
     /// The peer address we're connected to (address that got us connected).
     peer_address: Multiaddr,
 
@@ -188,6 +196,8 @@ impl Handler {
         config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
+        validator_verifier: Arc<dyn ValidatorRecordVerifier>,
+        validator_claim_budget: Arc<ValidatorClaimBudget>,
         peer_address: Multiaddr,
     ) -> Self {
         if let Some(peer_contact) = peer_contact_book.write().get(&peer_id)
@@ -201,6 +211,8 @@ impl Handler {
             config,
             keypair,
             peer_contact_book,
+            validator_verifier,
+            validator_claim_budget,
             peer_address,
             challenge_nonce: ChallengeNonce::generate(),
             state: HandlerState::Init,
@@ -241,6 +253,8 @@ impl Handler {
     ) -> Vec<SignedPeerContact> {
         peer_contact_book
             .query(self.services_filter)
+            // Never pass on a validator claim we could not verify ourselves.
+            .filter(|contact| contact.is_gossipable())
             .sample(&mut rand::rng(), limit)
             .into_iter()
             .map(|c| c.signed().clone())
@@ -606,14 +620,35 @@ impl ConnectionHandler for Handler {
                                         }
                                     }
 
+                                    // Check the validator claims before taking the contact book
+                                    // lock, since checking them reads blockchain state. A claim we
+                                    // cannot verify is never fatal for the connection. Verification
+                                    // is bounded by a shared budget, since this runs on the very
+                                    // first message an unauthenticated peer sends us.
+                                    let checked_contact = CheckedPeerContact::check_with_budget(
+                                        peer_contact.clone(),
+                                        &*self.validator_verifier,
+                                        &self.validator_claim_budget,
+                                    );
+                                    let checked_contacts = peer_contacts
+                                        .into_iter()
+                                        .map(|contact| {
+                                            CheckedPeerContact::check_with_budget(
+                                                contact,
+                                                &*self.validator_verifier,
+                                                &self.validator_claim_budget,
+                                            )
+                                        })
+                                        .collect::<Vec<_>>();
+
                                     let mut peer_contact_book = self.peer_contact_book.write();
 
                                     // Insert the peer into the peer contact book.
-                                    peer_contact_book.insert(peer_contact.clone());
+                                    peer_contact_book.insert(checked_contact);
 
                                     // Insert the peer's contacts (filtered) into my contact book
                                     peer_contact_book.insert_all_filtered(
-                                        peer_contacts,
+                                        checked_contacts,
                                         self.config.required_services,
                                         self.config.only_secure_ws_connections,
                                     );
@@ -720,9 +755,24 @@ impl ConnectionHandler for Handler {
                                         }
                                     }
 
+                                    // Check the validator claims before taking the contact book
+                                    // lock, since checking them reads blockchain state.
+                                    // Verification is bounded by a shared budget; see the same
+                                    // check in the handshake-ack handling above.
+                                    let checked_contacts = peer_contacts
+                                        .into_iter()
+                                        .map(|contact| {
+                                            CheckedPeerContact::check_with_budget(
+                                                contact,
+                                                &*self.validator_verifier,
+                                                &self.validator_claim_budget,
+                                            )
+                                        })
+                                        .collect::<Vec<_>>();
+
                                     // Insert the new peer contacts into the peer contact book.
                                     self.peer_contact_book.write().insert_all_filtered(
-                                        peer_contacts,
+                                        checked_contacts,
                                         self.config.required_services,
                                         self.config.only_secure_ws_connections,
                                     );

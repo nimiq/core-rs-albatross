@@ -6,6 +6,7 @@ use std::{
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
+use nimiq_keys::Address;
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable};
 use thiserror::Error;
@@ -14,6 +15,7 @@ use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use crate::{
     peer_info::*,
     request::{Message, Request, RequestError},
+    validator_record::ValidatorRecordSigner,
 };
 
 /// Network events that the network will report when subscribing
@@ -112,6 +114,19 @@ pub trait Network: Send + Sync + Unpin + 'static {
         services: Services,
         min_peers: usize,
     ) -> Result<Vec<Self::PeerId>, Self::Error>;
+
+    /// The peer IDs known to belong to `validator_address`, most recently advertised first.
+    ///
+    /// These come from the validator claims carried by gossiped peer contacts. Only claims this
+    /// node verified against the staking contract are reported, and our own peer ID is never
+    /// among them. The peers are not necessarily connected.
+    fn get_validator_peer_ids(&self, validator_address: &Address) -> Vec<Self::PeerId>;
+
+    /// Installs or removes the signer that advertises our own validator record to other peers.
+    ///
+    /// Passing `None` stops advertising, which is what a node should do as soon as it can no
+    /// longer prove the claim, for example after its signing key was rotated away.
+    fn set_validator_record_signer(&self, signer: Option<ValidatorRecordSigner>);
 
     /// Returns true when the given peer provides the services flags that are required by us
     fn peer_provides_required_services(&self, peer_id: Self::PeerId) -> bool;
