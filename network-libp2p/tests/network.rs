@@ -12,10 +12,15 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, Topic},
     peer_info::Services,
+    validator_claim::ValidatorClaimSigner,
+    validator_record::ValidatorRecord,
 };
 use nimiq_network_libp2p::{
     dht,
-    discovery::{self, peer_contacts::PeerContact},
+    discovery::{
+        self, peer_contacts::PeerContact, InvalidReason, NoopValidatorClaimVerifier,
+        SignedValidatorClaim, ValidatorClaimVerifier, ValidatorVerification,
+    },
     Config, Network, NetworkError,
 };
 use nimiq_serde::{Deserialize, Serialize};
@@ -27,7 +32,6 @@ use nimiq_utils::{
     spawn,
     tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned},
 };
-use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::RwLock;
 
 mod helper;
@@ -101,7 +105,12 @@ impl TestNetwork {
         let address = multiaddr![Memory(self.next_address)];
         self.next_address += 1;
 
-        let net = Network::new(network_config(address.clone()), ()).await;
+        let net = Network::new(
+            network_config(address.clone()),
+            Arc::new(NoopValidatorClaimVerifier),
+            (),
+        )
+        .await;
         net.listen_on(vec![address.clone()]).await;
 
         log::debug!(address = %address, peer_id = %net.get_local_peer_id(), "Creating node");
@@ -128,10 +137,20 @@ async fn create_connected_networks() -> (Network, Network) {
     let addr1 = multiaddr![Memory(rand::random::<u64>())];
     let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
-    let net1 = Network::new(network_config(addr1.clone()), ()).await;
+    let net1 = Network::new(
+        network_config(addr1.clone()),
+        Arc::new(NoopValidatorClaimVerifier),
+        (),
+    )
+    .await;
     net1.listen_on(vec![addr1.clone()]).await;
 
-    let net2 = Network::new(network_config(addr2.clone()), ()).await;
+    let net2 = Network::new(
+        network_config(addr2.clone()),
+        Arc::new(NoopValidatorClaimVerifier),
+        (),
+    )
+    .await;
     net2.listen_on(vec![addr2.clone()]).await;
 
     log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -161,10 +180,20 @@ async fn create_double_connected_networks() -> (Network, Network) {
     let addr1 = multiaddr![Memory(rand::random::<u64>())];
     let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
-    let net1 = Network::new(network_config(addr1.clone()), ()).await;
+    let net1 = Network::new(
+        network_config(addr1.clone()),
+        Arc::new(NoopValidatorClaimVerifier),
+        (),
+    )
+    .await;
     net1.listen_on(vec![addr1.clone()]).await;
 
-    let net2 = Network::new(network_config(addr2.clone()), ()).await;
+    let net2 = Network::new(
+        network_config(addr2.clone()),
+        Arc::new(NoopValidatorClaimVerifier),
+        (),
+    )
+    .await;
     net2.listen_on(vec![addr2.clone()]).await;
 
     log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -189,6 +218,7 @@ async fn create_double_connected_networks() -> (Network, Network) {
     (net1, net2)
 }
 
+#[derive(Clone)]
 struct Verifier {
     keys: Arc<RwLock<BTreeMap<Address, <KeyPair as TaggedKeyPair>::PublicKey>>>,
 }
@@ -245,7 +275,32 @@ impl dht::Verifier for Verifier {
     }
 }
 
+impl ValidatorClaimVerifier for Verifier {
+    fn verify_validator_claim(&self, signed_claim: &SignedValidatorClaim) -> ValidatorVerification {
+        let keys = self.keys.read();
+        let Some(public_key) = keys.get(&signed_claim.record.validator_address) else {
+            return ValidatorVerification::Invalid(InvalidReason::UnknownValidator);
+        };
+
+        if signed_claim.verify(public_key) {
+            ValidatorVerification::Verified
+        } else {
+            ValidatorVerification::Invalid(InvalidReason::InvalidSignature)
+        }
+    }
+}
+
+#[derive(Clone)]
 struct RejectingVerifier;
+
+impl ValidatorClaimVerifier for RejectingVerifier {
+    fn verify_validator_claim(
+        &self,
+        _signed_claim: &SignedValidatorClaim,
+    ) -> ValidatorVerification {
+        ValidatorVerification::Invalid(InvalidReason::InvalidSignature)
+    }
+}
 
 impl dht::Verifier for RejectingVerifier {
     fn verify(
@@ -276,7 +331,12 @@ async fn create_network_with_n_peers(
 
         addresses.push(addr.clone());
 
-        let network = Network::new(network_config(addr.clone()), Verifier::new(&keys)).await;
+        let network = Network::new(
+            network_config(addr.clone()),
+            Arc::new(Verifier::new(&keys)),
+            Verifier::new(&keys),
+        )
+        .await;
         network.listen_on(vec![addr.clone()]).await;
 
         log::debug!(address = %addr, peer_id = %network.get_local_peer_id(), "Network {}", peer);
@@ -533,10 +593,20 @@ async fn dht_get_with_verifier_failure_returns_error() {
     let addr2 = multiaddr![Memory(rand::random::<u64>())];
     let keys = Arc::new(RwLock::new(BTreeMap::default()));
 
-    let net1 = Network::new(network_config(addr1.clone()), Verifier::new(&keys)).await;
+    let net1 = Network::new(
+        network_config(addr1.clone()),
+        Arc::new(Verifier::new(&keys)),
+        Verifier::new(&keys),
+    )
+    .await;
     net1.listen_on(vec![addr1.clone()]).await;
 
-    let net2 = Network::new(network_config(addr2.clone()), RejectingVerifier).await;
+    let net2 = Network::new(
+        network_config(addr2.clone()),
+        Arc::new(RejectingVerifier),
+        RejectingVerifier,
+    )
+    .await;
     net2.listen_on(vec![addr2.clone()]).await;
 
     let mut events1 = net1.subscribe_events();
@@ -662,4 +732,250 @@ async fn test_gossipsub() {
         net2.publish::<TestTopic>(msg.clone()).await.unwrap();
     }
     net1.network_info().await.unwrap();
+}
+
+/// Registers the key of a new validator in `keys`, returning the validator's address along with a
+/// signer that lets a network advertise itself as that validator.
+#[cfg(feature = "kad")]
+fn register_validator(
+    keys: &Arc<RwLock<BTreeMap<Address, <KeyPair as TaggedKeyPair>::PublicKey>>>,
+) -> (Address, ValidatorClaimSigner) {
+    let key_pair = KeyPair::generate(&mut test_rng(false));
+    let validator_address: Address = (&key_pair.public).into();
+    keys.write()
+        .insert(validator_address.clone(), key_pair.public);
+
+    let signer = ValidatorClaimSigner::new(validator_address.clone(), key_pair);
+    (validator_address, signer)
+}
+
+/// Brings up two networks, the second one using `verifier` to check validator claims, with the
+/// first one advertising itself as the validator whose key is registered in `keys`.
+#[cfg(feature = "kad")]
+async fn create_networks_with_validator_claim<V>(
+    keys: &Arc<RwLock<BTreeMap<Address, <KeyPair as TaggedKeyPair>::PublicKey>>>,
+    verifier: V,
+) -> (Network, Network, Address)
+where
+    V: dht::Verifier + ValidatorClaimVerifier + Clone + 'static,
+{
+    let addr1 = multiaddr![Memory(rand::random::<u64>())];
+    let addr2 = multiaddr![Memory(rand::random::<u64>())];
+
+    // Register a validator and let the first network advertise it. This happens before the two
+    // are connected, so the claim travels in the discovery handshake rather than in a later
+    // periodic update.
+    let (validator_address, signer) = register_validator(keys);
+
+    let net1 = Network::new(
+        network_config(addr1.clone()),
+        Arc::new(Verifier::new(keys)),
+        Verifier::new(keys),
+    )
+    .await;
+    net1.listen_on(vec![addr1.clone()]).await;
+    net1.set_validator_claim_signer(Some(signer));
+
+    let net2 = Network::new(
+        network_config(addr2.clone()),
+        Arc::new(verifier.clone()),
+        verifier,
+    )
+    .await;
+    net2.listen_on(vec![addr2.clone()]).await;
+
+    let mut events2 = net2.subscribe_events();
+    net2.dial_address(addr1).await.unwrap();
+
+    let event2 = helper::get_next_peer_event(&mut events2).await;
+    helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
+
+    (net1, net2, validator_address)
+}
+
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn a_verified_validator_claim_is_resolvable() {
+    let keys = Arc::new(RwLock::new(BTreeMap::default()));
+    let (net1, net2, validator_address) =
+        create_networks_with_validator_claim(&keys, Verifier::new(&keys)).await;
+
+    assert_eq!(
+        net2.get_validator_peer_ids(&validator_address),
+        vec![net1.get_local_peer_id()],
+    );
+
+    // We never report ourselves, even though we are the one advertising the claim.
+    assert!(net1.get_validator_peer_ids(&validator_address).is_empty());
+}
+
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn an_unverifiable_validator_claim_costs_no_connection() {
+    let keys = Arc::new(RwLock::new(BTreeMap::default()));
+    let (net1, net2, validator_address) =
+        create_networks_with_validator_claim(&keys, RejectingVerifier).await;
+
+    // The claim does not check out for this node, so it is not resolvable...
+    assert!(net2.get_validator_peer_ids(&validator_address).is_empty());
+
+    // ...but the peer keeps its connection and stays a normal peer.
+    assert!(net2.has_peer(net1.get_local_peer_id()));
+    assert_eq!(net2.get_peers(), vec![net1.get_local_peer_id()]);
+}
+
+/// Brings up a network that checks validator claims with `validator_verifier` and listens for
+/// other networks to [`connect_to_relay`]. Returns the network along with its listen address.
+#[cfg(feature = "kad")]
+async fn create_relay(
+    validator_verifier: Arc<dyn ValidatorClaimVerifier>,
+    dht_verifier: impl dht::Verifier + 'static,
+) -> (Network, Multiaddr) {
+    let address = multiaddr![Memory(rand::random::<u64>())];
+
+    let relay = Network::new(
+        network_config(address.clone()),
+        validator_verifier,
+        dht_verifier,
+    )
+    .await;
+    relay.listen_on(vec![address.clone()]).await;
+    // Wait until the relay actually listens, so that nobody dials it too early. Its swarm handles
+    // our requests in order, so by the time it answers this one it has handled the one to listen.
+    relay.network_info().await.unwrap();
+
+    (relay, address)
+}
+
+/// Brings up a network that checks validator claims against `keys`, advertising itself as the
+/// validator of `signer` if there is one, and connects it to `relay`, listening at
+/// `relay_address`. Returns once both have completed the discovery handshake, by which time each
+/// has checked and stored the contacts the other passed on in it.
+///
+/// The new network never listens on the address it advertises, so the relay is the only network
+/// anybody can dial. Networks connected to the same relay this way therefore never connect to each
+/// other, whatever the connection pool, Kademlia or AutoNAT dial on their own. The only way for
+/// one of them to learn another's contact, and the validator claim in it, is for the relay to pass
+/// it on.
+#[cfg(feature = "kad")]
+async fn connect_to_relay(
+    relay: &Network,
+    relay_address: &Multiaddr,
+    keys: &Arc<RwLock<BTreeMap<Address, <KeyPair as TaggedKeyPair>::PublicKey>>>,
+    signer: Option<ValidatorClaimSigner>,
+) -> Network {
+    let network = Network::new(
+        network_config(multiaddr![Memory(rand::random::<u64>())]),
+        Arc::new(Verifier::new(keys)),
+        Verifier::new(keys),
+    )
+    .await;
+    // Advertise the claim before connecting, so that it travels in the discovery handshake.
+    if let Some(signer) = signer {
+        network.set_validator_claim_signer(Some(signer));
+    }
+
+    let mut events = network.subscribe_events();
+    let mut relay_events = relay.subscribe_events();
+    network.dial_address(relay_address.clone()).await.unwrap();
+
+    let event = helper::get_next_peer_event(&mut events).await;
+    helper::assert_peer_joined(&event, &relay.get_local_peer_id());
+
+    let relay_event = helper::get_next_peer_event(&mut relay_events).await;
+    helper::assert_peer_joined(&relay_event, &network.get_local_peer_id());
+
+    network
+}
+
+/// Once we verified a peer's validator claim, we pass it on to our other peers, which can then
+/// resolve the validator without ever connecting to it.
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn a_verified_validator_claim_is_relayed() {
+    let keys = Arc::new(RwLock::new(BTreeMap::default()));
+    let (relay, relay_address) =
+        create_relay(Arc::new(Verifier::new(&keys)), Verifier::new(&keys)).await;
+
+    let (validator_address, signer) = register_validator(&keys);
+    let validator = connect_to_relay(&relay, &relay_address, &keys, Some(signer)).await;
+    let validator_peer_id = validator.get_local_peer_id();
+
+    // The relay verified the claim the validator presented in their handshake...
+    assert_eq!(
+        relay.get_validator_peer_ids(&validator_address),
+        vec![validator_peer_id],
+    );
+
+    // ...and passes it on in its handshake with a network that connects to it later.
+    let receiver = connect_to_relay(&relay, &relay_address, &keys, None).await;
+    assert_eq!(
+        receiver.get_validator_peer_ids(&validator_address),
+        vec![validator_peer_id],
+    );
+
+    // The receiver cannot have gotten the claim from the validator itself: its only connection,
+    // counting ones still in their discovery handshake, is the one to the relay.
+    assert!(!receiver.has_peer(validator_peer_id));
+    assert_eq!(receiver.get_peers(), vec![relay.get_local_peer_id()]);
+    assert_eq!(receiver.network_info().await.unwrap().num_peers(), 1);
+}
+
+/// Connects a validator to a relay that checks validator claims with `relay_verifier`, which must
+/// not verify the validator's claim, and asserts that the relay does not pass on the validator's
+/// contact at all, not even to a network that would verify the claim itself.
+#[cfg(feature = "kad")]
+async fn assert_unverified_validator_claim_is_not_relayed(
+    relay_verifier: Arc<dyn ValidatorClaimVerifier>,
+    relay_dht_verifier: impl dht::Verifier + 'static,
+) {
+    let keys = Arc::new(RwLock::new(BTreeMap::default()));
+    let (relay, relay_address) = create_relay(relay_verifier, relay_dht_verifier).await;
+
+    let (validator_address, signer) = register_validator(&keys);
+    let validator = connect_to_relay(&relay, &relay_address, &keys, Some(signer)).await;
+    let validator_peer_id = validator.get_local_peer_id();
+
+    // The relay did not verify the claim, but keeps the validator as a peer.
+    assert!(relay.get_validator_peer_ids(&validator_address).is_empty());
+    assert!(relay.has_peer(validator_peer_id));
+
+    // A peer without a validator claim, whose contact the relay does pass on.
+    let bystander = connect_to_relay(&relay, &relay_address, &keys, None).await;
+
+    let receiver = connect_to_relay(&relay, &relay_address, &keys, None).await;
+    let known_peers: Vec<PeerId> = receiver
+        .get_address_book()
+        .into_iter()
+        .map(|(peer_id, _)| peer_id)
+        .collect();
+
+    // The relay passed on contacts to the receiver in their handshake...
+    assert!(known_peers.contains(&bystander.get_local_peer_id()));
+
+    // ...but not the validator's, which the receiver could only have learned from the relay.
+    assert!(!known_peers.contains(&validator_peer_id));
+    assert!(receiver
+        .get_validator_peer_ids(&validator_address)
+        .is_empty());
+    assert!(!receiver.has_peer(validator_peer_id));
+}
+
+/// A claim that does not check out for us is never passed on.
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn an_invalid_validator_claim_is_not_relayed() {
+    assert_unverified_validator_claim_is_not_relayed(
+        Arc::new(RejectingVerifier),
+        RejectingVerifier,
+    )
+    .await;
+}
+
+/// A claim we cannot check (yet) is not passed on either, even though it is not rejected.
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn a_pending_validator_claim_is_not_relayed() {
+    assert_unverified_validator_claim_is_not_relayed(Arc::new(NoopValidatorClaimVerifier), ())
+        .await;
 }

@@ -23,7 +23,8 @@ use nimiq_serde::{Deserialize, Serialize};
 ///
 ///  - `0x01`: [`ChallengeNonce`](../../nimiq_network_libp2p/discovery/protocol/struct.ChallengeNonce.html)
 ///  - `0x02`: [`PeerContact`](../../nimiq_network_libp2p/discovery/peer_contacts/struct.PeerContact.html)
-///  - `0x03`: [`ValidatorRecord`](../../nimiq_validator_network/validator_record/struct.ValidatorRecord.html)
+///  - `0x03`: [`ValidatorRecord`](../../nimiq_network_interface/validator_record/struct.ValidatorRecord.html)
+///  - `0x04`: [`ValidatorClaim`](../../nimiq_network_interface/validator_claim/struct.ValidatorClaim.html)
 ///
 pub trait TaggedSignable: Serialize {
     const TAG: u8;

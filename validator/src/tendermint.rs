@@ -17,7 +17,7 @@ use nimiq_handel::{
 };
 use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_keys::Ed25519Signature as SchnorrSignature;
-use nimiq_network_interface::network::CloseReason;
+use nimiq_network_interface::network::{CloseReason, Network as NetworkInterface};
 use nimiq_primitives::{
     networks::NetworkId, policy::Policy, slots_allocation::Validators, TendermintIdentifier,
     TendermintProposal, TendermintStep, TendermintVote,
@@ -74,6 +74,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
 {
     type Contribution = TendermintContribution;
     type Error = TValidatorNetwork::Error;
+    type Sender = <TValidatorNetwork::NetworkType as NetworkInterface>::PeerId;
 
     fn send_update(
         &self,
@@ -99,15 +100,17 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
         async move { network.send_to(node_id, update_message).await }
     }
 
-    fn ban_node(&self, node_id: u16) -> impl Future<Output = ()> + Send + 'static {
+    fn ban_node(
+        &self,
+        _node_id: u16,
+        sender: Self::Sender,
+    ) -> impl Future<Output = ()> + Send + 'static {
+        // Blame the peer that sent the contribution, which is not necessarily the one we would
+        // send to.
         let network = Arc::clone(&self.network);
         async move {
-            let Some(peer_id) = network.get_peer_id(node_id) else {
-                return;
-            };
-
             network
-                .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                .disconnect_peer(sender, CloseReason::MaliciousPeer)
                 .await
         }
     }
@@ -184,7 +187,8 @@ where
     type Inherent = Body;
     type InherentHash = Blake2sHash;
     type Aggregation = TendermintContribution;
-    type AggregationMessage = AggregateMessage;
+    type AggregationMessage =
+        AggregateMessage<<TValidatorNetwork::NetworkType as NetworkInterface>::PeerId>;
     type ProposalSignature = (SchnorrSignature, u16);
 
     const F_PLUS_ONE: usize = Policy::F_PLUS_ONE as usize;
@@ -486,7 +490,7 @@ where
             protocol,
             nimiq_handel::config::Config::default(),
             own_contribution,
-            update_stream.map(|item| item.0).boxed(),
+            update_stream.map(|item| (item.0, item.1)).boxed(),
             network,
         )
         .boxed()
