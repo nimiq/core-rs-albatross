@@ -7,6 +7,12 @@ pub enum NetworkError {
     #[error("Dial error: {0}")]
     Dial(#[from] libp2p::swarm::DialError),
 
+    #[error("Listen error: {0}")]
+    Listen(#[from] libp2p::core::transport::TransportError<std::io::Error>),
+
+    #[error("Listener closed before reporting an address")]
+    ListenerClosed,
+
     #[error("Failed to send action to swarm task")]
     Send,
 
