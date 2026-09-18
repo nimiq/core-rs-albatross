@@ -4195,9 +4195,9 @@ dependencies = [
 
 [[package]]
 name = "nimiq-jsonrpc-client"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6061f1d7c78781cddc1c65ed43ba1f3b26a548b6427e358e1e9cc0aa7cf158d"
+checksum = "ce485099c1f8f3ad35c377233ba5e41cc625d929de3afb300da506115f86ee38"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -4217,9 +4217,9 @@ dependencies = [
 
 [[package]]
 name = "nimiq-jsonrpc-core"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bd3ba5a2fdf41b1dd5a7477bcf90e47b880ff7839a4338bfc5c39070b1a1849"
+checksum = "aaf72b5c84bb2830232debb5a76669e0a9c585f4d25b5204e621ddf781b2e70c"
 dependencies = [
  "log",
  "serde",
@@ -4229,9 +4229,9 @@ dependencies = [
 
 [[package]]
 name = "nimiq-jsonrpc-derive"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "017e90cd8e7399564be6a5c303c91127526572adb215c5ae80326cd7f6c69d55"
+checksum = "5a8925ac134abc6c4ee5ac9a5b0ed731b04c333b3d28f977359e1298698f0480"
 dependencies = [
  "darling 0.24.1",
  "heck",
@@ -4245,9 +4245,9 @@ dependencies = [
 
 [[package]]
 name = "nimiq-jsonrpc-server"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ee3f4429b187b839369487b3bedc60bb67e77387d2b6a2644c7f23a860bf698"
+checksum = "458650b97b4257e0c3a9ded76ba258ae24425d9ca437258894275f3f7fb0667d"
 dependencies = [
  "async-trait",
  "axum",
@@ -5762,7 +5762,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -5775,7 +5775,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9120690fafc389a67ba3803df527d0ec9cbbc9cc45e4cc20b332996dfb672425"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -7099,7 +7099,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
