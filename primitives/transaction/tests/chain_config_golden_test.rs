@@ -10,9 +10,12 @@
 //! program extracts from realistic burn payloads, so a change to either the blob or the encoding
 //! fails here instead of on-chain.
 
+mod amoy;
+
+use amoy::{amoy_chain_config, POLYGON_AMOY_CHAIN_CONFIG};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::Serialize;
 use nimiq_transaction::{
     account::htlc_contract::{AnyHash, AnyHash32},
     bridge_contract::{
@@ -21,11 +24,6 @@ use nimiq_transaction::{
     },
 };
 use nimiq_utils::merkle::MerklePath;
-
-/// The serialized `ChainConfig` for Polygon Amoy. Redefining it means every bridge instance
-/// deployed with the old blob has to be redeployed, and whatever emits it has to be updated to
-/// match.
-const POLYGON_AMOY_CHAIN_CONFIG: &str = "82f104050000000000000000000000000000000000000000000000000000000000000000010102001100340680c0caf384a3021c06616d6f756e740000041c0e7461726765745f616464726573730014051c0c7461726765745f6e6f6e636500140500ffffffff0f141c116275726e5f626c6f636b5f6865696768740054051c0f7461726765745f636861696e5f696420";
 
 const AMOY_CHAIN_ID: u32 = 80002;
 
@@ -42,11 +40,6 @@ const WEI_PER_LUNA: u64 = 10_000_000_000_000;
 
 /// One NIM in luna, for readable vectors.
 const LUNA_PER_NIM: u64 = 100_000;
-
-fn amoy_chain_config() -> ChainConfig {
-    ChainConfig::deserialize_from_vec(&hex::decode(POLYGON_AMOY_CHAIN_CONFIG).unwrap())
-        .expect("shipped ChainConfig blob must deserialize")
-}
 
 /// Encodes a 32-byte big-endian EVM word.
 fn evm_word(value: u128) -> [u8; 32] {

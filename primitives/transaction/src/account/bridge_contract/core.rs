@@ -1759,7 +1759,9 @@ impl ValidationProgram {
             ValidationOp::JumpIfZero(skip) => {
                 let condition = ctx.pop_u64()?;
                 if condition == 0 {
-                    *pc += skip;
+                    // Saturating keeps jumps forward-only, so the
+                    // `pc < operations.len()` check always terminates execution.
+                    *pc = pc.saturating_add(*skip);
                 }
             }
 
@@ -1799,7 +1801,9 @@ impl ValidationProgram {
         while pc < self.operations.len() {
             let op = &self.operations[pc];
             Self::execute_operation(&mut ctx, op, &mut pc)?;
-            pc += 1;
+            // Saturating so a `pc` parked at `usize::MAX` by a long `JumpIfZero`
+            // ends the program instead of wrapping back to the first operation.
+            pc = pc.saturating_add(1);
         }
 
         Ok(ValidationResult {
@@ -1828,7 +1832,9 @@ impl ValidationProgram {
         while pc < self.operations.len() {
             let op = &self.operations[pc];
             Self::execute_operation(&mut ctx, op, &mut pc)?;
-            pc += 1;
+            // Saturating so a `pc` parked at `usize::MAX` by a long `JumpIfZero`
+            // ends the program instead of wrapping back to the first operation.
+            pc = pc.saturating_add(1);
         }
 
         Ok(ValidationResult {
