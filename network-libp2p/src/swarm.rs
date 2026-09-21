@@ -433,7 +433,7 @@ fn handle_event(event: SwarmEvent<behaviour::BehaviourEvent>, event_info: EventI
         }
 
         SwarmEvent::NewListenAddr {
-            listener_id: _,
+            listener_id,
             address,
         } => {
             debug!(%address, "New listen address");
@@ -443,15 +443,29 @@ fn handle_event(event: SwarmEvent<behaviour::BehaviourEvent>, event_info: EventI
                 .discovery
                 .add_own_addresses([address.clone()].to_vec());
             if event_info.swarm.behaviour().is_address_dialable(&address) {
-                event_info.state.nat_status.add_address(address);
+                event_info.state.nat_status.add_address(address.clone());
+            }
+            if let Some(output) = event_info
+                .state
+                .pending_listen_addresses
+                .remove(&listener_id)
+            {
+                output.send(Ok(address)).ok();
             }
         }
 
         SwarmEvent::ListenerClosed {
-            listener_id: _,
+            listener_id,
             addresses,
             reason: _,
         } => {
+            if let Some(output) = event_info
+                .state
+                .pending_listen_addresses
+                .remove(&listener_id)
+            {
+                output.send(Err(NetworkError::ListenerClosed)).ok();
+            }
             addresses.iter().for_each(|address| {
                 event_info.state.nat_status.remove_address(address);
             });
@@ -1374,6 +1388,17 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                     .expect("Failed to listen on provided address");
             }
         }
+        NetworkAction::ListenOnAddress {
+            listen_address,
+            output,
+        } => match Swarm::listen_on(swarm, listen_address) {
+            Ok(listener_id) => {
+                state.pending_listen_addresses.insert(listener_id, output);
+            }
+            Err(error) => {
+                output.send(Err(error.into())).ok();
+            }
+        },
         NetworkAction::StartConnecting => {
             swarm.behaviour_mut().pool.start_connecting();
         }
