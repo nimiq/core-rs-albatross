@@ -757,7 +757,9 @@ impl Client {
         }
     }
 
-    /// Fetches the transaction details for the given transaction hash.
+    /// Fetches an included transaction by hash. Returns an error if it is not found on-chain.
+    /// `state: "confirmed"` means finalized, not necessarily successful. This method returns
+    /// `executionResult: true` for successful execution or `false` for failed execution.
     #[wasm_bindgen(js_name = getTransaction)]
     pub async fn get_transaction(
         &self,
