@@ -30,7 +30,7 @@ mod waker;
 #[cfg(feature = "credentials")]
 pub use self::credentials::Credentials;
 #[cfg(feature = "spawn")]
-pub use self::spawn::{spawn, spawn_local};
+pub use self::spawn::{spawn, spawn_blocking, spawn_local};
 pub use self::{sensitive::Sensitive, waker::WakerExt};
 
 /// The version of the Cargo workspace package, with a `+dirty` build-metadata

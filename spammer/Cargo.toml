@@ -39,7 +39,7 @@ nimiq-mempool = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["coin", "networks"] }
 nimiq-transaction = { workspace = true }
 nimiq-transaction-builder = { workspace = true }
-nimiq-utils = { workspace = true }
+nimiq-utils = { workspace = true, features = ["spawn"] }
 
 [dependencies.nimiq]
 workspace = true

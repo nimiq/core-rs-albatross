@@ -19,6 +19,10 @@ path = "tokio::task::spawn_local"
 reason = "use `nimiq_utils::spawn_local` instead, it is also supported in WASM environments"
 
 [[disallowed-methods]]
+path = "tokio::task::spawn_blocking"
+reason = "use `nimiq_utils::spawn_blocking` instead, it is also supported in WASM environments"
+
+[[disallowed-methods]]
 path = "wasm_bindgen_futures::spawn_local"
 reason = "use `nimiq_utils::spawn` or `nimq_utils::spawn_local` instead, it is also supported in non-WASM environments"
 

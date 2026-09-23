@@ -9,9 +9,9 @@ use nimiq_handel::{
 };
 use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_primitives::{TendermintIdentifier, TendermintVote};
+use nimiq_utils::spawn_blocking;
 use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use tokio::task;
 
 use super::contribution::TendermintContribution;
 
@@ -85,7 +85,7 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
 
             params.push((aggregated_public_key, hash_curve, multi_sig.clone()));
         }
-        let result = task::spawn_blocking(move || {
+        let result = spawn_blocking(move || {
             params
                 .into_par_iter()
                 .map(|(aggregated_public_key, hash_curve, contribution)| {
@@ -98,8 +98,7 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
                 // If there is a single verification that failed, fail the whole verification as well.
                 .try_reduce(|| (), |(), ()| Ok(()))
         })
-        .await
-        .expect("spawned verification task has panicked");
+        .await;
 
         match result {
             // All results were Ok. Verification is Ok.
@@ -167,7 +166,7 @@ mod tests {
     }
 
     fn block_on<F: Future>(future: F) -> F::Output {
-        // The verifier uses `tokio::task::spawn_blocking`, so it needs a Tokio context
+        // The verifier uses `nimiq_utils::spawn_blocking`, so it needs a Tokio context
         tokio::runtime::Builder::new_current_thread()
             .build()
             .unwrap()

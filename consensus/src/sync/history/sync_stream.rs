@@ -8,8 +8,7 @@ use futures::{FutureExt, Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
 use nimiq_network_interface::network::{Network, NetworkEvent};
-use nimiq_utils::WakerExt as _;
-use tokio::task::spawn_blocking;
+use nimiq_utils::{spawn_blocking, WakerExt as _};
 
 use crate::sync::{
     history::{
@@ -119,10 +118,9 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                         let hash = batch_set.block.hash();
                         let blockchain = Arc::clone(&self.blockchain);
 
-                        // Note the fact that the future surrounding the spawn_blocking is created deliberately as
-                        // it is not necessarily polled immediately. It must wait until preceding futures have resolved
-                        // before the actual push_history_sync call has any chance of succeeding. Thus using the
-                        // spawn_blocking as the future is unfeasible.
+                        // The job is queued and only polled once the preceding jobs have resolved, as the
+                        // push_history_sync call has no chance of succeeding before that. The blocking push is
+                        // therefore started from within this future, so that nothing runs until it is polled.
                         let future = async move {
                             debug!(
                                 "Processing epoch #{} ({} history items)",
@@ -136,8 +134,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                                     &batch_set.history,
                                 )
                             })
-                            .await
-                            .expect("blockchain.push_history_sync() should not panic");
+                            .await;
 
                             if let Err(e) = &result {
                                 log::warn!("Failed to push epoch: {:?}", e);

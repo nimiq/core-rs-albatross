@@ -28,7 +28,7 @@ use nimiq_mempool::mempool::Mempool;
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_utils::spawn;
+use nimiq_utils::{spawn, spawn_blocking};
 use rand::{
     distr::{weighted::WeightedIndex, Distribution},
     RngExt,
@@ -396,7 +396,7 @@ async fn spam(
         let blockchain = consensus.blockchain.read();
         (blockchain.block_number(), blockchain.network_id())
     };
-    tokio::task::spawn_blocking(move || {
+    spawn_blocking(move || {
         let choices = [
             SpamType::BaseBasicTransaction,
             SpamType::BurstBasicTransaction,
@@ -452,8 +452,7 @@ async fn spam(
         }
         log::info!("\tSent {} transactions to the network.\n", txn_count);
     })
-    .await
-    .expect("spawn_blocking() panicked");
+    .await;
 }
 
 fn generate_basic_transactions(
