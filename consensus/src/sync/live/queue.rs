@@ -25,6 +25,7 @@ use nimiq_primitives::{
         trie_diff::TrieDiff,
     },
 };
+use nimiq_utils::spawn_blocking;
 use parking_lot::Mutex;
 
 use crate::{
@@ -35,18 +36,6 @@ use crate::{
     },
     BlsCache,
 };
-
-async fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(f: F) -> R {
-    #[cfg(not(target_family = "wasm"))]
-    {
-        tokio::task::spawn_blocking(f).await.unwrap()
-    }
-
-    #[cfg(target_family = "wasm")]
-    {
-        f()
-    }
-}
 
 /// Used during state live sync to track which peer provided which chunk,
 /// and to locate the chunk's position in the trie.
