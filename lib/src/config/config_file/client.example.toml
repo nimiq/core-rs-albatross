@@ -85,7 +85,8 @@ seed_nodes = [
 # Default: randomly generated
 #peer_key = ""
 
-# The max number of peer connections the network allows.
+# The max number of peer connections the network allows in each direction
+# (inbound and outbound connections are limited separately).
 # Default: 4000
 #peer_count_max = 4000
 

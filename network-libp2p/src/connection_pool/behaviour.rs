@@ -38,14 +38,33 @@ struct Limits {
     ip_count: HashMap<IpAddr, usize>,
     /// Number of peers connected per IP subnet
     ip_subnet_count: HashMap<IpNetwork, usize>,
-    /// Total peer count
-    peer_count: usize,
+    /// Number of established inbound connections
+    inbound_peer_count: usize,
+    /// Number of established outbound connections
+    outbound_peer_count: usize,
     /// Number of inbound connections per IP subnet that are still in the handshake
     pending_subnet_count: HashMap<IpNetwork, usize>,
     /// Counters charged per connection. A connection is released only for what
     /// it was actually charged, since the swarm also reports failures for
     /// connections that another behaviour denied before this one saw them.
     charges: HashMap<ConnectionId, ConnectionCharge>,
+}
+
+impl Limits {
+    /// Number of established connections in the given direction
+    fn peer_count(&self, endpoint: Endpoint) -> usize {
+        match endpoint {
+            Endpoint::Dialer => self.outbound_peer_count,
+            Endpoint::Listener => self.inbound_peer_count,
+        }
+    }
+
+    fn peer_count_mut(&mut self, endpoint: Endpoint) -> &mut usize {
+        match endpoint {
+            Endpoint::Dialer => &mut self.outbound_peer_count,
+            Endpoint::Listener => &mut self.inbound_peer_count,
+        }
+    }
 }
 
 /// Counters in [`Limits`] that were incremented for a single connection
@@ -55,8 +74,8 @@ struct ConnectionCharge {
     ip_info: Option<IpInfo>,
     /// Whether the connection is counted in `pending_subnet_count`
     pending: bool,
-    /// Whether `peer_count` was incremented
-    peer_count: bool,
+    /// Direction whose peer count was incremented
+    peer_count: Option<Endpoint>,
 }
 
 /// Connection pool behaviour configuration
@@ -66,7 +85,8 @@ pub(crate) struct Config {
     pub desired_peer_count: usize,
     /// The number of initial attempted connections. These will connect to seed nodes.
     pub num_initial_connections: usize,
-    /// Maximum count of peers
+    /// Maximum count of peers in each direction. Inbound and outbound
+    /// connections are limited separately, so that one cannot starve the other.
     pub peer_count_max: usize,
     /// Maximum peer count per IP
     pub peer_count_per_ip_max: usize,
@@ -412,7 +432,8 @@ impl Behaviour {
         let limits = Limits {
             ip_count: HashMap::new(),
             ip_subnet_count: HashMap::new(),
-            peer_count: 0,
+            inbound_peer_count: 0,
+            outbound_peer_count: 0,
             pending_subnet_count: HashMap::new(),
             charges: HashMap::new(),
         };
@@ -812,10 +833,12 @@ impl Behaviour {
         }
     }
 
-    fn check_peer_limit(&self) -> Result<(), ConnectionDenied> {
-        if self.limits.peer_count >= self.config.peer_count_max {
+    fn check_peer_limit(&self, endpoint: Endpoint) -> Result<(), ConnectionDenied> {
+        let peer_count = self.limits.peer_count(endpoint);
+        if peer_count >= self.config.peer_count_max {
             debug!(
-                connections = self.limits.peer_count,
+                connections = peer_count,
+                direction = ?endpoint,
                 "Max peer connections limit reached"
             );
             return Err(ConnectionDenied::new(Error::MaxPeerConnectionsReached));
@@ -910,14 +933,15 @@ impl Behaviour {
         }
     }
 
-    /// Increments `peer_count` and records it against `connection_id`.
-    fn charge_peer_count(&mut self, connection_id: ConnectionId) {
-        self.limits.peer_count = self.limits.peer_count.saturating_add(1);
+    /// Increments the peer count for `endpoint` and records it against `connection_id`.
+    fn charge_peer_count(&mut self, connection_id: ConnectionId, endpoint: Endpoint) {
+        let peer_count = self.limits.peer_count_mut(endpoint);
+        *peer_count = peer_count.saturating_add(1);
         self.limits
             .charges
             .entry(connection_id)
             .or_default()
-            .peer_count = true;
+            .peer_count = Some(endpoint);
     }
 
     /// Increments the IP and subnet counters and records them against `connection_id`.
@@ -955,8 +979,9 @@ impl Behaviour {
         if let Some(ip_info) = charge.ip_info {
             self.decrement_ip_counters(&ip_info);
         }
-        if charge.peer_count {
-            self.limits.peer_count = self.limits.peer_count.saturating_sub(1);
+        if let Some(endpoint) = charge.peer_count {
+            let peer_count = self.limits.peer_count_mut(endpoint);
+            *peer_count = peer_count.saturating_sub(1);
         }
     }
 
@@ -1091,8 +1116,8 @@ impl NetworkBehaviour for Behaviour {
             debug!(peer_id=%peer, "Peer is banned");
             return Err(ConnectionDenied::new(Error::BannedPeer));
         }
-        self.check_peer_limit()?;
-        self.charge_peer_count(connection_id);
+        self.check_peer_limit(Endpoint::Listener)?;
+        self.charge_peer_count(connection_id, Endpoint::Listener);
 
         Ok(dummy::ConnectionHandler)
     }
@@ -1110,12 +1135,12 @@ impl NetworkBehaviour for Behaviour {
         if let Some(ip_info) = &ip_info {
             self.check_ip_limits(ip_info)?;
         }
-        self.check_peer_limit()?;
+        self.check_peer_limit(Endpoint::Dialer)?;
 
         if let Some(ip_info) = ip_info {
             self.charge_ip_counters(connection_id, ip_info);
         }
-        self.charge_peer_count(connection_id);
+        self.charge_peer_count(connection_id, Endpoint::Dialer);
 
         Ok(dummy::ConnectionHandler)
     }
@@ -1333,7 +1358,7 @@ mod tests {
         connect_inbound(&mut behaviour, 1, &addr("/ip4/1.1.1.1/tcp/1")).expect("1st admitted");
         connect_inbound(&mut behaviour, 2, &addr("/ip4/2.2.2.2/tcp/1")).expect("2nd admitted");
         assert!(connect_inbound(&mut behaviour, 3, &addr("/ip4/3.3.3.3/tcp/1")).is_err());
-        assert_eq!(behaviour.limits.peer_count, 2);
+        assert_eq!(behaviour.limits.inbound_peer_count, 2);
 
         // Pending-inbound connections that fail during the upgrade.
         let remote = addr("/ip4/9.9.9.9/tcp/1");
@@ -1345,7 +1370,7 @@ mod tests {
             listen_failure(&mut behaviour, id, &remote);
         }
 
-        assert_eq!(behaviour.limits.peer_count, 2);
+        assert_eq!(behaviour.limits.inbound_peer_count, 2);
         assert!(connect_inbound(&mut behaviour, 20, &remote).is_err());
     }
 
@@ -1407,7 +1432,7 @@ mod tests {
         connect_outbound(&mut behaviour, 3, &b).expect("2nd admitted");
         // Denied by the peer limit.
         assert!(connect_outbound(&mut behaviour, 4, &c).is_err());
-        assert_eq!(behaviour.limits.peer_count, 2);
+        assert_eq!(behaviour.limits.outbound_peer_count, 2);
 
         close_outbound(&mut behaviour, 1, &a);
         close_outbound(&mut behaviour, 3, &b);
@@ -1417,7 +1442,8 @@ mod tests {
         listen_failure(&mut behaviour, 5, &c);
         listen_failure(&mut behaviour, 5, &c);
 
-        assert_eq!(behaviour.limits.peer_count, 0);
+        assert_eq!(behaviour.limits.inbound_peer_count, 0);
+        assert_eq!(behaviour.limits.outbound_peer_count, 0);
         assert!(behaviour.limits.ip_count.is_empty());
         assert!(behaviour.limits.ip_subnet_count.is_empty());
         assert!(behaviour.limits.pending_subnet_count.is_empty());
@@ -1498,5 +1524,25 @@ mod tests {
         listen_failure(&mut behaviour, 2, &a2);
         pending_inbound(&mut behaviour, 7, &a3).expect("slot freed by failure");
         assert!(pending_inbound(&mut behaviour, 8, &a3).is_err());
+    }
+
+    // Inbound connections must not use up the capacity for outbound ones,
+    // otherwise filling the inbound slots also stops us from dialing peers.
+    #[test(tokio::test)]
+    async fn inbound_connections_do_not_block_outbound() {
+        let mut behaviour = new_behaviour(Config {
+            peer_count_max: 2,
+            ..Config::default()
+        });
+
+        connect_inbound(&mut behaviour, 1, &addr("/ip4/1.1.1.1/tcp/1")).expect("1st admitted");
+        connect_inbound(&mut behaviour, 2, &addr("/ip4/2.2.2.2/tcp/1")).expect("2nd admitted");
+        assert!(connect_inbound(&mut behaviour, 3, &addr("/ip4/3.3.3.3/tcp/1")).is_err());
+
+        connect_outbound(&mut behaviour, 4, &addr("/ip4/4.4.4.4/tcp/1"))
+            .expect("outbound admitted with inbound full");
+        connect_outbound(&mut behaviour, 5, &addr("/ip4/5.5.5.5/tcp/1"))
+            .expect("outbound admitted with inbound full");
+        assert!(connect_outbound(&mut behaviour, 6, &addr("/ip4/6.6.6.6/tcp/1")).is_err());
     }
 }

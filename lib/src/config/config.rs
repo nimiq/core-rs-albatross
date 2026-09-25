@@ -159,7 +159,8 @@ pub struct NetworkConfig {
     #[builder(default = "12")]
     pub desired_peer_count: usize,
 
-    /// Optional, max number of peer connections.
+    /// Optional, max number of peer connections in each direction (inbound and outbound are
+    /// limited separately).
     #[builder(default = "4000")]
     pub peer_count_max: usize,
 
