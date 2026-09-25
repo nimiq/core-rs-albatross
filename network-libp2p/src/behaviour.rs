@@ -121,7 +121,9 @@ impl Behaviour {
 
         // Connection limits behaviour
         let limits = connection_limits::ConnectionLimits::default()
-            .with_max_pending_incoming(Some(16))
+            // The connection pool also limits pending connections per subnet,
+            // so a single host cannot hold all of these.
+            .with_max_pending_incoming(Some(64))
             .with_max_pending_outgoing(Some(16))
             .with_max_established_incoming(Some(4800))
             .with_max_established_outgoing(Some(4800))

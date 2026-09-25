@@ -2,6 +2,7 @@ use std::{
     collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     convert::Infallible,
     future::Future,
+    hash::Hash,
     net::IpAddr,
     pin::Pin,
     sync::Arc,
@@ -39,6 +40,8 @@ struct Limits {
     ip_subnet_count: HashMap<IpNetwork, usize>,
     /// Total peer count
     peer_count: usize,
+    /// Number of inbound connections per IP subnet that are still in the handshake
+    pending_subnet_count: HashMap<IpNetwork, usize>,
     /// Counters charged per connection. A connection is released only for what
     /// it was actually charged, since the swarm also reports failures for
     /// connections that another behaviour denied before this one saw them.
@@ -50,6 +53,8 @@ struct Limits {
 struct ConnectionCharge {
     /// IP (and subnet) whose counters were incremented
     ip_info: Option<IpInfo>,
+    /// Whether the connection is counted in `pending_subnet_count`
+    pending: bool,
     /// Whether `peer_count` was incremented
     peer_count: bool,
 }
@@ -67,6 +72,8 @@ pub(crate) struct Config {
     pub peer_count_per_ip_max: usize,
     /// Maximum peer count per subnet
     pub peer_count_per_subnet_max: usize,
+    /// Maximum number of inbound connections per subnet that can be in the handshake at once
+    pub pending_count_per_subnet_max: usize,
     /// IPv4 subnet prefix length to apply to detect same connections for the same subnet
     pub ipv4_subnet_prefix_len: u8,
     /// IPv6 subnet prefix length to apply to detect same connections for the same subnet
@@ -95,6 +102,7 @@ impl Default for Config {
             peer_count_max: 4000,
             peer_count_per_ip_max: 20,
             peer_count_per_subnet_max: 20,
+            pending_count_per_subnet_max: 4,
             ipv4_subnet_prefix_len: 24,
             // A /64 is the smallest block handed out to a single host or
             // subscriber, so anything longer lets one host span many subnets.
@@ -405,6 +413,7 @@ impl Behaviour {
             ip_count: HashMap::new(),
             ip_subnet_count: HashMap::new(),
             peer_count: 0,
+            pending_subnet_count: HashMap::new(),
             charges: HashMap::new(),
         };
         let housekeeping_timer = interval(config.housekeeping_interval);
@@ -846,6 +855,61 @@ impl Behaviour {
         Ok(())
     }
 
+    fn check_pending_limit(&self, ip_info: &IpInfo) -> Result<(), ConnectionDenied> {
+        if let Some(subnet_ip) = ip_info.subnet_ip
+            && self
+                .limits
+                .pending_subnet_count
+                .get(&subnet_ip)
+                .copied()
+                .unwrap_or(0)
+                >= self.config.pending_count_per_subnet_max
+        {
+            debug!(
+                %subnet_ip,
+                limit = self.config.pending_count_per_subnet_max,
+                "Max pending connections per IP subnet limit reached"
+            );
+            return Err(ConnectionDenied::new(
+                Error::MaxSubnetPendingConnectionsReached,
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Counts `connection_id` as pending for its subnet until its handshake ends.
+    fn charge_pending(&mut self, connection_id: ConnectionId, ip_info: &IpInfo) {
+        let Some(subnet_ip) = ip_info.subnet_ip else {
+            return;
+        };
+
+        self.limits
+            .pending_subnet_count
+            .entry(subnet_ip)
+            .and_modify(|counter| *counter = counter.saturating_add(1))
+            .or_insert(1);
+        self.limits
+            .charges
+            .entry(connection_id)
+            .or_default()
+            .pending = true;
+    }
+
+    /// Stops counting `connection_id` as pending, if it was.
+    fn release_pending(&mut self, connection_id: ConnectionId) {
+        let Some(charge) = self.limits.charges.get_mut(&connection_id) else {
+            return;
+        };
+        if !std::mem::take(&mut charge.pending) {
+            return;
+        }
+
+        if let Some(subnet_ip) = charge.ip_info.as_ref().and_then(|info| info.subnet_ip) {
+            decrement_count(&mut self.limits.pending_subnet_count, subnet_ip);
+        }
+    }
+
     /// Increments `peer_count` and records it against `connection_id`.
     fn charge_peer_count(&mut self, connection_id: ConnectionId) {
         self.limits.peer_count = self.limits.peer_count.saturating_add(1);
@@ -883,6 +947,7 @@ impl Behaviour {
     /// never charged (e.g. denied by another behaviour first) leave the
     /// counters untouched.
     fn release_connection(&mut self, connection_id: ConnectionId) {
+        self.release_pending(connection_id);
         let Some(charge) = self.limits.charges.remove(&connection_id) else {
             return;
         };
@@ -896,22 +961,19 @@ impl Behaviour {
     }
 
     fn decrement_ip_counters(&mut self, ip_info: &IpInfo) {
-        // Decrement peer IP counter
-        if let Entry::Occupied(mut ip_count) = self.limits.ip_count.entry(ip_info.ip) {
-            *ip_count.get_mut() = ip_count.get().saturating_sub(1);
-            if *ip_count.get() == 0 {
-                ip_count.remove();
-            }
+        decrement_count(&mut self.limits.ip_count, ip_info.ip);
+        if let Some(subnet_ip) = ip_info.subnet_ip {
+            decrement_count(&mut self.limits.ip_subnet_count, subnet_ip);
         }
+    }
+}
 
-        // Decrement peer subnet IP counter
-        if let Some(subnet_ip) = ip_info.subnet_ip
-            && let Entry::Occupied(mut subnet_count) = self.limits.ip_subnet_count.entry(subnet_ip)
-        {
-            *subnet_count.get_mut() = subnet_count.get().saturating_sub(1);
-            if *subnet_count.get() == 0 {
-                subnet_count.remove();
-            }
+/// Decrements the counter for `key`, removing it once it reaches zero.
+fn decrement_count<K: Eq + Hash>(counts: &mut HashMap<K, usize>, key: K) {
+    if let Entry::Occupied(mut count) = counts.entry(key) {
+        *count.get_mut() = count.get().saturating_sub(1);
+        if *count.get() == 0 {
+            count.remove();
         }
     }
 }
@@ -1005,6 +1067,8 @@ impl NetworkBehaviour for Behaviour {
         // Get IP from multiaddress if it exists.
         if let Some(ip_info) = self.get_ip_info_from_multiaddr(remote_addr) {
             self.check_ip_limits(&ip_info)?;
+            self.check_pending_limit(&ip_info)?;
+            self.charge_pending(connection_id, &ip_info);
             self.charge_ip_counters(connection_id, ip_info);
         }
 
@@ -1018,6 +1082,9 @@ impl NetworkBehaviour for Behaviour {
         _local_addr: &Multiaddr,
         _remote_addr: &Multiaddr,
     ) -> Result<THandler<Self>, ConnectionDenied> {
+        // The handshake is done, whether or not the connection is admitted.
+        self.release_pending(connection_id);
+
         // Peer IDs checks are performed here since it is in this point where we have
         // this information.
         if self.peer_ids.is_banned(peer) {
@@ -1353,6 +1420,7 @@ mod tests {
         assert_eq!(behaviour.limits.peer_count, 0);
         assert!(behaviour.limits.ip_count.is_empty());
         assert!(behaviour.limits.ip_subnet_count.is_empty());
+        assert!(behaviour.limits.pending_subnet_count.is_empty());
         assert!(behaviour.limits.charges.is_empty());
     }
 
@@ -1378,5 +1446,57 @@ mod tests {
         // A different /64 is a different subnet.
         connect_inbound(&mut behaviour, 4, &addr("/ip6/2001:db8:0:1::1/tcp/1"))
             .expect("other /64 admitted");
+    }
+
+    fn pending_inbound(
+        behaviour: &mut Behaviour,
+        id: usize,
+        remote: &Multiaddr,
+    ) -> Result<(), ConnectionDenied> {
+        let result = behaviour.handle_pending_inbound_connection(
+            ConnectionId::new_unchecked(id),
+            &addr("/ip4/127.0.0.1/tcp/8443"),
+            remote,
+        );
+        if result.is_err() {
+            listen_failure(behaviour, id, remote);
+        }
+        result
+    }
+
+    // A single subnet must not be able to hold all pending (handshaking)
+    // inbound slots, which would block every other inbound connection.
+    #[test(tokio::test)]
+    async fn pending_connections_are_limited_per_subnet() {
+        let mut behaviour = new_behaviour(Config {
+            pending_count_per_subnet_max: 2,
+            ..Config::default()
+        });
+        let a1 = addr("/ip4/9.9.9.1/tcp/1");
+        let a2 = addr("/ip4/9.9.9.2/tcp/1");
+        let a3 = addr("/ip4/9.9.9.3/tcp/1");
+
+        pending_inbound(&mut behaviour, 1, &a1).expect("1st pending admitted");
+        pending_inbound(&mut behaviour, 2, &a2).expect("2nd pending admitted");
+        assert!(pending_inbound(&mut behaviour, 3, &a3).is_err());
+        pending_inbound(&mut behaviour, 4, &addr("/ip4/8.8.8.8/tcp/1"))
+            .expect("other subnet admitted");
+
+        // A completed handshake frees the slot.
+        behaviour
+            .handle_established_inbound_connection(
+                ConnectionId::new_unchecked(1),
+                PeerId::random(),
+                &addr("/ip4/127.0.0.1/tcp/8443"),
+                &a1,
+            )
+            .expect("1st established");
+        pending_inbound(&mut behaviour, 5, &a3).expect("slot freed by handshake");
+        assert!(pending_inbound(&mut behaviour, 6, &a3).is_err());
+
+        // So does a failed handshake.
+        listen_failure(&mut behaviour, 2, &a2);
+        pending_inbound(&mut behaviour, 7, &a3).expect("slot freed by failure");
+        assert!(pending_inbound(&mut behaviour, 8, &a3).is_err());
     }
 }

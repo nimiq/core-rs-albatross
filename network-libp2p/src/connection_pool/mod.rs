@@ -17,6 +17,10 @@ pub enum Error {
     #[error("Maximum connections per subnet has been reached")]
     MaxSubnetConnectionsReached,
 
+    /// Maximum pending connections per subnet has been reached
+    #[error("Maximum pending connections per subnet has been reached")]
+    MaxSubnetPendingConnectionsReached,
+
     /// Maximum peer connections has been reached
     #[error("Maximum peer connections has been reached")]
     MaxPeerConnectionsReached,
