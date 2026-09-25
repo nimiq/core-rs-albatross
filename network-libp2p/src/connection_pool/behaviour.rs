@@ -11,7 +11,7 @@ use std::{
 };
 
 use futures::{FutureExt, StreamExt};
-use ip_network::IpNetwork;
+use ip_network::{IpNetwork, Ipv6Network};
 use libp2p::{
     core::{multiaddr::Protocol, transport::PortUse, ConnectedPoint, Endpoint},
     swarm::{
@@ -96,6 +96,8 @@ pub(crate) struct Config {
     pub pending_count_per_subnet_max: usize,
     /// IPv4 subnet prefix length to apply to detect same connections for the same subnet
     pub ipv4_subnet_prefix_len: u8,
+    /// IPv6 prefix length that identifies a single host, which counts as one IP
+    pub ipv6_host_prefix_len: u8,
     /// IPv6 subnet prefix length to apply to detect same connections for the same subnet
     pub ipv6_subnet_prefix_len: u8,
     /// Maximum number of peer dialings that can be in progress
@@ -124,9 +126,10 @@ impl Default for Config {
             peer_count_per_subnet_max: 20,
             pending_count_per_subnet_max: 4,
             ipv4_subnet_prefix_len: 24,
-            // A /64 is the smallest block handed out to a single host or
-            // subscriber, so anything longer lets one host span many subnets.
-            ipv6_subnet_prefix_len: 64,
+            // A single IPv6 host usually gets a whole /64 and a site a /48, the
+            // smallest globally routable prefix (as a /24 is for IPv4).
+            ipv6_host_prefix_len: 64,
+            ipv6_subnet_prefix_len: 48,
             dialing_count_max: 3,
             num_initial_connections: 1,
             retry_down_after: Duration::from_secs(60 * 10), // 10 minutes
@@ -476,7 +479,10 @@ impl Behaviour {
             }),
             Some(Protocol::Ip6(ip)) => Some(IpInfo {
                 subnet_ip: IpNetwork::new_truncate(ip, self.config.ipv6_subnet_prefix_len).ok(),
-                ip: IpAddr::V6(ip),
+                ip: IpAddr::V6(
+                    Ipv6Network::new_truncate(ip, self.config.ipv6_host_prefix_len)
+                        .map_or(ip, |host| host.network_address()),
+                ),
             }),
             _ => None,
         }
@@ -1450,28 +1456,38 @@ mod tests {
         assert!(behaviour.limits.charges.is_empty());
     }
 
-    // IPv6 addresses must be grouped by /64: a single host usually gets a
-    // whole /64, which spans 2^32 /96 subnets.
+    // A single IPv6 host usually gets a whole /64 (2^64 addresses) and a site
+    // a /48 (65536 /64s), so the per-IP and per-subnet limits must apply to
+    // those rather than to single addresses or /96s.
     #[test(tokio::test)]
-    async fn ipv6_subnet_limit_groups_by_64() {
+    async fn ipv6_limits_group_by_host_and_subnet() {
         let mut behaviour = new_behaviour(Config {
-            peer_count_per_subnet_max: 2,
+            peer_count_per_ip_max: 2,
+            peer_count_per_subnet_max: 3,
             ..Config::default()
         });
 
-        // Same /64, different /96.
+        // Same /64, different /96s: one host.
         connect_inbound(&mut behaviour, 1, &addr("/ip6/2001:db8::1:0:0:1/tcp/1"))
             .expect("1st admitted");
         connect_inbound(&mut behaviour, 2, &addr("/ip6/2001:db8::2:0:0:1/tcp/1"))
             .expect("2nd admitted");
         assert!(
             connect_inbound(&mut behaviour, 3, &addr("/ip6/2001:db8::3:0:0:1/tcp/1")).is_err(),
-            "per-subnet limit bypassed within a /64"
+            "per-IP limit bypassed within a /64"
         );
 
-        // A different /64 is a different subnet.
+        // Other /64s in the same /48: one subnet.
         connect_inbound(&mut behaviour, 4, &addr("/ip6/2001:db8:0:1::1/tcp/1"))
-            .expect("other /64 admitted");
+            .expect("3rd admitted");
+        assert!(
+            connect_inbound(&mut behaviour, 5, &addr("/ip6/2001:db8:0:2::1/tcp/1")).is_err(),
+            "per-subnet limit bypassed within a /48"
+        );
+
+        // A different /48 is a different subnet.
+        connect_inbound(&mut behaviour, 6, &addr("/ip6/2001:db8:1::1/tcp/1"))
+            .expect("other /48 admitted");
     }
 
     fn pending_inbound(
