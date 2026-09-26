@@ -4,6 +4,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
+use nimiq_keys::Address;
 use nimiq_network_interface::{peer_info::PeerInfo, request::RequestType};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -65,6 +66,13 @@ pub(crate) struct MockHubInner {
 
     /// DHT
     pub dht: HashMap<Vec<u8>, Vec<u8>>,
+
+    /// Peer IDs advertising themselves as a given validator, the one that advertised last first.
+    ///
+    /// This stands in for the validator claims carried by gossiped peer contacts, which are
+    /// reported newest first. The mock does not check signatures, so everything registered here
+    /// counts as verified. Entries never age out.
+    pub validator_peer_ids: HashMap<Address, Vec<MockPeerId>>,
 
     /// Arcs to `AtomicBool`s for each network if they're connected.
     pub is_connected: HashMap<MockAddress, Arc<AtomicBool>>,

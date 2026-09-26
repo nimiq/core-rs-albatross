@@ -33,8 +33,12 @@ use thiserror::Error;
 use super::{
     behaviour::Config,
     message_codec::{MessageReader, MessageWriter},
-    peer_contacts::{PeerContactBook, SignedPeerContact},
+    peer_contacts::{
+        newest_contact_per_peer, CheckedPeerContact, InsertFilter, PeerContactBook,
+        SignedPeerContact,
+    },
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
+    validator_verifier::{ValidatorClaimBudget, ValidatorClaimVerifier},
 };
 use crate::{AUTONAT_DIAL_BACK_PROTOCOL, AUTONAT_DIAL_REQUEST_PROTOCOL};
 
@@ -143,6 +147,13 @@ pub struct Handler {
     /// The peer contact book
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
+    /// Checks the validator claims carried by the contacts this peer sends us.
+    validator_verifier: Arc<dyn ValidatorClaimVerifier>,
+
+    /// Bounds how many validator claims this and every other discovery connection may verify
+    /// per house-keeping tick.
+    validator_claim_budget: Arc<ValidatorClaimBudget>,
+
     /// The peer address we're connected to (address that got us connected).
     peer_address: Multiaddr,
 
@@ -188,6 +199,8 @@ impl Handler {
         config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
+        validator_verifier: Arc<dyn ValidatorClaimVerifier>,
+        validator_claim_budget: Arc<ValidatorClaimBudget>,
         peer_address: Multiaddr,
     ) -> Self {
         if let Some(peer_contact) = peer_contact_book.write().get(&peer_id)
@@ -201,6 +214,8 @@ impl Handler {
             config,
             keypair,
             peer_contact_book,
+            validator_verifier,
+            validator_claim_budget,
             peer_address,
             challenge_nonce: ChallengeNonce::generate(),
             state: HandlerState::Init,
@@ -241,9 +256,54 @@ impl Handler {
     ) -> Vec<SignedPeerContact> {
         peer_contact_book
             .query(self.services_filter)
+            // Never pass on a validator claim we could not verify ourselves.
+            .filter(|contact| contact.is_gossipable())
             .sample(&mut rand::rng(), limit)
             .into_iter()
             .map(|c| c.signed().clone())
+            .collect()
+    }
+
+    /// Checks the validator claim of the contact of the peer itself, within the shared budget,
+    /// unless our contact book would discard the contact anyway. The contact is inserted with
+    /// [`PeerContactBook::insert`].
+    fn check_validator_claim(&self, contact: SignedPeerContact) -> CheckedPeerContact {
+        CheckedPeerContact::check_new_with_budget(
+            contact,
+            &self.peer_contact_book,
+            &*self.validator_verifier,
+            &self.validator_claim_budget,
+        )
+    }
+
+    /// Checks the validator claims of a batch of contacts the peer relayed to us, within the
+    /// shared budget. Only the newest contact of each peer is kept, and claims of contacts that
+    /// our contact book would discard anyway, e.g. because they do not pass the filter of
+    /// [`PeerContactBook::insert_filtered`], are not checked.
+    ///
+    /// Contacts of `skip_peer` are dropped, for a peer whose contact was already checked on its
+    /// own: checking a copy of it again, before either is stored, would charge the budget twice.
+    fn check_relayed_validator_claims(
+        &self,
+        contacts: Vec<SignedPeerContact>,
+        skip_peer: Option<&PeerId>,
+    ) -> Vec<CheckedPeerContact> {
+        let filter = InsertFilter {
+            services: self.config.required_services,
+            only_secure_ws_connections: self.config.only_secure_ws_connections,
+        };
+        newest_contact_per_peer(contacts)
+            .into_iter()
+            .filter(|contact| Some(&contact.peer_id()) != skip_peer)
+            .map(|contact| {
+                CheckedPeerContact::check_new_filtered_with_budget(
+                    contact,
+                    &self.peer_contact_book,
+                    &*self.validator_verifier,
+                    &self.validator_claim_budget,
+                    &filter,
+                )
+            })
             .collect()
     }
 
@@ -606,14 +666,26 @@ impl ConnectionHandler for Handler {
                                         }
                                     }
 
+                                    // Check the validator claims before taking the contact book
+                                    // lock, since checking them reads blockchain state. A claim we
+                                    // cannot verify is never fatal for the connection. Verification
+                                    // is bounded by a shared budget, since this runs on the very
+                                    // first message an unauthenticated peer sends us.
+                                    let checked_contact =
+                                        self.check_validator_claim(peer_contact.clone());
+                                    let checked_contacts = self.check_relayed_validator_claims(
+                                        peer_contacts,
+                                        Some(&peer_contact.peer_id()),
+                                    );
+
                                     let mut peer_contact_book = self.peer_contact_book.write();
 
                                     // Insert the peer into the peer contact book.
-                                    peer_contact_book.insert(peer_contact.clone());
+                                    peer_contact_book.insert(checked_contact);
 
                                     // Insert the peer's contacts (filtered) into my contact book
                                     peer_contact_book.insert_all_filtered(
-                                        peer_contacts,
+                                        checked_contacts,
                                         self.config.required_services,
                                         self.config.only_secure_ws_connections,
                                     );
@@ -720,9 +792,16 @@ impl ConnectionHandler for Handler {
                                         }
                                     }
 
+                                    // Check the validator claims before taking the contact book
+                                    // lock, since checking them reads blockchain state.
+                                    // Verification is bounded by a shared budget; see the same
+                                    // check in the handshake-ack handling above.
+                                    let checked_contacts =
+                                        self.check_relayed_validator_claims(peer_contacts, None);
+
                                     // Insert the new peer contacts into the peer contact book.
                                     self.peer_contact_book.write().insert_all_filtered(
-                                        peer_contacts,
+                                        checked_contacts,
                                         self.config.required_services,
                                         self.config.only_secure_ws_connections,
                                     );
@@ -810,5 +889,146 @@ impl ConnectionHandler for Handler {
 
         // If we've left the loop, we're waiting on something.
         Poll::Pending
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+        time::SystemTime,
+    };
+
+    use libp2p::{identity::Keypair, PeerId};
+    use nimiq_hash::Blake2bHash;
+    use nimiq_keys::{Address, KeyPair, SecureGenerate};
+    use nimiq_network_interface::{peer_info::Services, validator_claim::ValidatorClaimSigner};
+    use nimiq_test_log::test;
+    use nimiq_test_utils::test_rng;
+    use parking_lot::RwLock;
+
+    use super::{Config, Handler};
+    use crate::discovery::{
+        peer_contacts::{PeerContact, PeerContactBook, SignedPeerContact, ValidatorInfo},
+        validator_verifier::{
+            SignedValidatorClaim, ValidatorClaimBudget, ValidatorClaimVerifier,
+            ValidatorVerification,
+        },
+    };
+
+    /// A verifier that verifies every claim and counts how often it was asked.
+    #[derive(Default)]
+    struct CountingVerifier(AtomicUsize);
+
+    impl ValidatorClaimVerifier for CountingVerifier {
+        fn verify_validator_claim(
+            &self,
+            _signed_claim: &SignedValidatorClaim,
+        ) -> ValidatorVerification {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            ValidatorVerification::Verified
+        }
+    }
+
+    fn now_secs() -> u64 {
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    }
+
+    /// A contact of the peer of `keypair` at `timestamp`, claiming a validator if `with_claim`.
+    fn contact(keypair: &Keypair, timestamp: u64, with_claim: bool) -> SignedPeerContact {
+        let mut contact = PeerContact::new(
+            ["/ip4/127.0.0.1/tcp/8443".parse().unwrap()],
+            keypair.public(),
+            Services::all(),
+            timestamp,
+        )
+        .unwrap();
+        if with_claim {
+            let signer = ValidatorClaimSigner::new(
+                Address::from([1u8; 20]),
+                KeyPair::generate(&mut test_rng(false)),
+            );
+            let signed_claim = signer.sign(contact.peer_id(), timestamp);
+            contact.set_validator_info(Some(ValidatorInfo::new(
+                signer.validator_address().clone(),
+                signed_claim.signature,
+            )));
+        }
+        contact.sign(keypair)
+    }
+
+    #[test(tokio::test)]
+    async fn relayed_contacts_are_deduplicated_and_filtered_before_their_claims_are_checked() {
+        let own_key = Keypair::generate_ed25519();
+        let book = Arc::new(RwLock::new(PeerContactBook::new(
+            contact(&own_key, now_secs(), false),
+            false,
+            true,
+            true,
+        )));
+        let verifier = Arc::new(CountingVerifier::default());
+        let handler = Handler::new(
+            PeerId::random(),
+            Config::new(Blake2bHash::default(), Services::all(), false),
+            own_key,
+            book,
+            verifier.clone(),
+            Arc::new(ValidatorClaimBudget::with_refresh_reserve(10, 0)),
+            "/ip4/127.0.0.1/tcp/8443".parse().unwrap(),
+        );
+
+        let relayed = contact(&Keypair::generate_ed25519(), now_secs(), true);
+        let too_old = contact(
+            &Keypair::generate_ed25519(),
+            now_secs() - PeerContactBook::MAX_PEER_AGE - 10,
+            true,
+        );
+        let checked = handler.check_relayed_validator_claims(
+            vec![relayed.clone(), relayed.clone(), relayed, too_old],
+            None,
+        );
+
+        // One check for the three copies, and none for the contact the book would not store.
+        assert_eq!(checked.len(), 2);
+        assert_eq!(verifier.0.load(Ordering::Relaxed), 1);
+    }
+
+    #[test(tokio::test)]
+    async fn a_copy_of_the_peers_own_contact_among_those_it_relays_is_not_checked_again() {
+        let own_key = Keypair::generate_ed25519();
+        let book = Arc::new(RwLock::new(PeerContactBook::new(
+            contact(&own_key, now_secs(), false),
+            false,
+            true,
+            true,
+        )));
+        let verifier = Arc::new(CountingVerifier::default());
+        let peer_key = Keypair::generate_ed25519();
+        let peer_id = peer_key.public().to_peer_id();
+        let handler = Handler::new(
+            peer_id,
+            Config::new(Blake2bHash::default(), Services::all(), false),
+            own_key,
+            book,
+            verifier.clone(),
+            Arc::new(ValidatorClaimBudget::with_refresh_reserve(10, 0)),
+            "/ip4/127.0.0.1/tcp/8443".parse().unwrap(),
+        );
+
+        let peers_own = contact(&peer_key, now_secs(), true);
+        let relayed = contact(&Keypair::generate_ed25519(), now_secs(), true);
+        handler.check_validator_claim(peers_own.clone());
+        let checked =
+            handler.check_relayed_validator_claims(vec![peers_own, relayed], Some(&peer_id));
+
+        // Only the peer's own contact, checked on its own, and the other relayed one.
+        assert_eq!(checked.len(), 1);
+        assert_eq!(verifier.0.load(Ordering::Relaxed), 2);
     }
 }

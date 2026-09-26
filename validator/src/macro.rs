@@ -88,13 +88,16 @@ where
     ) -> Self {
         let input = network
             .receive::<TendermintUpdate>()
-            .filter_map(move |(item, validator_id)| async move {
+            .filter_map(move |(item, validator_id, peer_id)| async move {
                 // Check that the update is for the correct block.
                 (item.block_number == block_height).then(|| {
                     let TaggedAggregationMessage { tag, aggregation } = item.message;
                     TaggedAggregationMessage {
                         tag,
-                        aggregation: AggregateMessage(aggregation.into_level_update(validator_id)),
+                        aggregation: AggregateMessage(
+                            aggregation.into_level_update(validator_id),
+                            peer_id,
+                        ),
                     }
                 })
             })

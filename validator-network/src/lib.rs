@@ -1,7 +1,6 @@
 pub mod error;
 pub mod network_impl;
 pub mod single_response_requester;
-pub mod validator_record;
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
@@ -9,12 +8,15 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
+    validator_claim::ValidatorClaimSigner,
 };
+pub use nimiq_network_interface::{validator_claim, validator_record};
 use nimiq_primitives::slots_allocation::Validators;
 
 pub use crate::error::NetworkError;
 
-pub type MessageStream<TMessage> = BoxStream<'static, (TMessage, u16)>;
+/// Messages from validators, each with the validator ID it came from and the peer that sent it.
+pub type MessageStream<TMessage, TPeerId> = BoxStream<'static, (TMessage, u16, TPeerId)>;
 pub type PubsubId<TValidatorNetwork> =
     <<TValidatorNetwork as ValidatorNetwork>::NetworkType as Network>::PubsubId;
 
@@ -49,7 +51,13 @@ pub trait ValidatorNetwork: Send + Sync {
     >;
 
     /// Returns a stream to receive certain types of messages from every peer.
-    fn receive<M>(&self) -> MessageStream<M>
+    ///
+    /// Each message comes with the validator ID it was accepted as coming from and the peer that
+    /// sent it. That is the peer to blame should the message turn out to be forged. It is not
+    /// necessarily the peer [`Self::get_peer_id`] returns: messages from the peer with the
+    /// validator's newest verified claim are accepted as well, and the cached peer may not be one
+    /// the validator controls at all.
+    fn receive<M>(&self) -> MessageStream<M, <Self::NetworkType as Network>::PeerId>
     where
         M: Message + Clone;
 
@@ -98,4 +106,10 @@ pub trait ValidatorNetwork: Send + Sync {
 
     /// Returns the network peer ID for the given `validator_id` if it is known.
     fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId>;
+
+    /// Installs or removes the signer that advertises our own validator claim to other peers.
+    ///
+    /// Passing `None` stops advertising, which is what a node should do as soon as it can no
+    /// longer prove the claim, for example after its signing key was rotated away.
+    fn set_validator_claim_signer(&self, signer: Option<ValidatorClaimSigner>);
 }

@@ -8,6 +8,7 @@ use std::{
 
 use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt};
+use nimiq_keys::Address;
 use nimiq_network_interface::{
     network::{
         CloseReason, MsgAcceptance, Network, NetworkEvent, PubsubId, SubscribeEvents, Topic,
@@ -17,6 +18,7 @@ use nimiq_network_interface::{
         InboundRequestError, Message, OutboundRequestError, Request, RequestCommon, RequestError,
         RequestKind, RequestSerialize, RequestType,
     },
+    validator_claim::ValidatorClaimSigner,
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_time::timeout;
@@ -78,6 +80,8 @@ pub struct MockNetwork {
     hub: Arc<Mutex<MockHubInner>>,
     is_connected: Arc<AtomicBool>,
     validation_results: Mutex<Vec<(&'static str, MockId<MockPeerId>, MsgAcceptance)>>,
+    /// The validator address we currently advertise, so we can stop advertising it later.
+    own_validator_address: Mutex<Option<Address>>,
 }
 
 impl MockNetwork {
@@ -107,6 +111,7 @@ impl MockNetwork {
             hub,
             is_connected,
             validation_results: Mutex::new(Vec::new()),
+            own_validator_address: Mutex::new(None),
         }
     }
 
@@ -641,6 +646,48 @@ impl Network for MockNetwork {
                 .map_err(|_| MockNetworkError::CantRespond(request_id))
         } else {
             Err(MockNetworkError::CantRespond(request_id))
+        }
+    }
+
+    fn get_validator_peer_ids(&self, validator_address: &Address) -> Vec<Self::PeerId> {
+        let own_peer_id = MockPeerId::from(self.address);
+        self.hub
+            .lock()
+            .validator_peer_ids
+            .get(validator_address)
+            .map(|peer_ids| {
+                peer_ids
+                    .iter()
+                    .copied()
+                    .filter(|peer_id| *peer_id != own_peer_id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn set_validator_claim_signer(&self, signer: Option<ValidatorClaimSigner>) {
+        let own_peer_id = MockPeerId::from(self.address);
+        let mut hub = self.hub.lock();
+        let mut own_validator_address = self.own_validator_address.lock();
+
+        // Stop advertising under the address we used before, if any.
+        if let Some(previous) = own_validator_address.take()
+            && let Some(peer_ids) = hub.validator_peer_ids.get_mut(&previous)
+        {
+            peer_ids.retain(|peer_id| *peer_id != own_peer_id);
+            if peer_ids.is_empty() {
+                hub.validator_peer_ids.remove(&previous);
+            }
+        }
+
+        // Advertising makes ours the newest claim, just like re-signing a contact does.
+        if let Some(signer) = signer {
+            let validator_address = signer.validator_address().clone();
+            hub.validator_peer_ids
+                .entry(validator_address.clone())
+                .or_default()
+                .insert(0, own_peer_id);
+            *own_validator_address = Some(validator_address);
         }
     }
 

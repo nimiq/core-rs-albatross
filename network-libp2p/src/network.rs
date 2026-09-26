@@ -11,8 +11,10 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt};
 use libp2p::{
-    gossipsub, request_response::InboundRequestId, swarm::NetworkInfo, Multiaddr, PeerId, Swarm,
+    gossipsub, identity::Keypair, request_response::InboundRequestId, swarm::NetworkInfo,
+    Multiaddr, PeerId, Swarm,
 };
+use nimiq_keys::Address;
 use nimiq_network_interface::{
     network::{
         CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, SubscribeEvents,
@@ -23,6 +25,7 @@ use nimiq_network_interface::{
         InboundRequestError, Message, OutboundRequestError, Request, RequestCommon, RequestError,
         RequestSerialize, RequestType,
     },
+    validator_claim::ValidatorClaimSigner,
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_time::{interval, timeout};
@@ -38,7 +41,7 @@ use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 use crate::network_metrics::NetworkMetrics;
 use crate::{
     dht,
-    discovery::peer_contacts::PeerContactBook,
+    discovery::{peer_contacts::PeerContactBook, validator_verifier::ValidatorClaimVerifier},
     network_types::{GossipsubId, NetworkAction, ValidateMessage},
     rate_limiting::RateLimitConfig,
     swarm::{new_swarm, swarm_task},
@@ -67,6 +70,8 @@ pub struct Network {
     required_services: Services,
     /// Reference to PeerContactBook, used to satisfy rpc requests for it.
     contacts: Arc<RwLock<PeerContactBook>>,
+    /// Identity keypair, used to re-sign our own peer contact.
+    keypair: Keypair,
     /// Network buffer sieze
     buffer_size: usize,
 }
@@ -77,15 +82,23 @@ impl Network {
     /// # Arguments
     ///
     ///  - `config`: The network configuration, containing key pair, and other behavior-specific configuration.
+    ///  - `validator_verifier`: Checks the validator claims carried by peer contacts. Nodes built
+    ///    without any means to check them (e.g. the web client) pass
+    ///    [`crate::discovery::NoopValidatorClaimVerifier`], which leaves every claim unverified.
+    ///    A verifier that reads the staking contract does the same on a node running a light
+    ///    blockchain, answering
+    ///    [`UnverifiableReason::LightClient`](crate::discovery::UnverifiableReason::LightClient).
     ///  - `dht_verifier`: The verifier used to verify all Dht records.
     ///
     pub async fn new(
         config: Config,
+        validator_verifier: Arc<dyn ValidatorClaimVerifier>,
         #[cfg(feature = "kad")] dht_verifier: impl dht::Verifier + 'static,
     ) -> Self {
         let required_services = config.required_services;
         // TODO: persist to disk
         let own_peer_contact = config.peer_contact.clone();
+        let keypair = config.keypair.clone();
         let contacts = Arc::new(RwLock::new(PeerContactBook::new(
             own_peer_contact.sign(&config.keypair),
             config.only_secure_ws_connections,
@@ -108,6 +121,7 @@ impl Network {
             Arc::clone(&contacts),
             params.clone(),
             force_dht_server_mode,
+            validator_verifier,
         );
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
@@ -140,6 +154,7 @@ impl Network {
 
         Self {
             contacts,
+            keypair,
             local_peer_id,
             connected_peers,
             events_tx,
@@ -524,6 +539,18 @@ impl NetworkInterface for Network {
         }
 
         Ok(filtered_peers)
+    }
+
+    fn get_validator_peer_ids(&self, validator_address: &Address) -> Vec<PeerId> {
+        self.contacts
+            .read()
+            .get_validator_peer_ids(validator_address)
+    }
+
+    fn set_validator_claim_signer(&self, signer: Option<ValidatorClaimSigner>) {
+        self.contacts
+            .write()
+            .set_validator_claim_signer(signer, &self.keypair)
     }
 
     fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {

@@ -1,4 +1,4 @@
-use std::{io, sync::Arc};
+use std::{io, sync::Arc, time::Duration};
 
 use http::Uri;
 use http_body_util::{BodyExt, Empty, Limited};
@@ -8,7 +8,7 @@ use hyper_util::{
     client::legacy::{connect::HttpConnector, Client},
     rt::TokioExecutor,
 };
-use log::error;
+use log::{error, warn};
 use nimiq_keys::Address;
 use nimiq_network_libp2p::PeerId;
 use serde::Deserialize;
@@ -31,7 +31,17 @@ pub struct DhtFallback {
 }
 
 impl DhtFallback {
+    /// How long fetching the fallback list may take. The validator network waits for it before it
+    /// looks at its remaining sources, so it must not hang on a slow or unresponsive server.
+    const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
     fn new_inner(url: Url) -> io::Result<DhtFallback> {
+        // The list is not signed, so over plain HTTP anyone on the path can change it and point
+        // validators at peers of their choosing.
+        if url.scheme() != "https" {
+            warn!(%url, "The DHT fallback URL does not use HTTPS, so its contents can be tampered with on the way");
+        }
+
         // rustls can only determine the process-level `CryptoProvider` on its own if exactly one
         // provider is enabled in the dependency graph, which we don't control. Select ours
         // explicitly instead of relying on that.
@@ -62,6 +72,12 @@ impl DhtFallback {
     }
 
     async fn resolve_inner(&self, validator_address: Address) -> Result<Option<PeerId>, String> {
+        nimiq_time::timeout(Self::REQUEST_TIMEOUT, self.resolve_with(validator_address))
+            .await
+            .map_err(|_| format!("timed out after {:?}", Self::REQUEST_TIMEOUT))?
+    }
+
+    async fn resolve_with(&self, validator_address: Address) -> Result<Option<PeerId>, String> {
         let response = self
             .client
             .get(self.uri.clone())
@@ -104,9 +120,46 @@ impl DhtFallback {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use url::Url;
 
     use super::DhtFallback;
+
+    #[tokio::test(start_paused = true)]
+    async fn resolving_gives_up_on_a_server_that_does_not_answer() {
+        // A server that accepts connections, but never answers.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        // This test only runs natively, where `nimiq_utils::spawn` would not add anything.
+        #[allow(clippy::disallowed_methods)]
+        tokio::spawn(async move {
+            let mut connections = Vec::new();
+            loop {
+                let (socket, _) = listener.accept().await.unwrap();
+                connections.push(socket);
+            }
+        });
+        let fallback =
+            DhtFallback::new(Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap()).unwrap();
+
+        let started = tokio::time::Instant::now();
+        let resolved = fallback
+            .resolve(
+                "NQ36 U0BH 0BHM J0EH UAE5 FMV6 D2EY 8TBP 50M3"
+                    .parse()
+                    .unwrap(),
+            )
+            .await;
+
+        assert_eq!(resolved, None);
+        let waited = started.elapsed();
+        assert!(
+            waited >= DhtFallback::REQUEST_TIMEOUT,
+            "gave up after {waited:?}"
+        );
+        assert!(waited < Duration::from_secs(60), "gave up after {waited:?}");
+    }
 
     #[tokio::test]
     async fn resolve() {

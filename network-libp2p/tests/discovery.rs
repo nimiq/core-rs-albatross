@@ -33,6 +33,7 @@ use nimiq_network_libp2p::discovery::{
     self,
     peer_contacts::{PeerContact, PeerContactBook, SignedPeerContact},
     protocol::DiscoveryProtocol,
+    NoopValidatorClaimVerifier,
 };
 use nimiq_test_log::test;
 use nimiq_time::timeout;
@@ -219,8 +220,12 @@ impl TestNode {
             true,
         )));
 
-        let behaviour =
-            discovery::Behaviour::new(config, keypair.clone(), Arc::clone(&peer_contact_book));
+        let behaviour = discovery::Behaviour::new(
+            config,
+            keypair.clone(),
+            Arc::clone(&peer_contact_book),
+            Arc::new(NoopValidatorClaimVerifier),
+        );
 
         let mut swarm = SwarmBuilder::with_existing_identity(keypair)
             .with_tokio()
