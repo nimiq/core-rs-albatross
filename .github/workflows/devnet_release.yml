@@ -43,7 +43,7 @@ jobs:
         - test: ValidatorsStress
           devnet_args: -t .github/devnet_topologies/validators_stress.toml -R -k 2 -as -dt 30
 
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
     - name: Free Disk Space (Ubuntu)
@@ -54,7 +54,7 @@ jobs:
     - uses: actions/checkout@v7
     - uses: actions/setup-python@v7
       with:
-        python-version: '3.8'
+        python-version: '3.14'
     - name: Install python dependencies
       run: pip install scripts/devnet
     - name: Set up Rust toolchain

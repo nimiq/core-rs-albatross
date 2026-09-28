@@ -14,14 +14,14 @@ jobs:
       fail-fast: false
       matrix:
         runs-on:
-          - ubuntu-24.04
-          - ubuntu-24.04-arm
+          - ubuntu-26.04
+          - ubuntu-26.04-arm
     steps:
       - name: Prepare
         run: |
-          if [[ "${{ matrix.runs-on }}" == "ubuntu-24.04" ]]; then
+          if [[ "${{ matrix.runs-on }}" == "ubuntu-26.04" ]]; then
             platform="linux/amd64"
-          elif [[ "${{ matrix.runs-on }}" == "ubuntu-24.04-arm" ]]; then
+          elif [[ "${{ matrix.runs-on }}" == "ubuntu-26.04-arm" ]]; then
             platform=linux/arm64
           else
             echo "Unsupported runner/platform pair"
@@ -80,7 +80,7 @@ jobs:
 
   merge:
     if: ${{ github.ref_type == 'tag' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs:
       - build_docker
     steps:

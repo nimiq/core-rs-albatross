@@ -7,7 +7,7 @@ on:
 jobs:
 
   check:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
     - uses: actions/checkout@v7
@@ -17,7 +17,7 @@ jobs:
     - name: Set up python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.8'
+        python-version: '3.14'
     - name: Setup python requirements
       uses: BSFishy/pip-action@v1
       with:

@@ -12,7 +12,7 @@ on:
 jobs:
 
   rustfmt:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
     - uses: actions/checkout@v7
@@ -22,7 +22,7 @@ jobs:
     - run: cargo fmt --all -- --check
 
   check:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
     - uses: actions/checkout@v7
@@ -31,7 +31,7 @@ jobs:
     - run: cargo check --all-features --tests --benches
 
   test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
     - name: Free Disk Space (Ubuntu)
@@ -76,7 +76,7 @@ jobs:
 
   clippy:
     if: github.event_name != 'push' || github.event.pusher.name != 'dependabot[bot]'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
     - uses: actions/checkout@v7
@@ -91,7 +91,7 @@ jobs:
         args: --release --all-features
 
   web-client:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
     - name: Free Disk Space (Ubuntu)
@@ -118,7 +118,7 @@ jobs:
       run: wasm-pack test --chrome --headless
 
   web-client-lib:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
     - name: Free Disk Space (Ubuntu)
@@ -157,13 +157,13 @@ jobs:
       run: yarn test
 
   reconnect-test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-python@v7
       with:
-        python-version: '3.8'
+        python-version: '3.14'
     - name: Install python dependencies
       run: pip install scripts/devnet
     - name: Set up Rust toolchain
