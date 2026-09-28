@@ -823,3 +823,159 @@ async fn an_unverifiable_validator_claim_costs_no_connection() {
     assert!(net2.has_peer(net1.get_local_peer_id()));
     assert_eq!(net2.get_peers(), vec![net1.get_local_peer_id()]);
 }
+
+/// Brings up a network that checks validator claims with `validator_verifier` and listens for
+/// other networks to [`connect_to_relay`]. Returns the network along with its listen address.
+#[cfg(feature = "kad")]
+async fn create_relay(
+    validator_verifier: Arc<dyn ValidatorClaimVerifier>,
+    dht_verifier: impl dht::Verifier + 'static,
+) -> (Network, Multiaddr) {
+    let address = multiaddr![Memory(rand::random::<u64>())];
+
+    let relay = Network::new(
+        network_config(address.clone()),
+        validator_verifier,
+        dht_verifier,
+    )
+    .await;
+    relay.listen_on(vec![address.clone()]).await;
+    // Wait until the relay actually listens, so that nobody dials it too early. Its swarm handles
+    // our requests in order, so by the time it answers this one it has handled the one to listen.
+    relay.network_info().await.unwrap();
+
+    (relay, address)
+}
+
+/// Brings up a network that checks validator claims against `keys`, advertising itself as the
+/// validator of `signer` if there is one, and connects it to `relay`, listening at
+/// `relay_address`. Returns once both have completed the discovery handshake, by which time each
+/// has checked and stored the contacts the other passed on in it.
+///
+/// The new network never listens on the address it advertises, so the relay is the only network
+/// anybody can dial. Networks connected to the same relay this way therefore never connect to each
+/// other, whatever the connection pool, Kademlia or AutoNAT dial on their own. The only way for
+/// one of them to learn another's contact, and the validator claim in it, is for the relay to pass
+/// it on.
+#[cfg(feature = "kad")]
+async fn connect_to_relay(
+    relay: &Network,
+    relay_address: &Multiaddr,
+    keys: &Arc<RwLock<BTreeMap<Address, <KeyPair as TaggedKeyPair>::PublicKey>>>,
+    signer: Option<ValidatorClaimSigner>,
+) -> Network {
+    let network = Network::new(
+        network_config(multiaddr![Memory(rand::random::<u64>())]),
+        Arc::new(Verifier::new(keys)),
+        Verifier::new(keys),
+    )
+    .await;
+    // Advertise the claim before connecting, so that it travels in the discovery handshake.
+    if let Some(signer) = signer {
+        network.set_validator_claim_signer(Some(signer));
+    }
+
+    let mut events = network.subscribe_events();
+    let mut relay_events = relay.subscribe_events();
+    network.dial_address(relay_address.clone()).await.unwrap();
+
+    let event = helper::get_next_peer_event(&mut events).await;
+    helper::assert_peer_joined(&event, &relay.get_local_peer_id());
+
+    let relay_event = helper::get_next_peer_event(&mut relay_events).await;
+    helper::assert_peer_joined(&relay_event, &network.get_local_peer_id());
+
+    network
+}
+
+/// Once we verified a peer's validator claim, we pass it on to our other peers, which can then
+/// resolve the validator without ever connecting to it.
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn a_verified_validator_claim_is_relayed() {
+    let keys = Arc::new(RwLock::new(BTreeMap::default()));
+    let (relay, relay_address) =
+        create_relay(Arc::new(Verifier::new(&keys)), Verifier::new(&keys)).await;
+
+    let (validator_address, signer) = register_validator(&keys);
+    let validator = connect_to_relay(&relay, &relay_address, &keys, Some(signer)).await;
+    let validator_peer_id = validator.get_local_peer_id();
+
+    // The relay verified the claim the validator presented in their handshake...
+    assert_eq!(
+        relay.get_validator_peer_ids(&validator_address),
+        vec![validator_peer_id],
+    );
+
+    // ...and passes it on in its handshake with a network that connects to it later.
+    let receiver = connect_to_relay(&relay, &relay_address, &keys, None).await;
+    assert_eq!(
+        receiver.get_validator_peer_ids(&validator_address),
+        vec![validator_peer_id],
+    );
+
+    // The receiver cannot have gotten the claim from the validator itself: its only connection,
+    // counting ones still in their discovery handshake, is the one to the relay.
+    assert!(!receiver.has_peer(validator_peer_id));
+    assert_eq!(receiver.get_peers(), vec![relay.get_local_peer_id()]);
+    assert_eq!(receiver.network_info().await.unwrap().num_peers(), 1);
+}
+
+/// Connects a validator to a relay that checks validator claims with `relay_verifier`, which must
+/// not verify the validator's claim, and asserts that the relay does not pass on the validator's
+/// contact at all, not even to a network that would verify the claim itself.
+#[cfg(feature = "kad")]
+async fn assert_unverified_validator_claim_is_not_relayed(
+    relay_verifier: Arc<dyn ValidatorClaimVerifier>,
+    relay_dht_verifier: impl dht::Verifier + 'static,
+) {
+    let keys = Arc::new(RwLock::new(BTreeMap::default()));
+    let (relay, relay_address) = create_relay(relay_verifier, relay_dht_verifier).await;
+
+    let (validator_address, signer) = register_validator(&keys);
+    let validator = connect_to_relay(&relay, &relay_address, &keys, Some(signer)).await;
+    let validator_peer_id = validator.get_local_peer_id();
+
+    // The relay did not verify the claim, but keeps the validator as a peer.
+    assert!(relay.get_validator_peer_ids(&validator_address).is_empty());
+    assert!(relay.has_peer(validator_peer_id));
+
+    // A peer without a validator claim, whose contact the relay does pass on.
+    let bystander = connect_to_relay(&relay, &relay_address, &keys, None).await;
+
+    let receiver = connect_to_relay(&relay, &relay_address, &keys, None).await;
+    let known_peers: Vec<PeerId> = receiver
+        .get_address_book()
+        .into_iter()
+        .map(|(peer_id, _)| peer_id)
+        .collect();
+
+    // The relay passed on contacts to the receiver in their handshake...
+    assert!(known_peers.contains(&bystander.get_local_peer_id()));
+
+    // ...but not the validator's, which the receiver could only have learned from the relay.
+    assert!(!known_peers.contains(&validator_peer_id));
+    assert!(receiver
+        .get_validator_peer_ids(&validator_address)
+        .is_empty());
+    assert!(!receiver.has_peer(validator_peer_id));
+}
+
+/// A claim that does not check out for us is never passed on.
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn an_invalid_validator_claim_is_not_relayed() {
+    assert_unverified_validator_claim_is_not_relayed(
+        Arc::new(RejectingVerifier),
+        RejectingVerifier,
+    )
+    .await;
+}
+
+/// A claim we cannot check (yet) is not passed on either, even though it is not rejected.
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn a_pending_validator_claim_is_not_relayed() {
+    assert_unverified_validator_claim_is_not_relayed(Arc::new(NoopValidatorClaimVerifier), ())
+        .await;
+}
