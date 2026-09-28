@@ -247,6 +247,8 @@ impl Handler {
     ) -> Vec<SignedPeerContact> {
         peer_contact_book
             .query(self.services_filter)
+            // Never pass on a validator claim we could not verify ourselves.
+            .filter(|contact| contact.is_gossipable())
             .sample(&mut rand::rng(), limit)
             .into_iter()
             .map(|c| c.signed().clone())
