@@ -15,7 +15,7 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
     peer_info::{PeerInfo, Services},
-    validator_record::ValidatorRecord,
+    validator_claim::ValidatorClaim,
 };
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature};
 use parking_lot::RwLock;
@@ -40,16 +40,33 @@ fn contact_exceeds_age(timestamp: u64, max_age: Duration, unix_time: Duration) -
 }
 
 /// The validator info contains all information which is not present in a [PeerContact]
-/// such that a [ValidatorRecord] can be constructed. Importantly this also includes the signature.
+/// such that a [ValidatorClaim] can be constructed. Importantly this also includes the signature.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ValidatorInfo {
     /// The address of the validator. This is the unique identifier for a validator.
     validator_address: Address,
 
-    /// The signature for the [ValidatorRecord].
+    /// The signature for the [ValidatorClaim].
     /// It does _not_ verify for this structure, but only once the [nimiq_utils::tagged_signing::TaggedSigned] is reconstructed
     /// with the given information of this struct and the corresponding [PeerContact].
-    signature: TaggedSignature<ValidatorRecord<<Network as NetworkInterface>::PeerId>, KeyPair>,
+    signature: TaggedSignature<ValidatorClaim<<Network as NetworkInterface>::PeerId>, KeyPair>,
+}
+
+impl ValidatorInfo {
+    pub fn new(
+        validator_address: Address,
+        signature: TaggedSignature<ValidatorClaim<<Network as NetworkInterface>::PeerId>, KeyPair>,
+    ) -> Self {
+        Self {
+            validator_address,
+            signature,
+        }
+    }
+
+    /// The validator address claimed by this info. The claim is not verified here.
+    pub fn validator_address(&self) -> &Address {
+        &self.validator_address
+    }
 }
 
 /// A plain peer contact. This contains:
@@ -174,6 +191,26 @@ impl PeerContact {
             return Err(PeerContactError::AdvertisedAddressesExceeded);
         }
         Ok(())
+    }
+
+    /// The [`ValidatorInfo`] claimed by this contact, if any. The claim is not verified here.
+    pub fn validator_info(&self) -> Option<&ValidatorInfo> {
+        self.validator_info.as_ref()
+    }
+
+    /// The validator address claimed by this contact, if any. The claim is not verified here.
+    pub fn validator_address(&self) -> Option<&Address> {
+        self.validator_info
+            .as_ref()
+            .map(ValidatorInfo::validator_address)
+    }
+
+    /// Attaches (or removes) the validator claim of this contact.
+    ///
+    /// This invalidates any existing signature over the contact, so it must be called before
+    /// signing.
+    pub fn set_validator_info(&mut self, validator_info: Option<ValidatorInfo>) {
+        self.validator_info = validator_info;
     }
 }
 
@@ -447,6 +484,7 @@ impl PeerContactBook {
                 peer_id = %peer_id,
                 services = ?contact.inner.services,
                 addresses = ?contact.inner.addresses,
+                validator_address = ?contact.inner.validator_address(),
                 "Adding peer contact",
             );
         }
@@ -731,7 +769,13 @@ mod serde_public_key {
 
 #[cfg(test)]
 mod tests {
+    use nimiq_keys::SecureGenerate;
+    use nimiq_network_interface::{
+        validator_claim::ValidatorClaimSigner, validator_record::ValidatorRecord,
+    };
     use nimiq_test_log::test;
+    use nimiq_test_utils::test_rng;
+    use nimiq_utils::tagged_signing::TaggedSigned;
 
     use super::*;
 
@@ -771,5 +815,32 @@ mod tests {
         book.insert_filtered(own_contact, Services::all(), false);
 
         assert!(book.get(&own_peer_id).is_none());
+    }
+
+    #[test]
+    fn claims_and_dht_records_are_not_interchangeable() {
+        let key_pair = KeyPair::generate(&mut test_rng(false));
+        let address = Address::from([1u8; 20]);
+        let peer_id = Keypair::generate_ed25519().public().to_peer_id();
+        let timestamp = now_secs();
+
+        // A claim gossiped in a peer contact does not pass as a DHT record...
+        let claim =
+            ValidatorClaimSigner::new(address.clone(), key_pair.clone()).sign(peer_id, timestamp);
+        assert!(claim.verify(&key_pair.public));
+        let claim_as_record = TaggedSigned::<ValidatorRecord<PeerId>, KeyPair>::new(
+            ValidatorRecord::new(peer_id, address.clone(), timestamp),
+            TaggedSignature::from_bytes(claim.signature.as_bytes().to_vec()),
+        );
+        assert!(!claim_as_record.verify(&key_pair.public));
+
+        // ...and a DHT record does not pass as a claim.
+        let record = ValidatorRecord::new(peer_id, address.clone(), timestamp);
+        let record_signature = key_pair.tagged_sign(&record);
+        let record_as_claim = TaggedSigned::<ValidatorClaim<PeerId>, KeyPair>::new(
+            ValidatorClaim::new(peer_id, address, timestamp),
+            TaggedSignature::from_bytes(record_signature.as_bytes().to_vec()),
+        );
+        assert!(!record_as_claim.verify(&key_pair.public));
     }
 }
