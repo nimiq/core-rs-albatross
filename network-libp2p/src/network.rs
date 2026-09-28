@@ -13,6 +13,7 @@ use libp2p::{
     gossipsub, identity::Keypair, request_response::InboundRequestId, swarm::NetworkInfo,
     Multiaddr, PeerId, Swarm,
 };
+use nimiq_keys::Address;
 use nimiq_network_interface::{
     network::{
         CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, SubscribeEvents,
@@ -39,7 +40,7 @@ use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 use crate::network_metrics::NetworkMetrics;
 use crate::{
     dht,
-    discovery::peer_contacts::PeerContactBook,
+    discovery::{peer_contacts::PeerContactBook, validator_verifier::ValidatorClaimVerifier},
     network_types::{GossipsubId, NetworkAction, ValidateMessage},
     rate_limiting::RateLimitConfig,
     swarm::{new_swarm, swarm_task},
@@ -80,10 +81,17 @@ impl Network {
     /// # Arguments
     ///
     ///  - `config`: The network configuration, containing key pair, and other behavior-specific configuration.
+    ///  - `validator_verifier`: Checks the validator claims carried by peer contacts. Nodes built
+    ///    without any means to check them (e.g. the web client) pass
+    ///    [`crate::discovery::NoopValidatorClaimVerifier`], which leaves every claim unverified.
+    ///    A verifier that reads the staking contract does the same on a node running a light
+    ///    blockchain, answering
+    ///    [`UnverifiableReason::LightClient`](crate::discovery::UnverifiableReason::LightClient).
     ///  - `dht_verifier`: The verifier used to verify all Dht records.
     ///
     pub async fn new(
         config: Config,
+        validator_verifier: Arc<dyn ValidatorClaimVerifier>,
         #[cfg(feature = "kad")] dht_verifier: impl dht::Verifier + 'static,
     ) -> Self {
         let required_services = config.required_services;
@@ -112,6 +120,7 @@ impl Network {
             Arc::clone(&contacts),
             params.clone(),
             force_dht_server_mode,
+            validator_verifier,
         );
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
@@ -558,6 +567,12 @@ impl NetworkInterface for Network {
         }
 
         Ok(filtered_peers)
+    }
+
+    fn get_validator_peer_ids(&self, validator_address: &Address) -> Vec<PeerId> {
+        self.contacts
+            .read()
+            .get_validator_peer_ids(validator_address)
     }
 
     /// Installs or removes the signer that advertises our own validator claim to other peers,

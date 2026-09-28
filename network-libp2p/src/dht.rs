@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use libp2p::{kad::Record, PeerId};
 use nimiq_keys::Address;
 use nimiq_network_interface::{
@@ -28,6 +30,12 @@ pub enum DhtVerifierError {
 
 pub trait Verifier: Send + Sync {
     fn verify(&self, record: &Record) -> Result<DhtRecord, DhtVerifierError>;
+}
+
+impl<V: Verifier + ?Sized> Verifier for Arc<V> {
+    fn verify(&self, record: &Record) -> Result<DhtRecord, DhtVerifierError> {
+        (**self).verify(record)
+    }
 }
 
 /// Dummy implementation for testcases

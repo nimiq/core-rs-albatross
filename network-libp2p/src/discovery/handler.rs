@@ -33,8 +33,9 @@ use thiserror::Error;
 use super::{
     behaviour::Config,
     message_codec::{MessageReader, MessageWriter},
-    peer_contacts::{PeerContactBook, SignedPeerContact},
+    peer_contacts::{CheckedPeerContact, PeerContactBook, SignedPeerContact},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
+    validator_verifier::ValidatorClaimVerifier,
 };
 use crate::{AUTONAT_DIAL_BACK_PROTOCOL, AUTONAT_DIAL_REQUEST_PROTOCOL};
 
@@ -143,6 +144,9 @@ pub struct Handler {
     /// The peer contact book
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
+    /// Checks the validator claims carried by the contacts this peer sends us.
+    validator_verifier: Arc<dyn ValidatorClaimVerifier>,
+
     /// The peer address we're connected to (address that got us connected).
     peer_address: Multiaddr,
 
@@ -188,6 +192,7 @@ impl Handler {
         config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
+        validator_verifier: Arc<dyn ValidatorClaimVerifier>,
         peer_address: Multiaddr,
     ) -> Self {
         if let Some(peer_contact) = peer_contact_book.write().get(&peer_id)
@@ -201,6 +206,7 @@ impl Handler {
             config,
             keypair,
             peer_contact_book,
+            validator_verifier,
             peer_address,
             challenge_nonce: ChallengeNonce::generate(),
             state: HandlerState::Init,
@@ -244,6 +250,23 @@ impl Handler {
             .sample(&mut rand::rng(), limit)
             .into_iter()
             .map(|c| c.signed().clone())
+            .collect()
+    }
+
+    /// Checks the validator claim of the contact of the peer itself. The contact is inserted with
+    /// [`PeerContactBook::insert`].
+    fn check_validator_claim(&self, contact: SignedPeerContact) -> CheckedPeerContact {
+        CheckedPeerContact::check(contact, &*self.validator_verifier)
+    }
+
+    /// Checks the validator claims of a batch of contacts the peer relayed to us.
+    fn check_relayed_validator_claims(
+        &self,
+        contacts: Vec<SignedPeerContact>,
+    ) -> Vec<CheckedPeerContact> {
+        contacts
+            .into_iter()
+            .map(|contact| CheckedPeerContact::check(contact, &*self.validator_verifier))
             .collect()
     }
 
@@ -606,14 +629,22 @@ impl ConnectionHandler for Handler {
                                         }
                                     }
 
+                                    // Check the validator claims before taking the contact book
+                                    // lock, since checking them reads blockchain state. A claim we
+                                    // cannot verify is never fatal for the connection.
+                                    let checked_contact =
+                                        self.check_validator_claim(peer_contact.clone());
+                                    let checked_contacts =
+                                        self.check_relayed_validator_claims(peer_contacts);
+
                                     let mut peer_contact_book = self.peer_contact_book.write();
 
                                     // Insert the peer into the peer contact book.
-                                    peer_contact_book.insert(peer_contact.clone());
+                                    peer_contact_book.insert(checked_contact);
 
                                     // Insert the peer's contacts (filtered) into my contact book
                                     peer_contact_book.insert_all_filtered(
-                                        peer_contacts,
+                                        checked_contacts,
                                         self.config.required_services,
                                         self.config.only_secure_ws_connections,
                                     );
@@ -720,9 +751,14 @@ impl ConnectionHandler for Handler {
                                         }
                                     }
 
+                                    // Check the validator claims before taking the contact book
+                                    // lock, since checking them reads blockchain state.
+                                    let checked_contacts =
+                                        self.check_relayed_validator_claims(peer_contacts);
+
                                     // Insert the new peer contacts into the peer contact book.
                                     self.peer_contact_book.write().insert_all_filtered(
-                                        peer_contacts,
+                                        checked_contacts,
                                         self.config.required_services,
                                         self.config.only_secure_ws_connections,
                                     );
