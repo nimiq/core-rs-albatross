@@ -53,7 +53,10 @@ pub trait ValidatorNetwork: Send + Sync {
     /// Returns a stream to receive certain types of messages from every peer.
     ///
     /// Each message comes with the validator ID it was accepted as coming from and the peer that
-    /// sent it. That is the peer to blame should the message turn out to be forged.
+    /// sent it. That is the peer to blame should the message turn out to be forged. It is not
+    /// necessarily the peer [`Self::get_peer_id`] returns: messages from the peer with the
+    /// validator's newest verified claim are accepted as well, and the cached peer may not be one
+    /// the validator controls at all.
     fn receive<M>(&self) -> MessageStream<M, <Self::NetworkType as Network>::PeerId>
     where
         M: Message + Clone;

@@ -381,6 +381,53 @@ where
         new_cache_state
     }
 
+    /// The address of the validator occupying `validator_id` in the current epoch.
+    fn validator_address(&self, validator_id: u16) -> Option<Address> {
+        let validators = self.validators.read();
+        Self::get_validator(validators.as_ref(), validator_id)
+            .map(|validator| validator.address.clone())
+    }
+
+    /// Whether `peer_id` holds the newest live verified claim to be the validator at
+    /// `validator_id` (see [`Network::get_validator_peer_ids`]).
+    ///
+    /// Such a peer is heard as the validator besides its cached peer, so that a validator that
+    /// moved to another node is not ignored until our cache catches up. Only the newest claim
+    /// counts: a peer the validator left behind is not heard once the validator claimed another
+    /// one. This does not change the cache, so it cannot redirect what we send to the validator.
+    fn is_newest_verified_peer(&self, validator_id: u16, peer_id: N::PeerId) -> bool {
+        let Some(validator_address) = self.validator_address(validator_id) else {
+            return false;
+        };
+        // Note that the validators lock is released before we ask the network, so that the
+        // contact book lock is never taken while holding it. At most
+        // `PeerContactBook::MAX_BINDINGS_PER_VALIDATOR` peers are returned, so this is cheap.
+        self.network
+            .get_validator_peer_ids(&validator_address)
+            .into_iter()
+            .next()
+            == Some(peer_id)
+    }
+
+    /// Checks that a message or request that claims to come from the validator at `validator_id`
+    /// comes from its cached peer or from the peer with its newest verified claim. Otherwise
+    /// returns the cached peer, for logging.
+    fn accept_sender(
+        &self,
+        validator_id: u16,
+        peer_id: N::PeerId,
+    ) -> Result<(), Option<N::PeerId>> {
+        let validator_peer_id = self
+            .get_validator_cache(validator_id)
+            .potentially_outdated_peer_id();
+        if validator_peer_id == Some(peer_id) || self.is_newest_verified_peer(validator_id, peer_id)
+        {
+            Ok(())
+        } else {
+            Err(validator_peer_id)
+        }
+    }
+
     /// Clears the validator->peer_id cache on a `RequestError`.
     /// The cached entry should be cleared when the peer id might have changed.
     fn clear_validator_peer_id_cache_on_error(
@@ -555,14 +602,12 @@ where
                 .filter_map(move |(message, peer_id)| {
                     let self_ = self_.arc_clone();
                     async move {
-                        let validator_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
                         // Check that each message actually comes from the peer that it
-                        // claims it comes from. Reject it otherwise.
-                        if validator_peer_id
-                            .as_ref()
-                            .map(|pid| *pid != peer_id)
-                            .unwrap_or(true)
-                        {
+                        // claims it comes from. Reject it otherwise. Besides the peer ID we
+                        // resolved, accept the peer with the validator's newest verified claim, so
+                        // a validator that moved to another node is not ignored until our cache
+                        // catches up.
+                        if let Err(validator_peer_id) = self_.accept_sender(message.validator_id, peer_id) {
                             warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator message");
                             return None;
                         }
@@ -582,14 +627,10 @@ where
             .filter_map(move |(message, request_id, peer_id)| {
                 let self_ = self_.arc_clone();
                 async move {
-                    let validator_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
-                    // Check that each message actually comes from the peer that it
-                    // claims it comes from. Reject it otherwise.
-                    if validator_peer_id
-                        .as_ref()
-                        .map(|pid| *pid != peer_id)
-                        .unwrap_or(true)
-                    {
+                    // Check that each request actually comes from the peer that it
+                    // claims it comes from. Reject it otherwise. See `receive` above for why the
+                    // peer contact book is consulted as well.
+                    if let Err(validator_peer_id) = self_.accept_sender(message.validator_id, peer_id) {
                         warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator request");
                         return None;
                     }
@@ -677,7 +718,7 @@ mod tests {
     use futures::future;
     use nimiq_bls::CompressedPublicKey;
     use nimiq_keys::{Ed25519PublicKey, KeyPair, SecureGenerate};
-    use nimiq_network_interface::request::RequestMarker;
+    use nimiq_network_interface::request::{MessageMarker, RequestMarker};
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng;
@@ -769,6 +810,16 @@ mod tests {
         type Kind = RequestMarker;
         type Response = u32;
         const TYPE_ID: u16 = 1;
+        const MAX_REQUESTS: u32 = 10;
+    }
+
+    #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+    struct Note(u32);
+
+    impl RequestCommon for Note {
+        type Kind = MessageMarker;
+        type Response = ();
+        const TYPE_ID: u16 = 2;
         const MAX_REQUESTS: u32 = 10;
     }
 
@@ -1184,6 +1235,156 @@ mod tests {
         ));
         settle(&network, &address).await;
         assert_eq!(network.request(Ping(4), VALIDATOR_ID).await.unwrap(), 4);
+    }
+
+    /// A validator network for `us`, in which the cache entry of the validator at `address` points
+    /// to `cached`. `claimant` then advertises a verified claim to be that validator, while
+    /// `stranger` makes no claim. All of them are connected to us.
+    async fn validator_network_with_claimant(
+        us: MockNetwork,
+        address: &Address,
+        cached: &MockNetwork,
+        claimant: &MockNetwork,
+        stranger: &MockNetwork,
+    ) -> ValNet {
+        for peer in [cached, claimant, stranger] {
+            us.dial_mock(peer);
+        }
+        publish_dht(&us, address, cached.get_local_peer_id()).await;
+        let network = validator_network(us, address);
+        network.get_validator_cache(VALIDATOR_ID);
+        settle(&network, address).await;
+        assert!(matches!(
+            cache_state(&network, address),
+            Some(CacheState::Resolved(peer_id)) if peer_id == cached.get_local_peer_id()
+        ));
+        advertise(claimant, address);
+        network
+    }
+
+    /// Sends `Note(note)` to `to` over the validator network, claiming to be the validator at
+    /// `VALIDATOR_ID`.
+    async fn send_note(sender: &MockNetwork, to: MockPeerId, note: u32) {
+        let message = ValidatorMessage {
+            validator_id: VALIDATOR_ID,
+            inner: Note(note),
+        };
+        sender.message(message, to).await.unwrap();
+    }
+
+    #[test(tokio::test)]
+    async fn messages_are_only_accepted_from_the_cached_peer_or_the_newest_claimant() {
+        let mut hub = MockHub::default();
+        let us = hub.new_network();
+        let cached = hub.new_network();
+        let claimant = hub.new_network();
+        let stranger = hub.new_network();
+        let us_peer_id = us.get_local_peer_id();
+
+        let address = validator_address(1);
+        let network =
+            validator_network_with_claimant(us, &address, &cached, &claimant, &stranger).await;
+        let mut messages = network.receive::<Note>();
+
+        for (sender, note) in [(&stranger, 1), (&claimant, 2), (&cached, 3)] {
+            send_note(sender, us_peer_id, note).await;
+        }
+
+        // The stranger's message is dropped. The mock delivers messages right away, so the ones
+        // accepted are ready without waiting.
+        assert_eq!(
+            messages.next().now_or_never(),
+            Some(Some((Note(2), VALIDATOR_ID, claimant.get_local_peer_id())))
+        );
+        assert_eq!(
+            messages.next().now_or_never(),
+            Some(Some((Note(3), VALIDATOR_ID, cached.get_local_peer_id())))
+        );
+        assert!(messages.next().now_or_never().is_none());
+
+        // Hearing the claimant does not change where we send to.
+        assert_eq!(
+            network.get_peer_id(VALIDATOR_ID),
+            Some(cached.get_local_peer_id())
+        );
+    }
+
+    #[test(tokio::test)]
+    async fn requests_are_only_accepted_from_the_cached_peer_or_the_newest_claimant() {
+        let mut hub = MockHub::default();
+        let us = hub.new_network();
+        let cached = hub.new_network();
+        let claimant = hub.new_network();
+        let stranger = hub.new_network();
+        let us_peer_id = us.get_local_peer_id();
+
+        let address = validator_address(1);
+        let network =
+            validator_network_with_claimant(us, &address, &cached, &claimant, &stranger).await;
+        let mut requests = network.receive_requests::<Ping>();
+
+        // The stranger's request arrives first. It is never answered, so only poll it once.
+        let stranger_request = stranger.request(
+            ValidatorMessage {
+                validator_id: VALIDATOR_ID,
+                inner: Ping(1),
+            },
+            us_peer_id,
+        );
+        let mut stranger_request = std::pin::pin!(stranger_request);
+        assert!(stranger_request.as_mut().now_or_never().is_none());
+
+        for (sender, ping) in [(&claimant, 2), (&cached, 3)] {
+            let request = sender.request(
+                ValidatorMessage {
+                    validator_id: VALIDATOR_ID,
+                    inner: Ping(ping),
+                },
+                us_peer_id,
+            );
+            let mut request = std::pin::pin!(request);
+            assert!(request.as_mut().now_or_never().is_none());
+
+            // The stranger's request was dropped, so this is the one we just sent.
+            let (incoming, request_id, validator_id) = requests
+                .next()
+                .now_or_never()
+                .flatten()
+                .expect("the request was dropped");
+            assert_eq!((incoming.0, validator_id), (ping, VALIDATOR_ID));
+            network
+                .respond::<Ping>(request_id, incoming.0)
+                .await
+                .unwrap();
+            assert_eq!(request.await.unwrap(), ping);
+        }
+    }
+
+    #[test(tokio::test)]
+    async fn only_the_newest_claimant_is_heard() {
+        let mut hub = MockHub::default();
+        let us = hub.new_network();
+        let older = hub.new_network();
+        let newest = hub.new_network();
+        let us_peer_id = us.get_local_peer_id();
+
+        let address = validator_address(1);
+        us.dial_mock(&older);
+        us.dial_mock(&newest);
+        advertise(&older, &address);
+        advertise(&newest, &address);
+        let network = validator_network(us, &address);
+        let mut messages = network.receive::<Note>();
+
+        send_note(&older, us_peer_id, 1).await;
+        send_note(&newest, us_peer_id, 2).await;
+        settle(&network, &address).await;
+
+        assert_eq!(
+            messages.next().now_or_never(),
+            Some(Some((Note(2), VALIDATOR_ID, newest.get_local_peer_id())))
+        );
+        assert!(messages.next().now_or_never().is_none());
     }
 
     #[test(tokio::test)]
