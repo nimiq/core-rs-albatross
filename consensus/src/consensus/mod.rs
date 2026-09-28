@@ -376,6 +376,15 @@ impl<N: Network> Consensus<N> {
             .ok();
     }
 
+    /// Forcefully sets consensus lost, should be used for tests only.
+    pub fn force_lost(&mut self) {
+        trace!("Consensus forcefully lost.");
+        self.established_flag.swap(false, Ordering::Release);
+
+        // We don't care if anyone is listening.
+        self.events.send(ConsensusEvent::Lost).ok();
+    }
+
     /// Checks if the validity window is available.
     /// This function contains optimizations to only run the check when necessary.
     /// It returns a boolean indicating if the validity window is available
