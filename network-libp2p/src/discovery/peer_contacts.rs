@@ -23,7 +23,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::validator_verifier::{
-    InvalidReason, SignedValidatorClaim, ValidatorClaimVerifier, ValidatorVerification,
+    InvalidReason, SignedValidatorClaim, ValidatorClaimBudget, ValidatorClaimVerifier,
+    ValidatorVerification,
 };
 use crate::{utils, Network};
 
@@ -301,14 +302,22 @@ impl SignedPeerContact {
         let signed_claim = self.inner.signed_validator_claim()?;
         Some(verifier.verify_validator_claim(&signed_claim))
     }
+
+    /// Whether this contact carries a validator claim whose signature is malformed, so that it can
+    /// be rejected without spending any budget on it. See
+    /// [`PeerContact::has_malformed_validator_claim`].
+    fn has_malformed_validator_claim(&self) -> bool {
+        self.inner.has_malformed_validator_claim()
+    }
 }
 
 /// The verification status of a [`SignedPeerContact`]'s validator claim.
 ///
-/// Contacts received from peers get it from [`CheckedPeerContact::check`], which checks the
-/// claim, or from [`CheckedPeerContact::pending`], which leaves it [`Pending`](Self::Pending)
-/// unchecked. The pending claim of a stored contact is settled later by the periodic re-check
-/// sweep (see [`PeerContactBook::unverified_validator_contacts`]).
+/// Contacts received from peers get it from [`CheckedPeerContact::check_new_with_budget`], which
+/// checks the claim only if the contact is new to the book and the claim budget allows it, and
+/// otherwise leaves it [`Pending`](Self::Pending) unchecked, as [`CheckedPeerContact::pending`]
+/// does. The pending claim of a stored contact is settled later by the periodic re-check sweep
+/// (see [`PeerContactBook::unverified_validator_contacts`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ClaimCheck {
     /// This contact carries no validator claim.
@@ -317,8 +326,8 @@ enum ClaimCheck {
     Verified,
     /// The claim was cryptographically checked against this exact contact and does not hold.
     Invalid,
-    /// This exact contact's claim was not conclusively checked: it was not checked at all, or
-    /// the check came back [`ValidatorVerification::Unverifiable`]. The contact stays unverified
+    /// This exact contact's claim was not conclusively checked: budget was unavailable, or the
+    /// check came back [`ValidatorVerification::Unverifiable`]. The contact stays unverified
     /// until the periodic re-check sweep reaches a conclusive result.
     Pending,
 }
@@ -336,7 +345,10 @@ pub struct CheckedPeerContact {
 }
 
 impl CheckedPeerContact {
-    /// Checks the contact's validator claim, if it has one.
+    /// Checks the contact's validator claim, if it has one, without charging any budget.
+    ///
+    /// Only used by tests; see [`ClaimCheck`] for how claims are checked in production.
+    #[cfg(test)]
     pub(crate) fn check(contact: SignedPeerContact, verifier: &dyn ValidatorClaimVerifier) -> Self {
         Self::check_with_outcome(contact, verifier).0
     }
@@ -373,6 +385,195 @@ impl CheckedPeerContact {
         &self.contact
     }
 
+    /// Checks the contact's validator claim if it has one and the general `budget` allows it;
+    /// otherwise leaves it pending rather than actually checked. Like
+    /// [`Self::check_new_with_budget`], it exhausts `budget` if the check comes back unverifiable
+    /// for a node-wide reason.
+    ///
+    /// Only used by tests. In production, contacts received from peers (in the discovery
+    /// handshake and peer-address updates) go through [`Self::check_new_with_budget`], and the
+    /// claims it leaves pending are settled by the periodic re-check sweep (see
+    /// [`PeerContactBook::unverified_validator_contacts`]). Unlike [`Self::check_new_with_budget`],
+    /// this does not look at the contact book, so it spends the budget even on contacts the book
+    /// would discard, and it never spends the refresh reserve.
+    #[cfg(test)]
+    pub(crate) fn check_with_budget(
+        contact: SignedPeerContact,
+        verifier: &dyn ValidatorClaimVerifier,
+        budget: &ValidatorClaimBudget,
+    ) -> Self {
+        Self::check_charging(contact, verifier, budget, ValidatorClaimBudget::try_consume)
+    }
+
+    /// Checks the validator claim of a contact received from a peer, if it has one and `budget`
+    /// allows it; otherwise leaves it pending rather than actually checked.
+    ///
+    /// Verifying a claim reads blockchain state, so on hot, attacker-reachable paths (the
+    /// discovery handshake and periodic peer-address updates) the number of checks performed
+    /// must be bounded regardless of how many connections present a claim. A contact left
+    /// pending here is picked up later by [`PeerContactBook::unverified_validator_contacts`].
+    ///
+    /// If the check comes back unverifiable for a node-wide reason (see
+    /// [`UnverifiableReason::is_node_wide`](super::validator_verifier::UnverifiableReason::is_node_wide)),
+    /// e.g. because this node is still syncing its staking contract, every other claim would too,
+    /// so the whole budget is exhausted until the next house-keeping tick instead of spending it on
+    /// blockchain reads that cannot succeed.
+    ///
+    /// A contact that `book` would discard anyway, because it is our own, from the future, or not
+    /// newer than the one we have for its peer (e.g. the same contact relayed to us by several
+    /// peers), is not worth spending the budget on (see [`PeerContactBook::is_new`]). Its claim is
+    /// left pending, so that the re-check sweep picks it up in case it does get stored after all.
+    ///
+    /// A pending refresh that keeps the same validator address leaves a previous verified binding
+    /// in place, but cannot refresh its timestamp or make the new contact gossipable. A pending
+    /// refresh that claims a different address removes the previous binding. See
+    /// [`PeerContactBook::store`].
+    ///
+    /// A new contact whose peer already holds a live verified binding to the validator address it
+    /// claims (see [`PeerContactBook::has_live_verified_binding`]) is charged to the budget's
+    /// refresh reserve first, and to the general budget only once the reserve is used up or that
+    /// validator already took its one unit of the reserve this tick (see
+    /// [`ValidatorClaimBudget::try_consume_refresh`]). Any other contact is charged to the general
+    /// budget only. Getting such a binding takes the validator's signing key, and relaying the
+    /// validator's genuine refreshed contact to us at most spends that validator's unit on
+    /// verifying it, so unauthenticated peers flooding the general budget with bogus claims cannot
+    /// keep an honest validator's refreshed contact from being verified, and thereby gossiped.
+    ///
+    /// Copies of that same contact checked before the first one is stored, e.g. relayed on
+    /// several connections at once, fall back to the general budget and may thus be left pending.
+    /// If such a copy is stored before the one that was checked, the checked one still settles
+    /// the claim once it is stored; see [`PeerContactBook::store`].
+    ///
+    /// A claim is only checked while the validator it claims has not used up its share of
+    /// verified claims for this tick (see [`ValidatorClaimBudget::may_verify`]); otherwise it is
+    /// left pending without spending any budget. If it verifies, it takes part of that share. A
+    /// validator can sign claims for as many peer IDs as it likes, and refresh each of them every
+    /// second, and this keeps a single one from spending the general budget of every node its
+    /// contacts reach. Once a contact of a peer verified on arrival this tick, a newer one of the
+    /// same peer is only checked if it is fresh, i.e. younger than the budget's fresh contact age
+    /// (see [`ValidatorClaimBudget::is_fresh`]): the peer's current contact still verifies when an
+    /// older one got here first, as long as it is fresh on arrival, but replaying its older
+    /// contacts does not use up the share.
+    ///
+    /// A claim whose signature is malformed is rejected without spending any budget, since it can
+    /// be rejected without reading blockchain state.
+    ///
+    /// The book is only read briefly, once to tell whether the contact is new and whether its peer
+    /// holds such a binding, and never locked while the claim is checked, since checking reads
+    /// blockchain state.
+    ///
+    /// This is for a contact that is inserted with [`PeerContactBook::insert`]. For contacts that
+    /// are inserted with [`PeerContactBook::insert_filtered`], use
+    /// [`Self::check_new_filtered_with_budget`].
+    pub fn check_new_with_budget(
+        contact: SignedPeerContact,
+        book: &RwLock<PeerContactBook>,
+        verifier: &dyn ValidatorClaimVerifier,
+        budget: &ValidatorClaimBudget,
+    ) -> Self {
+        Self::check_if_stored_with_budget(contact, book, verifier, budget, None)
+    }
+
+    /// Like [`Self::check_new_with_budget`], for a contact that is inserted with
+    /// [`PeerContactBook::insert_filtered`] and `filter`: a contact that the filter would discard,
+    /// e.g. because it is too old, lacks the services we need or carries a claim whose signature
+    /// is malformed, is not worth spending the budget on either.
+    pub fn check_new_filtered_with_budget(
+        contact: SignedPeerContact,
+        book: &RwLock<PeerContactBook>,
+        verifier: &dyn ValidatorClaimVerifier,
+        budget: &ValidatorClaimBudget,
+        filter: &InsertFilter,
+    ) -> Self {
+        Self::check_if_stored_with_budget(contact, book, verifier, budget, Some(filter))
+    }
+
+    fn check_if_stored_with_budget(
+        contact: SignedPeerContact,
+        book: &RwLock<PeerContactBook>,
+        verifier: &dyn ValidatorClaimVerifier,
+        budget: &ValidatorClaimBudget,
+        filter: Option<&InsertFilter>,
+    ) -> Self {
+        let (would_store, refreshed_validator) = {
+            let book = book.read();
+            let would_store = book.would_store(&contact, filter);
+            let refreshed_validator = contact
+                .inner
+                .validator_address()
+                .filter(|&address| {
+                    would_store && book.has_live_verified_binding(&contact.peer_id(), address)
+                })
+                .cloned();
+            (would_store, refreshed_validator)
+        };
+
+        if !would_store {
+            return Self::pending(contact);
+        }
+
+        // Only check the claim while the validator it claims has not used up its share of
+        // verified claims for this tick. Whether the contact is fresh is decided once, so that the
+        // check and the record agree even if checking the claim takes into the next second.
+        let claimed = contact
+            .inner
+            .validator_address()
+            .map(|address| (address.clone(), contact.peer_id(), contact.inner.timestamp));
+        let fresh = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .is_ok_and(|unix_time| budget.is_fresh(contact.inner.timestamp, unix_time.as_secs()));
+        if let Some((address, peer_id, timestamp)) = &claimed
+            && !contact.has_malformed_validator_claim()
+            && !budget.may_verify(address, peer_id, *timestamp, fresh)
+        {
+            return Self::pending(contact);
+        }
+
+        let checked =
+            Self::check_charging(
+                contact,
+                verifier,
+                budget,
+                |budget| match &refreshed_validator {
+                    Some(validator_address) => budget.try_consume_refresh(validator_address),
+                    None => budget.try_consume(),
+                },
+            );
+        if let Some((address, peer_id, timestamp)) = claimed
+            && checked.claim == ClaimCheck::Verified
+        {
+            budget.record_verified(&address, peer_id, timestamp, fresh);
+        }
+        checked
+    }
+
+    /// Checks the contact's validator claim if it has one and `consume` takes a unit of `budget`
+    /// for it; otherwise leaves it pending. Exhausts `budget` if the check shows that no claim can
+    /// be verified by this node right now. A claim whose signature is malformed is rejected
+    /// without charging `budget`.
+    fn check_charging(
+        contact: SignedPeerContact,
+        verifier: &dyn ValidatorClaimVerifier,
+        budget: &ValidatorClaimBudget,
+        consume: impl FnOnce(&ValidatorClaimBudget) -> bool,
+    ) -> Self {
+        if contact.has_malformed_validator_claim() {
+            return Self::check_with_outcome(contact, verifier).0;
+        }
+        if contact.inner.validator_info().is_none() || !consume(budget) {
+            return Self::pending(contact);
+        }
+        let (checked, verification) = Self::check_with_outcome(contact, verifier);
+        if verification.is_some_and(|verification| verification.is_node_wide_unverifiable()) {
+            debug!(
+                ?verification,
+                "Cannot verify validator claims right now, skipping checks until next tick",
+            );
+            budget.exhaust();
+        }
+        checked
+    }
+
     /// Leaves the contact's validator claim, if it has one, pending without checking it.
     pub fn pending(contact: SignedPeerContact) -> Self {
         let claim = if contact.inner.validator_info().is_some() {
@@ -392,6 +593,49 @@ impl From<SignedPeerContact> for CheckedPeerContact {
     fn from(contact: SignedPeerContact) -> Self {
         Self::pending(contact)
     }
+}
+
+/// Keeps, of the contacts in one batch received from a peer, only the newest one of each peer,
+/// in the order they came in. Contacts from the future are dropped.
+///
+/// The contact book would only ever store that one: it discards contacts from the future and
+/// contacts that are not newer than the one it has. Checking the claims of the others, e.g. of
+/// several copies of the same contact, would only spend the claim budget, since every contact in
+/// a batch is checked before any of them is stored. If the newest one then does not pass the
+/// filter of [`PeerContactBook::insert_filtered`], none of them is stored, even if an older one
+/// would have passed; that older one is superseded anyway.
+pub fn newest_contact_per_peer(contacts: Vec<SignedPeerContact>) -> Vec<SignedPeerContact> {
+    let Ok(unix_time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) else {
+        return contacts;
+    };
+    let now = unix_time.as_secs();
+
+    // For each peer, the position and timestamp of its newest contact. Of equally new ones, the
+    // first is kept.
+    let mut newest: HashMap<PeerId, (usize, u64)> = HashMap::new();
+    for (position, contact) in contacts.iter().enumerate() {
+        let timestamp = contact.inner.timestamp;
+        if timestamp > now {
+            continue;
+        }
+        match newest.entry(contact.peer_id()) {
+            Entry::Occupied(mut entry) => {
+                if timestamp > entry.get().1 {
+                    entry.insert((position, timestamp));
+                }
+            }
+            Entry::Vacant(entry) => {
+                entry.insert((position, timestamp));
+            }
+        }
+    }
+
+    let keep: HashSet<usize> = newest.into_values().map(|(position, _)| position).collect();
+    contacts
+        .into_iter()
+        .enumerate()
+        .filter_map(|(position, contact)| keep.contains(&position).then_some(contact))
+        .collect()
 }
 
 /// The filter that [`PeerContactBook::insert_filtered`] applies to contacts relayed to us.
@@ -419,6 +663,10 @@ struct PeerContactMeta {
     /// [`PeerContactInfo::reopen_validator_claim`]). Otherwise, both verified and invalid claims
     /// are excluded from the periodic re-check sweep.
     validator_verification_pending: bool,
+    /// When the re-check sweep last picked the stale binding of this contact's peer for a
+    /// re-check, in seconds since the Unix epoch. See
+    /// [`PeerContactBook::stale_verified_validator_contacts`].
+    binding_rechecked_at: Option<u64>,
 }
 
 /// This encapsulates a peer contact (signed), but also pre-computes frequently used values such as `peer_id` and
@@ -453,6 +701,7 @@ impl PeerContactInfo {
                 outer_protocol_address: None,
                 validator_verified,
                 validator_verification_pending: pending,
+                binding_rechecked_at: None,
             }),
         }
     }
@@ -574,6 +823,30 @@ impl PeerContactInfo {
         meta.validator_verification_pending = true;
     }
 
+    /// Notes that the re-check sweep picked the stale binding of this contact's peer for a
+    /// re-check at `unix_time`, so that it is not picked again before [`STALE_BINDING_AGE`]
+    /// passed.
+    ///
+    /// [`STALE_BINDING_AGE`]: PeerContactBook::STALE_BINDING_AGE
+    pub(crate) fn mark_binding_rechecked(&self, unix_time: Duration) {
+        self.meta.write().binding_rechecked_at = Some(unix_time.as_secs());
+    }
+
+    /// Whether the stale binding of this contact's peer was picked for a re-check less than
+    /// [`PeerContactBook::STALE_BINDING_AGE`] before `unix_time`.
+    fn binding_rechecked_recently(&self, unix_time: Duration) -> bool {
+        self.meta
+            .read()
+            .binding_rechecked_at
+            .is_some_and(|rechecked_at| {
+                !contact_exceeds_age(
+                    rechecked_at,
+                    Duration::from_secs(PeerContactBook::STALE_BINDING_AGE),
+                    unix_time,
+                )
+            })
+    }
+
     /// Sets the outer protocol address of the peer once
     pub fn set_outer_protocol_address(&self, addr: Multiaddr) {
         self.meta
@@ -624,6 +897,16 @@ impl PeerContactBook {
     /// The maximum number of live verified bindings kept for a validator address. See
     /// [`Self::index_add`].
     pub const MAX_BINDINGS_PER_VALIDATOR: usize = 4;
+
+    /// A verified binding whose contact is older than this, in seconds, is re-checked against the
+    /// staking contract by the re-check sweep (5 minutes). See
+    /// [`Self::stale_verified_validator_contacts`].
+    ///
+    /// An online validator re-signs its contact on every house-keeping tick, and each refreshed
+    /// contact is checked anew, so this only concerns bindings that stopped being refreshed, e.g.
+    /// by someone holding a signing key that was rotated away since.
+    pub const STALE_BINDING_AGE: u64 = 5 * 60;
+
     /// Creates a new `PeerContactBook` given our own peer contact information.
     pub fn new(
         own_peer_contact: SignedPeerContact,
@@ -642,6 +925,29 @@ impl PeerContactBook {
             allow_loopback_addresses,
             memory_transport,
         }
+    }
+
+    /// Whether storing `contact` could change anything: it is not our own contact, not from the
+    /// future, and newer than the one we have for its peer, if any. Anything else is discarded on
+    /// insertion.
+    pub fn is_new(&self, contact: &SignedPeerContact) -> bool {
+        let peer_id = contact.peer_id();
+        let Ok(unix_time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) else {
+            return true;
+        };
+        peer_id != self.own_peer_id
+            && contact.inner.timestamp <= unix_time.as_secs()
+            && self
+                .peer_contacts
+                .get(&peer_id)
+                .is_none_or(|existing| existing.contact().timestamp < contact.inner.timestamp)
+    }
+
+    /// Whether inserting `contact` could change anything: it [is new](Self::is_new) and, if it is
+    /// inserted with [`Self::insert_filtered`] and `filter`, passes that filter.
+    pub fn would_store(&self, contact: &SignedPeerContact, filter: Option<&InsertFilter>) -> bool {
+        self.is_new(contact)
+            && filter.is_none_or(|filter| self.passes_filter(&contact.inner, filter))
     }
 
     /// Whether [`Self::insert_filtered`] keeps `peer_contact` under `filter`: it provides the
@@ -725,6 +1031,16 @@ impl PeerContactBook {
     ///
     /// Keeps the latest contact separate from the peer's verified validator binding, so pending
     /// refreshes cannot extend the lifetime or priority of a previously verified binding.
+    ///
+    /// The one exception to "strictly newer" is an identical copy of the stored contact whose
+    /// claim was conclusively checked: that outcome settles the stored claim if it is still
+    /// pending, just like [`Self::apply_validator_verifications`] would, and re-opens it if it was
+    /// settled the other way in the meantime (see [`Self::settle_or_reopen_claim`]). Copies of the
+    /// same contact can be checked on several connections before the first one is stored, and
+    /// only one of them may get to spend the budget on it (see
+    /// [`CheckedPeerContact::check_new_with_budget`]). Without this, a copy left pending that
+    /// happened to be stored first would shadow the verified one until the re-check sweep got to
+    /// it.
     fn store(&mut self, checked: CheckedPeerContact) {
         let peer_id = checked.contact.inner.peer_id();
         let existing = self.peer_contacts.get(&peer_id).cloned();
@@ -732,6 +1048,18 @@ impl PeerContactBook {
         if let Some(existing) = &existing {
             // Only update the contact if the timestamp is greater than the entry we have
             if existing.contact().timestamp >= checked.contact.inner.timestamp {
+                // A copy that was not conclusively checked (or, converted from a plain contact,
+                // not checked at all) has nothing to settle, so it is not even compared.
+                let verified = match checked.claim {
+                    ClaimCheck::Verified => Some(true),
+                    ClaimCheck::Invalid => Some(false),
+                    ClaimCheck::Pending | ClaimCheck::None => None,
+                };
+                if let Some(verified) = verified
+                    && existing.signed() == &checked.contact
+                {
+                    self.settle_or_reopen_claim(existing, verified);
+                }
                 return;
             }
         } else {
@@ -1033,6 +1361,31 @@ impl PeerContactBook {
         bindings.into_iter().map(|(peer_id, _)| peer_id).collect()
     }
 
+    /// Whether `peer_id` holds a verified binding to `validator_address` that has not expired yet.
+    ///
+    /// Such a binding only ever results from a conclusive check of a claim signed with the
+    /// validator's signing key, so this is what entitles a refreshed contact to the refresh
+    /// reserve of the claim budget (see [`CheckedPeerContact::check_new_with_budget`]). Expiry is
+    /// checked the same way as in [`Self::get_validator_peer_ids`], independently of
+    /// house-keeping.
+    pub fn has_live_verified_binding(&self, peer_id: &PeerId, validator_address: &Address) -> bool {
+        let Some(&timestamp) = self
+            .verified_claim_timestamps
+            .get(validator_address)
+            .and_then(|bindings| bindings.get(peer_id))
+        else {
+            return false;
+        };
+        let Ok(unix_time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) else {
+            return false;
+        };
+        !contact_exceeds_age(
+            timestamp,
+            Duration::from_secs(Self::MAX_PEER_AGE),
+            unix_time,
+        )
+    }
+
     /// Snapshot of the contacts whose validator claim still needs a fresh cryptographic check —
     /// it has not been conclusively checked yet (skipped for budget or came back
     /// [`ValidatorVerification::Unverifiable`]). Claims that were conclusively checked —
@@ -1055,6 +1408,58 @@ impl PeerContactBook {
             .values()
             .filter(|info| {
                 info.validator_address().is_some() && info.validator_claim_needs_recheck()
+            })
+            .cloned()
+            .collect();
+        contacts.sort_unstable_by_key(|info| info.peer_id);
+        contacts
+    }
+
+    /// Snapshot of the contacts of peers whose live verified binding went stale: the binding is
+    /// older than [`Self::STALE_BINDING_AGE`], and the peer's current contact is either the one it
+    /// was verified in or a pending refresh claiming the same validator. Ordered by peer ID, like
+    /// [`Self::unverified_validator_contacts`]. A binding that was picked for a re-check less than
+    /// [`Self::STALE_BINDING_AGE`] ago is left out (see [`PeerContactInfo::mark_binding_rechecked`]).
+    ///
+    /// A claim is checked against the staking contract when its contact arrives, and a validator
+    /// that is online refreshes its contact, and thereby the check, on every house-keeping tick.
+    /// A binding that stopped being refreshed would otherwise be trusted until it expires, even if
+    /// the validator rotated its signing key in the meantime, and so would one whose refreshes are
+    /// left pending, e.g. because they are signed with a key rotated away and the claim budget is
+    /// used up. The re-check sweep re-checks the current contact: a conclusive rejection removes
+    /// the binding (and, if the current contact itself is the one that verified, has its claim
+    /// checked once more), and a verification of a pending refresh renews it (see
+    /// [`Self::apply_validator_verifications`]).
+    pub fn stale_verified_validator_contacts(&self) -> Vec<Arc<PeerContactInfo>> {
+        let Ok(unix_time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) else {
+            return Vec::new();
+        };
+        let mut contacts: Vec<Arc<PeerContactInfo>> = self
+            .peer_contacts
+            .values()
+            .filter(|info| {
+                let Some(&bound_at) = info.validator_address().and_then(|address| {
+                    self.verified_claim_timestamps
+                        .get(address)
+                        .and_then(|bindings| bindings.get(&info.peer_id))
+                }) else {
+                    return false;
+                };
+                let checkable = (info.is_validator_verified()
+                    && bound_at == info.contact().timestamp())
+                    || info.validator_claim_needs_recheck();
+                checkable
+                    && contact_exceeds_age(
+                        bound_at,
+                        Duration::from_secs(Self::STALE_BINDING_AGE),
+                        unix_time,
+                    )
+                    && !contact_exceeds_age(
+                        bound_at,
+                        Duration::from_secs(Self::MAX_PEER_AGE),
+                        unix_time,
+                    )
+                    && !info.binding_rechecked_recently(unix_time)
             })
             .cloned()
             .collect();
@@ -1356,13 +1761,17 @@ mod serde_public_key {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use nimiq_keys::{Ed25519PublicKey, SecureGenerate};
     use nimiq_network_interface::validator_record::ValidatorRecord;
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng;
 
     use super::*;
-    use crate::discovery::validator_verifier::{InvalidReason, NoopValidatorClaimVerifier};
+    use crate::discovery::validator_verifier::{
+        InvalidReason, NoopValidatorClaimVerifier, UnverifiableReason,
+    };
 
     /// A verifier that knows a fixed set of validator signing keys.
     struct TestVerifier {
@@ -1383,6 +1792,71 @@ mod tests {
                 ValidatorVerification::Invalid(InvalidReason::InvalidSignature)
             }
         }
+    }
+
+    /// A verifier that answers every claim with the same outcome and counts how often it was
+    /// asked, i.e. how many blockchain reads a real verifier would have done.
+    struct CountingVerifier {
+        outcome: ValidatorVerification,
+        calls: AtomicUsize,
+    }
+
+    impl CountingVerifier {
+        fn new(outcome: ValidatorVerification) -> Self {
+            Self {
+                outcome,
+                calls: AtomicUsize::new(0),
+            }
+        }
+
+        fn calls(&self) -> usize {
+            self.calls.load(Ordering::Relaxed)
+        }
+    }
+
+    impl ValidatorClaimVerifier for CountingVerifier {
+        fn verify_validator_claim(
+            &self,
+            _signed_claim: &SignedValidatorClaim,
+        ) -> ValidatorVerification {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            self.outcome
+        }
+    }
+
+    /// A verifier that fails the test if it is asked to check a claim while `book` is locked,
+    /// and otherwise defers to `inner`.
+    struct LockCheckingVerifier<'a> {
+        book: &'a RwLock<PeerContactBook>,
+        inner: &'a dyn ValidatorClaimVerifier,
+    }
+
+    impl ValidatorClaimVerifier for LockCheckingVerifier<'_> {
+        fn verify_validator_claim(
+            &self,
+            signed_claim: &SignedValidatorClaim,
+        ) -> ValidatorVerification {
+            assert!(
+                self.book.try_write().is_some(),
+                "a claim must never be checked while the contact book is locked",
+            );
+            self.inner.verify_validator_claim(signed_claim)
+        }
+    }
+
+    /// A book holding a live verified binding of a peer to the validator of `signer`, with the key
+    /// of that peer.
+    fn book_with_binding(
+        signer: &ValidatorClaimSigner,
+        verifier: &TestVerifier,
+    ) -> (Keypair, RwLock<PeerContactBook>) {
+        let (_own_key, mut book) = empty_book();
+        let peer_key = Keypair::generate_ed25519();
+        let first = contact_for(&peer_key, now_secs() - 10, Some(signer));
+        let peer_id = first.peer_id();
+        book.insert(CheckedPeerContact::check(first, verifier));
+        assert!(book.has_live_verified_binding(&peer_id, signer.validator_address()));
+        (peer_key, RwLock::new(book))
     }
 
     fn now_secs() -> u64 {
@@ -1762,6 +2236,166 @@ mod tests {
     }
 
     #[test]
+    fn check_with_budget_leaves_the_claim_unverified_once_exhausted() {
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let contact = contact_for(&peer_key, now_secs(), Some(&signer));
+
+        let budget = ValidatorClaimBudget::new(0);
+        let checked = CheckedPeerContact::check_with_budget(contact, &verifier, &budget);
+
+        // The claim would verify, but no budget was available to check it.
+        assert_eq!(checked.claim, ClaimCheck::Pending);
+    }
+
+    #[test]
+    fn pending_refresh_keeps_original_verified_binding_until_promotion() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        // First sighting: budget is available, the claim verifies and gets indexed.
+        let budget = ValidatorClaimBudget::new(1);
+        let first = contact_for(&peer_key, now - 10, Some(&signer));
+        let peer_id = first.peer_id();
+        book.insert(CheckedPeerContact::check_with_budget(
+            first, &verifier, &budget,
+        ));
+
+        let other_key = Keypair::generate_ed25519();
+        let other = contact_for(&other_key, now - 5, Some(&signer));
+        let other_peer_id = other.peer_id();
+        book.insert(CheckedPeerContact::check(other, &verifier));
+
+        // The same peer refreshes its contact (newer timestamp, same claim), but this time the
+        // shared budget is exhausted by contention from other connections.
+        assert!(!budget.try_consume(), "budget should already be empty");
+        for timestamp in [now - 2, now] {
+            let refreshed = contact_for(&peer_key, timestamp, Some(&signer));
+            book.insert(CheckedPeerContact::check_with_budget(
+                refreshed.clone(),
+                &verifier,
+                &budget,
+            ));
+
+            // Repeated pending refreshes preserve only the original verified binding. They
+            // neither improve its ordering nor make the latest contact gossipable.
+            assert_eq!(
+                book.get_validator_peer_ids(signer.validator_address()),
+                vec![other_peer_id, peer_id]
+            );
+            assert_eq!(
+                book.verified_claim_timestamps[signer.validator_address()][&peer_id],
+                now - 10
+            );
+            let info = book.get(&peer_id).unwrap();
+            assert_eq!(info.signed(), &refreshed);
+            assert!(!info.is_validator_verified());
+            assert!(!info.is_gossipable());
+        }
+
+        let pending = book.unverified_validator_contacts();
+        assert_eq!(pending.len(), 1);
+        let refreshed = pending[0].signed().clone();
+        book.apply_validator_verifications([(
+            peer_id,
+            now,
+            refreshed.check_validator_claim(&verifier).unwrap(),
+        )]);
+
+        // A conclusive success promotes the current contact and its timestamp together.
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![peer_id, other_peer_id]
+        );
+        assert_eq!(
+            book.verified_claim_timestamps[signer.validator_address()][&peer_id],
+            now
+        );
+        assert!(book.get(&peer_id).unwrap().is_validator_verified());
+        assert!(book.get(&peer_id).unwrap().is_gossipable());
+        assert!(book.unverified_validator_contacts().is_empty());
+    }
+
+    #[test]
+    fn budget_exhaustion_does_not_verify_a_brand_new_claim() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+
+        // The very first sighting of this peer arrives while the budget is already exhausted.
+        let budget = ValidatorClaimBudget::new(0);
+        let contact = contact_for(&peer_key, now_secs(), Some(&signer));
+        let peer_id = contact.peer_id();
+        book.insert(CheckedPeerContact::check_with_budget(
+            contact, &verifier, &budget,
+        ));
+
+        // Without a conclusive check, the claim stays unverified (safe default), not silently
+        // trusted.
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+        assert!(!book.get(&peer_id).unwrap().is_validator_verified());
+    }
+
+    #[test]
+    fn budget_exhaustion_does_not_carry_trust_over_to_a_new_validator_address() {
+        let (_own_key, mut book) = empty_book();
+        let (signer_a, verifier_a) = validator(1);
+        let (signer_b, _verifier_b) = validator(2);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        let budget = ValidatorClaimBudget::new(1);
+        let first = contact_for(&peer_key, now - 10, Some(&signer_a));
+        let peer_id = first.peer_id();
+        book.insert(CheckedPeerContact::check_with_budget(
+            first,
+            &verifier_a,
+            &budget,
+        ));
+        assert_eq!(
+            book.get_validator_peer_ids(signer_a.validator_address()),
+            vec![peer_id]
+        );
+
+        // Establish a pending latest contact backed by the previous verified binding.
+        let pending = contact_for(&peer_key, now - 5, Some(&signer_a));
+        book.insert(CheckedPeerContact::check_with_budget(
+            pending,
+            &verifier_a,
+            &budget,
+        ));
+        assert_eq!(
+            book.get_validator_peer_ids(signer_a.validator_address()),
+            vec![peer_id]
+        );
+        assert!(!book.get(&peer_id).unwrap().is_validator_verified());
+
+        // The same peer now claims a *different* validator address while the budget is
+        // exhausted. Trust in the old address must not transfer to the new one.
+        assert!(!budget.try_consume());
+        let switched = contact_for(&peer_key, now, Some(&signer_b));
+        book.insert(CheckedPeerContact::check_with_budget(
+            switched,
+            &verifier_a,
+            &budget,
+        ));
+
+        assert!(book
+            .get_validator_peer_ids(signer_a.validator_address())
+            .is_empty());
+        assert!(book
+            .get_validator_peer_ids(signer_b.validator_address())
+            .is_empty());
+        assert!(!book.get(&peer_id).unwrap().is_gossipable());
+        // The lookup also filters on the current claim, so check the binding itself is gone.
+        assert!(book.verified_claim_timestamps.is_empty());
+    }
+
+    #[test]
     fn pending_address_flip_does_not_resurrect_the_old_binding() {
         let (_own_key, mut book) = empty_book();
         let (signer_a, verifier_a) = validator(1);
@@ -1800,6 +2434,85 @@ mod tests {
     }
 
     #[test]
+    fn check_with_budget_only_charges_contacts_that_carry_a_claim() {
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let with_claim = contact_for(&peer_key, now_secs(), Some(&signer));
+        let without_claim = contact_for(&Keypair::generate_ed25519(), now_secs(), None);
+
+        let budget = ValidatorClaimBudget::new(1);
+
+        // A contact with no claim never touches the budget.
+        let checked = CheckedPeerContact::check_with_budget(without_claim, &verifier, &budget);
+        assert_eq!(checked.claim, ClaimCheck::None);
+        assert!(budget.try_consume());
+
+        // Put the single unit back, then spend it on a contact that does carry a claim.
+        budget.reset();
+        let checked = CheckedPeerContact::check_with_budget(with_claim.clone(), &verifier, &budget);
+        assert_eq!(checked.claim, ClaimCheck::Verified);
+
+        // The budget is now exhausted, so a second claim in the same tick is left pending.
+        let checked = CheckedPeerContact::check_with_budget(with_claim, &verifier, &budget);
+        assert_eq!(checked.claim, ClaimCheck::Pending);
+    }
+
+    #[test]
+    fn only_contacts_the_book_would_store_are_new() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+        let contact = contact_for(&peer_key, now - 10, Some(&signer));
+
+        assert!(book.is_new(&contact));
+        book.insert(CheckedPeerContact::check(contact.clone(), &verifier));
+
+        // The same contact, e.g. relayed to us by another peer, is not new, and neither is an older
+        // one or our own.
+        assert!(!book.is_new(&contact));
+        assert!(!book.is_new(&contact_for(&peer_key, now - 20, Some(&signer))));
+        assert!(!book.is_new(book.get_own_contact().signed()));
+        assert!(!book.is_new(&contact_for(&peer_key, now + 60, Some(&signer))));
+
+        // A newer contact is.
+        assert!(book.is_new(&contact_for(&peer_key, now, Some(&signer))));
+    }
+
+    #[test]
+    fn contacts_the_book_would_discard_do_not_use_up_the_budget() {
+        let (own_key, mut book) = empty_book();
+        let (own_signer, _) = validator(2);
+        book.set_validator_claim_signer(Some(own_signer), &own_key);
+        let own_contact = book.get_own_contact().signed().clone();
+        let book = RwLock::new(book);
+
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+        let contact = contact_for(&peer_key, now - 10, Some(&signer));
+        let budget = ValidatorClaimBudget::new(1);
+        let check = |contact| {
+            CheckedPeerContact::check_new_with_budget(contact, &book, &verifier, &budget).claim
+        };
+
+        assert_eq!(check(contact.clone()), ClaimCheck::Verified);
+        book.write()
+            .insert(CheckedPeerContact::check(contact.clone(), &verifier));
+
+        // The same contact relayed to us again, and our own contact echoed back, are left pending
+        // without being checked, so the single unit of budget is still there for a newer contact.
+        budget.reset();
+        assert_eq!(check(contact), ClaimCheck::Pending);
+        assert_eq!(check(own_contact), ClaimCheck::Pending);
+        assert_eq!(
+            check(contact_for(&peer_key, now, Some(&signer))),
+            ClaimCheck::Verified
+        );
+        assert!(!budget.try_consume());
+    }
+
+    #[test]
     fn a_contact_left_pending_is_offered_to_the_recheck_sweep() {
         let (_own_key, mut book) = empty_book();
         let (signer, _verifier) = validator(1);
@@ -1816,6 +2529,121 @@ mod tests {
         assert!(book
             .get_validator_peer_ids(signer.validator_address())
             .is_empty());
+    }
+
+    #[test]
+    fn invalid_refresh_removes_verified_binding_on_insert_or_recheck() {
+        for check_on_insert in [false, true] {
+            let (_own_key, mut book) = empty_book();
+            let (signer, verifier) = validator(1);
+            let peer_key = Keypair::generate_ed25519();
+            let now = now_secs();
+
+            let first = contact_for(&peer_key, now - 20, Some(&signer));
+            let peer_id = first.peer_id();
+            book.insert(CheckedPeerContact::check(first.clone(), &verifier));
+
+            let pending = contact_for(&peer_key, now - 10, Some(&signer));
+            book.insert(CheckedPeerContact::check(
+                pending,
+                &NoopValidatorClaimVerifier,
+            ));
+
+            // The peer signs a new timestamp with its network key but reuses the old validator
+            // signature. Its outer signature is valid, while the current validator claim is not.
+            let mut refreshed = first.inner.clone();
+            refreshed.timestamp = now;
+            let refreshed = refreshed.sign(&peer_key);
+            assert!(refreshed.verify());
+            assert_eq!(
+                refreshed.check_validator_claim(&verifier),
+                Some(ValidatorVerification::Invalid(
+                    InvalidReason::InvalidSignature
+                ))
+            );
+
+            let budget = ValidatorClaimBudget::new(usize::from(check_on_insert));
+            book.insert(CheckedPeerContact::check_with_budget(
+                refreshed, &verifier, &budget,
+            ));
+            assert!(!book.get(&peer_id).unwrap().is_validator_verified());
+            assert!(!book.get(&peer_id).unwrap().is_gossipable());
+
+            if !check_on_insert {
+                assert_eq!(
+                    book.get_validator_peer_ids(signer.validator_address()),
+                    vec![peer_id]
+                );
+                assert_eq!(
+                    book.verified_claim_timestamps[signer.validator_address()][&peer_id],
+                    now - 20
+                );
+
+                let pending = book.unverified_validator_contacts();
+                assert_eq!(pending.len(), 1);
+                let info = &pending[0];
+                book.apply_validator_verifications([(
+                    *info.peer_id(),
+                    info.contact().timestamp(),
+                    info.signed().check_validator_claim(&verifier).unwrap(),
+                )]);
+            }
+
+            assert!(book
+                .get_validator_peer_ids(signer.validator_address())
+                .is_empty());
+            assert!(!book
+                .verified_claim_timestamps
+                .contains_key(signer.validator_address()));
+            assert!(book.unverified_validator_contacts().is_empty());
+        }
+    }
+
+    #[test]
+    fn inconclusive_checks_keep_the_original_verified_binding() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        let budget = ValidatorClaimBudget::new(1);
+        let contact = contact_for(&peer_key, now - 10, Some(&signer));
+        let peer_id = contact.peer_id();
+        book.insert(CheckedPeerContact::check_with_budget(
+            contact, &verifier, &budget,
+        ));
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![peer_id]
+        );
+
+        // A freshly-checked contact (budget available) that comes back `Unverifiable` — e.g. our
+        // own staking-contract state is transiently incomplete — must keep the old binding.
+        let refreshed = contact_for(&peer_key, now, Some(&signer));
+        book.insert(CheckedPeerContact::check(
+            refreshed.clone(),
+            &NoopValidatorClaimVerifier,
+        ));
+
+        book.apply_validator_verifications([(
+            peer_id,
+            now,
+            refreshed
+                .check_validator_claim(&NoopValidatorClaimVerifier)
+                .unwrap(),
+        )]);
+
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![peer_id]
+        );
+        assert_eq!(
+            book.verified_claim_timestamps[signer.validator_address()][&peer_id],
+            now - 10
+        );
+        assert!(!book.get(&peer_id).unwrap().is_validator_verified());
+        assert!(!book.get(&peer_id).unwrap().is_gossipable());
+        assert_eq!(book.unverified_validator_contacts().len(), 1);
     }
 
     #[test]
@@ -1896,6 +2724,538 @@ mod tests {
     }
 
     #[test]
+    fn a_node_wide_unverifiable_check_exhausts_the_budget() {
+        for reason in [
+            UnverifiableReason::NoVerifier,
+            UnverifiableReason::LightClient,
+            UnverifiableReason::StateIncomplete,
+        ] {
+            let (signer, _verifier) = validator(1);
+            let verifier = CountingVerifier::new(ValidatorVerification::Unverifiable(reason));
+            let budget = ValidatorClaimBudget::with_refresh_reserve(2, 2);
+
+            let first = contact_for(&Keypair::generate_ed25519(), now_secs(), Some(&signer));
+            let checked = CheckedPeerContact::check_with_budget(first, &verifier, &budget);
+            assert_eq!(checked.claim, ClaimCheck::Pending);
+            assert_eq!(verifier.calls(), 1);
+
+            // Every other claim would come back the same way, so the rest of the budget,
+            // including the refresh reserve, is gone until the next tick, and the next contact is
+            // left pending without being checked.
+            let second = contact_for(&Keypair::generate_ed25519(), now_secs(), Some(&signer));
+            let checked = CheckedPeerContact::check_with_budget(second, &verifier, &budget);
+            assert_eq!(checked.claim, ClaimCheck::Pending);
+            assert_eq!(verifier.calls(), 1);
+            assert_eq!(budget.remaining(), (0, 0));
+
+            // The next tick refills it.
+            budget.reset();
+            assert_eq!(budget.remaining(), (2, 2));
+        }
+    }
+
+    #[test]
+    fn conclusive_checks_do_not_exhaust_the_budget() {
+        for (outcome, expected) in [
+            (ValidatorVerification::Verified, ClaimCheck::Verified),
+            (
+                ValidatorVerification::Invalid(InvalidReason::UnknownValidator),
+                ClaimCheck::Invalid,
+            ),
+            (
+                ValidatorVerification::Invalid(InvalidReason::InvalidSignature),
+                ClaimCheck::Invalid,
+            ),
+        ] {
+            let (signer, _verifier) = validator(1);
+            let verifier = CountingVerifier::new(outcome);
+            let budget = ValidatorClaimBudget::new(2);
+
+            for calls in 1..=2 {
+                let contact = contact_for(&Keypair::generate_ed25519(), now_secs(), Some(&signer));
+                let checked = CheckedPeerContact::check_with_budget(contact, &verifier, &budget);
+                assert_eq!(checked.claim, expected);
+                assert_eq!(verifier.calls(), calls);
+            }
+            assert!(!budget.try_consume());
+        }
+    }
+
+    #[test]
+    fn a_refresh_of_a_verified_binding_is_verified_from_the_reserve_despite_a_flooded_budget() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        let first = contact_for(&peer_key, now - 10, Some(&signer));
+        let peer_id = first.peer_id();
+        book.insert(CheckedPeerContact::check(first, &verifier));
+        assert!(book.has_live_verified_binding(&peer_id, signer.validator_address()));
+        let book = RwLock::new(book);
+
+        // Unauthenticated peers have used up the general budget with bogus claims under fresh
+        // peer keys. Only the refresh reserve is left.
+        let budget = ValidatorClaimBudget::with_refresh_reserve(0, 1);
+        let (bogus_signer, _) = validator(2);
+        let flood = contact_for(&Keypair::generate_ed25519(), now, Some(&bogus_signer));
+        assert_eq!(
+            CheckedPeerContact::check_new_with_budget(flood, &book, &verifier, &budget).claim,
+            ClaimCheck::Pending
+        );
+
+        // The validator's refreshed contact is still verified, so it stays gossipable and its
+        // binding moves on to the new timestamp.
+        let refreshed = contact_for(&peer_key, now, Some(&signer));
+        let checked =
+            CheckedPeerContact::check_new_with_budget(refreshed.clone(), &book, &verifier, &budget);
+        assert_eq!(checked.claim, ClaimCheck::Verified);
+        let mut book = book.into_inner();
+        book.insert(checked);
+
+        let info = book.get(&peer_id).unwrap();
+        assert_eq!(info.signed(), &refreshed);
+        assert!(info.is_validator_verified());
+        assert!(info.is_gossipable());
+        assert_eq!(
+            book.verified_claim_timestamps[signer.validator_address()][&peer_id],
+            now
+        );
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![peer_id]
+        );
+        assert_eq!(budget.remaining(), (0, 0));
+    }
+
+    #[test]
+    fn a_peer_without_a_verified_binding_cannot_spend_the_reserve() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let now = now_secs();
+
+        // The address is bound, but to another peer.
+        let bound = contact_for(&Keypair::generate_ed25519(), now - 10, Some(&signer));
+        let bound_peer_id = bound.peer_id();
+        book.insert(CheckedPeerContact::check(bound, &verifier));
+        assert!(book.has_live_verified_binding(&bound_peer_id, signer.validator_address()));
+
+        // A peer whose earlier contact claimed the address but was never conclusively checked.
+        let pending_key = Keypair::generate_ed25519();
+        let pending = contact_for(&pending_key, now - 10, Some(&signer));
+        book.insert(CheckedPeerContact::pending(pending));
+        let book = RwLock::new(book);
+
+        let budget = ValidatorClaimBudget::with_refresh_reserve(0, 3);
+        for contact in [
+            // A peer we have never heard of, claiming the address with a genuine claim that would
+            // verify.
+            contact_for(&Keypair::generate_ed25519(), now, Some(&signer)),
+            contact_for(&pending_key, now, Some(&signer)),
+        ] {
+            assert!(!book
+                .read()
+                .has_live_verified_binding(&contact.peer_id(), signer.validator_address()));
+            assert_eq!(
+                CheckedPeerContact::check_new_with_budget(contact, &book, &verifier, &budget).claim,
+                ClaimCheck::Pending
+            );
+        }
+        assert_eq!(budget.remaining(), (0, 3));
+    }
+
+    #[test]
+    fn a_refresh_claiming_another_address_does_not_use_the_reserve() {
+        let (_own_key, mut book) = empty_book();
+        let (signer_a, verifier_a) = validator(1);
+        let (signer_b, verifier_b) = validator(2);
+        let verifier = TestVerifier {
+            keys: verifier_a.keys.into_iter().chain(verifier_b.keys).collect(),
+        };
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        let first = contact_for(&peer_key, now - 10, Some(&signer_a));
+        let peer_id = first.peer_id();
+        book.insert(CheckedPeerContact::check(first, &verifier));
+        let book = RwLock::new(book);
+
+        // The binding is to the first address only. Claiming another one is a fresh claim, and
+        // has to compete for the general budget like any other.
+        let switched = contact_for(&peer_key, now, Some(&signer_b));
+        assert!(!book
+            .read()
+            .has_live_verified_binding(&peer_id, signer_b.validator_address()));
+        let budget = ValidatorClaimBudget::with_refresh_reserve(0, 1);
+        assert_eq!(
+            CheckedPeerContact::check_new_with_budget(switched, &book, &verifier, &budget).claim,
+            ClaimCheck::Pending
+        );
+        assert_eq!(budget.remaining(), (0, 1));
+    }
+
+    #[test]
+    fn an_expired_binding_does_not_unlock_the_reserve() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        // `insert` does not check the age, so this creates a binding that has already expired,
+        // as it would be until the next house-keeping removes it.
+        let expired = contact_for(
+            &peer_key,
+            now - PeerContactBook::MAX_PEER_AGE - 10,
+            Some(&signer),
+        );
+        let peer_id = expired.peer_id();
+        book.insert(CheckedPeerContact::check(expired, &verifier));
+        assert!(book.verified_claim_timestamps[signer.validator_address()].contains_key(&peer_id));
+        assert!(!book.has_live_verified_binding(&peer_id, signer.validator_address()));
+        let book = RwLock::new(book);
+
+        let budget = ValidatorClaimBudget::with_refresh_reserve(0, 1);
+        let refreshed = contact_for(&peer_key, now, Some(&signer));
+        assert_eq!(
+            CheckedPeerContact::check_new_with_budget(refreshed, &book, &verifier, &budget).claim,
+            ClaimCheck::Pending
+        );
+        assert_eq!(budget.remaining(), (0, 1));
+    }
+
+    #[test]
+    fn a_refresh_relayed_several_times_takes_one_unit_of_the_reserve() {
+        let (signer, verifier) = validator(1);
+        let (peer_key, book) = book_with_binding(&signer, &verifier);
+        let counting = CountingVerifier::new(ValidatorVerification::Verified);
+        let budget = ValidatorClaimBudget::with_refresh_reserve(0, 3);
+
+        // Copies of the validator's genuine refreshed contact, relayed to us several times in one
+        // batch or on several connections at once. All of them are checked before any is stored,
+        // so every one of them is new to the book and refreshes a live binding.
+        let refreshed = contact_for(&peer_key, now_secs(), Some(&signer));
+        let claims: Vec<_> = (0..3)
+            .map(|_| {
+                CheckedPeerContact::check_new_with_budget(
+                    refreshed.clone(),
+                    &book,
+                    &counting,
+                    &budget,
+                )
+                .claim
+            })
+            .collect();
+
+        // Only the first copy is charged to the reserve and checked. The others fall back to the
+        // general budget, which is gone, so the reserve is left for other validators.
+        assert_eq!(
+            claims,
+            vec![
+                ClaimCheck::Verified,
+                ClaimCheck::Pending,
+                ClaimCheck::Pending
+            ]
+        );
+        assert_eq!(counting.calls(), 1);
+        assert_eq!(budget.remaining(), (0, 2));
+
+        // A refresh of another validator still gets its unit.
+        let (other_signer, other_verifier) = validator(2);
+        let (other_key, other_book) = book_with_binding(&other_signer, &other_verifier);
+        let other_refreshed = contact_for(&other_key, now_secs(), Some(&other_signer));
+        assert_eq!(
+            CheckedPeerContact::check_new_with_budget(
+                other_refreshed,
+                &other_book,
+                &counting,
+                &budget
+            )
+            .claim,
+            ClaimCheck::Verified
+        );
+        assert_eq!(budget.remaining(), (0, 1));
+    }
+
+    #[test]
+    fn a_verified_copy_settles_a_pending_copy_stored_before_it() {
+        let (signer, verifier) = validator(1);
+        let (peer_key, book) = book_with_binding(&signer, &verifier);
+        let budget = ValidatorClaimBudget::with_refresh_reserve(0, 1);
+
+        // Two copies of the same refresh are checked at once. Only the first one gets the
+        // validator's unit of the reserve, and the other is left pending...
+        let now = now_secs();
+        let refreshed = contact_for(&peer_key, now, Some(&signer));
+        let peer_id = refreshed.peer_id();
+        let verified =
+            CheckedPeerContact::check_new_with_budget(refreshed.clone(), &book, &verifier, &budget);
+        let pending =
+            CheckedPeerContact::check_new_with_budget(refreshed.clone(), &book, &verifier, &budget);
+        assert_eq!(verified.claim, ClaimCheck::Verified);
+        assert_eq!(pending.claim, ClaimCheck::Pending);
+
+        // ...but stored first, which keeps the binding at its old timestamp.
+        let mut book = book.into_inner();
+        book.insert(pending);
+        assert!(!book.get(&peer_id).unwrap().is_gossipable());
+        assert_eq!(
+            book.verified_claim_timestamps[signer.validator_address()][&peer_id],
+            now - 10
+        );
+
+        // The verified copy then settles the claim, just like the re-check sweep would.
+        book.insert(verified);
+        let info = book.get(&peer_id).unwrap();
+        assert_eq!(info.signed(), &refreshed);
+        assert!(info.is_validator_verified());
+        assert!(info.is_gossipable());
+        assert!(book.unverified_validator_contacts().is_empty());
+        assert_eq!(
+            book.verified_claim_timestamps[signer.validator_address()][&peer_id],
+            now
+        );
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![peer_id]
+        );
+    }
+
+    #[test]
+    fn a_rejected_copy_settles_a_pending_copy_stored_before_it() {
+        let (signer, verifier) = validator(1);
+        let (peer_key, book) = book_with_binding(&signer, &verifier);
+        let mut book = book.into_inner();
+
+        let refreshed = contact_for(&peer_key, now_secs(), Some(&signer));
+        let peer_id = refreshed.peer_id();
+        book.insert(CheckedPeerContact::pending(refreshed.clone()));
+        assert!(book.has_live_verified_binding(&peer_id, signer.validator_address()));
+
+        // A copy that was checked against a staking contract that no longer knows the validator.
+        let (_, unaware_verifier) = validator(2);
+        let rejected = CheckedPeerContact::check(refreshed, &unaware_verifier);
+        assert_eq!(rejected.claim, ClaimCheck::Invalid);
+        book.insert(rejected);
+
+        // As with a rejection by the re-check sweep, the binding is gone and the claim is not
+        // re-checked again.
+        let info = book.get(&peer_id).unwrap();
+        assert!(!info.is_validator_verified());
+        assert!(!info.is_gossipable());
+        assert!(!info.validator_claim_needs_recheck());
+        assert!(!book.has_live_verified_binding(&peer_id, signer.validator_address()));
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+    }
+
+    #[test]
+    fn a_copy_settles_an_identical_pending_claim_and_reopens_a_settled_one_it_disagrees_with() {
+        let (_own_key, mut book) = empty_book();
+        let (signer_a, verifier_a) = validator(1);
+        let (signer_b, verifier_b) = validator(2);
+        let both = TestVerifier {
+            keys: verifier_a
+                .keys
+                .clone()
+                .into_iter()
+                .chain(verifier_b.keys.clone())
+                .collect(),
+        };
+        let now = now_secs();
+
+        // A contact with the same peer and timestamp, but another claim, settles nothing.
+        let peer_key = Keypair::generate_ed25519();
+        let pending = contact_for(&peer_key, now, Some(&signer_a));
+        let peer_id = pending.peer_id();
+        book.insert(CheckedPeerContact::pending(pending.clone()));
+        let other_claim = contact_for(&peer_key, now, Some(&signer_b));
+        let other_claim = CheckedPeerContact::check(other_claim, &both);
+        assert_eq!(other_claim.claim, ClaimCheck::Verified);
+        book.insert(other_claim);
+        let info = book.get(&peer_id).unwrap();
+        assert_eq!(info.signed(), &pending);
+        assert!(info.validator_claim_needs_recheck());
+        assert!(!info.is_validator_verified());
+        assert!(!book.has_live_verified_binding(&peer_id, signer_a.validator_address()));
+        assert!(!book.has_live_verified_binding(&peer_id, signer_b.validator_address()));
+
+        // A claim that was verified stays verified when a copy that was not conclusively checked,
+        // or one that verified as well, is stored later...
+        let verified_key = Keypair::generate_ed25519();
+        let verified = contact_for(&verified_key, now, Some(&signer_a));
+        let verified_peer_id = verified.peer_id();
+        book.insert(CheckedPeerContact::check(verified.clone(), &verifier_a));
+        book.insert(CheckedPeerContact::pending(verified.clone()));
+        book.insert(CheckedPeerContact::check(verified.clone(), &verifier_a));
+        let info = book.get(&verified_peer_id).unwrap();
+        assert!(info.is_validator_verified());
+        assert!(!info.validator_claim_needs_recheck());
+        assert!(book.has_live_verified_binding(&verified_peer_id, signer_a.validator_address()));
+
+        // ...but a copy that was rejected re-opens it: the binding is withdrawn until the claim is
+        // checked once more.
+        book.insert(CheckedPeerContact::check(verified, &verifier_b));
+        assert!(!info.is_validator_verified());
+        assert!(info.validator_claim_needs_recheck());
+        assert!(!book.has_live_verified_binding(&verified_peer_id, signer_a.validator_address()));
+
+        // Likewise, a claim that was rejected stays rejected when a copy that was rejected as well
+        // is stored later...
+        let rejected_key = Keypair::generate_ed25519();
+        let rejected = contact_for(&rejected_key, now, Some(&signer_a));
+        let rejected_peer_id = rejected.peer_id();
+        book.insert(CheckedPeerContact::check(rejected.clone(), &verifier_b));
+        book.insert(CheckedPeerContact::check(rejected.clone(), &verifier_b));
+        let info = book.get(&rejected_peer_id).unwrap();
+        assert!(!info.is_validator_verified());
+        assert!(!info.validator_claim_needs_recheck());
+        assert!(!book.has_live_verified_binding(&rejected_peer_id, signer_a.validator_address()));
+
+        // ...but a copy that verified re-opens it, without establishing a binding on its own.
+        book.insert(CheckedPeerContact::check(rejected, &verifier_a));
+        assert!(!info.is_validator_verified());
+        assert!(info.validator_claim_needs_recheck());
+        assert!(!book.has_live_verified_binding(&rejected_peer_id, signer_a.validator_address()));
+        // Both re-opened claims await a re-check, along with the pending one from above.
+        assert_eq!(book.unverified_validator_contacts().len(), 3);
+    }
+
+    // A malformed claim signature can never be honest, so a relayed contact carrying one is not
+    // stored: the signature is bounded by the message size only. The contact a peer presents for
+    // itself in its handshake is stored regardless, with its claim rejected.
+    #[test]
+    fn a_relayed_contact_with_a_malformed_claim_is_not_stored() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let keypair = Keypair::generate_ed25519();
+        let mut contact = PeerContact::new(
+            ["/ip4/127.0.0.1/tcp/8443".parse().unwrap()],
+            keypair.public(),
+            Services::all(),
+            now_secs(),
+        )
+        .unwrap();
+        contact.set_validator_info(Some(ValidatorInfo::new(
+            signer.validator_address().clone(),
+            TaggedSignature::from_bytes(vec![0; Ed25519Signature::SIZE + 1]),
+        )));
+        let contact = contact.sign(&keypair);
+        let peer_id = contact.peer_id();
+        let filter = InsertFilter {
+            services: Services::all(),
+            only_secure_ws_connections: false,
+        };
+
+        assert!(!book.would_store(&contact, Some(&filter)));
+        book.insert_filtered(
+            CheckedPeerContact::check(contact.clone(), &verifier),
+            filter.services,
+            filter.only_secure_ws_connections,
+        );
+        assert!(book.get(&peer_id).is_none());
+
+        // The same contact without the claim, or with a well-formed one, is stored.
+        let mut without_claim = contact.inner.clone();
+        without_claim.set_validator_info(None);
+        assert!(book.would_store(&without_claim.sign(&keypair), Some(&filter)));
+        let with_claim = contact_for(&keypair, now_secs(), Some(&signer));
+        assert!(book.would_store(&with_claim, Some(&filter)));
+
+        // The peer's own handshake contact is stored regardless, its claim rejected.
+        assert!(book.would_store(&contact, None));
+        book.insert(CheckedPeerContact::check(contact, &verifier));
+        let info = book.get(&peer_id).unwrap();
+        assert!(!info.is_validator_verified());
+        assert!(!info.validator_claim_needs_recheck());
+        assert!(!info.is_gossipable());
+    }
+
+    #[test]
+    fn claims_are_checked_without_holding_the_book_lock() {
+        let (signer, verifier) = validator(1);
+        let (peer_key, book) = book_with_binding(&signer, &verifier);
+        let checking = LockCheckingVerifier {
+            book: &book,
+            inner: &verifier,
+        };
+        let budget = ValidatorClaimBudget::with_refresh_reserve(1, 1);
+
+        // A refresh of a live binding, charged to the reserve...
+        let refreshed = contact_for(&peer_key, now_secs(), Some(&signer));
+        assert_eq!(
+            CheckedPeerContact::check_new_with_budget(refreshed, &book, &checking, &budget).claim,
+            ClaimCheck::Verified
+        );
+        assert_eq!(budget.remaining(), (1, 0));
+
+        // ...and a claim of a peer we have never heard of, charged to the general budget.
+        let fresh = contact_for(&Keypair::generate_ed25519(), now_secs(), Some(&signer));
+        assert_eq!(
+            CheckedPeerContact::check_new_with_budget(fresh, &book, &checking, &budget).claim,
+            ClaimCheck::Verified
+        );
+        assert_eq!(budget.remaining(), (0, 0));
+    }
+
+    #[test]
+    fn a_node_wide_unverifiable_check_of_a_new_contact_exhausts_the_budget() {
+        let (signer, verifier) = validator(1);
+        let incomplete = CountingVerifier::new(ValidatorVerification::Unverifiable(
+            UnverifiableReason::StateIncomplete,
+        ));
+
+        // A refresh of a live binding, charged to the reserve, and a claim of a peer we have never
+        // heard of, charged to the general budget, each empty the whole budget.
+        let (peer_key, book) = book_with_binding(&signer, &verifier);
+        let refreshed = contact_for(&peer_key, now_secs(), Some(&signer));
+        let fresh = contact_for(&Keypair::generate_ed25519(), now_secs(), Some(&signer));
+        for (calls, contact) in [refreshed, fresh].into_iter().enumerate() {
+            let budget = ValidatorClaimBudget::with_refresh_reserve(2, 2);
+            assert_eq!(
+                CheckedPeerContact::check_new_with_budget(contact, &book, &incomplete, &budget)
+                    .claim,
+                ClaimCheck::Pending
+            );
+            assert_eq!(incomplete.calls(), calls + 1);
+            assert_eq!(budget.remaining(), (0, 0));
+
+            // The next new contact is left pending without being checked.
+            let next = contact_for(&Keypair::generate_ed25519(), now_secs(), Some(&signer));
+            assert_eq!(
+                CheckedPeerContact::check_new_with_budget(next, &book, &incomplete, &budget).claim,
+                ClaimCheck::Pending
+            );
+            assert_eq!(incomplete.calls(), calls + 1);
+        }
+    }
+
+    #[test]
+    fn check_with_budget_never_spends_the_refresh_reserve() {
+        let (signer, verifier) = validator(1);
+        let counting = CountingVerifier::new(ValidatorVerification::Verified);
+        let budget = ValidatorClaimBudget::with_refresh_reserve(0, 1);
+
+        // Even a contact of a peer that holds a live binding is only charged to the general
+        // budget here.
+        let (peer_key, _book) = book_with_binding(&signer, &verifier);
+        let refreshed = contact_for(&peer_key, now_secs(), Some(&signer));
+        assert_eq!(
+            CheckedPeerContact::check_with_budget(refreshed, &counting, &budget).claim,
+            ClaimCheck::Pending
+        );
+        assert_eq!(counting.calls(), 0);
+        assert_eq!(budget.remaining(), (0, 1));
+    }
+    /// A signing key other than the one the verifier of `validator(seed)` knows, e.g. the key the
+    /// validator rotated to, or one an attacker made up.
+    fn other_signing_key() -> KeyPair {
+        let mut rng = test_rng(false);
+        let _ = KeyPair::generate(&mut rng);
+        KeyPair::generate(&mut rng)
+    }
+
+    #[test]
     fn a_validator_keeps_only_its_newest_bindings() {
         let (_own_key, mut book) = empty_book();
         let (signer, verifier) = validator(1);
@@ -1945,5 +3305,835 @@ mod tests {
             .get(&old_key.public().to_peer_id())
             .unwrap()
             .is_gossipable());
+    }
+
+    #[test]
+    fn a_validator_verifies_only_its_share_of_contacts_per_tick() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, verifier) = validator(1);
+        let budget =
+            ValidatorClaimBudget::with_refresh_reserve(256, 256).with_per_validator_limit(2);
+        let now = now_secs();
+
+        // Bogus claims to the validator's address do not use up its share.
+        let bogus =
+            ValidatorClaimSigner::new(signer.validator_address().clone(), other_signing_key());
+        for _ in 0..3 {
+            let contact = contact_for(&Keypair::generate_ed25519(), now, Some(&bogus));
+            let checked =
+                CheckedPeerContact::check_new_with_budget(contact, &book, &verifier, &budget);
+            assert_eq!(checked.claim, ClaimCheck::Invalid);
+            book.write().insert(checked);
+        }
+
+        // Its genuine claims do, and once it is used up, further ones are left pending without
+        // spending any budget.
+        let mut outcomes = Vec::new();
+        for _ in 0..4 {
+            let contact = contact_for(&Keypair::generate_ed25519(), now, Some(&signer));
+            let checked =
+                CheckedPeerContact::check_new_with_budget(contact, &book, &verifier, &budget);
+            outcomes.push(checked.claim);
+            book.write().insert(checked);
+        }
+        assert_eq!(
+            outcomes,
+            vec![
+                ClaimCheck::Verified,
+                ClaimCheck::Verified,
+                ClaimCheck::Pending,
+                ClaimCheck::Pending
+            ]
+        );
+        assert_eq!(budget.remaining(), (256 - 5, 256));
+
+        // Another validator is not affected.
+        let (other_signer, other_verifier) = validator(2);
+        let contact = contact_for(&Keypair::generate_ed25519(), now, Some(&other_signer));
+        let checked =
+            CheckedPeerContact::check_new_with_budget(contact, &book, &other_verifier, &budget);
+        assert_eq!(checked.claim, ClaimCheck::Verified);
+    }
+
+    #[test]
+    fn a_stale_verification_does_not_bind_over_a_later_rejection_but_reopens_it() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier_before_rotation) = validator(1);
+        let address = signer.validator_address().clone();
+        let verifier_after_rotation = TestVerifier {
+            keys: HashMap::from([(address.clone(), other_signing_key().public)]),
+        };
+        let peer_key = Keypair::generate_ed25519();
+        let contact = contact_for(&peer_key, now_secs() - 5, Some(&signer));
+        let peer_id = contact.peer_id();
+        let timestamp = contact.inner.timestamp();
+
+        // The re-check sweep checks the pending claim against the state before the rotation...
+        book.insert(CheckedPeerContact::pending(contact.clone()));
+        let stale = book.unverified_validator_contacts()[0]
+            .signed()
+            .check_validator_claim(&verifier_before_rotation)
+            .unwrap();
+        assert_eq!(stale, ValidatorVerification::Verified);
+
+        // ...while an identical copy is rejected against the state after it, and settles the claim.
+        book.insert(CheckedPeerContact::check(contact, &verifier_after_rotation));
+        book.apply_validator_verifications([(peer_id, timestamp, stale)]);
+
+        // The binding is not established, and the claim is checked once more, since the two checks
+        // disagreed and it cannot be told which of them read the newer state.
+        assert!(book.get_validator_peer_ids(&address).is_empty());
+        let info = book.get(&peer_id).unwrap();
+        assert!(!info.is_gossipable());
+        assert!(!info.is_validator_verified());
+        assert!(info.validator_claim_needs_recheck());
+
+        // That check settles it, and it is not checked again.
+        book.apply_validator_verifications([(
+            peer_id,
+            timestamp,
+            ValidatorVerification::Invalid(InvalidReason::InvalidSignature),
+        )]);
+        assert!(book.get_validator_peer_ids(&address).is_empty());
+        assert!(!info.is_validator_verified());
+        assert!(!info.validator_claim_needs_recheck());
+    }
+
+    // The mirror case: the sweep rejects a pending claim against the state before the validator
+    // registered, while an identical copy verifies against the state after it, and settles the
+    // claim. The stale rejection must not settle the claim as rejected for good, which would take
+    // the binding away until the validator's next re-sign.
+    #[test]
+    fn a_stale_rejection_does_not_undo_a_later_verification_for_good() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier_after_registration) = validator(1);
+        let address = signer.validator_address().clone();
+        let verifier_before_registration = TestVerifier {
+            keys: HashMap::new(),
+        };
+        let peer_key = Keypair::generate_ed25519();
+        let contact = contact_for(&peer_key, now_secs() - 5, Some(&signer));
+        let peer_id = contact.peer_id();
+        let timestamp = contact.inner.timestamp();
+
+        // The re-check sweep checks the pending claim against the state before the
+        // registration...
+        book.insert(CheckedPeerContact::pending(contact.clone()));
+        let stale = book.unverified_validator_contacts()[0]
+            .signed()
+            .check_validator_claim(&verifier_before_registration)
+            .unwrap();
+        assert_eq!(
+            stale,
+            ValidatorVerification::Invalid(InvalidReason::UnknownValidator)
+        );
+
+        // ...while an identical copy verifies against the state after it, and settles the claim.
+        book.insert(CheckedPeerContact::check(
+            contact,
+            &verifier_after_registration,
+        ));
+        assert_eq!(book.get_validator_peer_ids(&address), vec![peer_id]);
+        book.apply_validator_verifications([(peer_id, timestamp, stale)]);
+
+        // The binding is withdrawn, and the claim is checked once more.
+        assert!(book.get_validator_peer_ids(&address).is_empty());
+        let info = book.get(&peer_id).unwrap();
+        assert!(!info.is_gossipable());
+        assert!(!info.is_validator_verified());
+        assert!(info.validator_claim_needs_recheck());
+        assert_eq!(book.unverified_validator_contacts().len(), 1);
+
+        // That check, against the current state, establishes the binding.
+        book.apply_validator_verifications([(peer_id, timestamp, ValidatorVerification::Verified)]);
+        assert_eq!(book.get_validator_peer_ids(&address), vec![peer_id]);
+        assert!(info.is_gossipable());
+        assert!(info.is_validator_verified());
+        assert!(!info.validator_claim_needs_recheck());
+        assert!(book.unverified_validator_contacts().is_empty());
+    }
+
+    #[test]
+    fn a_rejection_ends_a_verified_binding() {
+        let (signer, verifier) = validator(1);
+        let (peer_key, book) = book_with_binding(&signer, &verifier);
+        let mut book = book.into_inner();
+        let peer_id = peer_key.public().to_peer_id();
+        let timestamp = book.get(&peer_id).unwrap().contact().timestamp();
+
+        book.apply_validator_verifications([(
+            peer_id,
+            timestamp,
+            ValidatorVerification::Invalid(InvalidReason::InvalidSignature),
+        )]);
+
+        // The binding ends right away. The claim verified before, so it is checked once more...
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+        let info = book.get(&peer_id).unwrap();
+        assert!(!info.is_gossipable());
+        assert!(!info.is_validator_verified());
+        assert!(info.validator_claim_needs_recheck());
+        assert!(book.stale_verified_validator_contacts().is_empty());
+
+        // ...and a second rejection settles it.
+        book.apply_validator_verifications([(
+            peer_id,
+            timestamp,
+            ValidatorVerification::Invalid(InvalidReason::InvalidSignature),
+        )]);
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+        assert!(!info.is_validator_verified());
+        assert!(!info.validator_claim_needs_recheck());
+    }
+
+    #[test]
+    fn a_contact_the_filter_would_drop_is_not_checked() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, _verifier) = validator(1);
+        let counting = CountingVerifier::new(ValidatorVerification::Verified);
+        let budget = ValidatorClaimBudget::new(10);
+        let filter = InsertFilter {
+            services: Services::all(),
+            only_secure_ws_connections: false,
+        };
+
+        // Too old for `insert_filtered`...
+        let too_old = contact_for(
+            &Keypair::generate_ed25519(),
+            now_secs() - PeerContactBook::MAX_PEER_AGE - 10,
+            Some(&signer),
+        );
+        // ...or without a secure websocket address, where one is required.
+        let insecure = contact_for(&Keypair::generate_ed25519(), now_secs(), Some(&signer));
+        let secure_only = InsertFilter {
+            only_secure_ws_connections: true,
+            ..filter
+        };
+
+        for (contact, filter) in [(too_old, &filter), (insecure, &secure_only)] {
+            let checked = CheckedPeerContact::check_new_filtered_with_budget(
+                contact, &book, &counting, &budget, filter,
+            );
+            assert_eq!(checked.claim, ClaimCheck::Pending);
+        }
+        assert_eq!(counting.calls(), 0);
+        assert_eq!(budget.remaining(), (10, 0));
+    }
+
+    #[test]
+    fn only_the_newest_contact_of_each_peer_in_a_batch_is_kept() {
+        let (signer, _verifier) = validator(1);
+        let (a, b) = (Keypair::generate_ed25519(), Keypair::generate_ed25519());
+        let now = now_secs();
+        let a_old = contact_for(&a, now - 20, Some(&signer));
+        let a_new = contact_for(&a, now - 10, Some(&signer));
+        let a_future = contact_for(&a, now + 1_000, Some(&signer));
+        let b_only = contact_for(&b, now - 30, None);
+
+        let kept = newest_contact_per_peer(vec![
+            a_old.clone(),
+            b_only.clone(),
+            a_new.clone(),
+            a_new.clone(),
+            a_future,
+        ]);
+
+        assert_eq!(kept, vec![b_only, a_new]);
+    }
+
+    #[test]
+    fn a_malformed_claim_is_rejected_without_charging_the_budget() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, _verifier) = validator(1);
+        let counting = CountingVerifier::new(ValidatorVerification::Verified);
+        // No budget left at all, and no share of verified claims either.
+        let budget = ValidatorClaimBudget::new(0).with_per_validator_limit(0);
+
+        // Both too short and too long to be an Ed25519 signature.
+        for size in [10, Ed25519Signature::SIZE + 1] {
+            let keypair = Keypair::generate_ed25519();
+            let mut contact = PeerContact::new(
+                ["/ip4/127.0.0.1/tcp/8443".parse().unwrap()],
+                keypair.public(),
+                Services::all(),
+                now_secs(),
+            )
+            .unwrap();
+            contact.set_validator_info(Some(ValidatorInfo::new(
+                signer.validator_address().clone(),
+                TaggedSignature::from_bytes(vec![0; size]),
+            )));
+            let contact = contact.sign(&keypair);
+
+            // It is conclusively rejected all the same, without asking the verifier.
+            let checked =
+                CheckedPeerContact::check_new_with_budget(contact, &book, &counting, &budget);
+            assert_eq!(
+                checked.claim,
+                ClaimCheck::Invalid,
+                "signature of {size} bytes"
+            );
+        }
+        assert_eq!(counting.calls(), 0);
+    }
+
+    // A budget that does not treat any contact as fresh lets each peer verify a single contact per
+    // tick.
+    #[test]
+    fn without_a_fresh_age_a_peer_verifies_one_contact_per_tick() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, verifier) = validator(1);
+        let budget =
+            ValidatorClaimBudget::with_refresh_reserve(256, 256).with_per_validator_limit(2);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        let mut outcomes = Vec::new();
+        for age in [30, 20, 10] {
+            let contact = contact_for(&peer_key, now - age, Some(&signer));
+            let checked =
+                CheckedPeerContact::check_new_with_budget(contact, &book, &verifier, &budget);
+            outcomes.push(checked.claim);
+            book.write().insert(checked);
+        }
+
+        // The refreshes wait for the next tick. Meanwhile the first contact keeps the binding.
+        assert_eq!(
+            outcomes,
+            vec![
+                ClaimCheck::Verified,
+                ClaimCheck::Pending,
+                ClaimCheck::Pending
+            ]
+        );
+        assert_eq!(
+            book.read()
+                .get_validator_peer_ids(signer.validator_address()),
+            vec![peer_key.public().to_peer_id()]
+        );
+    }
+
+    /// The discovery behaviour's claim budget, with its share of verified claims per validator.
+    fn behaviour_budget() -> ValidatorClaimBudget {
+        ValidatorClaimBudget::with_refresh_reserve(256, 256)
+            .with_per_validator_limit(4)
+            .with_fresh_contact_age(Duration::from_secs(60))
+    }
+
+    /// Checks the contacts of the peer of `keypair` of the given ages with `budget`, one after the
+    /// other, and inserts each into `book`, returning the outcome of each check.
+    fn check_and_insert_contacts(
+        book: &RwLock<PeerContactBook>,
+        keypair: &Keypair,
+        ages: impl IntoIterator<Item = u64>,
+        signer: &ValidatorClaimSigner,
+        verifier: &dyn ValidatorClaimVerifier,
+        budget: &ValidatorClaimBudget,
+    ) -> Vec<ClaimCheck> {
+        check_and_insert_contacts_at(book, keypair, now_secs(), ages, signer, verifier, budget)
+    }
+
+    /// Like [`check_and_insert_contacts`], with the ages counted from `now`.
+    fn check_and_insert_contacts_at(
+        book: &RwLock<PeerContactBook>,
+        keypair: &Keypair,
+        now: u64,
+        ages: impl IntoIterator<Item = u64>,
+        signer: &ValidatorClaimSigner,
+        verifier: &dyn ValidatorClaimVerifier,
+        budget: &ValidatorClaimBudget,
+    ) -> Vec<ClaimCheck> {
+        ages.into_iter()
+            .map(|age| {
+                let contact = contact_for(keypair, now - age, Some(signer));
+                let checked =
+                    CheckedPeerContact::check_new_with_budget(contact, book, verifier, budget);
+                let claim = checked.claim;
+                book.write().insert(checked);
+                claim
+            })
+            .collect()
+    }
+
+    // Anyone can relay a validator's genuine older contacts. Relaying those of one of its peers,
+    // oldest first so that each is new to us, must not use up the validator's share and keep the
+    // contact of its current peer from being verified. The validator re-signs its contacts once
+    // per tick; contacts closer together than that can only come from its own keys.
+    #[test]
+    fn replayed_contacts_of_one_peer_do_not_use_up_the_validators_share() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, verifier) = validator(1);
+        let budget = behaviour_budget();
+        let old_key = Keypair::generate_ed25519();
+        let current_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        for age in [1500, 1440, 1380, 1320, 1260] {
+            let contact = contact_for(&old_key, now - age, Some(&signer));
+            let checked =
+                CheckedPeerContact::check_new_with_budget(contact, &book, &verifier, &budget);
+            book.write().insert(checked);
+        }
+
+        let contact = contact_for(&current_key, now, Some(&signer));
+        let checked = CheckedPeerContact::check_new_with_budget(contact, &book, &verifier, &budget);
+        assert_eq!(checked.claim, ClaimCheck::Verified);
+        book.write().insert(checked);
+        assert_eq!(
+            book.read()
+                .get_validator_peer_ids(signer.validator_address())
+                .first(),
+            Some(&current_key.public().to_peer_id())
+        );
+    }
+
+    // A node that does not know a validator's peer yet can get one of the peer's older contacts,
+    // relayed late or replayed on purpose, before its current one. The current one must still
+    // verify on arrival and take over the binding, rather than wait for the next tick.
+    #[test]
+    fn an_older_contact_verified_first_does_not_hold_back_the_current_one() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, verifier) = validator(1);
+        let budget = behaviour_budget();
+        let peer_key = Keypair::generate_ed25519();
+        let peer_id = peer_key.public().to_peer_id();
+        let now = now_secs();
+
+        let outcomes = check_and_insert_contacts_at(
+            &book,
+            &peer_key,
+            now,
+            [1500],
+            &signer,
+            &verifier,
+            &budget,
+        );
+        assert_eq!(outcomes, [ClaimCheck::Verified]);
+        assert_eq!(budget.remaining(), (255, 256));
+
+        // The current contact refreshes the binding the older one got, from the reserve.
+        let outcomes =
+            check_and_insert_contacts_at(&book, &peer_key, now, [5], &signer, &verifier, &budget);
+        assert_eq!(outcomes, [ClaimCheck::Verified]);
+        assert_eq!(budget.remaining(), (255, 255));
+        let book = book.read();
+        assert_eq!(
+            book.verified_claim_timestamps[signer.validator_address()][&peer_id],
+            now - 5
+        );
+        assert!(book.get(&peer_id).unwrap().is_gossipable());
+    }
+
+    #[test]
+    fn a_peer_verifies_a_later_contact_on_arrival_only_while_it_is_fresh() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, verifier) = validator(1);
+        let budget = ValidatorClaimBudget::with_refresh_reserve(256, 256)
+            .with_per_validator_limit(2)
+            .with_fresh_contact_age(Duration::from_secs(60));
+        let peer_key = Keypair::generate_ed25519();
+        let peer_id = peer_key.public().to_peer_id();
+        let now = now_secs();
+
+        let outcomes = check_and_insert_contacts_at(
+            &book,
+            &peer_key,
+            now,
+            [600, 300, 30, 10],
+            &signer,
+            &verifier,
+            &budget,
+        );
+
+        // The one from 5 minutes ago is not fresh, and the last one finds the share used up.
+        assert_eq!(
+            outcomes,
+            [
+                ClaimCheck::Verified,
+                ClaimCheck::Pending,
+                ClaimCheck::Verified,
+                ClaimCheck::Pending
+            ]
+        );
+        assert_eq!(
+            book.read().verified_claim_timestamps[signer.validator_address()][&peer_id],
+            now - 30
+        );
+    }
+
+    #[test]
+    fn replayed_older_contacts_of_a_peer_take_a_single_place() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, _verifier) = validator(1);
+        let counting = CountingVerifier::new(ValidatorVerification::Verified);
+        let budget = behaviour_budget();
+        let peer_key = Keypair::generate_ed25519();
+
+        // Every contact the peer signed in the last 25 minutes, oldest first, so that each is new.
+        let ages = (1..=25).rev().map(|tick| tick * 60);
+        let outcomes =
+            check_and_insert_contacts(&book, &peer_key, ages, &signer, &counting, &budget);
+        assert_eq!(outcomes[0], ClaimCheck::Verified);
+        assert!(outcomes[1..]
+            .iter()
+            .all(|&outcome| outcome == ClaimCheck::Pending));
+        assert_eq!(counting.calls(), 1);
+
+        // The current contact of the peer, and the contacts of two more peers, still verify.
+        let outcomes = [
+            peer_key,
+            Keypair::generate_ed25519(),
+            Keypair::generate_ed25519(),
+        ]
+        .iter()
+        .flat_map(|keypair| {
+            check_and_insert_contacts(&book, keypair, [5], &signer, &counting, &budget)
+        })
+        .collect::<Vec<_>>();
+        assert_eq!(outcomes, [ClaimCheck::Verified; 3]);
+        // That is the validator's whole share.
+        let outcomes = check_and_insert_contacts(
+            &book,
+            &Keypair::generate_ed25519(),
+            [5],
+            &signer,
+            &counting,
+            &budget,
+        );
+        assert_eq!(outcomes, [ClaimCheck::Pending]);
+        assert_eq!(counting.calls(), 4);
+    }
+
+    #[test]
+    fn a_copy_of_a_peers_newest_contact_takes_no_further_place() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, verifier) = validator(1);
+        let budget = behaviour_budget();
+        let peer_key = Keypair::generate_ed25519();
+
+        check_and_insert_contacts(&book, &peer_key, [1500], &signer, &verifier, &budget);
+        // Two copies of the current contact, checked on two connections before either is stored.
+        let current = contact_for(&peer_key, now_secs() - 5, Some(&signer));
+        let copies = [current.clone(), current].map(|contact| {
+            CheckedPeerContact::check_new_with_budget(contact, &book, &verifier, &budget)
+        });
+        assert!(copies.iter().all(|copy| copy.claim == ClaimCheck::Verified));
+        for copy in copies {
+            book.write().insert(copy);
+        }
+
+        let outcomes = [(); 3]
+            .map(|_| Keypair::generate_ed25519())
+            .iter()
+            .flat_map(|keypair| {
+                check_and_insert_contacts(&book, keypair, [5], &signer, &verifier, &budget)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            outcomes,
+            [
+                ClaimCheck::Verified,
+                ClaimCheck::Verified,
+                ClaimCheck::Pending
+            ]
+        );
+    }
+
+    // A validator can re-sign a contact of its own peer every second. Those are all fresh, but
+    // they still verify no more than its share of contacts per tick.
+    #[test]
+    fn a_validators_chain_of_contacts_of_one_peer_is_capped_by_its_share() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, _verifier) = validator(1);
+        let counting = CountingVerifier::new(ValidatorVerification::Verified);
+        let budget = behaviour_budget();
+        let peer_key = Keypair::generate_ed25519();
+
+        let outcomes = check_and_insert_contacts(
+            &book,
+            &peer_key,
+            (0..=10).rev(),
+            &signer,
+            &counting,
+            &budget,
+        );
+        assert_eq!(outcomes[..4], [ClaimCheck::Verified; 4]);
+        assert!(outcomes[4..]
+            .iter()
+            .all(|&outcome| outcome == ClaimCheck::Pending));
+        assert_eq!(counting.calls(), 4);
+        // The first from the general budget, the second from the reserve, the others from the
+        // general budget again, since each validator takes one unit of the reserve per tick.
+        assert_eq!(budget.remaining(), (253, 255));
+    }
+
+    /// A verifier that verifies every claim, after running `before`.
+    struct VerifiesAfter<F>(F);
+
+    impl<F: Fn() + Send + Sync> ValidatorClaimVerifier for VerifiesAfter<F> {
+        fn verify_validator_claim(
+            &self,
+            _signed_claim: &SignedValidatorClaim,
+        ) -> ValidatorVerification {
+            (self.0)();
+            ValidatorVerification::Verified
+        }
+    }
+
+    // Anyone can relay older contacts of a peer on several connections at once, so that they are
+    // all checked before any of them is recorded. They must still take a single place.
+    #[test]
+    fn older_contacts_of_a_peer_checked_at_once_take_a_single_place() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, _verifier) = validator(1);
+        let budget = behaviour_budget();
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        // Neither check completes before both have started.
+        let barrier = std::sync::Barrier::new(2);
+        let both_checking = VerifiesAfter(|| {
+            barrier.wait();
+        });
+        let checked: Vec<_> = std::thread::scope(|scope| {
+            let threads: Vec<_> = [1500, 1440]
+                .into_iter()
+                .map(|age| {
+                    let contact = contact_for(&peer_key, now - age, Some(&signer));
+                    let (book, verifier, budget) = (&book, &both_checking, &budget);
+                    scope.spawn(move || {
+                        CheckedPeerContact::check_new_with_budget(contact, book, verifier, budget)
+                    })
+                })
+                .collect();
+            threads
+                .into_iter()
+                .map(|thread| thread.join().unwrap())
+                .collect()
+        });
+        assert!(checked
+            .iter()
+            .all(|checked| checked.claim == ClaimCheck::Verified));
+        for checked in checked {
+            book.write().insert(checked);
+        }
+
+        let outcomes = [(); 4]
+            .map(|_| Keypair::generate_ed25519())
+            .iter()
+            .flat_map(|keypair| {
+                check_and_insert_contacts(
+                    &book,
+                    keypair,
+                    [5],
+                    &signer,
+                    &VerifiesAfter(|| {}),
+                    &budget,
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            outcomes,
+            [
+                ClaimCheck::Verified,
+                ClaimCheck::Verified,
+                ClaimCheck::Verified,
+                ClaimCheck::Pending
+            ]
+        );
+    }
+
+    // Whether a contact is fresh is decided before its claim is checked, and that decision is
+    // what counts, even if the contact is no longer fresh once the check is done. Otherwise a
+    // validator could time its contacts to be let through as fresh without taking a place.
+    #[test]
+    fn a_contact_that_stops_being_fresh_while_its_claim_is_checked_still_takes_a_place() {
+        let (_own_key, book) = empty_book();
+        let book = RwLock::new(book);
+        let (signer, _verifier) = validator(1);
+        let budget = behaviour_budget();
+        let peer_key = Keypair::generate_ed25519();
+        let instantly = VerifiesAfter(|| {});
+        check_and_insert_contacts(&book, &peer_key, [1500], &signer, &instantly, &budget);
+
+        // Start early in a second, so that the contact is still fresh when it is checked.
+        while SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .subsec_millis()
+            > 500
+        {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let timestamp = now_secs() - 59;
+        let until_stale = VerifiesAfter(|| {
+            while now_secs() < timestamp + 60 {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        });
+        let checked = CheckedPeerContact::check_new_with_budget(
+            contact_for(&peer_key, timestamp, Some(&signer)),
+            &book,
+            &until_stale,
+            &budget,
+        );
+        assert_eq!(checked.claim, ClaimCheck::Verified);
+        book.write().insert(checked);
+
+        let outcomes = [(); 3]
+            .map(|_| Keypair::generate_ed25519())
+            .iter()
+            .flat_map(|keypair| {
+                check_and_insert_contacts(&book, keypair, [5], &signer, &instantly, &budget)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            outcomes,
+            [
+                ClaimCheck::Verified,
+                ClaimCheck::Verified,
+                ClaimCheck::Pending
+            ]
+        );
+    }
+
+    #[test]
+    fn a_plain_contact_with_a_claim_is_stored_pending() {
+        let (signer, verifier) = validator(1);
+        let (peer_key, book) = book_with_binding(&signer, &verifier);
+        let mut book = book.into_inner();
+        let peer_id = peer_key.public().to_peer_id();
+
+        // A refresh inserted without checking its claim keeps the binding and waits for the sweep.
+        book.insert(contact_for(&peer_key, now_secs(), Some(&signer)));
+
+        assert!(book.get(&peer_id).unwrap().validator_claim_needs_recheck());
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![peer_id]
+        );
+    }
+
+    #[test]
+    fn stale_verified_bindings_are_offered_for_a_recheck() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let now = now_secs();
+
+        let stale_key = Keypair::generate_ed25519();
+        book.insert(CheckedPeerContact::check(
+            contact_for(
+                &stale_key,
+                now - PeerContactBook::STALE_BINDING_AGE - 10,
+                Some(&signer),
+            ),
+            &verifier,
+        ));
+        let fresh_key = Keypair::generate_ed25519();
+        book.insert(CheckedPeerContact::check(
+            contact_for(&fresh_key, now - 10, Some(&signer)),
+            &verifier,
+        ));
+        let unverified_key = Keypair::generate_ed25519();
+        book.insert(CheckedPeerContact::pending(contact_for(
+            &unverified_key,
+            now - PeerContactBook::STALE_BINDING_AGE - 10,
+            Some(&signer),
+        )));
+
+        let stale: Vec<PeerId> = book
+            .stale_verified_validator_contacts()
+            .iter()
+            .map(|info| *info.peer_id())
+            .collect();
+        assert_eq!(stale, vec![stale_key.public().to_peer_id()]);
+    }
+    #[test]
+    fn a_stale_binding_kept_under_a_pending_refresh_is_offered_for_a_recheck() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let now = now_secs();
+        let peer_key = Keypair::generate_ed25519();
+        let peer_id = peer_key.public().to_peer_id();
+
+        book.insert(CheckedPeerContact::check(
+            contact_for(
+                &peer_key,
+                now - PeerContactBook::STALE_BINDING_AGE - 10,
+                Some(&signer),
+            ),
+            &verifier,
+        ));
+        // A refresh that could not be checked keeps the binding at its old timestamp.
+        let refresh = contact_for(&peer_key, now - 10, Some(&signer));
+        let refresh_timestamp = refresh.inner.timestamp();
+        book.insert(CheckedPeerContact::pending(refresh));
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![peer_id]
+        );
+
+        // The binding went stale, so the pending refresh is offered for a re-check...
+        let stale: Vec<PeerId> = book
+            .stale_verified_validator_contacts()
+            .iter()
+            .map(|info| *info.peer_id())
+            .collect();
+        assert_eq!(stale, vec![peer_id]);
+
+        // ...and if it is rejected, e.g. because it is signed with a key rotated away, the
+        // binding ends.
+        book.apply_validator_verifications([(
+            peer_id,
+            refresh_timestamp,
+            ValidatorVerification::Invalid(InvalidReason::InvalidSignature),
+        )]);
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+    }
+
+    #[test]
+    fn a_stale_binding_is_offered_for_a_recheck_once_in_a_while() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        book.insert(CheckedPeerContact::check(
+            contact_for(
+                &peer_key,
+                now_secs() - PeerContactBook::STALE_BINDING_AGE - 10,
+                Some(&signer),
+            ),
+            &verifier,
+        ));
+        let stale = book.stale_verified_validator_contacts();
+        assert_eq!(stale.len(), 1);
+
+        // Once picked, it is left alone until the stale age passed again.
+        let unix_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap();
+        stale[0].mark_binding_rechecked(unix_time);
+        assert!(book.stale_verified_validator_contacts().is_empty());
+
+        stale[0].mark_binding_rechecked(
+            unix_time - Duration::from_secs(PeerContactBook::STALE_BINDING_AGE + 1),
+        );
+        assert_eq!(book.stale_verified_validator_contacts().len(), 1);
     }
 }
