@@ -307,7 +307,8 @@ impl SignedPeerContact {
 ///
 /// Contacts received from peers get it from [`CheckedPeerContact::check`], which checks the
 /// claim, or from [`CheckedPeerContact::pending`], which leaves it [`Pending`](Self::Pending)
-/// unchecked.
+/// unchecked. The pending claim of a stored contact is settled later by the periodic re-check
+/// sweep (see [`PeerContactBook::unverified_validator_contacts`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ClaimCheck {
     /// This contact carries no validator claim.
@@ -317,7 +318,8 @@ enum ClaimCheck {
     /// The claim was cryptographically checked against this exact contact and does not hold.
     Invalid,
     /// This exact contact's claim was not conclusively checked: it was not checked at all, or
-    /// the check came back [`ValidatorVerification::Unverifiable`]. The contact stays unverified.
+    /// the check came back [`ValidatorVerification::Unverifiable`]. The contact stays unverified
+    /// until the periodic re-check sweep reaches a conclusive result.
     Pending,
 }
 
@@ -385,7 +387,8 @@ impl CheckedPeerContact {
 impl From<SignedPeerContact> for CheckedPeerContact {
     /// Leaves the contact's validator claim, if it has one, pending without checking it.
     ///
-    /// Treating a claim as absent instead would end the peer's existing binding.
+    /// Treating a claim as absent instead would store it as settled, so the re-check sweep would
+    /// never look at it, and it would end the peer's existing binding.
     fn from(contact: SignedPeerContact) -> Self {
         Self::pending(contact)
     }
@@ -410,6 +413,12 @@ struct PeerContactMeta {
     score: f64,
     /// Whether this exact contact's validator claim was conclusively verified.
     validator_verified: bool,
+    /// Whether this contact still needs a conclusive check: verification was skipped for budget,
+    /// returned [`ValidatorVerification::Unverifiable`], or a conclusive check of this contact
+    /// disagreed with the outcome it was settled with (see
+    /// [`PeerContactInfo::reopen_validator_claim`]). Otherwise, both verified and invalid claims
+    /// are excluded from the periodic re-check sweep.
+    validator_verification_pending: bool,
 }
 
 /// This encapsulates a peer contact (signed), but also pre-computes frequently used values such as `peer_id` and
@@ -428,13 +437,13 @@ pub struct PeerContactInfo {
 
 impl From<SignedPeerContact> for PeerContactInfo {
     fn from(contact: SignedPeerContact) -> Self {
-        Self::new(contact, false)
+        Self::new(contact, false, false)
     }
 }
 
 impl PeerContactInfo {
     /// Constructs contact info with the verification status of this exact contact's claim.
-    fn new(contact: SignedPeerContact, validator_verified: bool) -> Self {
+    fn new(contact: SignedPeerContact, validator_verified: bool, pending: bool) -> Self {
         let peer_id = contact.inner.peer_id();
         Self {
             peer_id,
@@ -443,6 +452,7 @@ impl PeerContactInfo {
                 score: 0.,
                 outer_protocol_address: None,
                 validator_verified,
+                validator_verification_pending: pending,
             }),
         }
     }
@@ -514,6 +524,31 @@ impl PeerContactInfo {
         self.meta.read().validator_verified
     }
 
+    /// Whether this contact's validator claim should still be offered to the periodic re-check
+    /// sweep ([`PeerContactBook::unverified_validator_contacts`]): this exact contact's claim has
+    /// not been conclusively checked yet, because the check was skipped for budget or came back
+    /// [`ValidatorVerification::Unverifiable`].
+    ///
+    /// A claim that *was* conclusively checked is not re-offered, whether the outcome was
+    /// [`ValidatorVerification::Verified`] or [`ValidatorVerification::Invalid`]. This matters for
+    /// `Invalid`: the reconstructed claim binds this contact's exact peer ID and timestamp, so a
+    /// signature that does not verify against the validator's on-chain signing key (or an address
+    /// that is not a validator) can never start verifying for *this* contact. Re-offering it would
+    /// let a peer that attaches a bogus claim to every contact it gossips permanently occupy the
+    /// sweep and burn its bounded per-tick blockchain-read budget on known-bad claims, starving the
+    /// re-check of claims that legitimately came back `Unverifiable`. The contact stays stored and
+    /// dialable; only its rejected claim is left alone until the peer advertises a newer contact,
+    /// which is checked anew on arrival.
+    ///
+    /// The one exception is a claim whose two conclusive checks disagreed, e.g. because a block
+    /// that registered the validator or rotated its signing key landed between them, or because
+    /// its binding was evicted in between: it is re-opened for one more check (see
+    /// [`Self::reopen_validator_claim`]). That takes a check that verified, so it cannot be
+    /// brought about without the validator's signing key.
+    pub(crate) fn validator_claim_needs_recheck(&self) -> bool {
+        self.meta.read().validator_verification_pending
+    }
+
     /// Whether this contact may be passed on to other peers.
     ///
     /// Contacts carrying a validator claim we could not verify are still stored and dialed, but
@@ -523,9 +558,20 @@ impl PeerContactInfo {
     }
 
     /// Records a definitive verification outcome for the current contact: `verified` reflects
-    /// the result.
+    /// the result, and the claim is no longer pending re-check.
     pub(crate) fn set_validator_verified(&self, verified: bool) {
-        self.meta.write().validator_verified = verified;
+        let mut meta = self.meta.write();
+        meta.validator_verified = verified;
+        meta.validator_verification_pending = false;
+    }
+
+    /// Re-opens the claim of the current contact for the re-check sweep, after a conclusive check
+    /// of it disagreed with the outcome it was settled with: the contact is no longer considered
+    /// verified, and its claim is pending again. See `PeerContactBook::settle_or_reopen_claim`.
+    pub(crate) fn reopen_validator_claim(&self) {
+        let mut meta = self.meta.write();
+        meta.validator_verified = false;
+        meta.validator_verification_pending = true;
     }
 
     /// Sets the outer protocol address of the peer once
@@ -706,7 +752,11 @@ impl PeerContactBook {
             ClaimCheck::Pending => (false, true),
         };
 
-        let info = Arc::new(PeerContactInfo::new(checked.contact, validator_verified));
+        let info = Arc::new(PeerContactInfo::new(
+            checked.contact,
+            validator_verified,
+            pending,
+        ));
 
         self.peer_contacts.insert(peer_id, Arc::clone(&info));
 
@@ -718,6 +768,66 @@ impl PeerContactBook {
             self.index_remove(&replaced);
         }
         self.index_add(&info);
+    }
+
+    /// Applies the conclusive outcome `verified` of a check of the current contact `info` to its
+    /// claim.
+    ///
+    /// While the claim is pending, the outcome settles it: a verification establishes or renews
+    /// the peer's binding at the contact's timestamp, and a rejection removes the binding. Once
+    /// the claim is settled, an outcome that agrees with it changes nothing.
+    ///
+    /// An outcome that disagrees with it re-opens the claim for the re-check sweep (see
+    /// [`PeerContactInfo::reopen_validator_claim`]) and removes the binding in the meantime. The
+    /// two checks were computed outside the lock, in either order, and read blockchain state at
+    /// different times, e.g. before and after a block that registered the validator or rotated
+    /// its signing key landed. This cannot tell which of them read the newer state, so the
+    /// binding is withdrawn, which is the safe side, and the claim is checked once more by the
+    /// next sweep, which reads the state current by then. That check settles it, since a pending
+    /// claim never disagrees with anything. Only a check that verified can bring this about, so
+    /// it takes the validator's signing key, and a claim that verified once is re-opened at most
+    /// once per conclusive check of it, each of which is bounded like any other check: by the
+    /// claim budget on arrival, and by the sweep's cap and per-validator share on a re-check.
+    ///
+    /// A contact whose binding was evicted, because its validator has newer ones (see
+    /// [`Self::index_add`]), is settled and unverified as well, so a verification of it that was
+    /// computed before the eviction re-opens it just the same. The re-check then binds it again
+    /// if there is room by then, or evicts it again, which settles it.
+    fn settle_or_reopen_claim(&mut self, info: &PeerContactInfo, verified: bool) {
+        // A contact without a claim has nothing to settle. The sweep never checks one, but this
+        // guards the public `apply_validator_verifications` all the same.
+        if info.validator_address().is_none() {
+            return;
+        }
+        let peer_id = info.peer_id;
+        let validator_address = info.validator_address().cloned();
+        if info.validator_claim_needs_recheck() {
+            info.set_validator_verified(verified);
+            if verified {
+                debug!(%peer_id, ?validator_address, "Verified validator claim of peer contact");
+                self.index_add(info);
+            } else {
+                let removed_binding = self.index_remove(info);
+                debug!(
+                    %peer_id,
+                    ?validator_address,
+                    removed_binding,
+                    "Rejected validator claim of peer contact",
+                );
+            }
+        } else if info.is_validator_verified() == verified {
+            trace!(%peer_id, "Ignoring a check of a validator claim that was settled the same way since");
+        } else {
+            info.reopen_validator_claim();
+            let removed_binding = self.index_remove(info);
+            debug!(
+                %peer_id,
+                ?validator_address,
+                verified,
+                removed_binding,
+                "A check of a validator claim disagreed with the one that settled it, checking it once more",
+            );
+        }
     }
 
     /// Records a verified binding at this contact's timestamp, only if this exact contact was
@@ -921,6 +1031,75 @@ impl PeerContactBook {
         });
 
         bindings.into_iter().map(|(peer_id, _)| peer_id).collect()
+    }
+
+    /// Snapshot of the contacts whose validator claim still needs a fresh cryptographic check —
+    /// it has not been conclusively checked yet (skipped for budget or came back
+    /// [`ValidatorVerification::Unverifiable`]). Claims that were conclusively checked —
+    /// `Verified` or `Invalid` — are not included, so a peer cannot keep the sweep busy by
+    /// attaching claims that are rejected outright.
+    ///
+    /// The result is ordered by peer ID rather than left in arbitrary hash-map order, so that a
+    /// caller re-checking only a bounded number of claims each tick (see
+    /// [`super::behaviour::Behaviour::MAX_RECHECKED_CLAIMS_PER_TICK`]) can find the contact it
+    /// stopped at in the next snapshot and continue from there, and still reach every contact,
+    /// instead of always favoring whichever contacts happen to land first in `HashMap` iteration
+    /// order. The caller relies on this order to find contacts by peer ID.
+    ///
+    /// Verification needs the staking contract, so it must happen outside the contact book lock.
+    /// Take this snapshot, check the claims, then feed the results back through
+    /// [`PeerContactBook::apply_validator_verifications`].
+    pub fn unverified_validator_contacts(&self) -> Vec<Arc<PeerContactInfo>> {
+        let mut contacts: Vec<Arc<PeerContactInfo>> = self
+            .peer_contacts
+            .values()
+            .filter(|info| {
+                info.validator_address().is_some() && info.validator_claim_needs_recheck()
+            })
+            .cloned()
+            .collect();
+        contacts.sort_unstable_by_key(|info| info.peer_id);
+        contacts
+    }
+
+    /// Applies validator claim checks computed outside the lock.
+    ///
+    /// Each result carries the contact timestamp it was computed from; results for a contact
+    /// that has since been replaced are discarded. A conclusive outcome settles the contact's
+    /// claim if it is still pending: a verification establishes or refreshes the peer's verified
+    /// binding at the checked contact's timestamp, and a rejection removes the binding. A
+    /// rejection also removes the binding of a contact that was verified before, so that a claim
+    /// that no longer holds, e.g. after the validator rotated its signing key, does not outlive
+    /// the check that found out (see [`Self::stale_verified_validator_contacts`]); the claim is
+    /// then checked once more. Likewise if the claim was settled the other way in the meantime,
+    /// e.g. by an identical copy checked on arrival (see [`Self::store`]): the two checks may have
+    /// read blockchain state in either order, so the binding is removed and the claim is
+    /// re-opened for the next sweep (see `settle_or_reopen_claim`). An inconclusive result leaves
+    /// the binding's original expiry intact.
+    pub fn apply_validator_verifications(
+        &mut self,
+        results: impl IntoIterator<Item = (PeerId, u64, ValidatorVerification)>,
+    ) {
+        for (peer_id, timestamp, verification) in results {
+            let Some(info) = self.peer_contacts.get(&peer_id) else {
+                continue;
+            };
+            if info.contact().timestamp != timestamp {
+                continue;
+            }
+            let info = Arc::clone(info);
+
+            match verification {
+                ValidatorVerification::Verified => self.settle_or_reopen_claim(&info, true),
+                ValidatorVerification::Invalid(reason) => {
+                    trace!(%peer_id, ?reason, "Validator claim of peer contact failed a re-check");
+                    self.settle_or_reopen_claim(&info, false);
+                }
+                // Inconclusive: the current contact stays pending and the verified binding, if
+                // any, keeps its original timestamp and expiry.
+                ValidatorVerification::Unverifiable(_) => {}
+            }
+        }
     }
 
     /// Retrieves a single PeerInfo object for every known peer.
@@ -1409,6 +1588,48 @@ mod tests {
     }
 
     #[test]
+    fn verifications_apply_only_to_the_contact_they_were_computed_from() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        let contact = contact_for(&peer_key, now, Some(&signer));
+        let peer_id = contact.peer_id();
+        book.insert(CheckedPeerContact::check(
+            contact,
+            &NoopValidatorClaimVerifier,
+        ));
+
+        // A result computed from a different (older) version of the contact is discarded.
+        book.apply_validator_verifications([(peer_id, now - 1, ValidatorVerification::Verified)]);
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+
+        // Re-checking the contact we actually hold promotes it.
+        let snapshot = book.unverified_validator_contacts();
+        assert_eq!(snapshot.len(), 1);
+        let results: Vec<_> = snapshot
+            .iter()
+            .map(|info| {
+                (
+                    *info.peer_id(),
+                    info.contact().timestamp(),
+                    info.signed().check_validator_claim(&verifier).unwrap(),
+                )
+            })
+            .collect();
+        book.apply_validator_verifications(results);
+
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![peer_id]
+        );
+        assert!(book.unverified_validator_contacts().is_empty());
+    }
+
+    #[test]
     fn newest_claim_is_returned_first() {
         let (_own_key, mut book) = empty_book();
         let (signer, verifier) = validator(1);
@@ -1576,5 +1797,153 @@ mod tests {
         assert!(book.verified_claim_timestamps.is_empty());
         assert!(!book.get(&peer_id).unwrap().is_validator_verified());
         assert!(!book.get(&peer_id).unwrap().is_gossipable());
+    }
+
+    #[test]
+    fn a_contact_left_pending_is_offered_to_the_recheck_sweep() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, _verifier) = validator(1);
+        let with_claim = contact_for(&Keypair::generate_ed25519(), now_secs(), Some(&signer));
+        let without_claim = contact_for(&Keypair::generate_ed25519(), now_secs(), None);
+
+        assert_eq!(
+            CheckedPeerContact::pending(without_claim).claim,
+            ClaimCheck::None
+        );
+        book.insert(CheckedPeerContact::pending(with_claim));
+
+        assert_eq!(book.unverified_validator_contacts().len(), 1);
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+    }
+
+    #[test]
+    fn pending_refresh_and_inconclusive_checks_do_not_extend_verified_binding_expiry() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        // Insert an expired contact directly so expiry can be checked without sleeping.
+        let expired = contact_for(
+            &peer_key,
+            now - PeerContactBook::MAX_PEER_AGE - 10,
+            Some(&signer),
+        );
+        let peer_id = expired.peer_id();
+        book.insert(CheckedPeerContact::check(expired, &verifier));
+
+        let refreshed = contact_for(&peer_key, now, Some(&signer));
+        book.insert(CheckedPeerContact::check(
+            refreshed.clone(),
+            &NoopValidatorClaimVerifier,
+        ));
+        book.apply_validator_verifications([(
+            peer_id,
+            now,
+            refreshed
+                .check_validator_claim(&NoopValidatorClaimVerifier)
+                .unwrap(),
+        )]);
+
+        // Resolution must filter the expired binding even before housekeeping runs.
+        assert_eq!(
+            book.verified_claim_timestamps[signer.validator_address()][&peer_id],
+            now - PeerContactBook::MAX_PEER_AGE - 10
+        );
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+
+        book.house_keeping();
+
+        // The fresh pending contact remains dialable, but cannot keep the binding alive.
+        assert_eq!(book.get(&peer_id).unwrap().signed(), &refreshed);
+        assert!(!book.get(&peer_id).unwrap().is_gossipable());
+        assert_eq!(book.unverified_validator_contacts().len(), 1);
+        assert!(!book
+            .verified_claim_timestamps
+            .contains_key(signer.validator_address()));
+    }
+
+    #[test]
+    fn a_conclusively_invalid_claim_is_not_re_offered_to_the_recheck_sweep() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, _verifier) = validator(1);
+        // A verifier that does not know the claimed validator, so the claim is checked and
+        // rejected outright as `Invalid` (here `UnknownValidator`; a bad signature is equivalent,
+        // both are `ClaimCheck::Invalid`).
+        let (_other_signer, other_verifier) = validator(2);
+        let peer_key = Keypair::generate_ed25519();
+
+        let contact = contact_for(&peer_key, now_secs(), Some(&signer));
+        let peer_id = contact.peer_id();
+        book.insert(CheckedPeerContact::check(contact, &other_verifier));
+
+        // The bogus claim is stored but neither trusted nor indexed...
+        let info = book.get(&peer_id).expect("contact must be stored");
+        assert!(!info.is_validator_verified());
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+
+        // ...and, crucially, it is NOT re-offered to the periodic re-check sweep. A definitive
+        // `Invalid` is conclusive for this exact contact, so re-checking it would only waste the
+        // sweep's bounded per-tick blockchain-read budget on a known-bad claim — which is exactly
+        // what a peer attaching a bogus claim to every contact would try to exploit.
+        assert!(book.unverified_validator_contacts().is_empty());
+    }
+
+    #[test]
+    fn a_validator_keeps_only_its_newest_bindings() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let now = now_secs();
+        let extra = 2;
+
+        let peers: Vec<(Keypair, u64)> = (0..PeerContactBook::MAX_BINDINGS_PER_VALIDATOR + extra)
+            .map(|i| (Keypair::generate_ed25519(), now - 100 + i as u64))
+            .collect();
+        for (key, timestamp) in &peers {
+            book.insert(CheckedPeerContact::check(
+                contact_for(key, *timestamp, Some(&signer)),
+                &verifier,
+            ));
+        }
+
+        // Only the newest ones are reported...
+        let expected: Vec<PeerId> = peers
+            .iter()
+            .rev()
+            .take(PeerContactBook::MAX_BINDINGS_PER_VALIDATOR)
+            .map(|(key, _)| key.public().to_peer_id())
+            .collect();
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            expected
+        );
+        // ...and the contacts of the others are neither gossiped nor offered for a re-check.
+        for (key, _) in peers.iter().take(extra) {
+            let info = book.get(&key.public().to_peer_id()).unwrap();
+            assert!(!info.is_validator_verified());
+            assert!(!info.is_gossipable());
+            assert!(!info.validator_claim_needs_recheck());
+        }
+
+        // A binding older than all of them does not make it either.
+        let old_key = Keypair::generate_ed25519();
+        book.insert(CheckedPeerContact::check(
+            contact_for(&old_key, now - 1_000, Some(&signer)),
+            &verifier,
+        ));
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            expected
+        );
+        assert!(!book
+            .get(&old_key.public().to_peer_id())
+            .unwrap()
+            .is_gossipable());
     }
 }
