@@ -9,8 +9,9 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
-    validator_record,
+    validator_claim::ValidatorClaimSigner,
 };
+pub use nimiq_network_interface::{validator_claim, validator_record};
 use nimiq_primitives::slots_allocation::Validators;
 
 pub use crate::error::NetworkError;
@@ -111,4 +112,13 @@ pub trait ValidatorNetwork: Send + Sync {
 
     /// Returns the network peer ID for the given `validator_id` if it is known.
     fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId>;
+
+    /// Installs or removes the signer that advertises our own validator claim to other peers.
+    ///
+    /// Passing `None` stops advertising, which is what a node should do as soon as it can no
+    /// longer prove the claim, for example after its signing key was rotated away.
+    ///
+    /// An implementation may spawn a task to advertise the change, so this must be called within
+    /// the async runtime the network runs on.
+    fn set_validator_claim_signer(&self, signer: Option<ValidatorClaimSigner>);
 }

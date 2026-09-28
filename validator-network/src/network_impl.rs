@@ -14,7 +14,7 @@ use parking_lot::RwLock;
 use time::OffsetDateTime;
 
 use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
-use crate::validator_record::ValidatorRecord;
+use crate::{validator_claim::ValidatorClaimSigner, validator_record::ValidatorRecord};
 
 /// Validator `PeerId` cache state
 #[derive(Clone, Copy)]
@@ -542,5 +542,9 @@ where
     fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId> {
         self.get_validator_cache(validator_id)
             .potentially_outdated_peer_id()
+    }
+
+    fn set_validator_claim_signer(&self, signer: Option<ValidatorClaimSigner>) {
+        self.network.set_validator_claim_signer(signer)
     }
 }
