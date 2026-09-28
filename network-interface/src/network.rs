@@ -14,6 +14,7 @@ use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use crate::{
     peer_info::*,
     request::{Message, Request, RequestError},
+    validator_claim::ValidatorClaimSigner,
 };
 
 /// Network events that the network will report when subscribing
@@ -112,6 +113,15 @@ pub trait Network: Send + Sync + Unpin + 'static {
         services: Services,
         min_peers: usize,
     ) -> Result<Vec<Self::PeerId>, Self::Error>;
+
+    /// Installs or removes the signer that advertises our own validator claim to other peers.
+    ///
+    /// Passing `None` stops advertising, which is what a node should do as soon as it can no
+    /// longer prove the claim, for example after its signing key was rotated away.
+    ///
+    /// An implementation may spawn a task to advertise the change, so this must be called within
+    /// the async runtime the network runs on.
+    fn set_validator_claim_signer(&self, signer: Option<ValidatorClaimSigner>);
 
     /// Returns true when the given peer provides the services flags that are required by us
     fn peer_provides_required_services(&self, peer_id: Self::PeerId) -> bool;

@@ -15,7 +15,7 @@ use nimiq_keys::{Address, Ed25519Signature, KeyPair};
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
     peer_info::{PeerInfo, Services},
-    validator_claim::ValidatorClaim,
+    validator_claim::{ValidatorClaim, ValidatorClaimSigner},
 };
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature, TaggedSigned};
 use parking_lot::RwLock;
@@ -430,6 +430,8 @@ pub struct PeerContactBook {
     /// Contact information for other peers in the network indexed by their
     /// peer ID.
     peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
+    /// Signs the validator claim attached to our own contact, if we run a registered validator.
+    validator_claim_signer: Option<ValidatorClaimSigner>,
     /// Only return secure websocket addresses.
     /// With this flag non secure websocket addresses will be stored (to still have a valid signature of the peer contact)
     /// but won't be returned when calling `get_addresses`
@@ -456,6 +458,7 @@ impl PeerContactBook {
             own_peer_contact: own_peer_contact.into(),
             own_peer_id,
             peer_contacts: HashMap::new(),
+            validator_claim_signer: None,
             only_secure_addresses,
             allow_loopback_addresses,
             memory_transport,
@@ -714,8 +717,39 @@ impl PeerContactBook {
         self.sign_own_contact(contact, keypair);
     }
 
-    /// Signs `contact` as our own contact.
-    fn sign_own_contact(&mut self, contact: PeerContact, keypair: &Keypair) {
+    /// Installs or removes the signer for the validator claim on our own contact.
+    ///
+    /// Our own contact is re-signed immediately so that the change takes effect without waiting
+    /// for the next house-keeping tick. Returns whether the re-signed contact is no newer than the
+    /// one it replaced, which is the case if our clock still reads the second that one was signed
+    /// in (contact timestamps are in seconds), or an earlier one because it stepped back since.
+    /// Peers that already stored the replaced contact discard the re-signed one, since they only
+    /// store a strictly newer contact, so the caller should re-sign our contact once more with
+    /// [`Self::update_own_contact`] once our clock reads a later second than the replaced
+    /// contact's timestamp. Giving the re-signed contact a later timestamp instead is not an
+    /// option: peers reject contacts from the future.
+    pub fn set_validator_claim_signer(
+        &mut self,
+        signer: Option<ValidatorClaimSigner>,
+        keypair: &Keypair,
+    ) -> bool {
+        let replaced_timestamp = self.own_peer_contact.contact().timestamp();
+        self.validator_claim_signer = signer;
+        self.update_own_contact(keypair);
+        self.own_peer_contact.contact().timestamp() <= replaced_timestamp
+    }
+
+    /// Signs `contact` as our own contact, attaching a fresh validator claim if we have a signer.
+    ///
+    /// The claim covers the contact's timestamp, so it has to be produced here, every time the
+    /// contact is (re-)signed, rather than being handed to us pre-computed.
+    fn sign_own_contact(&mut self, mut contact: PeerContact, keypair: &Keypair) {
+        let validator_info = self.validator_claim_signer.as_ref().map(|signer| {
+            let signed_claim = signer.sign(contact.peer_id(), contact.timestamp());
+            ValidatorInfo::new(signer.validator_address().clone(), signed_claim.signature)
+        });
+        contact.set_validator_info(validator_info);
+
         self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
     }
 
@@ -842,14 +876,33 @@ mod serde_public_key {
 
 #[cfg(test)]
 mod tests {
-    use nimiq_keys::SecureGenerate;
-    use nimiq_network_interface::{
-        validator_claim::ValidatorClaimSigner, validator_record::ValidatorRecord,
-    };
+    use nimiq_keys::{Ed25519PublicKey, SecureGenerate};
+    use nimiq_network_interface::validator_record::ValidatorRecord;
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng;
 
     use super::*;
+
+    /// A verifier that knows a fixed set of validator signing keys.
+    struct TestVerifier {
+        keys: HashMap<Address, Ed25519PublicKey>,
+    }
+
+    impl ValidatorClaimVerifier for TestVerifier {
+        fn verify_validator_claim(
+            &self,
+            signed_claim: &SignedValidatorClaim,
+        ) -> ValidatorVerification {
+            let Some(public_key) = self.keys.get(&signed_claim.record.validator_address) else {
+                return ValidatorVerification::Invalid(InvalidReason::UnknownValidator);
+            };
+            if signed_claim.verify(public_key) {
+                ValidatorVerification::Verified
+            } else {
+                ValidatorVerification::Invalid(InvalidReason::InvalidSignature)
+            }
+        }
+    }
 
     fn now_secs() -> u64 {
         SystemTime::now()
@@ -858,20 +911,49 @@ mod tests {
             .as_secs()
     }
 
-    fn contact_for(keypair: &Keypair, timestamp: u64) -> SignedPeerContact {
-        PeerContact::new(
+    /// Creates a validator signing key and a verifier that accepts it.
+    fn validator(seed: u8) -> (ValidatorClaimSigner, TestVerifier) {
+        let key_pair = KeyPair::generate(&mut test_rng(false));
+        let mut address_bytes = [0u8; 20];
+        address_bytes[0] = seed;
+        let address = Address::from(address_bytes);
+
+        let mut keys = HashMap::new();
+        keys.insert(address.clone(), key_pair.public);
+
+        (
+            ValidatorClaimSigner::new(address, key_pair),
+            TestVerifier { keys },
+        )
+    }
+
+    fn contact_for(
+        keypair: &Keypair,
+        timestamp: u64,
+        signer: Option<&ValidatorClaimSigner>,
+    ) -> SignedPeerContact {
+        let mut contact = PeerContact::new(
             ["/ip4/127.0.0.1/tcp/8443".parse().unwrap()],
             keypair.public(),
             Services::all(),
             timestamp,
         )
-        .unwrap()
-        .sign(keypair)
+        .unwrap();
+
+        if let Some(signer) = signer {
+            let signed_claim = signer.sign(contact.peer_id(), timestamp);
+            contact.set_validator_info(Some(ValidatorInfo::new(
+                signer.validator_address().clone(),
+                signed_claim.signature,
+            )));
+        }
+
+        contact.sign(keypair)
     }
 
     fn empty_book() -> (Keypair, PeerContactBook) {
         let keypair = Keypair::generate_ed25519();
-        let own_contact = contact_for(&keypair, now_secs());
+        let own_contact = contact_for(&keypair, now_secs(), None);
         (
             keypair.clone(),
             PeerContactBook::new(own_contact, false, true, true),
@@ -887,6 +969,78 @@ mod tests {
         book.insert_filtered(own_contact, Services::all(), false);
 
         assert!(book.get(&own_peer_id).is_none());
+    }
+
+    #[test]
+    fn own_contact_carries_a_verifiable_validator_claim() {
+        let (own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let validator_address = signer.validator_address().clone();
+
+        book.set_validator_claim_signer(Some(signer), &own_key);
+
+        let own_contact = book.get_own_contact().signed().clone();
+        assert!(own_contact.verify());
+        assert_eq!(
+            own_contact.inner.validator_address(),
+            Some(&validator_address)
+        );
+        assert_eq!(
+            own_contact.check_validator_claim(&verifier),
+            Some(ValidatorVerification::Verified)
+        );
+
+        // Refreshing the contact re-signs the claim for the new timestamp.
+        book.update_own_contact(&own_key);
+        let refreshed = book.get_own_contact().signed().clone();
+        assert_eq!(
+            refreshed.check_validator_claim(&verifier),
+            Some(ValidatorVerification::Verified)
+        );
+
+        book.set_validator_claim_signer(None, &own_key);
+        assert!(book
+            .get_own_contact()
+            .signed()
+            .inner
+            .validator_info()
+            .is_none());
+    }
+
+    #[test]
+    fn a_new_signer_reports_whether_our_resigned_contact_is_newer() {
+        let (signer, _verifier) = validator(1);
+        let book_signed_at = |timestamp| {
+            let own_key = Keypair::generate_ed25519();
+            let book =
+                PeerContactBook::new(contact_for(&own_key, timestamp, None), false, true, true);
+            (own_key, book)
+        };
+
+        // Signed in an earlier second, the re-signed contact is newer and replaces the old one at
+        // peers that stored it.
+        let (own_key, mut book) = book_signed_at(now_secs() - 10);
+        assert!(!book.set_validator_claim_signer(Some(signer.clone()), &own_key));
+
+        // Signed within the same second, it is not. Try again if the second ends in between.
+        for attempt in 0.. {
+            let timestamp = now_secs();
+            let (own_key, mut book) = book_signed_at(timestamp);
+            let resign_again = book.set_validator_claim_signer(Some(signer.clone()), &own_key);
+            if book.get_own_contact().contact().timestamp() == timestamp {
+                assert!(resign_again);
+                break;
+            }
+            assert!(attempt < 10, "never re-signed within the same second");
+        }
+
+        // Nor is it if our clock stepped back. The signer is installed all the same.
+        let (own_key, mut book) = book_signed_at(now_secs() + 60);
+        assert!(book.set_validator_claim_signer(Some(signer.clone()), &own_key));
+        assert_eq!(
+            book.get_own_contact().contact().validator_address(),
+            Some(signer.validator_address())
+        );
     }
 
     #[test]

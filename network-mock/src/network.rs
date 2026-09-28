@@ -1,6 +1,6 @@
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
@@ -17,6 +17,7 @@ use nimiq_network_interface::{
         InboundRequestError, Message, OutboundRequestError, Request, RequestCommon, RequestError,
         RequestKind, RequestSerialize, RequestType,
     },
+    validator_claim::ValidatorClaimSigner,
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_time::timeout;
@@ -78,6 +79,9 @@ pub struct MockNetwork {
     hub: Arc<Mutex<MockHubInner>>,
     is_connected: Arc<AtomicBool>,
     validation_results: Mutex<Vec<(&'static str, MockId<MockPeerId>, MsgAcceptance)>>,
+    /// How often the validator claim signer was installed or removed, whether or not that changed
+    /// anything. A real network re-signs our peer contact each time.
+    validator_claim_signer_updates: AtomicUsize,
 }
 
 impl MockNetwork {
@@ -107,7 +111,13 @@ impl MockNetwork {
             hub,
             is_connected,
             validation_results: Mutex::new(Vec::new()),
+            validator_claim_signer_updates: AtomicUsize::new(0),
         }
+    }
+
+    /// How often [`Network::set_validator_claim_signer`] was called on this network so far.
+    pub fn validator_claim_signer_updates(&self) -> usize {
+        self.validator_claim_signer_updates.load(Ordering::Relaxed)
     }
 
     pub fn address(&self) -> MockAddress {
@@ -642,6 +652,11 @@ impl Network for MockNetwork {
         } else {
             Err(MockNetworkError::CantRespond(request_id))
         }
+    }
+
+    fn set_validator_claim_signer(&self, _signer: Option<ValidatorClaimSigner>) {
+        self.validator_claim_signer_updates
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     fn peer_provides_required_services(&self, _peer_id: Self::PeerId) -> bool {
