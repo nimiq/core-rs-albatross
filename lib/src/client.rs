@@ -29,9 +29,11 @@ use nimiq_network_interface::{
     peer_info::{NodeType, Services},
     Multiaddr, Protocol,
 };
+#[cfg(not(feature = "full-consensus"))]
+use nimiq_network_libp2p::discovery::NoopValidatorClaimVerifier;
 use nimiq_network_libp2p::{
-    discovery::peer_contacts::PeerContact, Config as NetworkConfig, Network,
-    TlsConfig as NetworkTls,
+    discovery::{peer_contacts::PeerContact, ValidatorClaimVerifier},
+    Config as NetworkConfig, Network, TlsConfig as NetworkTls,
 };
 use nimiq_primitives::policy::Policy;
 #[cfg(feature = "full-consensus")]
@@ -355,14 +357,24 @@ impl ClientInner {
             ))),
         };
 
-        // Create the Dht verifier
+        // Create the Dht verifier. The same verifier also checks the validator claims carried
+        // by peer contacts, since both need the staking contract.
         #[cfg(feature = "full-consensus")]
-        let dht_verifier = Verifier::new(blockchain_proxy.clone());
+        let dht_verifier = Arc::new(Verifier::new(blockchain_proxy.clone()));
+
+        // Nodes without a full consensus cannot check validator claims, so they leave every claim
+        // unverified rather than trusting it.
+        #[cfg(feature = "full-consensus")]
+        let validator_verifier: Arc<dyn ValidatorClaimVerifier> = Arc::clone(&dht_verifier) as _;
+        #[cfg(not(feature = "full-consensus"))]
+        let validator_verifier: Arc<dyn ValidatorClaimVerifier> =
+            Arc::new(NoopValidatorClaimVerifier);
 
         // Create the network.
         let network = Arc::new(
             Network::new(
                 network_config,
+                validator_verifier,
                 #[cfg(feature = "full-consensus")]
                 dht_verifier,
             )

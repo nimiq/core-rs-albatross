@@ -47,7 +47,7 @@ use crate::rate_limiting::RateLimitConfig;
 use crate::{
     autonat::NatStatus,
     behaviour, dht,
-    discovery::{self, peer_contacts::PeerContactBook},
+    discovery::{self, peer_contacts::PeerContactBook, validator_verifier::ValidatorClaimVerifier},
     network_types::{
         DhtBootStrapState, DhtRecord, DhtResults, GossipsubTopicInfo, NetworkAction, TaskState,
         ValidateMessage,
@@ -115,6 +115,7 @@ pub(crate) fn new_swarm(
     contacts: Arc<RwLock<PeerContactBook>>,
     peer_score_params: gossipsub::PeerScoreParams,
     force_dht_server_mode: bool,
+    validator_verifier: Arc<dyn ValidatorClaimVerifier>,
 ) -> Swarm<behaviour::Behaviour> {
     let keypair = config.keypair.clone();
     let transport = new_transport(
@@ -125,8 +126,13 @@ pub(crate) fn new_swarm(
     )
     .unwrap();
 
-    let behaviour =
-        behaviour::Behaviour::new(config, contacts, peer_score_params, force_dht_server_mode);
+    let behaviour = behaviour::Behaviour::new(
+        config,
+        contacts,
+        peer_score_params,
+        force_dht_server_mode,
+        validator_verifier,
+    );
 
     // TODO add proper config
     #[cfg(not(target_family = "wasm"))]

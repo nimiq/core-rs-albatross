@@ -23,6 +23,7 @@ use parking_lot::RwLock;
 use super::{
     handler::{Handler, HandlerOutEvent},
     peer_contacts::{PeerContact, PeerContactBook},
+    validator_verifier::ValidatorClaimVerifier,
 };
 
 #[derive(Clone, Debug)]
@@ -115,6 +116,9 @@ pub struct Behaviour {
 
     /// Timer to do house-keeping in the peer address book.
     house_keeping_timer: Interval,
+
+    /// Checks the validator claims carried by peer contacts.
+    validator_verifier: Arc<dyn ValidatorClaimVerifier>,
 }
 
 impl Behaviour {
@@ -122,6 +126,7 @@ impl Behaviour {
         config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
+        validator_verifier: Arc<dyn ValidatorClaimVerifier>,
     ) -> Self {
         let house_keeping_timer = interval(config.house_keeping_interval);
         peer_contact_book.write().update_own_contact(&keypair);
@@ -139,6 +144,7 @@ impl Behaviour {
             peer_contact_book,
             events,
             house_keeping_timer,
+            validator_verifier,
         }
     }
 
@@ -176,6 +182,7 @@ impl NetworkBehaviour for Behaviour {
             self.config.clone(),
             self.keypair.clone(),
             self.peer_contact_book(),
+            Arc::clone(&self.validator_verifier),
             remote_addr.clone(),
         ))
     }
@@ -193,6 +200,7 @@ impl NetworkBehaviour for Behaviour {
             self.config.clone(),
             self.keypair.clone(),
             self.peer_contact_book(),
+            Arc::clone(&self.validator_verifier),
             addr.clone(),
         ))
     }

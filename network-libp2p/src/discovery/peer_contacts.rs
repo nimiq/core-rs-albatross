@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
     time::Duration,
 };
@@ -303,6 +303,94 @@ impl SignedPeerContact {
     }
 }
 
+/// The verification status of a [`SignedPeerContact`]'s validator claim.
+///
+/// Contacts received from peers get it from [`CheckedPeerContact::check`], which checks the
+/// claim, or from [`CheckedPeerContact::pending`], which leaves it [`Pending`](Self::Pending)
+/// unchecked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ClaimCheck {
+    /// This contact carries no validator claim.
+    None,
+    /// The claim was cryptographically checked against this exact contact and holds.
+    Verified,
+    /// The claim was cryptographically checked against this exact contact and does not hold.
+    Invalid,
+    /// This exact contact's claim was not conclusively checked: it was not checked at all, or
+    /// the check came back [`ValidatorVerification::Unverifiable`]. The contact stays unverified.
+    Pending,
+}
+
+/// A [`SignedPeerContact`] together with the outcome of checking its validator claim.
+///
+/// Only a conclusive verification can establish or refresh a validator binding. A pending refresh
+/// that keeps the same validator address leaves the previous binding in place, with its original
+/// timestamp and expiry. Converting a plain [`SignedPeerContact`] leaves its claim, if it has one,
+/// pending, just like [`CheckedPeerContact::pending`].
+#[derive(Clone, Debug)]
+pub struct CheckedPeerContact {
+    contact: SignedPeerContact,
+    claim: ClaimCheck,
+}
+
+impl CheckedPeerContact {
+    /// Checks the contact's validator claim, if it has one.
+    pub(crate) fn check(contact: SignedPeerContact, verifier: &dyn ValidatorClaimVerifier) -> Self {
+        Self::check_with_outcome(contact, verifier).0
+    }
+
+    /// Checks the contact's validator claim, if it has one, and also returns the raw outcome of
+    /// the check, which tells *why* a claim was left pending. `None` if the contact carries no
+    /// claim.
+    fn check_with_outcome(
+        contact: SignedPeerContact,
+        verifier: &dyn ValidatorClaimVerifier,
+    ) -> (Self, Option<ValidatorVerification>) {
+        let verification = contact.check_validator_claim(verifier);
+        let claim = match verification {
+            None => ClaimCheck::None,
+            Some(ValidatorVerification::Verified) => ClaimCheck::Verified,
+            Some(ValidatorVerification::Invalid(reason)) => {
+                debug!(
+                    peer_id = %contact.peer_id(),
+                    ?reason,
+                    "Ignoring bogus validator claim in peer contact",
+                );
+                ClaimCheck::Invalid
+            }
+            // Inconclusive: we simply don't know yet (e.g. our own staking-contract state is
+            // incomplete). This must never be treated as a definitive rejection.
+            Some(ValidatorVerification::Unverifiable(_)) => ClaimCheck::Pending,
+        };
+
+        (Self { contact, claim }, verification)
+    }
+
+    /// The underlying signed contact.
+    pub fn signed(&self) -> &SignedPeerContact {
+        &self.contact
+    }
+
+    /// Leaves the contact's validator claim, if it has one, pending without checking it.
+    pub fn pending(contact: SignedPeerContact) -> Self {
+        let claim = if contact.inner.validator_info().is_some() {
+            ClaimCheck::Pending
+        } else {
+            ClaimCheck::None
+        };
+        Self { contact, claim }
+    }
+}
+
+impl From<SignedPeerContact> for CheckedPeerContact {
+    /// Leaves the contact's validator claim, if it has one, pending without checking it.
+    ///
+    /// Treating a claim as absent instead would end the peer's existing binding.
+    fn from(contact: SignedPeerContact) -> Self {
+        Self::pending(contact)
+    }
+}
+
 /// The filter that [`PeerContactBook::insert_filtered`] applies to contacts relayed to us.
 ///
 /// Besides the fields below, a contact that carries a validator claim whose signature is
@@ -320,6 +408,8 @@ pub struct InsertFilter {
 struct PeerContactMeta {
     outer_protocol_address: Option<Multiaddr>,
     score: f64,
+    /// Whether this exact contact's validator claim was conclusively verified.
+    validator_verified: bool,
 }
 
 /// This encapsulates a peer contact (signed), but also pre-computes frequently used values such as `peer_id` and
@@ -338,20 +428,25 @@ pub struct PeerContactInfo {
 
 impl From<SignedPeerContact> for PeerContactInfo {
     fn from(contact: SignedPeerContact) -> Self {
-        let peer_id = contact.inner.peer_id();
+        Self::new(contact, false)
+    }
+}
 
+impl PeerContactInfo {
+    /// Constructs contact info with the verification status of this exact contact's claim.
+    fn new(contact: SignedPeerContact, validator_verified: bool) -> Self {
+        let peer_id = contact.inner.peer_id();
         Self {
             peer_id,
             contact,
             meta: RwLock::new(PeerContactMeta {
                 score: 0.,
                 outer_protocol_address: None,
+                validator_verified,
             }),
         }
     }
-}
 
-impl PeerContactInfo {
     /// Short-hand for the plain [`PeerContact`]
     pub fn contact(&self) -> &PeerContact {
         &self.contact.inner
@@ -407,6 +502,32 @@ impl PeerContactInfo {
         self.meta.read().outer_protocol_address.clone()
     }
 
+    /// The validator address claimed by this contact, if any.
+    ///
+    /// The claim may be unverified; use [`PeerContactInfo::is_validator_verified`] to tell.
+    pub fn validator_address(&self) -> Option<&Address> {
+        self.contact.inner.validator_address()
+    }
+
+    /// Whether this exact contact's validator claim was checked and holds.
+    pub fn is_validator_verified(&self) -> bool {
+        self.meta.read().validator_verified
+    }
+
+    /// Whether this contact may be passed on to other peers.
+    ///
+    /// Contacts carrying a validator claim we could not verify are still stored and dialed, but
+    /// never gossiped, so that we do not spread claims we cannot vouch for.
+    pub fn is_gossipable(&self) -> bool {
+        self.validator_address().is_none() || self.is_validator_verified()
+    }
+
+    /// Records a definitive verification outcome for the current contact: `verified` reflects
+    /// the result.
+    pub(crate) fn set_validator_verified(&self, verified: bool) {
+        self.meta.write().validator_verified = verified;
+    }
+
     /// Sets the outer protocol address of the peer once
     pub fn set_outer_protocol_address(&self, addr: Multiaddr) {
         self.meta
@@ -430,6 +551,14 @@ pub struct PeerContactBook {
     /// Contact information for other peers in the network indexed by their
     /// peer ID.
     peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
+    /// Verified validator bindings: for each validator address and peer ID, the timestamp of that
+    /// peer's last contact whose claim to the address was conclusively verified.
+    ///
+    /// The timestamp sets both the binding's priority and its expiry. A pending refresh with the
+    /// same address keeps the binding but cannot change its timestamp. The latest contact in
+    /// `peer_contacts` determines gossip eligibility, and must still claim the same validator
+    /// address for the binding to be reported. This never contains our own peer ID.
+    verified_claim_timestamps: HashMap<Address, HashMap<PeerId, u64>>,
     /// Signs the validator claim attached to our own contact, if we run a registered validator.
     validator_claim_signer: Option<ValidatorClaimSigner>,
     /// Only return secure websocket addresses.
@@ -446,6 +575,9 @@ impl PeerContactBook {
     /// If a peer's age exceeds this value in seconds, it is removed (30 minutes)
     pub const MAX_PEER_AGE: u64 = 30 * 60;
 
+    /// The maximum number of live verified bindings kept for a validator address. See
+    /// [`Self::index_add`].
+    pub const MAX_BINDINGS_PER_VALIDATOR: usize = 4;
     /// Creates a new `PeerContactBook` given our own peer contact information.
     pub fn new(
         own_peer_contact: SignedPeerContact,
@@ -458,6 +590,7 @@ impl PeerContactBook {
             own_peer_contact: own_peer_contact.into(),
             own_peer_id,
             peer_contacts: HashMap::new(),
+            verified_claim_timestamps: HashMap::new(),
             validator_claim_signer: None,
             only_secure_addresses,
             allow_loopback_addresses,
@@ -520,20 +653,22 @@ impl PeerContactBook {
     }
 
     /// Insert a peer contact or update an existing one
-    pub fn insert(&mut self, contact: SignedPeerContact) {
+    pub fn insert(&mut self, contact: impl Into<CheckedPeerContact>) {
+        let contact = contact.into();
+
         // Don't insert our own contact into our peer contacts
-        if contact.peer_id() == self.own_peer_id {
+        if contact.signed().peer_id() == self.own_peer_id {
             return;
         }
 
-        log::debug!(peer_id = %contact.peer_id(), addresses = ?contact.inner.addresses, "Adding peer contact");
+        log::debug!(peer_id = %contact.signed().peer_id(), addresses = ?contact.signed().inner.addresses, "Adding peer contact");
         let current_ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
         // Reject contacts with timestamps in the future
-        if contact.inner.timestamp > current_ts {
+        if contact.signed().inner.timestamp > current_ts {
             return;
         }
 
@@ -541,26 +676,133 @@ impl PeerContactBook {
     }
 
     /// Stores a contact, replacing an existing one only if the new one is strictly newer.
-    fn store(&mut self, contact: SignedPeerContact) {
-        let peer_id = contact.inner.peer_id();
+    ///
+    /// Keeps the latest contact separate from the peer's verified validator binding, so pending
+    /// refreshes cannot extend the lifetime or priority of a previously verified binding.
+    fn store(&mut self, checked: CheckedPeerContact) {
+        let peer_id = checked.contact.inner.peer_id();
+        let existing = self.peer_contacts.get(&peer_id).cloned();
 
-        if let Some(existing) = self.peer_contacts.get(&peer_id) {
+        if let Some(existing) = &existing {
             // Only update the contact if the timestamp is greater than the entry we have
-            if existing.contact().timestamp >= contact.inner.timestamp {
+            if existing.contact().timestamp >= checked.contact.inner.timestamp {
                 return;
             }
         } else {
             log::trace!(
                 peer_id = %peer_id,
-                services = ?contact.inner.services,
-                addresses = ?contact.inner.addresses,
-                validator_address = ?contact.inner.validator_address(),
+                services = ?checked.contact.inner.services,
+                addresses = ?checked.contact.inner.addresses,
+                validator_address = ?checked.contact.inner.validator_address(),
                 "Adding peer contact",
             );
         }
 
-        self.peer_contacts
-            .insert(peer_id, Arc::new(PeerContactInfo::from(contact)));
+        // Only a conclusive check can make the new contact trusted and gossipable. A pending
+        // refresh with the same address keeps the previous verified binding until it expires.
+        let (validator_verified, pending) = match checked.claim {
+            ClaimCheck::Verified => (true, false),
+            ClaimCheck::Invalid | ClaimCheck::None => (false, false),
+            ClaimCheck::Pending => (false, true),
+        };
+
+        let info = Arc::new(PeerContactInfo::new(checked.contact, validator_verified));
+
+        self.peer_contacts.insert(peer_id, Arc::clone(&info));
+
+        // Keep the verified binding across pending refreshes only while the address stays the
+        // same. A conclusive rejection, a changed address or a dropped claim removes it.
+        if let Some(replaced) = existing
+            && (!pending || replaced.validator_address() != info.validator_address())
+        {
+            self.index_remove(&replaced);
+        }
+        self.index_add(&info);
+    }
+
+    /// Records a verified binding at this contact's timestamp, only if this exact contact was
+    /// verified.
+    ///
+    /// A validator address keeps at most [`Self::MAX_BINDINGS_PER_VALIDATOR`] live bindings, the
+    /// newest ones, ranked like [`Self::get_validator_peer_ids`] ranks them. A binding that does not
+    /// make it, the new one included, is dropped, and the contact it was verified in is no longer
+    /// considered verified, so that it is neither reported nor gossiped. Only the validator's
+    /// signing key can produce bindings to its address, so this only ever limits the validator
+    /// itself: an honest one binds one peer, or two for a while after it moved.
+    fn index_add(&mut self, info: &PeerContactInfo) {
+        if !info.is_validator_verified() {
+            return;
+        }
+        let Some(validator_address) = info.validator_address() else {
+            return;
+        };
+
+        let bindings = self
+            .verified_claim_timestamps
+            .entry(validator_address.clone())
+            .or_default();
+        bindings.insert(info.peer_id, info.contact().timestamp());
+        let Ok(unix_time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) else {
+            return;
+        };
+
+        // Expired bindings are no longer reported, so they do not count towards the limit. They
+        // are left for house-keeping to remove.
+        let mut live: Vec<(PeerId, u64)> = bindings
+            .iter()
+            .filter(|(_, timestamp)| {
+                !contact_exceeds_age(
+                    **timestamp,
+                    Duration::from_secs(Self::MAX_PEER_AGE),
+                    unix_time,
+                )
+            })
+            .map(|(&peer_id, &timestamp)| (peer_id, timestamp))
+            .collect();
+        let mut evicted = Vec::new();
+        if live.len() > Self::MAX_BINDINGS_PER_VALIDATOR {
+            // Rank like `get_validator_peer_ids`: newest first, then by peer ID.
+            live.sort_unstable_by(|(peer_a, ts_a), (peer_b, ts_b)| {
+                ts_b.cmp(ts_a).then_with(|| peer_a.cmp(peer_b))
+            });
+            for (peer_id, _) in live.drain(Self::MAX_BINDINGS_PER_VALIDATOR..) {
+                bindings.remove(&peer_id);
+                evicted.push(peer_id);
+            }
+        }
+
+        for peer_id in evicted {
+            debug!(
+                %peer_id,
+                %validator_address,
+                "Dropping validator binding, the validator has newer ones",
+            );
+            if let Some(evicted_info) = self.peer_contacts.get(&peer_id)
+                && evicted_info.is_validator_verified()
+                && evicted_info.validator_address() == Some(validator_address)
+            {
+                evicted_info.set_validator_verified(false);
+            }
+        }
+    }
+
+    /// Removes the verified binding between this contact's peer and its validator address.
+    /// Returns whether there was one.
+    fn index_remove(&mut self, info: &PeerContactInfo) -> bool {
+        let Some(validator_address) = info.validator_address() else {
+            return false;
+        };
+        let Entry::Occupied(mut entry) = self
+            .verified_claim_timestamps
+            .entry(validator_address.clone())
+        else {
+            return false;
+        };
+        let removed = entry.get_mut().remove(&info.peer_id).is_some();
+        if entry.get().is_empty() {
+            entry.remove();
+        }
+        removed
     }
 
     /// Inserts a peer contact or update an existing using the service filtering.
@@ -575,12 +817,14 @@ impl PeerContactBook {
     /// dialed again; there is one such contact per connection.
     pub fn insert_filtered(
         &mut self,
-        contact: SignedPeerContact,
+        contact: impl Into<CheckedPeerContact>,
         services_filter: Services,
         only_secure_ws_connections: bool,
     ) {
+        let contact = contact.into();
+
         // Don't insert our own contact into our peer contacts. Peers do echo it back to us.
-        if contact.peer_id() == self.own_peer_id {
+        if contact.signed().peer_id() == self.own_peer_id {
             return;
         }
 
@@ -588,7 +832,7 @@ impl PeerContactBook {
             services: services_filter,
             only_secure_ws_connections,
         };
-        if !self.passes_filter(&contact.inner, &filter) {
+        if !self.passes_filter(&contact.signed().inner, &filter) {
             return;
         }
 
@@ -596,7 +840,10 @@ impl PeerContactBook {
     }
 
     /// Inserts a set of contacts or updates existing ones
-    pub fn insert_all<I: IntoIterator<Item = SignedPeerContact>>(&mut self, contacts: I) {
+    pub fn insert_all<C: Into<CheckedPeerContact>, I: IntoIterator<Item = C>>(
+        &mut self,
+        contacts: I,
+    ) {
         for contact in contacts {
             self.insert(contact);
         }
@@ -605,7 +852,7 @@ impl PeerContactBook {
     /// Inserts a set of peer contact or update an existing ones using the service
     /// filtering. If the filter matches the services provided by the contact,
     /// it is added. Otherwise it is ignored.
-    pub fn insert_all_filtered<I: IntoIterator<Item = SignedPeerContact>>(
+    pub fn insert_all_filtered<C: Into<CheckedPeerContact>, I: IntoIterator<Item = C>>(
         &mut self,
         contacts: I,
         services_filter: Services,
@@ -634,6 +881,46 @@ impl PeerContactBook {
                 .cloned()
                 .collect()
         })
+    }
+
+    /// The peer IDs known to belong to `validator_address`, newest verified binding first.
+    ///
+    /// A binding is ranked and aged by the timestamp of the contact whose claim was verified, and
+    /// a pending refresh changes neither. Expiry is checked on every lookup, independently of
+    /// house-keeping, and the peer's latest contact must still claim this validator address. A
+    /// newer contact whose claim to this address is conclusively rejected also ends the binding,
+    /// whether the claim is rejected on insertion or by the re-check sweep (see
+    /// [`Self::apply_validator_verifications`]).
+    pub fn get_validator_peer_ids(&self, validator_address: &Address) -> Vec<PeerId> {
+        let Some(verified) = self.verified_claim_timestamps.get(validator_address) else {
+            return Vec::new();
+        };
+        let Ok(unix_time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) else {
+            return Vec::new();
+        };
+
+        let mut bindings: Vec<(PeerId, u64)> = verified
+            .iter()
+            .map(|(&peer_id, &timestamp)| (peer_id, timestamp))
+            .filter(|(peer_id, timestamp)| {
+                !contact_exceeds_age(
+                    *timestamp,
+                    Duration::from_secs(Self::MAX_PEER_AGE),
+                    unix_time,
+                ) && self
+                    .peer_contacts
+                    .get(peer_id)
+                    .is_some_and(|info| info.validator_address() == Some(validator_address))
+            })
+            .collect();
+
+        // Prefer the most recent claim: a validator that moved to another node should win over the
+        // contact of the node it left behind.
+        bindings.sort_unstable_by(|(peer_a, ts_a), (peer_b, ts_b)| {
+            ts_b.cmp(ts_a).then_with(|| peer_a.cmp(peer_b))
+        });
+
+        bindings.into_iter().map(|(peer_id, _)| peer_id).collect()
     }
 
     /// Retrieves a single PeerInfo object for every known peer.
@@ -759,7 +1046,7 @@ impl PeerContactBook {
     }
 
     /// Removes peer contacts that have already exceeded the maximum age as
-    /// defined in `MAX_PEER_AGE`.
+    /// defined in `MAX_PEER_AGE`, and verified validator bindings whose verified contact has.
     pub fn house_keeping(&mut self) {
         if let Ok(unix_time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
             let delete_peers = self
@@ -780,8 +1067,22 @@ impl PeerContactBook {
                 .collect::<Vec<PeerId>>();
 
             for peer_id in delete_peers {
-                self.peer_contacts.remove(&peer_id);
+                if let Some(info) = self.peer_contacts.remove(&peer_id) {
+                    self.index_remove(&info);
+                }
             }
+
+            // A newer pending contact must not keep an older verified binding alive.
+            self.verified_claim_timestamps.retain(|_, bindings| {
+                bindings.retain(|_, timestamp| {
+                    !contact_exceeds_age(
+                        *timestamp,
+                        Duration::from_secs(Self::MAX_PEER_AGE),
+                        unix_time,
+                    )
+                });
+                !bindings.is_empty()
+            });
         }
     }
 
@@ -882,6 +1183,7 @@ mod tests {
     use nimiq_test_utils::test_rng;
 
     use super::*;
+    use crate::discovery::validator_verifier::{InvalidReason, NoopValidatorClaimVerifier};
 
     /// A verifier that knows a fixed set of validator signing keys.
     struct TestVerifier {
@@ -958,6 +1260,174 @@ mod tests {
             keypair.clone(),
             PeerContactBook::new(own_contact, false, true, true),
         )
+    }
+
+    #[test]
+    fn verified_claim_is_indexed() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let contact = contact_for(&peer_key, now_secs(), Some(&signer));
+        let peer_id = contact.peer_id();
+
+        book.insert(CheckedPeerContact::check(contact, &verifier));
+
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![peer_id]
+        );
+        assert!(book.get(&peer_id).unwrap().is_gossipable());
+    }
+
+    #[test]
+    fn unverified_claim_is_stored_but_neither_indexed_nor_gossiped() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, _verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let contact = contact_for(&peer_key, now_secs(), Some(&signer));
+        let peer_id = contact.peer_id();
+
+        book.insert(CheckedPeerContact::check(
+            contact,
+            &NoopValidatorClaimVerifier,
+        ));
+
+        // The contact is kept and remains dialable, we just do not vouch for its claim.
+        let info = book.get(&peer_id).expect("contact must be stored");
+        assert!(!info.is_validator_verified());
+        assert!(!info.is_gossipable());
+        assert!(!book.get_addresses(&peer_id).unwrap().is_empty());
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+    }
+
+    #[test]
+    fn replacing_a_contact_moves_the_index_to_the_new_address() {
+        let (_own_key, mut book) = empty_book();
+        let (signer_a, verifier_a) = validator(1);
+        let (signer_b, verifier_b) = validator(2);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        let first = contact_for(&peer_key, now - 10, Some(&signer_a));
+        let peer_id = first.peer_id();
+        book.insert(CheckedPeerContact::check(first, &verifier_a));
+        assert_eq!(
+            book.get_validator_peer_ids(signer_a.validator_address()),
+            vec![peer_id]
+        );
+
+        // The same peer now claims a different validator.
+        let second = contact_for(&peer_key, now, Some(&signer_b));
+        book.insert(CheckedPeerContact::check(second, &verifier_b));
+
+        assert!(book
+            .get_validator_peer_ids(signer_a.validator_address())
+            .is_empty());
+        assert_eq!(
+            book.get_validator_peer_ids(signer_b.validator_address()),
+            vec![peer_id]
+        );
+    }
+
+    #[test]
+    fn dropping_the_claim_drops_the_index_entry() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        let first = contact_for(&peer_key, now - 10, Some(&signer));
+        let peer_id = first.peer_id();
+        book.insert(CheckedPeerContact::check(first, &verifier));
+
+        // A pending refresh with the same address keeps the verified binding.
+        let pending = contact_for(&peer_key, now - 5, Some(&signer));
+        book.insert(CheckedPeerContact::check(
+            pending,
+            &NoopValidatorClaimVerifier,
+        ));
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![peer_id]
+        );
+        assert!(!book.get(&peer_id).unwrap().is_validator_verified());
+
+        // A newer contact from the same peer without any claim.
+        let second = contact_for(&peer_key, now, None);
+        book.insert(CheckedPeerContact::check(second, &verifier));
+
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+        // The lookup also filters on the current claim, so check the binding itself is gone.
+        assert!(book.verified_claim_timestamps.is_empty());
+    }
+
+    #[test]
+    fn stale_contact_does_not_replace_a_newer_one() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        let newer = contact_for(&peer_key, now, None);
+        book.insert(CheckedPeerContact::check(newer, &verifier));
+
+        // An older contact carrying a claim must not be able to re-add the peer to the index.
+        let older = contact_for(&peer_key, now - 10, Some(&signer));
+        book.insert(CheckedPeerContact::check(older, &verifier));
+
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+    }
+
+    #[test]
+    fn house_keeping_removes_index_entries() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let peer_key = Keypair::generate_ed25519();
+        let stale_ts = now_secs() - PeerContactBook::MAX_PEER_AGE * 2;
+
+        let contact = contact_for(&peer_key, stale_ts, Some(&signer));
+        book.insert(CheckedPeerContact::check(contact, &verifier));
+        assert_eq!(
+            book.verified_claim_timestamps[signer.validator_address()].len(),
+            1
+        );
+
+        book.house_keeping();
+
+        assert!(book
+            .get_validator_peer_ids(signer.validator_address())
+            .is_empty());
+        assert!(!book
+            .verified_claim_timestamps
+            .contains_key(signer.validator_address()));
+    }
+
+    #[test]
+    fn newest_claim_is_returned_first() {
+        let (_own_key, mut book) = empty_book();
+        let (signer, verifier) = validator(1);
+        let now = now_secs();
+
+        let old_key = Keypair::generate_ed25519();
+        let old = contact_for(&old_key, now - 60, Some(&signer));
+        let old_peer_id = old.peer_id();
+        book.insert(CheckedPeerContact::check(old, &verifier));
+
+        let new_key = Keypair::generate_ed25519();
+        let new = contact_for(&new_key, now, Some(&signer));
+        let new_peer_id = new.peer_id();
+        book.insert(CheckedPeerContact::check(new, &verifier));
+
+        assert_eq!(
+            book.get_validator_peer_ids(signer.validator_address()),
+            vec![new_peer_id, old_peer_id]
+        );
     }
 
     #[test]
@@ -1068,5 +1538,43 @@ mod tests {
             TaggedSignature::from_bytes(record_signature.as_bytes().to_vec()),
         );
         assert!(!record_as_claim.verify(&key_pair.public));
+    }
+
+    #[test]
+    fn pending_address_flip_does_not_resurrect_the_old_binding() {
+        let (_own_key, mut book) = empty_book();
+        let (signer_a, verifier_a) = validator(1);
+        let (signer_b, _verifier_b) = validator(2);
+        let peer_key = Keypair::generate_ed25519();
+        let now = now_secs();
+
+        let first = contact_for(&peer_key, now - 20, Some(&signer_a));
+        let peer_id = first.peer_id();
+        book.insert(CheckedPeerContact::check(first, &verifier_a));
+        assert_eq!(
+            book.get_validator_peer_ids(signer_a.validator_address()),
+            vec![peer_id]
+        );
+
+        // The peer switches to another validator address and back, and neither claim gets a
+        // conclusive check.
+        let switched = contact_for(&peer_key, now - 10, Some(&signer_b));
+        book.insert(CheckedPeerContact::check(
+            switched,
+            &NoopValidatorClaimVerifier,
+        ));
+        assert!(book.verified_claim_timestamps.is_empty());
+
+        let back = contact_for(&peer_key, now, Some(&signer_a));
+        book.insert(CheckedPeerContact::check(back, &NoopValidatorClaimVerifier));
+
+        // The binding to the first address ended with the switch. Claiming that address again
+        // without a conclusive check must not bring it back.
+        assert!(book
+            .get_validator_peer_ids(signer_a.validator_address())
+            .is_empty());
+        assert!(book.verified_claim_timestamps.is_empty());
+        assert!(!book.get(&peer_id).unwrap().is_validator_verified());
+        assert!(!book.get(&peer_id).unwrap().is_gossipable());
     }
 }
