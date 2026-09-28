@@ -1,7 +1,6 @@
 pub mod error;
 pub mod network_impl;
 pub mod single_response_requester;
-pub mod validator_record;
 
 use std::future::Future;
 
@@ -10,6 +9,7 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
+    validator_record,
 };
 use nimiq_primitives::slots_allocation::Validators;
 

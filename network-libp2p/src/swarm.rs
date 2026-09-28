@@ -696,7 +696,7 @@ mod tests {
 
     use libp2p::kad::{Record, RecordKey};
     use nimiq_keys::Address;
-    use nimiq_validator_network::validator_record::ValidatorRecord;
+    use nimiq_network_interface::validator_record::ValidatorRecord;
 
     use super::{store_dht_record, DhtRecord, DhtResults};
 
