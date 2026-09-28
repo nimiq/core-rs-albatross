@@ -465,6 +465,11 @@ impl PeerContactBook {
         services_filter: Services,
         only_secure_ws_connections: bool,
     ) {
+        // Don't insert our own contact into our peer contacts. Peers do echo it back to us.
+        if contact.peer_id() == self.own_peer_id {
+            return;
+        }
+
         let filter = InsertFilter {
             services: services_filter,
             only_secure_ws_connections,
@@ -721,5 +726,50 @@ mod serde_public_key {
             .map_err(|_| D::Error::custom("Invalid value"))?;
 
         Ok(PublicKey::from(pk))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_test_log::test;
+
+    use super::*;
+
+    fn now_secs() -> u64 {
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    }
+
+    fn contact_for(keypair: &Keypair, timestamp: u64) -> SignedPeerContact {
+        PeerContact::new(
+            ["/ip4/127.0.0.1/tcp/8443".parse().unwrap()],
+            keypair.public(),
+            Services::all(),
+            timestamp,
+        )
+        .unwrap()
+        .sign(keypair)
+    }
+
+    fn empty_book() -> (Keypair, PeerContactBook) {
+        let keypair = Keypair::generate_ed25519();
+        let own_contact = contact_for(&keypair, now_secs());
+        (
+            keypair.clone(),
+            PeerContactBook::new(own_contact, false, true, true),
+        )
+    }
+
+    #[test]
+    fn insert_filtered_ignores_our_own_contact() {
+        let (_own_key, mut book) = empty_book();
+        let own_contact = book.get_own_contact().signed().clone();
+        let own_peer_id = own_contact.peer_id();
+
+        book.insert_filtered(own_contact, Services::all(), false);
+
+        assert!(book.get(&own_peer_id).is_none());
     }
 }
