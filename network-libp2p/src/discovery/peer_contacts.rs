@@ -11,17 +11,20 @@ use libp2p::{
     multiaddr::Protocol,
     Multiaddr, PeerId,
 };
-use nimiq_keys::{Address, KeyPair};
+use nimiq_keys::{Address, Ed25519Signature, KeyPair};
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
     peer_info::{PeerInfo, Services},
     validator_claim::ValidatorClaim,
 };
-use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature};
+use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature, TaggedSigned};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use super::validator_verifier::{
+    InvalidReason, SignedValidatorClaim, ValidatorClaimVerifier, ValidatorVerification,
+};
 use crate::{utils, Network};
 
 #[derive(Debug, Error)]
@@ -66,6 +69,12 @@ impl ValidatorInfo {
     /// The validator address claimed by this info. The claim is not verified here.
     pub fn validator_address(&self) -> &Address {
         &self.validator_address
+    }
+
+    /// Whether the signature has the size of an Ed25519 signature. A signature of any other size
+    /// can never verify, so the claim is bogus without looking up the validator's signing key.
+    fn has_well_formed_signature(&self) -> bool {
+        self.signature.as_bytes().len() == Ed25519Signature::SIZE
     }
 }
 
@@ -212,6 +221,30 @@ impl PeerContact {
     pub fn set_validator_info(&mut self, validator_info: Option<ValidatorInfo>) {
         self.validator_info = validator_info;
     }
+
+    /// Whether this contact carries a validator claim whose signature is malformed, i.e. does not
+    /// even have the size of an Ed25519 signature. Such a claim can never be honest, so it is
+    /// rejected without spending any budget on it, and a relayed contact carrying one is not
+    /// stored at all (see [`PeerContactBook::insert_filtered`]).
+    pub fn has_malformed_validator_claim(&self) -> bool {
+        self.validator_info
+            .as_ref()
+            .is_some_and(|info| !info.has_well_formed_signature())
+    }
+
+    /// Reconstructs the signed [`ValidatorClaim`] of this contact, if any.
+    ///
+    /// The claim binds the contact's peer ID and timestamp to the validator address, so it is
+    /// only meaningful together with the contact it was taken from.
+    pub fn signed_validator_claim(&self) -> Option<SignedValidatorClaim> {
+        let validator_info = self.validator_info.as_ref()?;
+        let claim = ValidatorClaim::new(
+            self.peer_id(),
+            validator_info.validator_address.clone(),
+            self.timestamp,
+        );
+        Some(TaggedSigned::new(claim, validator_info.signature.clone()))
+    }
 }
 
 impl TaggedSignable for PeerContact {
@@ -248,9 +281,32 @@ impl SignedPeerContact {
     pub fn peer_id(&self) -> PeerId {
         self.inner.peer_id()
     }
+
+    /// Checks the validator claim carried by this contact, returning `None` if it makes none.
+    ///
+    /// This is pure and takes no contact book locks, so it can (and must) be called before
+    /// inserting the contact into the book.
+    ///
+    /// A claim whose signature does not even have the size of one is rejected without asking
+    /// `verifier`, which would look up the validator's signing key first.
+    pub fn check_validator_claim(
+        &self,
+        verifier: &dyn ValidatorClaimVerifier,
+    ) -> Option<ValidatorVerification> {
+        if !self.inner.validator_info()?.has_well_formed_signature() {
+            return Some(ValidatorVerification::Invalid(
+                InvalidReason::InvalidSignature,
+            ));
+        }
+        let signed_claim = self.inner.signed_validator_claim()?;
+        Some(verifier.verify_validator_claim(&signed_claim))
+    }
 }
 
 /// The filter that [`PeerContactBook::insert_filtered`] applies to contacts relayed to us.
+///
+/// Besides the fields below, a contact that carries a validator claim whose signature is
+/// malformed is always filtered out; see [`PeerContactBook::insert_filtered`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InsertFilter {
     /// The services a contact must provide, unless both we and the contact are validators.
@@ -408,8 +464,19 @@ impl PeerContactBook {
 
     /// Whether [`Self::insert_filtered`] keeps `peer_contact` under `filter`: it provides the
     /// services we need (or both we and it are validators), advertises a secure websocket address
-    /// if we require one, and is neither from the future nor older than [`Self::MAX_PEER_AGE`].
+    /// if we require one, is neither from the future nor older than [`Self::MAX_PEER_AGE`], and
+    /// does not carry a validator claim whose signature is malformed.
     fn passes_filter(&self, peer_contact: &PeerContact, filter: &InsertFilter) -> bool {
+        // A claim whose signature does not even have the size of one can never be honest: every
+        // validator signs its claims with an Ed25519 key. Such a contact is not worth storing, let
+        // alone the bytes of that signature, which are bounded by the message size only. The
+        // contact is dropped silently, like any other contact that does not pass this filter,
+        // rather than failing its signature check, since nodes that do not know about validator
+        // claims relay such contacts like any other, and must not be disconnected for it.
+        if peer_contact.has_malformed_validator_claim() {
+            return false;
+        }
+
         // A peer is interesting to us in two cases:
         // - We are configured as a validator, and the peer is also a validator, then that peer is
         //   interesting regardless of the services that are provided by that peer.
@@ -497,6 +564,12 @@ impl PeerContactBook {
     /// If the filter matches the services provided by the contact, it is added.
     /// Otherwise it is ignored.
     /// The services_filter argument to this function contains the services that are required.
+    ///
+    /// A contact carrying a validator claim whose signature is malformed is ignored as well (see
+    /// `passes_filter`). This is for contacts relayed to us by other peers, which may
+    /// hand us any number of them. The contact a peer presents for itself in its handshake goes
+    /// through [`Self::insert`] and is stored regardless of its claim, so that the peer can be
+    /// dialed again; there is one such contact per connection.
     pub fn insert_filtered(
         &mut self,
         contact: SignedPeerContact,
@@ -775,7 +848,6 @@ mod tests {
     };
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng;
-    use nimiq_utils::tagged_signing::TaggedSigned;
 
     use super::*;
 
