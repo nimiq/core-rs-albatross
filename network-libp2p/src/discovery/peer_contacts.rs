@@ -30,6 +30,15 @@ pub enum PeerContactError {
     AdvertisedAddressesExceeded,
 }
 
+/// Whether a contact timestamped `timestamp` (seconds since the epoch) exceeds `max_age` as of
+/// `unix_time`. Future timestamps are treated as exceeded, to prevent immortal entries from
+/// untrusted peers.
+fn contact_exceeds_age(timestamp: u64, max_age: Duration, unix_time: Duration) -> bool {
+    unix_time
+        .checked_sub(Duration::from_secs(timestamp))
+        .is_none_or(|age| age > max_age)
+}
+
 /// The validator info contains all information which is not present in a [PeerContact]
 /// such that a [ValidatorRecord] can be constructed. Importantly this also includes the signature.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -204,6 +213,15 @@ impl SignedPeerContact {
     }
 }
 
+/// The filter that [`PeerContactBook::insert_filtered`] applies to contacts relayed to us.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InsertFilter {
+    /// The services a contact must provide, unless both we and the contact are validators.
+    pub services: Services,
+    /// Whether a contact must advertise a secure websocket address.
+    pub only_secure_ws_connections: bool,
+}
+
 /// Meta information attached to peer contact info objects. This is meant to be mutable and change over time.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct PeerContactMeta {
@@ -273,11 +291,7 @@ impl PeerContactInfo {
 
     /// Returns whether the peer contact exceeds its age limit
     pub fn exceeds_age(&self, max_age: Duration, unix_time: Duration) -> bool {
-        unix_time
-            .checked_sub(Duration::from_secs(self.contact.inner.timestamp()))
-            // Future timestamps (checked_sub returns None) are treated as exceeded
-            // to prevent immortal entries from untrusted peers.
-            .is_none_or(|age| age > max_age)
+        contact_exceeds_age(self.contact.inner.timestamp(), max_age, unix_time)
     }
 
     /// Returns true if the services provided are interesting to me
@@ -355,6 +369,49 @@ impl PeerContactBook {
         }
     }
 
+    /// Whether [`Self::insert_filtered`] keeps `peer_contact` under `filter`: it provides the
+    /// services we need (or both we and it are validators), advertises a secure websocket address
+    /// if we require one, and is neither from the future nor older than [`Self::MAX_PEER_AGE`].
+    fn passes_filter(&self, peer_contact: &PeerContact, filter: &InsertFilter) -> bool {
+        // A peer is interesting to us in two cases:
+        // - We are configured as a validator, and the peer is also a validator, then that peer is
+        //   interesting regardless of the services that are provided by that peer.
+        // - The services provided by the peer are a superset of the requested services.
+        let we_are_validator = self
+            .own_peer_contact
+            .services()
+            .contains(Services::VALIDATOR);
+        let keep_validator =
+            we_are_validator && peer_contact.services.contains(Services::VALIDATOR);
+        if !keep_validator && !peer_contact.services.contains(filter.services) {
+            return false;
+        }
+
+        // Check that the peer provides secure ws addresses if required.
+        if filter.only_secure_ws_connections
+            && !peer_contact
+                .addresses
+                .iter()
+                .any(utils::is_address_ws_secure)
+        {
+            return false;
+        }
+
+        let current_ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Reject contacts with timestamps in the future, and contacts that are older than the
+        // allowed age.
+        peer_contact.timestamp <= current_ts
+            && !contact_exceeds_age(
+                peer_contact.timestamp,
+                Duration::from_secs(PeerContactBook::MAX_PEER_AGE),
+                Duration::from_secs(current_ts),
+            )
+    }
+
     /// Insert a peer contact or update an existing one
     pub fn insert(&mut self, contact: SignedPeerContact) {
         // Don't insert our own contact into our peer contacts
@@ -368,26 +425,34 @@ impl PeerContactBook {
             .unwrap()
             .as_secs();
 
-        let info = PeerContactInfo::from(contact);
-        let peer_id = info.peer_id;
-
         // Reject contacts with timestamps in the future
-        if info.contact().timestamp > current_ts {
+        if contact.inner.timestamp > current_ts {
             return;
         }
 
-        match self.peer_contacts.entry(peer_id) {
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
-                let entry_value = entry.get_mut();
-                // Only update the contact if the timestamp is greater than the entry we have
-                if entry_value.contact().timestamp < info.contact().timestamp {
-                    *entry_value = Arc::new(info);
-                }
+        self.store(contact);
+    }
+
+    /// Stores a contact, replacing an existing one only if the new one is strictly newer.
+    fn store(&mut self, contact: SignedPeerContact) {
+        let peer_id = contact.inner.peer_id();
+
+        if let Some(existing) = self.peer_contacts.get(&peer_id) {
+            // Only update the contact if the timestamp is greater than the entry we have
+            if existing.contact().timestamp >= contact.inner.timestamp {
+                return;
             }
-            std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(Arc::new(info));
-            }
+        } else {
+            log::trace!(
+                peer_id = %peer_id,
+                services = ?contact.inner.services,
+                addresses = ?contact.inner.addresses,
+                "Adding peer contact",
+            );
         }
+
+        self.peer_contacts
+            .insert(peer_id, Arc::new(PeerContactInfo::from(contact)));
     }
 
     /// Inserts a peer contact or update an existing using the service filtering.
@@ -400,68 +465,15 @@ impl PeerContactBook {
         services_filter: Services,
         only_secure_ws_connections: bool,
     ) {
-        let info = PeerContactInfo::from(contact);
-
-        // A peer is interesting to us in two cases:
-        // - We are configured as a validator, and the peer is also a validator, then that peer is
-        //   interesting regardless of the services that are provided by that peer.
-        // - The services provided by the peer are a superset of the requested services.
-        let we_are_validator = self
-            .own_peer_contact
-            .services()
-            .contains(Services::VALIDATOR);
-        let keep_validator = we_are_validator && info.services().contains(Services::VALIDATOR);
-        if !keep_validator && !info.matches(services_filter) {
+        let filter = InsertFilter {
+            services: services_filter,
+            only_secure_ws_connections,
+        };
+        if !self.passes_filter(&contact.inner, &filter) {
             return;
         }
 
-        // Check that the peer provides secure ws addresses if required.
-        if only_secure_ws_connections {
-            let peer_contact = &info.contact.inner;
-            let has_secure_ws_connections = peer_contact
-                .addresses
-                .iter()
-                .any(utils::is_address_ws_secure);
-            if !has_secure_ws_connections {
-                return;
-            }
-        }
-
-        let current_ts = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        // Reject contacts with timestamps in the future
-        if info.contact().timestamp > current_ts {
-            return;
-        }
-
-        // Rejects contacts that are older than the allowed age
-        if info.exceeds_age(
-            Duration::from_secs(PeerContactBook::MAX_PEER_AGE),
-            Duration::from_secs(current_ts),
-        ) {
-            return;
-        }
-
-        let info = Arc::new(info);
-        match self.peer_contacts.entry(info.peer_id) {
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
-                if entry.get().contact().timestamp < info.contact().timestamp {
-                    entry.insert(info);
-                }
-            }
-            std::collections::hash_map::Entry::Vacant(entry) => {
-                log::trace!(
-                    peer_id = %info.peer_id,
-                    services = ?info.services(),
-                    addresses = ?info.contact.inner.addresses,
-                    "Adding peer contact",
-                );
-                entry.insert(info);
-            }
-        }
+        self.store(contact);
     }
 
     /// Inserts a set of contacts or updates existing ones
@@ -560,7 +572,7 @@ impl PeerContactBook {
         let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
         trace!(?addresses, "Adding own addresses");
         contact.add_addresses(addresses);
-        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
+        self.sign_own_contact(contact, keypair);
     }
 
     /// Removes a set of addresses from the list of addresses known for our own.
@@ -572,7 +584,7 @@ impl PeerContactBook {
         let mut contact = self.own_peer_contact.contact.inner.clone();
         let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
         contact.remove_addresses(addresses);
-        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
+        self.sign_own_contact(contact, keypair);
     }
 
     /// Updates the timestamp of our own contact
@@ -583,6 +595,11 @@ impl PeerContactBook {
         // Update timestamp
         contact.set_current_time();
 
+        self.sign_own_contact(contact, keypair);
+    }
+
+    /// Signs `contact` as our own contact.
+    fn sign_own_contact(&mut self, contact: PeerContact, keypair: &Keypair) {
         self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
     }
 
