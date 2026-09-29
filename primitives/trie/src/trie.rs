@@ -565,7 +565,9 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
         // Descend down the tree and collect nodes to be updated.
         loop {
             // This function should only be called with keys in the missing range.
-            assert_ne!(&node.key, key);
+            if node.key == *key {
+                return Err(MerkleRadixTrieError::WrongPrefix);
+            }
 
             // Check that the key we are trying to update can exist in this part of the tree.
             if !node.key.is_prefix_of(key) {
