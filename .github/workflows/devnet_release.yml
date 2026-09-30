@@ -14,6 +14,7 @@ jobs:
         - FourValidatorsReconnect
         - MultipleValidatorsDown
         - FourValidatorsReconnectRmDatabase
+        - FourValidatorsReconnectEraseState
         - FourValidatorsReconnectSpammer
         - MacroBlockProduction
         - Validators90sDownFullNodes
@@ -28,6 +29,10 @@ jobs:
           devnet_args: -t .github/devnet_topologies/four_validators.toml -k 2 -R -as
         - test: FourValidatorsReconnectRmDatabase
           devnet_args: -t .github/devnet_topologies/four_validators.toml -d -R
+        - test: FourValidatorsReconnectEraseState
+          # Restart validators with their whole state dir erased (incl. peer_key.dat), so each
+          # rejoins with a new PeerId. Regression test for peer ID rediscovery (issue #725).
+          devnet_args: -t .github/devnet_topologies/four_validators.toml -e -R
         - test: FourValidatorsReconnectSpammer
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_3.toml -R
         - test: MacroBlockProduction
