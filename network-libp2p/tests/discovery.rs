@@ -173,6 +173,12 @@ struct TestNode {
 
 impl TestNode {
     pub fn new() -> Self {
+        Self::with_extra_own_address(None)
+    }
+
+    /// Creates a node whose own contact also advertises `extra_address`, which `PeerContact::new`
+    /// would drop if it isn't supported by all peers.
+    pub fn with_extra_own_address(extra_address: Option<Multiaddr>) -> Self {
         let keypair = Keypair::generate_ed25519();
         let peer_id = PeerId::from(keypair.public());
 
@@ -200,7 +206,7 @@ impl TestNode {
             only_secure_ws_connections: false,
         };
 
-        let peer_contact = PeerContact::new(
+        let mut peer_contact = PeerContact::new(
             Some(address.clone()),
             keypair.public(),
             config.required_services,
@@ -209,8 +215,9 @@ impl TestNode {
                 .unwrap()
                 .as_secs(),
         )
-        .expect("PeerContact must be creatable")
-        .sign(&keypair);
+        .expect("PeerContact must be creatable");
+        peer_contact.addresses.extend(extra_address);
+        let peer_contact = peer_contact.sign(&keypair);
 
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(
             peer_contact,
@@ -687,5 +694,100 @@ fn test_insert_filtered_only_replaces_with_newer_timestamp() {
         peer_contact_book.get(&peer_id).unwrap().signed(),
         &newer_contact,
         "newer timestamp must replace the existing contact"
+    );
+}
+
+#[test]
+fn test_insert_rejects_contacts_old_peers_cannot_decode() {
+    let own_contact = random_peer_contact(1, Services::FULL_BLOCKS);
+    let mut peer_contact_book = PeerContactBook::new(own_contact, false, true, true);
+
+    let keypair = Keypair::generate_ed25519();
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    // Built by hand since `PeerContact::new` drops such addresses from our own contact.
+    let mut peer_contact = PeerContact::new(
+        Some("/dns/peer.local/tcp/443/wss".parse().unwrap()),
+        keypair.public(),
+        Services::FULL_BLOCKS,
+        now,
+    )
+    .expect("Peer contact must be creatable");
+    peer_contact.addresses.push(
+        "/dns/peer.local/tcp/443/wss/http-path/nimiq"
+            .parse()
+            .unwrap(),
+    );
+    let contact = peer_contact.sign(&keypair);
+    assert!(contact.verify());
+
+    let peer_id = contact.public_key().clone().to_peer_id();
+
+    peer_contact_book.insert(contact.clone());
+    peer_contact_book.insert_filtered(contact, Services::FULL_BLOCKS, false);
+    assert!(
+        peer_contact_book.get(&peer_id).is_none(),
+        "contacts with /http-path addresses must not be stored, since they would be relayed"
+    );
+}
+
+#[test]
+fn test_own_contact_drops_addresses_old_peers_cannot_decode() {
+    let keypair = Keypair::generate_ed25519();
+    let address: Multiaddr = "/dns/peer.local/tcp/443/wss".parse().unwrap();
+    let http_path_address: Multiaddr = "/dns/peer.local/tcp/443/wss/http-path/nimiq"
+        .parse()
+        .unwrap();
+
+    let mut peer_contact = PeerContact::new(
+        [address.clone(), http_path_address.clone()],
+        keypair.public(),
+        Services::FULL_BLOCKS,
+        0,
+    )
+    .expect("Peer contact must be creatable");
+    assert_eq!(peer_contact.addresses, vec![address.clone()]);
+
+    peer_contact.add_addresses(vec![http_path_address]);
+    assert_eq!(peer_contact.addresses, vec![address]);
+}
+
+#[test(tokio::test)]
+pub async fn test_peer_with_unsupported_own_address_joins_without_being_relayed() {
+    let mut node1 = TestNode::new();
+    let node2 = TestNode::with_extra_own_address(Some(
+        "/dns/peer.local/tcp/443/wss/http-path/nimiq"
+            .parse()
+            .unwrap(),
+    ));
+
+    let peer_contact_book1 = Arc::clone(&node1.peer_contact_book);
+    let peer2_id = node2.peer_id;
+
+    node1.dial(node2.address.clone());
+
+    // Just run node 2
+    spawn(async move {
+        node2.swarm.for_each(|_| async {}).await;
+    });
+
+    let established_peer_id = timeout(Duration::from_secs(10), async {
+        while let Some(event) = node1.swarm.next().await {
+            if let SwarmEvent::Behaviour(discovery::Event::Established { peer_id, .. }) = event {
+                return peer_id;
+            }
+        }
+        panic!("Swarm ended before peer exchange was established");
+    })
+    .await
+    .expect("Peer exchange must be established");
+
+    assert_eq!(established_peer_id, peer2_id);
+    assert!(
+        peer_contact_book1.read().get(&peer2_id).is_none(),
+        "the contact must not be stored, since it would be relayed"
     );
 }

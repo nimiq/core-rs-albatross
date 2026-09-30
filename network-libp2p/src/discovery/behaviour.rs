@@ -271,14 +271,20 @@ impl NetworkBehaviour for Behaviour {
                 peer_address,
                 peer_contact: signed_peer_contact,
             } => {
-                if let Some(peer_contact) = self.peer_contact_book.read().get(&peer_id) {
-                    self.events
-                        .push_back(ToSwarm::GenerateEvent(Event::Established {
-                            peer_id: signed_peer_contact.public_key().clone().to_peer_id(),
-                            peer_address,
-                            peer_contact: peer_contact.contact().clone(),
-                        }));
-                }
+                // The contact book may not have stored the peer's contact, e.g. because it has
+                // addresses that we don't relay. The peer is connected and verified nonetheless.
+                let peer_contact = self
+                    .peer_contact_book
+                    .read()
+                    .get(&peer_id)
+                    .map(|peer_contact| peer_contact.contact().clone())
+                    .unwrap_or_else(|| signed_peer_contact.inner.clone());
+                self.events
+                    .push_back(ToSwarm::GenerateEvent(Event::Established {
+                        peer_id: signed_peer_contact.public_key().clone().to_peer_id(),
+                        peer_address,
+                        peer_contact,
+                    }));
             }
             HandlerOutEvent::ObservedAddress { observed_address } => {
                 self.events

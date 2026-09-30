@@ -36,7 +36,7 @@ use super::{
     peer_contacts::{PeerContactBook, SignedPeerContact},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
-use crate::{AUTONAT_DIAL_BACK_PROTOCOL, AUTONAT_DIAL_REQUEST_PROTOCOL};
+use crate::{utils, AUTONAT_DIAL_BACK_PROTOCOL, AUTONAT_DIAL_REQUEST_PROTOCOL};
 
 #[derive(Debug)]
 pub enum HandlerOutEvent {
@@ -420,7 +420,8 @@ impl ConnectionHandler for Handler {
                     // Send out a handshake message.
 
                     let msg = DiscoveryMessage::Handshake {
-                        observed_address: self.peer_address.clone(),
+                        // Older peers close the connection on addresses they cannot decode.
+                        observed_address: utils::decodable_address_prefix(&self.peer_address),
                         challenge_nonce: self.challenge_nonce.clone(),
                         genesis_hash: self.config.genesis_hash.clone(),
                         limit: self.config.update_limit,

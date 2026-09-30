@@ -82,6 +82,7 @@ impl PeerContact {
         timestamp: u64,
     ) -> Result<Self, PeerContactError> {
         let mut addresses = advertised_addresses.into_iter().collect::<Vec<Multiaddr>>();
+        Self::retain_decodable_addresses(&mut addresses);
         if addresses.len() > Self::MAX_ADDRESSES {
             return Err(PeerContactError::AdvertisedAddressesExceeded);
         }
@@ -135,7 +136,8 @@ impl PeerContact {
     }
 
     /// Adds a set of addresses
-    pub fn add_addresses(&mut self, addresses: Vec<Multiaddr>) {
+    pub fn add_addresses(&mut self, mut addresses: Vec<Multiaddr>) {
+        Self::retain_decodable_addresses(&mut addresses);
         if addresses.len() + self.addresses.len() > Self::MAX_ADDRESSES {
             log::warn!(
                 maximum = Self::MAX_ADDRESSES,
@@ -156,6 +158,25 @@ impl PeerContact {
         let to_remove_addresses: HashSet<Multiaddr> = HashSet::from_iter(addresses);
         self.addresses
             .retain(|addr| !to_remove_addresses.contains(addr));
+    }
+
+    /// Removes the addresses that not every node on the network can decode, since advertising them
+    /// would make older nodes drop our contact and the connection.
+    fn retain_decodable_addresses(addresses: &mut Vec<Multiaddr>) {
+        addresses.retain(|address| {
+            let decodable = utils::is_address_decodable_by_all_peers(address);
+            if !decodable {
+                log::warn!(%address, "Not advertising an address that older peers cannot decode");
+            }
+            decodable
+        });
+    }
+
+    /// Returns whether every node on the network can decode all addresses of this contact.
+    fn has_decodable_addresses(&self) -> bool {
+        self.addresses
+            .iter()
+            .all(utils::is_address_decodable_by_all_peers)
     }
 
     /// Verifies whether the lengths of the advertised addresses are within
@@ -355,10 +376,28 @@ impl PeerContactBook {
         }
     }
 
+    /// Returns whether a received contact may be stored. Stored contacts are relayed to our peers,
+    /// so a contact that older nodes cannot decode would make them drop the connection to us.
+    fn is_relayable(contact: &SignedPeerContact) -> bool {
+        let relayable = contact.inner.has_decodable_addresses();
+        if !relayable {
+            log::debug!(
+                peer_id = %contact.peer_id(),
+                addresses = ?contact.inner.addresses,
+                "Ignoring peer contact with addresses that older peers cannot decode",
+            );
+        }
+        relayable
+    }
+
     /// Insert a peer contact or update an existing one
     pub fn insert(&mut self, contact: SignedPeerContact) {
         // Don't insert our own contact into our peer contacts
         if contact.peer_id() == self.own_peer_id {
+            return;
+        }
+
+        if !Self::is_relayable(&contact) {
             return;
         }
 
@@ -400,6 +439,10 @@ impl PeerContactBook {
         services_filter: Services,
         only_secure_ws_connections: bool,
     ) {
+        if !Self::is_relayable(&contact) {
+            return;
+        }
+
         let info = PeerContactInfo::from(contact);
 
         // A peer is interesting to us in two cases:

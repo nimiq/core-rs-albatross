@@ -35,6 +35,7 @@ pub use network::Network;
 use serde::{
     de::Error, ser::Error as SerializationError, Deserialize, Deserializer, Serialize, Serializer,
 };
+pub use utils::is_address_decodable_by_all_peers;
 
 /// Wrapper to libp2p Keypair identity that implements SerDe Serialize/Deserialize
 #[derive(Clone, Debug)]
