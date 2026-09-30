@@ -1,10 +1,10 @@
 use std::{
     fmt::{Debug, Display},
+    future::Future,
     hash::Hash,
     time::Duration,
 };
 
-use async_trait::async_trait;
 use futures::stream::BoxStream;
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable};
@@ -85,7 +85,6 @@ pub enum SendError {
     AlreadyClosed,
 }
 
-#[async_trait]
 pub trait Network: Send + Sync + Unpin + 'static {
     type PeerId: Copy + Debug + Display + Ord + Hash + Send + Sync + Unpin + 'static;
     type AddressType: Debug + Display + 'static;
@@ -107,11 +106,11 @@ pub trait Network: Send + Sync + Unpin + 'static {
     /// If we currently don't have min number of connected peer that provides those services,
     /// we dial peers.
     /// If there aren't enough peers in the network that provides the required services, we return an error
-    async fn get_peers_by_services(
+    fn get_peers_by_services(
         &self,
         services: Services,
         min_peers: usize,
-    ) -> Result<Vec<Self::PeerId>, Self::Error>;
+    ) -> impl Future<Output = Result<Vec<Self::PeerId>, Self::Error>> + Send;
 
     /// Returns true when the given peer provides the services flags that are required by us
     fn peer_provides_required_services(&self, peer_id: Self::PeerId) -> bool;
@@ -120,43 +119,54 @@ pub trait Network: Send + Sync + Unpin + 'static {
     fn peer_provides_services(&self, peer_id: Self::PeerId, services: Services) -> bool;
 
     /// Disconnects a peer with a close reason
-    async fn disconnect_peer(&self, peer_id: Self::PeerId, close_reason: CloseReason);
+    fn disconnect_peer(
+        &self,
+        peer_id: Self::PeerId,
+        close_reason: CloseReason,
+    ) -> impl Future<Output = ()> + Send;
 
     /// Subscribes to network events
     fn subscribe_events(&self) -> SubscribeEvents<Self::PeerId>;
 
     /// Subscribes to a Gossipsub topic
-    async fn subscribe<T>(
+    fn subscribe<T>(
         &self,
-    ) -> Result<BoxStream<'static, (T::Item, Self::PubsubId)>, Self::Error>
+    ) -> impl Future<Output = Result<BoxStream<'static, (T::Item, Self::PubsubId)>, Self::Error>> + Send
     where
         T: Topic + Sync;
 
     /// Unsubscribes from a Gossipsub topic
-    async fn unsubscribe<T>(&self) -> Result<(), Self::Error>
+    fn unsubscribe<T>(&self) -> impl Future<Output = Result<(), Self::Error>> + Send
     where
         T: Topic + Sync;
 
     /// Publishes a message to a Gossipsub topic
-    async fn publish<T>(&self, item: T::Item) -> Result<(), Self::Error>
+    fn publish<T>(&self, item: T::Item) -> impl Future<Output = Result<(), Self::Error>> + Send
     where
         T: Topic + Sync;
 
     /// Subscribes to a Gossipsub subtopic, providing the subtopic name
-    async fn subscribe_subtopic<T>(
+    fn subscribe_subtopic<T>(
         &self,
         subtopic: String,
-    ) -> Result<BoxStream<'static, (T::Item, Self::PubsubId)>, Self::Error>
+    ) -> impl Future<Output = Result<BoxStream<'static, (T::Item, Self::PubsubId)>, Self::Error>> + Send
     where
         T: Topic + Sync;
 
     /// Unsubscribes from a Gossipsub subtopic
-    async fn unsubscribe_subtopic<T>(&self, subtopic: String) -> Result<(), Self::Error>
+    fn unsubscribe_subtopic<T>(
+        &self,
+        subtopic: String,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send
     where
         T: Topic + Sync;
 
     /// Publishes a message to a Gossipsub subtopic
-    async fn publish_subtopic<T>(&self, subtopic: String, item: T::Item) -> Result<(), Self::Error>
+    fn publish_subtopic<T>(
+        &self,
+        subtopic: String,
+        item: T::Item,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send
     where
         T: Topic + Sync;
 
@@ -166,41 +176,55 @@ pub trait Network: Send + Sync + Unpin + 'static {
         T: Topic + Sync;
 
     /// Gets a value from the distributed hash table
-    async fn dht_get<K, V, T>(&self, k: &K) -> Result<Option<V>, Self::Error>
+    fn dht_get<K, V, T>(
+        &self,
+        k: &K,
+    ) -> impl Future<Output = Result<Option<V>, Self::Error>> + Send
     where
         K: AsRef<[u8]> + Send + Sync,
         V: Deserialize + Send + Sync + TaggedSignable + Ord,
         T: TaggedKeyPair + Send + Sync + Serialize + Deserialize;
 
     /// Puts a value to the distributed hash table
-    async fn dht_put<K, V, T>(&self, k: &K, v: &V, keypair: &T) -> Result<(), Self::Error>
+    fn dht_put<K, V, T>(
+        &self,
+        k: &K,
+        v: &V,
+        keypair: &T,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send
     where
         K: AsRef<[u8]> + Send + Sync,
         V: Serialize + Send + Sync + TaggedSignable + Clone + Ord,
         T: TaggedKeyPair + Send + Sync + Serialize + Deserialize;
 
     /// Dials a peer
-    async fn dial_peer(&self, peer_id: Self::PeerId) -> Result<(), Self::Error>;
+    fn dial_peer(
+        &self,
+        peer_id: Self::PeerId,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Dials an address
-    async fn dial_address(&self, address: Self::AddressType) -> Result<(), Self::Error>;
+    fn dial_address(
+        &self,
+        address: Self::AddressType,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Gets the local peer ID
     fn get_local_peer_id(&self) -> Self::PeerId;
 
     /// Sends a message to a specific peer
-    async fn message<M: Message>(
+    fn message<M: Message>(
         &self,
         request: M,
         peer_id: Self::PeerId,
-    ) -> Result<(), RequestError>;
+    ) -> impl Future<Output = Result<(), RequestError>> + Send;
 
     /// Requests data from a specific peer
-    async fn request<Req: Request>(
+    fn request<Req: Request>(
         &self,
         request: Req,
         peer_id: Self::PeerId,
-    ) -> Result<Req::Response, RequestError>;
+    ) -> impl Future<Output = Result<Req::Response, RequestError>> + Send;
 
     /// Receives messages from peers.
     /// This function returns a stream where the messages are going to be propagated.
@@ -213,9 +237,9 @@ pub trait Network: Send + Sync + Unpin + 'static {
     ) -> BoxStream<'static, (Req, Self::RequestId, Self::PeerId)>;
 
     /// Sends a response to a specific request
-    async fn respond<Req: Request>(
+    fn respond<Req: Request>(
         &self,
         request_id: Self::RequestId,
         response: Req::Response,
-    ) -> Result<(), Self::Error>;
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }

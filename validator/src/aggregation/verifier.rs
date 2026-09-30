@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use nimiq_bls::{AggregatePublicKey, G1Projective, Signature};
 use nimiq_handel::{
     identity::IdentityRegistry,
@@ -25,7 +24,6 @@ impl<I: IdentityRegistry> MultithreadedVerifier<I> {
     }
 }
 
-#[async_trait]
 impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVerifier<I> {
     type Contribution = SignedSkipBlockMessage;
 

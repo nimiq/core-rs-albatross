@@ -136,7 +136,7 @@ async fn it_verifies_inferior_chain_proposals() {
     // Create TendermintProtocol for blockchain2
     let current_validators = blockchain1.read().current_validators().unwrap().clone();
     let hub = MockHub::default();
-    let nw: Arc<Network> = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let nw = Network::build_network(0, Default::default(), &mut Some(hub)).await;
     let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
     let interface = TendermintProtocol::new(
         Arc::clone(&blockchain2),
@@ -383,7 +383,7 @@ async fn it_triggers_version_upgrades() {
     );
     let validator1 = current_validators.validators[0].address.clone();
     let hub = MockHub::default();
-    let nw: Arc<Network> = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let nw = Network::build_network(0, Default::default(), &mut Some(hub)).await;
     let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
     let interface = TendermintProtocol::new(
         Arc::clone(&blockchain),
@@ -437,7 +437,7 @@ async fn it_aborts_proposal_creation_with_incomplete_accounts() {
     let blockchain = Arc::clone(&temp_producer.blockchain);
     let current_validators = blockchain.read().current_validators().unwrap().clone();
     let hub = MockHub::default();
-    let nw: Arc<Network> = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let nw = Network::build_network(0, Default::default(), &mut Some(hub)).await;
     let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
     let interface = TendermintProtocol::new(
         Arc::clone(&blockchain),
@@ -507,7 +507,7 @@ async fn it_does_not_trigger_version_upgrades_on_checkpoint_blocks() {
     );
     let validator1 = current_validators.validators[0].address.clone();
     let hub = MockHub::default();
-    let nw: Arc<Network> = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let nw = Network::build_network(0, Default::default(), &mut Some(hub)).await;
     let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
     let interface = TendermintProtocol::new(
         Arc::clone(&blockchain),
@@ -618,8 +618,7 @@ async fn it_ensures_macro_block_observes_block_separation_time() {
 
     // The proposal path never touches the network, so a mock network suffices.
     let hub = MockHub::default();
-    let nw: Arc<MockNetwork> =
-        TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let nw = MockNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
     let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
     let interface = TendermintProtocol::new(
         Arc::clone(&blockchain),

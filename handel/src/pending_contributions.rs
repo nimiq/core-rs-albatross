@@ -206,7 +206,6 @@ where
 mod tests {
     use std::sync::Arc;
 
-    use async_trait::async_trait;
     use nimiq_bls::PublicKey;
     use nimiq_collections::bitset::BitSet;
     use parking_lot::RwLock;
@@ -273,7 +272,6 @@ mod tests {
 
     struct DumbVerifier;
 
-    #[async_trait]
     impl Verifier for DumbVerifier {
         type Contribution = Contribution;
         async fn verify(&self, _contribution: &Self::Contribution) -> VerificationResult {

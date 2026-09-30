@@ -197,8 +197,7 @@ async fn sync_ingredients() {
     // Produce the blocks.
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
-    let net1: Arc<Network> =
-        TestNetwork::build_network(2, Default::default(), &mut Some(hub)).await;
+    let net1 = Network::build_network(2, Default::default(), &mut Some(hub)).await;
     networks.push(Arc::clone(&net1));
     let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
     let syncer1 = SyncerProxy::new_history(
@@ -226,8 +225,7 @@ async fn sync_ingredients() {
         .unwrap(),
     ));
 
-    let net2: Arc<Network> =
-        TestNetwork::build_network(3, Default::default(), &mut Some(MockHub::default())).await;
+    let net2 = Network::build_network(3, Default::default(), &mut Some(MockHub::default())).await;
     networks.push(Arc::clone(&net2));
     let blockchain2_proxy = BlockchainProxy::from(&blockchain2);
     let syncer2 = SyncerProxy::new_history(

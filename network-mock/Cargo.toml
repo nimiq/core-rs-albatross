@@ -21,7 +21,6 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-async-trait = "0.1"
 derive_more = { version = "2.1", features = ["display", "from", "into"] }
 futures = { workspace = true }
 log = { workspace = true }

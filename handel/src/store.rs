@@ -288,7 +288,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use async_trait::async_trait;
     use nimiq_collections::BitSet;
     use nimiq_test_log::test;
     use parking_lot::RwLock;
@@ -320,7 +319,6 @@ mod tests {
         }
     }
     pub struct TestVerifier {}
-    #[async_trait]
     impl Verifier for TestVerifier {
         type Contribution = Contribution;
         async fn verify(&self, _contribution: &Self::Contribution) -> VerificationResult {

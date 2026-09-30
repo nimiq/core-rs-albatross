@@ -1,6 +1,5 @@
-use std::{num::NonZeroU8, sync::Arc};
+use std::{future::Future, num::NonZeroU8, sync::Arc};
 
-use async_trait::async_trait;
 use instant::SystemTime;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network as NetworkInterface, peer_info::Services};
@@ -10,20 +9,18 @@ use nimiq_network_libp2p::{
 };
 use nimiq_network_mock::{MockHub, MockNetwork};
 
-#[async_trait]
 pub trait TestNetwork<N = Self>
 where
     N: NetworkInterface,
 {
-    async fn build_network(
+    fn build_network(
         peer_id: u64,
         genesis_hash: Blake2bHash,
         hub: &mut Option<MockHub>,
-    ) -> Arc<Self>;
-    async fn connect_networks(networks: &[Arc<N>], seed_peer_id: u64);
+    ) -> impl Future<Output = Arc<Self>> + Send;
+    fn connect_networks(networks: &[Arc<N>], seed_peer_id: u64) -> impl Future<Output = ()> + Send;
 }
 
-#[async_trait]
 impl TestNetwork for MockNetwork {
     async fn build_network(
         peer_id: u64,
@@ -47,7 +44,6 @@ impl TestNetwork for MockNetwork {
     }
 }
 
-#[async_trait]
 impl TestNetwork for Network {
     async fn build_network(
         peer_id: u64,

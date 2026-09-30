@@ -20,7 +20,6 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-async-trait = "0.1"
 bitflags = { version = "2.12", features = ["serde"] }
 futures = { workspace = true }
 log = { workspace = true }
