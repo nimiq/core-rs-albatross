@@ -48,9 +48,9 @@ pub struct MerkleRadixTrie<T: TrieTable> {
 /// Counts the number of updates performed.
 #[derive(Default)]
 struct CountUpdates {
-    branches: i8,
-    hybrids: i8,
-    leaves: i8,
+    branches: i64,
+    hybrids: i64,
+    leaves: i64,
 }
 
 impl CountUpdates {
@@ -70,7 +70,7 @@ impl CountUpdates {
     fn is_empty(&self) -> bool {
         self.branches == 0 && self.hybrids == 0 && self.leaves == 0
     }
-    fn counter_mut(&mut self, kind: Option<TrieNodeKind>) -> Option<&mut i8> {
+    fn counter_mut(&mut self, kind: Option<TrieNodeKind>) -> Option<&mut i64> {
         match kind {
             None => None,
             Some(TrieNodeKind::Root) => None,
@@ -80,11 +80,11 @@ impl CountUpdates {
         }
     }
     fn update_root_data(self, root_data: &mut RootData) {
-        let apply_difference = |data: &mut u64, diff| {
+        let apply_difference = |data: &mut u64, diff: i64| {
             if diff >= 0 {
                 *data += diff as u64;
             } else {
-                *data -= (-(diff as i64)) as u64;
+                *data -= (-diff) as u64;
             }
         };
         apply_difference(&mut root_data.num_branches, self.branches);
@@ -432,6 +432,46 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
 
             // Try to find a child of the current node that matches our key.
             match cur_node.child_key(key, missing_range) {
+                // The matching child is a stump. The key is in the complete part, so it can't be
+                // below the stump and they need a common parent instead
+                Err(MerkleRadixTrieError::ChildIsStump) => {
+                    let (stump_key, stump_hash) = Self::child_entry(&cur_node, key);
+                    let common_prefix = stump_key.common_prefix(key);
+
+                    let mut new_node = TrieNode::new_leaf(key.clone(), value);
+                    if common_prefix == *key {
+                        // The new node is the parent of the stump. Thus it needs to be a hybrid node
+                        new_node.put_child(&stump_key, stump_hash).unwrap();
+                        self.put_node(txn, &new_node, OldValue::None);
+
+                        count_updates = CountUpdates {
+                            hybrids: 1,
+                            ..Default::default()
+                        };
+                        root_path.push(cur_node);
+                        root_path.push(new_node);
+                    } else {
+                        // The new node is a sibling of the stump. We insert a new branch node as
+                        // the parent of both
+                        self.put_node(txn, &new_node, OldValue::None);
+
+                        let mut new_parent = TrieNode::new_empty(common_prefix);
+                        new_parent.put_child(&stump_key, stump_hash).unwrap();
+                        new_parent
+                            .put_child(&new_node.key, new_node.hash_assert())
+                            .unwrap();
+                        self.put_node(txn, &new_parent, OldValue::None);
+
+                        count_updates = CountUpdates {
+                            branches: 1,
+                            leaves: 1,
+                            ..Default::default()
+                        };
+                        root_path.push(cur_node);
+                        root_path.push(new_parent);
+                    }
+                    break;
+                }
                 // If no matching child exists, add a new child to the current node.
                 Err(_) => {
                     // Create and store the new node.
@@ -504,7 +544,8 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
             .expect("The Merkle Radix Trie didn't have a root node!");
 
         let mut root_path = Vec::new();
-        let mut new_stump = false;
+        let mut count_updates = CountUpdates::default();
+        let new_stump;
         // Descend down the tree and collect nodes to be updated.
         loop {
             // Check that the key we are trying to update can exist in this part of the tree.
@@ -512,96 +553,65 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
                 return Err(MerkleRadixTrieError::ChildDoesNotExist);
             }
 
-            // Descend to the corresponding child.
-            match node.child_key(key, missing_range) {
-                Ok(child_key) => {
-                    let child = self
-                        .get_node(txn, &child_key)
-                        .expect("Child should be present");
-                    let parent = mem::replace(&mut node, child);
-                    root_path.push(parent);
-                }
-                e @ Err(MerkleRadixTrieError::ChildIsStump)
-                | e @ Err(MerkleRadixTrieError::ChildDoesNotExist) => {
-                    // We cannot continue further down as the next node is outside our trie.
-                    // Update this node prior to `update_keys` (which only updates the other nodes in the root path).
-                    node.put_child_no_hash(key).expect("Prefix must be correct");
-                    self.put_node(txn, &node, OldValue::Unchanged);
+            let idx = node.child_index(key)?;
+            let Some(child) = &node.children[idx] else {
+                // There is no child for the key yet, so we add a new stump for it.
+                // Update this node prior to `update_keys` (which only updates the other nodes in the root path)
+                let prev_kind = node.kind();
+                node.put_child_no_hash(key)?;
+                count_updates.apply_update(prev_kind, node.kind());
+                self.put_node(txn, &node, OldValue::Unchanged);
 
-                    // Mark that a new stump has been added.
-                    if let Err(MerkleRadixTrieError::ChildDoesNotExist) = e {
-                        new_stump = true;
-                    }
+                root_path.push(node);
+                new_stump = true;
+                break;
+            };
 
-                    root_path.push(node);
-                    break;
-                }
-                Err(e) => {
-                    return Err(e);
-                }
+            let child_key = node
+                .key
+                .checked_add(&child.suffix)
+                .ok_or(MerkleRadixTrieError::WrongPrefix)?;
+            let common_prefix = child_key.common_prefix(key);
+
+            if !self.is_within_complete_part(&common_prefix, missing_range) {
+                // The key is in the subtree of a stump. We cannot continue further down as the
+                // next node is outside our trie, so we only mark the stump as changed. Its suffix
+                // stays unchanged, since it still points to the missing part of the trie
+                node.put_child(&child_key, Blake2bHash::default())?;
+                self.put_node(txn, &node, OldValue::Unchanged);
+
+                root_path.push(node);
+                new_stump = false;
+                break;
             }
+
+            if common_prefix == child_key {
+                // The child is in the complete part and a prefix of the key, continue there
+                let child = self
+                    .get_node(txn, &child_key)
+                    .expect("Child should be present");
+                let parent = mem::replace(&mut node, child);
+                root_path.push(parent);
+                continue;
+            }
+
+            // The key and the child diverge in the complete part of the trie. We insert a new
+            // branch node as the parent of both, with a new stump for the key
+            let mut new_parent = TrieNode::new_empty(common_prefix);
+            new_parent.put_child(&child_key, child.hash.clone())?;
+            new_parent.put_child_no_hash(key)?;
+            self.put_node(txn, &new_parent, OldValue::None);
+            count_updates.branches += 1;
+
+            root_path.push(node);
+            root_path.push(new_parent);
+            new_stump = true;
+            break;
         }
 
-        self.update_keys(txn, root_path, CountUpdates::default());
+        self.update_keys(txn, root_path, count_updates);
 
         Ok(new_stump)
-    }
-
-    /// Removes the corresponding stump and updates the hashes for a path
-    /// to a node in the missing part of the tree.
-    /// This is used to indicate that the corresponding branch's hash has changed,
-    /// but we cannot provide the accurate hash until a new chunk has been pushed.
-    fn remove_within_missing_part_raw(
-        &self,
-        txn: &mut WriteTransactionProxy,
-        key: &KeyNibbles,
-        missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
-    ) -> Result<(), MerkleRadixTrieError> {
-        let mut node = self
-            .get_root(txn)
-            .expect("The Merkle Radix Trie didn't have a root node!");
-
-        let mut root_path = Vec::new();
-        // Descend down the tree and collect nodes to be updated.
-        loop {
-            // This function should only be called with keys in the missing range.
-            if node.key == *key {
-                return Err(MerkleRadixTrieError::WrongPrefix);
-            }
-
-            // Check that the key we are trying to update can exist in this part of the tree.
-            if !node.key.is_prefix_of(key) {
-                return Err(MerkleRadixTrieError::ChildDoesNotExist);
-            }
-
-            // Descend to the corresponding child.
-            match node.child_key(key, missing_range) {
-                Ok(child_key) => {
-                    let child = self
-                        .get_node(txn, &child_key)
-                        .expect("Child should be present");
-                    let parent = mem::replace(&mut node, child);
-                    root_path.push(parent);
-                }
-                Err(MerkleRadixTrieError::ChildIsStump) => {
-                    // We cannot continue further down as the next node is outside our trie.
-                    // Remove this stump.
-                    node.remove_child(key).expect("Prefix must be correct");
-                    self.put_node(txn, &node, OldValue::Unchanged);
-
-                    root_path.push(node);
-                    break;
-                }
-                Err(MerkleRadixTrieError::ChildDoesNotExist) => unreachable!("Child must exist"),
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
-
-        self.update_keys(txn, root_path, CountUpdates::default());
-
-        Ok(())
     }
 
     pub fn get_chunk_with_proof(
@@ -659,15 +669,11 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
             .expect("root node needs root data")
             .incomplete;
 
-        // And initialize the root path.
-        let mut root_path: Vec<TrieNode> = vec![];
+        // First, remove the stumps from the nodes on the path to the start key
+        let mut path: Vec<TrieNode> = vec![];
         let mut count_updates = CountUpdates::default();
 
         loop {
-            // If we're no longer a prefix of the limit, we're done.
-            if !cur_node.key.is_prefix_of(&keys.start) {
-                break;
-            }
             // Assume we have a tree with the following nodes:
             // 11
             // 12
@@ -686,62 +692,81 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
             // clear from 12..: this means clearing 2, 3 from node 1 // this can't happen, tree is too detailed
             // clear from 122..: this means clearing 2, 3 from node 12 and 3 from node 1
             // clear from 121..: this means clearing 1, 2, 3 from node 12 and 3 from node 1
-            {
-                let cur_digit = keys.start.get(cur_node.key.len());
-                let is_last_digit = keys.start.len() <= cur_node.key.len() + 1;
-                let prune_from = cur_digit.unwrap_or(0) // can only be `None` for the root node
-                    + usize::from(!is_last_digit);
-                assert!(cur_node.key.is_empty() || cur_digit.is_some());
-                let prev_kind = cur_node.kind();
-                for child in &mut cur_node.children[prune_from..16] {
-                    assert!(child
-                        .as_ref()
-                        .map(|c| c.is_stump(&cur_node.key, &missing_range))
-                        .unwrap_or(true));
+            let cur_digit = keys.start.get(cur_node.key.len());
+            let is_last_digit = keys.start.len() <= cur_node.key.len() + 1;
+            let prune_from = cur_digit.unwrap_or(0) // can only be `None` for the root node
+                + usize::from(!is_last_digit);
+            assert!(cur_node.key.is_empty() || cur_digit.is_some());
+            let prev_kind = cur_node.kind();
+            for child in &mut cur_node.children[prune_from..16] {
+                assert!(child
+                    .as_ref()
+                    .map(|c| c.is_stump(&cur_node.key, &missing_range))
+                    .unwrap_or(true));
+                *child = None;
+            }
+            // The child on the path of the key can be a stump too, e.g. after its parent
+            // branch was merged into it
+            if let Some(digit) = cur_digit {
+                let child = &mut cur_node.children[digit];
+                if child
+                    .as_ref()
+                    .is_some_and(|c| c.is_stump(&cur_node.key, &missing_range))
+                {
                     *child = None;
                 }
-
-                // If we only have one child remaining, merge with the parent node.
-                if cur_node.value.is_none()
-                    && !root_path.is_empty()
-                    && cur_node.iter_children().count() == 1
-                {
-                    count_updates.apply_update(prev_kind, None);
-                    self.remove_node(txn, &cur_node.key, OldValue::Unchanged);
-
-                    let only_child_key = cur_node
-                        .iter_children()
-                        .next()
-                        .unwrap()
-                        .key(&cur_node.key, &missing_range)
-                        .expect("no stump");
-
-                    cur_node = root_path.pop().unwrap();
-                    cur_node.put_child_no_hash(&only_child_key).unwrap();
-                } else {
-                    count_updates.apply_update(prev_kind, cur_node.kind());
-                }
-                self.put_node(txn, &cur_node, OldValue::Unchanged);
             }
+            count_updates.apply_update(prev_kind, cur_node.kind());
 
-            if cur_node.key.len() == keys.start.len() {
-                // If we got to our actual key, we're done.
-                root_path.push(cur_node);
-                break;
-            }
-
-            // Try to find a child of the current node that matches our key.
-            let maybe_child_key = cur_node.child_key(&keys.start, &missing_range);
-            root_path.push(cur_node);
-            match maybe_child_key {
-                // If no matching child exists, we're done.
-                Err(_) => break,
-                // If there's a child, then we clear its stumps and continue down the trie.
-                Ok(child_key) => cur_node = self.get_node(txn, &child_key).unwrap(),
+            // Continue with the child on the path to the start key, if there is one
+            let next = if cur_node.key.len() == keys.start.len() {
+                None
+            } else {
+                cur_node
+                    .child_key(&keys.start, &missing_range)
+                    .ok()
+                    .filter(|child_key| child_key.is_prefix_of(&keys.start))
+            };
+            path.push(cur_node);
+            match next {
+                Some(child_key) => cur_node = self.get_node(txn, &child_key).unwrap(),
+                None => break,
             }
         }
 
-        self.update_keys(txn, root_path, count_updates);
+        // Then, going back up, remove the nodes that lost all their children and merge the ones
+        // that are left with a single child into it
+        let mut changed_child = None;
+        while let Some(mut node) = path.pop() {
+            if let Some(child_key) = changed_child.take() {
+                // Mark the changed child as dirty
+                node.put_child(&child_key, Blake2bHash::default()).unwrap();
+            }
+            match path.last_mut() {
+                Some(parent) if node.value.is_none() && node.iter_children().count() <= 1 => {
+                    self.remove_node(txn, &node.key, OldValue::Unchanged);
+                    count_updates.apply_update(node.kind(), None);
+
+                    let prev_parent_kind = parent.kind();
+                    if node.has_children() {
+                        Self::replace_with_only_child(parent, &node);
+                    } else {
+                        parent.remove_child(&node.key).unwrap();
+                    }
+                    count_updates.apply_update(prev_parent_kind, parent.kind());
+                }
+                Some(_) => {
+                    self.put_node(txn, &node, OldValue::Unchanged);
+                    changed_child = Some(node.key);
+                }
+                None => {
+                    mem::take(&mut count_updates).update_root_data(
+                        node.root_data.as_mut().expect("root node needs root data"),
+                    );
+                    self.put_node(txn, &node, OldValue::Unchanged);
+                }
+            }
+        }
     }
 
     /// Marks empty stump children on the rightmost path in the tree.
@@ -961,6 +986,9 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
     }
 
     /// `start_key` is inclusive and marks the first key to be removed.
+    ///
+    /// Everything from `start_key` on becomes part of the missing range again. The removed
+    /// subtrees are replaced by stumps, which keep the hashes of the subtrees where they're known.
     pub fn remove_chunk(
         &self,
         txn: &mut WriteTransactionProxy,
@@ -968,49 +996,79 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
     ) -> Result<(), MerkleRadixTrieError> {
         let missing_range = self.get_missing_range(txn);
 
-        // PITODO: Optimize this.
-        // Currently, we need the whole list of remaining nodes to generate the chunk proof,
-        // and the remaining list of nodes to remove those.
-        let to_remove: Vec<_> = self
-            .get_trie_chunk(
-                txn,
-                &start_key,
-                (self.num_leaves(txn) + self.num_hybrids(txn)) as usize, //PITODO: optimize this
-            )
-            .drain(..)
-            .map(|node| node.key)
-            .collect();
-
-        if to_remove.is_empty() {
+        // Nothing to do if the trie is already missing everything from `start_key` on
+        if missing_range
+            .as_ref()
+            .is_some_and(|range| range.start <= start_key)
+        {
             return Ok(());
         }
 
-        // Next, we get a proof for the last remaining leaf.
-        let proof = if let Some(last_remaining) = self.get_predecessor(txn, &start_key) {
-            self.get_proof(txn, vec![&last_remaining]).unwrap()
-        } else {
-            TrieProof::new(vec![self.get_root(txn).unwrap().into()], Default::default())
-        };
+        // Update the hashes first, so that the stumps keep the hashes of their subtrees
+        let _ = self.update_hashes(txn, &KeyNibbles::ROOT, &missing_range);
 
-        // Then, clear the tree's stumps.
-        if let Some(ref missing_range) = missing_range {
-            self.clear_stumps(txn, missing_range.clone());
+        // Walk down the path to the start key and remove every subtree from the start key on,
+        // keeping only its entry in the parent as a stump
+        let mut count_updates = CountUpdates::default();
+        let mut cur_node = self
+            .get_root(txn)
+            .expect("Merkle Radix Trie must have a root node!");
+        loop {
+            let digit = start_key.get(cur_node.key.len()).unwrap_or(0);
+            let mut next = None;
+            for child in cur_node.children[digit..].iter().flatten() {
+                let child_key = cur_node
+                    .key
+                    .checked_add(&child.suffix)
+                    .ok_or(MerkleRadixTrieError::WrongPrefix)?;
+                if child_key < start_key {
+                    // Only a child on the path to the start key can have smaller keys below it
+                    if child_key.is_prefix_of(&start_key) {
+                        next = Some(child_key);
+                    }
+                } else if !child.is_stump(&cur_node.key, &missing_range) {
+                    self.remove_subtree(txn, &child_key, &missing_range, &mut count_updates);
+                }
+            }
+            match next {
+                Some(child_key) => {
+                    cur_node = self
+                        .get_node(txn, &child_key)
+                        .expect("Child should be present")
+                }
+                None => break,
+            }
         }
-
-        // Then, remove all the items.
-        for key in to_remove {
-            self.remove(txn, &key);
-        }
-
-        // Mark the remaining stumps.
-        self.mark_stumps(txn, start_key.clone().., &proof.nodes)?;
 
         let mut root_node = self.get_root(txn).unwrap();
-        root_node.root_data.as_mut().unwrap().incomplete =
-            Some(ops::RangeFrom { start: start_key });
+        let root_data = root_node.root_data.as_mut().unwrap();
+        count_updates.update_root_data(root_data);
+        root_data.incomplete = Some(start_key..);
         self.put_node(txn, &root_node, OldValue::Unchanged);
 
         Ok(())
+    }
+
+    /// Removes the node with the given key and all nodes below it from the database.
+    fn remove_subtree(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        key: &KeyNibbles,
+        missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
+        count_updates: &mut CountUpdates,
+    ) {
+        let mut stack = vec![key.clone()];
+        while let Some(key) = stack.pop() {
+            let node = self.get_node(txn, &key).expect("Child should be present");
+            // Stumps aren't stored, so there's nothing to remove for them
+            for child in node.iter_children() {
+                if let Ok(child_key) = child.key(&node.key, missing_range) {
+                    stack.push(child_key);
+                }
+            }
+            count_updates.apply_update(node.kind(), None);
+            self.remove_node(txn, &node.key, node.value.into());
+        }
     }
 
     /// Removes the value in the Merkle Radix Trie at the given key. If the key doesn't exist
@@ -1056,17 +1114,12 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
                         // Remove the node from the database.
                         self.remove_node(txn, &cur_node.key, old_value.into());
 
-                        // Get the node's only child and add it to the root path.
-                        let only_child_key = cur_node
-                            .iter_children()
-                            .next()
-                            .unwrap()
-                            .key(&cur_node.key, missing_range)
-                            .expect("no stump");
+                        // Let the parent point to the node's only child instead
+                        let mut parent = root_path.pop().expect("Non-root node must have a parent");
+                        Self::replace_with_only_child(&mut parent, &cur_node);
+                        self.put_node(txn, &parent, OldValue::Unchanged);
 
-                        let only_child = self.get_node(txn, &only_child_key).unwrap();
-
-                        root_path.push(only_child);
+                        root_path.push(parent);
 
                         // We removed a hybrid node.
                         count_updates = CountUpdates {
@@ -1137,17 +1190,12 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
                 self.remove_node(txn, &parent_node.key, OldValue::Unchanged);
                 count_updates.apply_update(parent_node.kind(), None);
 
-                // Get the node's only child and add it to the root path.
-                let only_child_key = parent_node
-                    .iter_children()
-                    .next()
-                    .unwrap()
-                    .key(&parent_node.key, missing_range)
-                    .expect("no stump");
+                // Let the node's parent point to its only child instead
+                let mut grandparent = root_path.pop().expect("Non-root node must have a parent");
+                Self::replace_with_only_child(&mut grandparent, &parent_node);
+                self.put_node(txn, &grandparent, OldValue::Unchanged);
 
-                let only_child = self.get_node(txn, &only_child_key).unwrap();
-
-                root_path.push(only_child);
+                root_path.push(grandparent);
 
                 // Update the keys and hashes of the rest of the root path.
                 self.update_keys(txn, root_path, count_updates);
@@ -1378,10 +1426,10 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
             } else {
                 match value {
                     RevertDiffValue::Put(_) => unreachable!("key should be in incomplete part"),
-                    RevertDiffValue::Remove => {
-                        self.remove_within_missing_part_raw(txn, &key, &missing_range)?
-                    }
-                    RevertDiffValue::UpdateStump => {
+                    // A reverted chunk may have replaced the stump that was added for this key
+                    // with one for a larger part of the trie, so we never remove it. We only mark
+                    // it as changed; the next chunk replaces it anyway
+                    RevertDiffValue::Remove | RevertDiffValue::UpdateStump => {
                         self.update_within_missing_part_raw(txn, &key, &missing_range)?;
                     }
                 }
@@ -1417,6 +1465,32 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
     /// Returns the root node, if there is one.
     fn get_root(&self, txn: &MdbxReadTransaction) -> Option<TrieNode> {
         self.get_node(txn, &KeyNibbles::ROOT)
+    }
+
+    /// Returns the key and hash of the child of `node` at the position of `key`. The child may be
+    /// a stump.
+    fn child_entry(node: &TrieNode, key: &KeyNibbles) -> (KeyNibbles, Blake2bHash) {
+        let child = node.children[node.child_index(key).expect("Key must be below the node")]
+            .as_ref()
+            .expect("Child must exist");
+        let child_key = node
+            .key
+            .checked_add(&child.suffix)
+            .expect("Child key must fit");
+        (child_key, child.hash.clone())
+    }
+
+    /// Replaces `node` in its parent by the node's only child. Only the child's entry is moved,
+    /// so the child may be a stump.
+    fn replace_with_only_child(parent: &mut TrieNode, node: &TrieNode) {
+        let child = node.iter_children().next().expect("Node must have a child");
+        let child_key = node
+            .key
+            .checked_add(&child.suffix)
+            .expect("Child key must fit");
+        parent
+            .put_child(&child_key, child.hash.clone())
+            .expect("Child must be below the parent");
     }
 
     /// Updates the keys for a chain of nodes and marks those nodes as dirty. It assumes that the
@@ -1542,14 +1616,11 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
                 None => break,
                 // If there's a child, then we update the current node and the root path, and
                 // continue down the trie.
-                Some(child) => {
-                    cur_node = self
-                        .get_node(
-                            txn,
-                            &child.key(&cur_node.key, &missing_range).expect("no stump"),
-                        )
-                        .unwrap();
-                }
+                Some(child) => match child.key(&cur_node.key, &missing_range) {
+                    Ok(child_key) => cur_node = self.get_node(txn, &child_key).unwrap(),
+                    // Everything below a stump comes after the given key, we're done
+                    Err(_) => break,
+                },
             }
         }
 
@@ -2768,7 +2839,7 @@ mod tests {
 
     #[test]
     fn remove_chunk_on_empty_tree() {
-        let key_1 = "413f22".parse().unwrap();
+        let key_1: KeyNibbles = "413f22".parse().unwrap();
 
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
@@ -2776,8 +2847,9 @@ mod tests {
         let mut raw_txn = env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 
-        original.remove_chunk(&mut txn, key_1).unwrap();
-        assert!(original.is_complete(&txn));
+        original.remove_chunk(&mut txn, key_1.clone()).unwrap();
+        assert_eq!(original.get_missing_range(&txn), Some(key_1..));
+        assert_eq!(original.count_nodes(&txn), (0, 0, 0));
     }
 
     #[test]
@@ -2804,17 +2876,22 @@ mod tests {
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
 
+        // Nothing is stored from `key_5` on, but the trie is still missing that part afterwards
         original.remove_chunk(&mut txn, key_5.clone()).unwrap();
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
-        assert!(original.is_complete(&txn));
+        assert_eq!(original.get_missing_range(&txn), Some(key_5.clone()..));
 
-        original.remove_chunk(&mut txn, key_3).unwrap();
-        assert_eq!(original.count_nodes(&txn), (0, 1, 2));
-        assert!(!original.is_complete(&txn));
+        // `key_1` keeps `key_3` as a stump child, so it stays a hybrid node
+        let hash = original.root_hash_assert(&txn);
+        original.remove_chunk(&mut txn, key_3.clone()).unwrap();
+        assert_eq!(original.count_nodes(&txn), (0, 2, 1));
+        assert_eq!(original.get_missing_range(&txn), Some(key_3.clone()..));
+        assert_eq!(original.root_hash(&txn), Some(hash));
 
+        // The trie is already missing everything from `key_3` on
         original.remove_chunk(&mut txn, key_5).unwrap();
-        assert_eq!(original.count_nodes(&txn), (0, 1, 2));
-        assert!(!original.is_complete(&txn));
+        assert_eq!(original.count_nodes(&txn), (0, 2, 1));
+        assert_eq!(original.get_missing_range(&txn), Some(key_3..));
     }
 
     #[test]
@@ -2851,5 +2928,495 @@ mod tests {
         original.put_chunk(&mut txn, key_1, chunk, hash).unwrap();
         assert_eq!(original.count_nodes(&txn), (0, 2, 2));
         assert!(original.is_complete(&txn));
+    }
+
+    fn fill(txn: &mut WriteTransactionProxy, full: &MerkleRadixTrie<TestTrie>, keys: &[&str]) {
+        for (i, key) in keys.iter().enumerate() {
+            full.put_raw(txn, &key.parse().unwrap(), vec![i as u8], &None);
+        }
+        full.update_root(txn).unwrap();
+    }
+
+    /// Applies an honest chunk of `size` items to the partial trie.
+    fn push_chunk(
+        txn: &mut WriteTransactionProxy,
+        full: &MerkleRadixTrie<TestTrie>,
+        partial: &MerkleRadixTrie<TestTrieCopy>,
+        size: usize,
+    ) {
+        let start = partial.get_missing_range(txn).unwrap().start;
+        let chunk = full.get_chunk_with_proof(txn, start.clone().., size);
+        let hash = full.root_hash_assert(txn);
+        assert_eq!(
+            partial.put_chunk(txn, start, chunk, hash),
+            Ok(TrieChunkPushResult::Applied)
+        );
+    }
+
+    /// Applies a diff to both tries and checks that the partial trie doesn't report a wrong hash.
+    fn apply_to_both(
+        txn: &mut WriteTransactionProxy,
+        full: &MerkleRadixTrie<TestTrie>,
+        partial: &MerkleRadixTrie<TestTrieCopy>,
+        diff: &[(&str, Option<u8>)],
+    ) -> (RevertTrieDiff, RevertTrieDiff) {
+        let diff = TrieDiff(
+            diff.iter()
+                .map(|(key, value)| (key.parse().unwrap(), value.map(|v| vec![v])))
+                .collect(),
+        );
+        let full_revert = full.apply_diff(txn, diff.clone()).unwrap();
+        full.update_root(txn).unwrap();
+        let partial_revert = partial.apply_diff(txn, diff).unwrap();
+        partial.update_root(txn).ok();
+        assert_consistent(txn, full, partial);
+        (full_revert, partial_revert)
+    }
+
+    fn assert_consistent(
+        txn: &MdbxReadTransaction,
+        full: &MerkleRadixTrie<TestTrie>,
+        partial: &MerkleRadixTrie<TestTrieCopy>,
+    ) {
+        if let Some(hash) = partial.root_hash(txn) {
+            assert_eq!(hash, full.root_hash_assert(txn));
+        }
+        partial.count_nodes(txn);
+    }
+
+    /// Syncs the rest of the partial trie and checks that it ends up equal to the full trie.
+    fn finish_sync(
+        txn: &mut WriteTransactionProxy,
+        full: &MerkleRadixTrie<TestTrie>,
+        partial: &MerkleRadixTrie<TestTrieCopy>,
+    ) {
+        while !partial.is_complete(txn) {
+            push_chunk(txn, full, partial, 1);
+        }
+        assert_eq!(partial.root_hash_assert(txn), full.root_hash_assert(txn));
+        assert_eq!(partial.count_nodes(txn), full.count_nodes(txn));
+    }
+
+    #[test]
+    fn removing_the_last_complete_child_merges_the_branch_into_a_stump() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        fill(&mut txn, &full, &["a1", "a2", "b"]);
+
+        // The chunk ends between the only two children of branch `a`
+        push_chunk(&mut txn, &full, &partial, 1);
+        assert_eq!(
+            partial.get_missing_range(&txn),
+            Some("a2".parse().unwrap()..)
+        );
+
+        // Branch `a` is left with a single stump child
+        apply_to_both(&mut txn, &full, &partial, &[("a1", None)]);
+        finish_sync(&mut txn, &full, &partial);
+    }
+
+    #[test]
+    fn removing_a_hybrid_value_merges_the_node_into_a_stump() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        fill(&mut txn, &full, &["a", "a1", "b"]);
+
+        push_chunk(&mut txn, &full, &partial, 1);
+        assert_eq!(
+            partial.get_missing_range(&txn),
+            Some("a1".parse().unwrap()..)
+        );
+
+        // Hybrid `a` becomes a branch with a single stump child
+        apply_to_both(&mut txn, &full, &partial, &[("a", None)]);
+        finish_sync(&mut txn, &full, &partial);
+    }
+
+    #[test]
+    fn new_key_in_missing_part_splits_a_complete_node() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        fill(&mut txn, &full, &["5a1", "5a2", "6"]);
+
+        push_chunk(&mut txn, &full, &partial, 1);
+        assert_eq!(
+            partial.get_missing_range(&txn),
+            Some("5a2".parse().unwrap()..)
+        );
+
+        // `5f` is in the missing part, but diverges from the complete branch `5a`
+        apply_to_both(&mut txn, &full, &partial, &[("5f", Some(1))]);
+        finish_sync(&mut txn, &full, &partial);
+    }
+
+    #[test]
+    fn update_in_missing_part_keeps_the_stump() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        fill(&mut txn, &full, &["a1", "b12", "b13"]);
+
+        push_chunk(&mut txn, &full, &partial, 1);
+        assert_eq!(
+            partial.get_missing_range(&txn),
+            Some("b".parse().unwrap()..)
+        );
+
+        // `b2` is next to the stump for branch `b1`, which must keep pointing to `b1`
+        apply_to_both(&mut txn, &full, &partial, &[("b2", Some(1))]);
+        let root = partial.get_root(&txn).unwrap();
+        let stump = root.child(&"b".parse().unwrap()).unwrap();
+        assert_eq!(stump.suffix, "b1".parse().unwrap());
+        assert!(!stump.has_hash());
+
+        finish_sync(&mut txn, &full, &partial);
+    }
+
+    #[test]
+    fn new_key_below_a_leaf_in_missing_part_is_counted() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        fill(&mut txn, &full, &["0", "22"]);
+
+        // A valid chunk that ends right below leaf `0`
+        let key_0: KeyNibbles = "0".parse().unwrap();
+        let proof = full.get_proof(&txn, vec![&key_0]).unwrap();
+        let chunk = TrieChunk::new(
+            Some("01".parse().unwrap()),
+            vec![TrieItem::new(key_0, vec![0])],
+            proof,
+        );
+        let hash = full.root_hash_assert(&txn);
+        assert_eq!(
+            partial.put_chunk(&mut txn, KeyNibbles::ROOT, chunk, hash),
+            Ok(TrieChunkPushResult::Applied)
+        );
+
+        // Leaf `0` gets a stump child and becomes a hybrid node
+        apply_to_both(&mut txn, &full, &partial, &[("02", Some(1))]);
+        assert_eq!(partial.count_nodes(&txn), (0, 1, 0));
+        finish_sync(&mut txn, &full, &partial);
+    }
+
+    #[test]
+    fn removing_a_chunk_keeps_the_nodes_above_its_start() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        fill(&mut txn, &full, &["12", "3", "3000", "302", "311"]);
+
+        push_chunk(&mut txn, &full, &partial, 3);
+        let start = partial.get_missing_range(&txn).unwrap().start;
+        assert_eq!(start, "302".parse().unwrap());
+
+        // A block removes everything below `3` that is before the missing part, and its chunk
+        // completes the trie
+        let (full_revert, partial_revert) =
+            apply_to_both(&mut txn, &full, &partial, &[("3", None), ("3000", None)]);
+        push_chunk(&mut txn, &full, &partial, 3);
+        assert!(partial.is_complete(&txn));
+
+        // Reverting the block needs node `3` for the missing part again
+        partial.remove_chunk(&mut txn, start).unwrap();
+        partial.revert_diff(&mut txn, partial_revert).unwrap();
+        partial.update_root(&mut txn).ok();
+        full.revert_diff(&mut txn, full_revert).unwrap();
+        full.update_root(&mut txn).unwrap();
+        assert_eq!(partial.root_hash(&txn), Some(full.root_hash_assert(&txn)));
+        assert_consistent(&txn, &full, &partial);
+
+        finish_sync(&mut txn, &full, &partial);
+    }
+
+    #[test]
+    fn reverting_a_block_after_its_chunk_only_marks_stumps() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        fill(&mut txn, &full, &["0", "10", "12", "2"]);
+
+        // The partial trie is still empty, so the block adds a stump for `12`
+        let (full_revert, partial_revert) =
+            apply_to_both(&mut txn, &full, &partial, &[("12", None)]);
+        // The block's chunk replaces it by a stump for all of branch `1`
+        push_chunk(&mut txn, &full, &partial, 1);
+        assert_eq!(
+            partial.get_missing_range(&txn),
+            Some("1".parse().unwrap()..)
+        );
+
+        // Reverting the block must not remove the stump for branch `1`
+        partial.remove_chunk(&mut txn, KeyNibbles::ROOT).unwrap();
+        partial.revert_diff(&mut txn, partial_revert).unwrap();
+        partial.update_root(&mut txn).ok();
+        full.revert_diff(&mut txn, full_revert).unwrap();
+        full.update_root(&mut txn).unwrap();
+        assert_consistent(&txn, &full, &partial);
+
+        finish_sync(&mut txn, &full, &partial);
+    }
+
+    #[test]
+    fn reverting_a_block_whose_chunk_completed_the_trie() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        fill(&mut txn, &full, &["0", "1"]);
+
+        push_chunk(&mut txn, &full, &partial, 1);
+        let start = partial.get_missing_range(&txn).unwrap().start;
+        assert_eq!(start, "1".parse().unwrap());
+
+        // The block removes everything in the missing part, so its chunk has no items
+        let (full_revert, partial_revert) =
+            apply_to_both(&mut txn, &full, &partial, &[("1", None)]);
+        push_chunk(&mut txn, &full, &partial, 1);
+        assert!(partial.is_complete(&txn));
+
+        // Reverting the block makes the part from the chunk's start missing again
+        partial.remove_chunk(&mut txn, start.clone()).unwrap();
+        assert_eq!(partial.get_missing_range(&txn), Some(start..));
+        partial.revert_diff(&mut txn, partial_revert).unwrap();
+        partial.update_root(&mut txn).ok();
+        full.revert_diff(&mut txn, full_revert).unwrap();
+        full.update_root(&mut txn).unwrap();
+        assert_consistent(&txn, &full, &partial);
+
+        finish_sync(&mut txn, &full, &partial);
+    }
+
+    #[test]
+    fn clearing_stumps_removes_branches_that_no_longer_exist() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        fill(&mut txn, &full, &["1", "21", "23", "24"]);
+
+        push_chunk(&mut txn, &full, &partial, 2);
+        assert_eq!(
+            partial.get_missing_range(&txn),
+            Some("23".parse().unwrap()..)
+        );
+
+        // Branch `2` is left with only `23`, so it no longer exists in the full trie. The
+        // partial trie still has it with two stumps.
+        apply_to_both(&mut txn, &full, &partial, &[("21", None), ("24", None)]);
+
+        // The next chunk must not keep branch `2` with `23` as its only child
+        finish_sync(&mut txn, &full, &partial);
+    }
+
+    #[test]
+    fn clearing_stumps_merges_branches_left_with_one_complete_child() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        fill(&mut txn, &full, &["1", "21", "23", "3"]);
+
+        push_chunk(&mut txn, &full, &partial, 2);
+        assert_eq!(
+            partial.get_missing_range(&txn),
+            Some("23".parse().unwrap()..)
+        );
+
+        // Branch `2` is left with only `21`, so it no longer exists in the full trie. The
+        // partial trie still has it with a stump for `23`.
+        apply_to_both(&mut txn, &full, &partial, &[("23", None)]);
+
+        // The next chunk must merge branch `2` into `21`
+        finish_sync(&mut txn, &full, &partial);
+    }
+
+    /// Deterministic xorshift generator for the state sync simulation.
+    struct SimRng(u64);
+
+    impl SimRng {
+        fn below(&mut self, n: u64) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0 % n
+        }
+
+        /// Short keys over a small alphabet, so that keys share prefixes, become hybrids and
+        /// split each other's branches.
+        fn key(&mut self) -> KeyNibbles {
+            let len = 1 + self.below(4) as usize;
+            (0..len)
+                .map(|_| char::from_digit(self.below(4) as u32, 16).unwrap())
+                .collect::<String>()
+                .parse()
+                .unwrap()
+        }
+
+        /// A diff that creates, updates and prunes entries of `state`.
+        fn diff(&mut self, state: &BTreeMap<KeyNibbles, Vec<u8>>) -> TrieDiff {
+            let mut diff = BTreeMap::new();
+            for _ in 0..=self.below(3) {
+                if !state.is_empty() && self.below(3) == 0 {
+                    let idx = self.below(state.len() as u64) as usize;
+                    let key = state.keys().nth(idx).unwrap().clone();
+                    diff.entry(key).or_insert(None);
+                } else {
+                    let key = self.key();
+                    let value = vec![self.below(256) as u8];
+                    if state.get(&key) != Some(&value) {
+                        diff.entry(key).or_insert(Some(value));
+                    }
+                }
+            }
+            TrieDiff(diff)
+        }
+    }
+
+    struct SimBlock {
+        full_revert: RevertTrieDiff,
+        partial_revert: RevertTrieDiff,
+        prev_missing_start: Option<KeyNibbles>,
+        prev_state: BTreeMap<KeyNibbles, Vec<u8>>,
+    }
+
+    /// Simulates a node that state-syncs a trie while blocks are applied and reverted, and
+    /// checks it against a complete trie that follows the same blocks.
+    fn simulate_state_sync(seed: u64) {
+        let mut rng = SimRng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let full = MerkleRadixTrie::new(&env, TestTrie);
+        let partial = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
+        let mut raw_txn = env.write_transaction();
+        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+
+        let mut state = BTreeMap::new();
+        for _ in 0..(3 + rng.below(12)) {
+            let key = rng.key();
+            let value = vec![rng.below(256) as u8];
+            full.put_raw(&mut txn, &key, value.clone(), &None);
+            state.insert(key, value);
+        }
+        full.update_root(&mut txn).unwrap();
+
+        let mut blocks: Vec<SimBlock> = vec![];
+        let mut step = 0;
+        loop {
+            let ctx = format!("seed {seed}, step {step}");
+            let action = if step < 80 { rng.below(5) } else { 0 };
+            match action {
+                // Apply a chunk of the current state
+                0 | 1 => {
+                    let Some(missing) = partial.get_missing_range(&txn) else {
+                        if step >= 80 {
+                            break;
+                        }
+                        step += 1;
+                        continue;
+                    };
+                    let chunk = full.get_chunk_with_proof(
+                        &txn,
+                        missing.start.clone()..,
+                        1 + rng.below(3) as usize,
+                    );
+                    let hash = full.root_hash_assert(&txn);
+                    assert_eq!(
+                        partial.put_chunk(&mut txn, missing.start.clone(), chunk, hash),
+                        Ok(TrieChunkPushResult::Applied),
+                        "{ctx}: chunk from {}",
+                        missing.start,
+                    );
+                    if let Some(block) = blocks.last_mut() {
+                        block.prev_missing_start.get_or_insert(missing.start);
+                    }
+                }
+                // Apply a block
+                2 | 3 => {
+                    let diff = rng.diff(&state);
+                    let prev_state = state.clone();
+                    for (key, value) in &diff.0 {
+                        match value {
+                            Some(value) => state.insert(key.clone(), value.clone()),
+                            None => state.remove(key),
+                        };
+                    }
+                    let full_revert = full.apply_diff(&mut txn, diff.clone()).unwrap();
+                    full.update_root(&mut txn).unwrap();
+                    let partial_revert = partial
+                        .apply_diff(&mut txn, diff.clone())
+                        .unwrap_or_else(|e| panic!("{ctx}: apply {diff:?}: {e}"));
+                    partial.update_root(&mut txn).ok();
+                    blocks.push(SimBlock {
+                        full_revert,
+                        partial_revert,
+                        prev_missing_start: None,
+                        prev_state,
+                    });
+                }
+                // Revert the latest block, including the chunks applied with it
+                _ => {
+                    if let Some(block) = blocks.pop() {
+                        if let Some(start) = block.prev_missing_start {
+                            partial
+                                .remove_chunk(&mut txn, start)
+                                .unwrap_or_else(|e| panic!("{ctx}: remove chunk: {e}"));
+                        }
+                        partial
+                            .revert_diff(&mut txn, block.partial_revert)
+                            .unwrap_or_else(|e| panic!("{ctx}: revert: {e}"));
+                        partial.update_root(&mut txn).ok();
+                        full.revert_diff(&mut txn, block.full_revert).unwrap();
+                        full.update_root(&mut txn).unwrap();
+                        state = block.prev_state;
+                    }
+                }
+            }
+
+            // A partial trie must never report a root hash that differs from the full trie
+            if let Some(hash) = partial.root_hash(&txn) {
+                assert_eq!(hash, full.root_hash_assert(&txn), "{ctx}: root hash");
+            }
+            // Checks the node counters against the actual nodes
+            partial.count_nodes(&txn);
+            step += 1;
+        }
+
+        assert_eq!(
+            partial.root_hash_assert(&txn),
+            full.root_hash_assert(&txn),
+            "seed {seed}: final root hash"
+        );
+        assert_eq!(
+            partial.count_nodes(&txn),
+            full.count_nodes(&txn),
+            "seed {seed}: final node counts"
+        );
+    }
+
+    #[test]
+    fn partial_trie_follows_blocks_during_state_sync() {
+        for seed in 1..=20 {
+            simulate_state_sync(seed);
+        }
     }
 }
