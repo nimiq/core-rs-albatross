@@ -26,6 +26,9 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 futures = { workspace = true }
 getrandom = { version = "0.4", features = ["wasm_js"] }
+# We need to enable the `js` feature of getrandom 0.2 while we still indirectly depend on it
+# (through rand_core_compat in nimiq-bls)
+getrandom_0_2 = { package="getrandom", version = "0.2", features = ["js"] }
 # We need to enable the `wasm_js` feature of getrandom 0.3 while we still indirectly depend on it
 getrandom_0_3 = { package="getrandom", version = "0.3", features = ["wasm_js"] }
 hex = "0.4"

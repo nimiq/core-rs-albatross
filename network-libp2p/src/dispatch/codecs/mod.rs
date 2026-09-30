@@ -51,7 +51,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl request_response::Codec for MessageCodec {
     type Protocol = StreamProtocol;
     type Request = Option<IncomingRequest>;
