@@ -14,6 +14,8 @@ mod network;
 mod network_metrics;
 mod network_types;
 mod only_secure_ws_transport;
+#[cfg(feature = "tokio-websocket")]
+mod panic_safe_dns_transport;
 mod rate_limiting;
 mod swarm;
 mod utils;

@@ -237,9 +237,11 @@ fn new_transport(
         // TODO: Use websocket over the memory transport
 
         #[cfg(feature = "tokio-websocket")]
-        let mut transport = websocket::Config::new(dns::tokio::Transport::system(
-            tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
-        )?);
+        let mut transport = websocket::Config::new(
+            crate::panic_safe_dns_transport::Transport::new(dns::tokio::Transport::system(
+                tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
+            )?),
+        );
 
         // Configure TLS if the configuration has the corresponding entry
         #[cfg(feature = "tokio-websocket")]
@@ -280,9 +282,11 @@ fn new_transport(
         }
     } else {
         #[cfg(feature = "tokio-websocket")]
-        let mut transport = websocket::Config::new(dns::tokio::Transport::system(
-            tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
-        )?);
+        let mut transport = websocket::Config::new(
+            crate::panic_safe_dns_transport::Transport::new(dns::tokio::Transport::system(
+                tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
+            )?),
+        );
 
         // Configure TLS if the configuration has the corresponding entry
         #[cfg(feature = "tokio-websocket")]

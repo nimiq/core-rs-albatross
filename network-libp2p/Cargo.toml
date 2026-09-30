@@ -83,6 +83,8 @@ libp2p = { version = "0.57", default-features = false, features = [
 [dev-dependencies]
 # In dev/testing we require more tokio features
 tokio = { version = "1.52", features = ["macros", "rt", "rt-multi-thread", "test-util", "time", "tracing"] }
+# Points the DNS transport at a local server in the `tokio-websocket` tests
+hickory-resolver = { version = "0.26", default-features = false }
 
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }

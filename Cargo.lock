@@ -4628,6 +4628,7 @@ dependencies = [
  "bytes",
  "futures-util",
  "hex",
+ "hickory-resolver",
  "instant",
  "ip_network",
  "libp2p",
