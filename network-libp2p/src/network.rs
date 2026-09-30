@@ -11,8 +11,10 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt};
 use libp2p::{
-    gossipsub, request_response::InboundRequestId, swarm::NetworkInfo, Multiaddr, PeerId, Swarm,
+    gossipsub, identity::Keypair, request_response::InboundRequestId, swarm::NetworkInfo,
+    Multiaddr, PeerId, Swarm,
 };
+use nimiq_keys::Address;
 use nimiq_network_interface::{
     network::{
         CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, SubscribeEvents,
@@ -23,9 +25,10 @@ use nimiq_network_interface::{
         InboundRequestError, Message, OutboundRequestError, Request, RequestCommon, RequestError,
         RequestSerialize, RequestType,
     },
+    validator_claim::ValidatorClaimSigner,
 };
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_time::{interval, timeout};
+use nimiq_time::{interval, sleep, timeout};
 use nimiq_utils::{
     spawn,
     tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned},
@@ -38,7 +41,7 @@ use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 use crate::network_metrics::NetworkMetrics;
 use crate::{
     dht,
-    discovery::peer_contacts::PeerContactBook,
+    discovery::{peer_contacts::PeerContactBook, validator_verifier::ValidatorClaimVerifier},
     network_types::{GossipsubId, NetworkAction, ValidateMessage},
     rate_limiting::RateLimitConfig,
     swarm::{new_swarm, swarm_task},
@@ -67,6 +70,8 @@ pub struct Network {
     required_services: Services,
     /// Reference to PeerContactBook, used to satisfy rpc requests for it.
     contacts: Arc<RwLock<PeerContactBook>>,
+    /// Identity keypair, used to re-sign our own peer contact.
+    keypair: Keypair,
     /// Network buffer sieze
     buffer_size: usize,
 }
@@ -77,15 +82,23 @@ impl Network {
     /// # Arguments
     ///
     ///  - `config`: The network configuration, containing key pair, and other behavior-specific configuration.
+    ///  - `validator_verifier`: Checks the validator claims carried by peer contacts. Nodes built
+    ///    without any means to check them (e.g. the web client) pass
+    ///    [`crate::discovery::NoopValidatorClaimVerifier`], which leaves every claim unverified.
+    ///    A verifier that reads the staking contract does the same on a node running a light
+    ///    blockchain, answering
+    ///    [`UnverifiableReason::LightClient`](crate::discovery::UnverifiableReason::LightClient).
     ///  - `dht_verifier`: The verifier used to verify all Dht records.
     ///
     pub async fn new(
         config: Config,
+        validator_verifier: Arc<dyn ValidatorClaimVerifier>,
         #[cfg(feature = "kad")] dht_verifier: impl dht::Verifier + 'static,
     ) -> Self {
         let required_services = config.required_services;
         // TODO: persist to disk
         let own_peer_contact = config.peer_contact.clone();
+        let keypair = config.keypair.clone();
         let contacts = Arc::new(RwLock::new(PeerContactBook::new(
             own_peer_contact.sign(&config.keypair),
             config.only_secure_ws_connections,
@@ -108,6 +121,7 @@ impl Network {
             Arc::clone(&contacts),
             params.clone(),
             force_dht_server_mode,
+            validator_verifier,
         );
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
@@ -140,6 +154,7 @@ impl Network {
 
         Self {
             contacts,
+            keypair,
             local_peer_id,
             connected_peers,
             events_tx,
@@ -463,6 +478,36 @@ impl Network {
     }
 }
 
+/// Installs or removes `signer` for the validator claim on our own contact in `contacts`, which
+/// re-signs our contact (see [`PeerContactBook::set_validator_claim_signer`]).
+///
+/// Contact timestamps are in seconds. If our previous contact was signed within the current second,
+/// or our clock has since stepped back to before it, the re-signed contact is no newer than it, and
+/// peers that stored that one discard the re-signed one. In that case, this returns a future that
+/// re-signs our contact once more a second later, rather than leaving the change to the next
+/// house-keeping tick. That uses whatever signer is installed by then, so a later change is never
+/// undone.
+///
+/// That second re-sign helps when our clock still reads the second the replaced contact was
+/// signed in. If our clock stepped back to an earlier second, the contact it re-signs a second
+/// later can still be no newer, and peers only take the change once our clock reads a later
+/// second than the replaced contact's timestamp and our contact is re-signed after that, like any
+/// other change to our contact.
+fn install_validator_claim_signer(
+    contacts: &Arc<RwLock<PeerContactBook>>,
+    keypair: &Keypair,
+    signer: Option<ValidatorClaimSigner>,
+) -> Option<impl Future<Output = ()> + Send + use<>> {
+    if !contacts.write().set_validator_claim_signer(signer, keypair) {
+        return None;
+    }
+    let (contacts, keypair) = (Arc::clone(contacts), keypair.clone());
+    Some(async move {
+        sleep(Duration::from_secs(1)).await;
+        contacts.write().update_own_contact(&keypair);
+    })
+}
+
 #[async_trait]
 impl NetworkInterface for Network {
     type PeerId = PeerId;
@@ -524,6 +569,26 @@ impl NetworkInterface for Network {
         }
 
         Ok(filtered_peers)
+    }
+
+    fn get_validator_peer_ids(&self, validator_address: &Address) -> Vec<PeerId> {
+        self.contacts
+            .read()
+            .get_validator_peer_ids(validator_address)
+    }
+
+    /// Installs or removes the signer that advertises our own validator claim to other peers,
+    /// re-signing our own contact right away.
+    ///
+    /// If peers that stored our previous contact would discard the re-signed one, because it is no
+    /// newer, e.g. since both were signed within the same second, this also spawns a task that
+    /// re-signs our contact once more a second later. Like [`Network::new`], it must therefore be
+    /// called within the runtime the network runs on.
+    fn set_validator_claim_signer(&self, signer: Option<ValidatorClaimSigner>) {
+        if let Some(resign) = install_validator_claim_signer(&self.contacts, &self.keypair, signer)
+        {
+            spawn(resign);
+        }
     }
 
     fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {
@@ -749,5 +814,126 @@ impl NetworkInterface for Network {
             .await?;
 
         output_rx.await?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::SystemTime;
+
+    use nimiq_keys::{Address, KeyPair, SecureGenerate};
+    use nimiq_network_interface::peer_info::Services;
+    use nimiq_test_log::test;
+    use nimiq_test_utils::test_rng;
+
+    use super::*;
+    use crate::discovery::peer_contacts::PeerContact;
+
+    fn now_secs() -> u64 {
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    }
+
+    /// A contact book whose own contact, of the peer of `keypair`, was signed at `timestamp`.
+    fn contacts_signed_at(keypair: &Keypair, timestamp: u64) -> Arc<RwLock<PeerContactBook>> {
+        let own_contact = PeerContact::new(
+            ["/ip4/127.0.0.1/tcp/8443".parse().unwrap()],
+            keypair.public(),
+            Services::all(),
+            timestamp,
+        )
+        .unwrap()
+        .sign(keypair);
+        Arc::new(RwLock::new(PeerContactBook::new(
+            own_contact,
+            false,
+            true,
+            true,
+        )))
+    }
+
+    fn own_timestamp(contacts: &RwLock<PeerContactBook>) -> u64 {
+        contacts.read().get_own_contact().contact().timestamp()
+    }
+
+    fn own_validator_address(contacts: &RwLock<PeerContactBook>) -> Option<Address> {
+        contacts
+            .read()
+            .get_own_contact()
+            .contact()
+            .validator_address()
+            .cloned()
+    }
+
+    /// Installs `signer` in a contact book whose own contact was signed within the current second,
+    /// returning the book along with the second and the re-sign.
+    fn install_within_the_second(
+        keypair: &Keypair,
+        signer: ValidatorClaimSigner,
+    ) -> (
+        Arc<RwLock<PeerContactBook>>,
+        u64,
+        impl Future<Output = ()> + Send + use<>,
+    ) {
+        for _ in 0..10 {
+            let signed_at = now_secs();
+            let contacts = contacts_signed_at(keypair, signed_at);
+            let resign = install_validator_claim_signer(&contacts, keypair, Some(signer.clone()));
+            // Try again if the second ended in between.
+            if own_timestamp(&contacts) == signed_at {
+                return (contacts, signed_at, resign.expect("a re-sign"));
+            }
+        }
+        panic!("never installed the signer within the second the contact was signed in");
+    }
+
+    // Real time: the re-sign needs the wall clock to move on.
+    #[test(tokio::test)]
+    async fn a_signer_installed_within_the_second_our_contact_was_signed_is_advertised_again() {
+        let keypair = Keypair::generate_ed25519();
+        let signer = ValidatorClaimSigner::new(
+            Address::from([1; 20]),
+            KeyPair::generate(&mut test_rng(false)),
+        );
+
+        // A contact signed in an earlier second is replaced by the re-signed one at every peer.
+        let contacts = contacts_signed_at(&keypair, now_secs() - 10);
+        assert!(
+            install_validator_claim_signer(&contacts, &keypair, Some(signer.clone())).is_none()
+        );
+        assert_eq!(
+            own_validator_address(&contacts).as_ref(),
+            Some(signer.validator_address())
+        );
+
+        // One signed within the same second is re-signed once more a second later, with the claim.
+        let (contacts, signed_at, resign) = install_within_the_second(&keypair, signer.clone());
+        assert_eq!(
+            own_validator_address(&contacts).as_ref(),
+            Some(signer.validator_address())
+        );
+        resign.await;
+        assert!(own_timestamp(&contacts) > signed_at);
+        assert_eq!(
+            own_validator_address(&contacts).as_ref(),
+            Some(signer.validator_address())
+        );
+    }
+
+    #[test(tokio::test)]
+    async fn the_second_re_sign_uses_the_signer_installed_by_then() {
+        let keypair = Keypair::generate_ed25519();
+        let signer = ValidatorClaimSigner::new(
+            Address::from([1; 20]),
+            KeyPair::generate(&mut test_rng(false)),
+        );
+
+        let (contacts, signed_at, resign) = install_within_the_second(&keypair, signer);
+        contacts.write().set_validator_claim_signer(None, &keypair);
+        resign.await;
+        assert!(own_timestamp(&contacts) > signed_at);
+        assert_eq!(own_validator_address(&contacts), None);
     }
 }

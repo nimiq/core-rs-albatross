@@ -5,8 +5,9 @@ use instant::SystemTime;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network as NetworkInterface, peer_info::Services};
 use nimiq_network_libp2p::{
-    discovery::peer_contacts::PeerContact, libp2p::core::multiaddr::multiaddr, Config, Keypair,
-    Network,
+    discovery::{peer_contacts::PeerContact, NoopValidatorClaimVerifier},
+    libp2p::core::multiaddr::multiaddr,
+    Config, Keypair, Network,
 };
 use nimiq_network_mock::{MockHub, MockNetwork};
 
@@ -84,7 +85,8 @@ impl TestNetwork for Network {
             NonZeroU8::new(1).unwrap(),
             1024,
         );
-        let network = Arc::new(Network::new(config, ()).await);
+        let network =
+            Arc::new(Network::new(config, Arc::new(NoopValidatorClaimVerifier), ()).await);
         network.listen_on(vec![peer_address]).await;
         network
     }
