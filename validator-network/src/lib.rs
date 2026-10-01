@@ -1,11 +1,11 @@
 pub mod error;
 pub mod network_impl;
 pub mod single_response_requester;
-pub mod validator_record;
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 use nimiq_keys::{Address, KeyPair};
+pub use nimiq_network_interface::validator_record;
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
