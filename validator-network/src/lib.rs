@@ -14,7 +14,8 @@ use nimiq_primitives::slots_allocation::Validators;
 
 pub use crate::error::NetworkError;
 
-pub type MessageStream<TMessage> = BoxStream<'static, (TMessage, u16)>;
+/// Messages from validators, each with the validator ID it came from and the peer that sent it.
+pub type MessageStream<TMessage, TPeerId> = BoxStream<'static, (TMessage, u16, TPeerId)>;
 pub type PubsubId<TValidatorNetwork> =
     <<TValidatorNetwork as ValidatorNetwork>::NetworkType as Network>::PubsubId;
 
@@ -49,7 +50,10 @@ pub trait ValidatorNetwork: Send + Sync {
     >;
 
     /// Returns a stream to receive certain types of messages from every peer.
-    fn receive<M>(&self) -> MessageStream<M>
+    ///
+    /// Each message comes with the validator ID it was accepted as coming from and the peer that
+    /// sent it. That is the peer to blame should the message turn out to be forged.
+    fn receive<M>(&self) -> MessageStream<M, <Self::NetworkType as Network>::PeerId>
     where
         M: Message + Clone;
 

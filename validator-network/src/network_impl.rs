@@ -425,7 +425,7 @@ where
         }
     }
 
-    fn receive<M>(&self) -> MessageStream<M>
+    fn receive<M>(&self) -> MessageStream<M, N::PeerId>
     where
         M: Message + Clone,
     {
@@ -447,7 +447,7 @@ where
                             warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator message");
                             return None;
                         }
-                        Some((message.inner, message.validator_id))
+                        Some((message.inner, message.validator_id, peer_id))
                     }
                 }),
         )
