@@ -197,8 +197,8 @@ async fn sync_ingredients() {
     // Produce the blocks.
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
-    let net1: Arc<Network> =
-        TestNetwork::build_network(2, Default::default(), &mut Some(hub)).await;
+    let (net1, _): (Arc<Network>, u64) =
+        TestNetwork::build_network_with_address(0, Default::default(), &mut Some(hub)).await;
     networks.push(Arc::clone(&net1));
     let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
     let syncer1 = SyncerProxy::new_history(
@@ -226,8 +226,12 @@ async fn sync_ingredients() {
         .unwrap(),
     ));
 
-    let net2: Arc<Network> =
-        TestNetwork::build_network(3, Default::default(), &mut Some(MockHub::default())).await;
+    let (net2, net2_address): (Arc<Network>, u64) = TestNetwork::build_network_with_address(
+        0,
+        Default::default(),
+        &mut Some(MockHub::default()),
+    )
+    .await;
     networks.push(Arc::clone(&net2));
     let blockchain2_proxy = BlockchainProxy::from(&blockchain2);
     let syncer2 = SyncerProxy::new_history(
@@ -244,7 +248,7 @@ async fn sync_ingredients() {
 
     // Connect the two peers.
     let mut stream = net2.subscribe_events();
-    Network::connect_networks(&networks, 3u64).await;
+    Network::connect_networks(&networks, net2_address).await;
     // Then wait for connection to be established.
     let _ = stream.next().await.unwrap();
     sleep(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this

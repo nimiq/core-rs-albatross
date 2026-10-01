@@ -5,8 +5,9 @@ use instant::SystemTime;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network as NetworkInterface, peer_info::Services};
 use nimiq_network_libp2p::{
-    discovery::peer_contacts::PeerContact, libp2p::core::multiaddr::multiaddr, Config, Keypair,
-    Network,
+    discovery::peer_contacts::PeerContact,
+    libp2p::core::multiaddr::{multiaddr, Protocol},
+    Config, Keypair, Network,
 };
 use nimiq_network_mock::{MockHub, MockNetwork};
 
@@ -16,27 +17,41 @@ where
     N: NetworkInterface,
 {
     async fn build_network(
-        peer_id: u64,
+        memory_address: u64,
         genesis_hash: Blake2bHash,
         hub: &mut Option<MockHub>,
-    ) -> Arc<Self>;
-    async fn connect_networks(networks: &[Arc<N>], seed_peer_id: u64);
+    ) -> Arc<Self> {
+        Self::build_network_with_address(memory_address, genesis_hash, hub)
+            .await
+            .0
+    }
+
+    async fn build_network_with_address(
+        memory_address: u64,
+        genesis_hash: Blake2bHash,
+        hub: &mut Option<MockHub>,
+    ) -> (Arc<Self>, u64);
+
+    async fn connect_networks(networks: &[Arc<N>], seed_memory_address: u64);
 }
 
 #[async_trait]
 impl TestNetwork for MockNetwork {
-    async fn build_network(
-        peer_id: u64,
+    async fn build_network_with_address(
+        memory_address: u64,
         _genesis_hash: Blake2bHash,
         hub: &mut Option<MockHub>,
-    ) -> Arc<MockNetwork> {
+    ) -> (Arc<MockNetwork>, u64) {
         let hub = hub
             .as_mut()
             .expect("Can't build a Mock Network without a MockHub");
-        Arc::new(hub.new_network_with_address(peer_id))
+        (
+            Arc::new(hub.new_network_with_address(memory_address)),
+            memory_address,
+        )
     }
 
-    async fn connect_networks(networks: &[Arc<MockNetwork>], _seed_peer_id: u64) {
+    async fn connect_networks(networks: &[Arc<MockNetwork>], _seed_memory_address: u64) {
         // Connect validators to each other.
         for (id, network) in networks.iter().enumerate() {
             for other_id in (id + 1)..networks.len() {
@@ -49,15 +64,15 @@ impl TestNetwork for MockNetwork {
 
 #[async_trait]
 impl TestNetwork for Network {
-    async fn build_network(
-        peer_id: u64,
+    async fn build_network_with_address(
+        memory_address: u64,
         genesis_hash: Blake2bHash,
         _hub: &mut Option<MockHub>,
-    ) -> Arc<Network> {
+    ) -> (Arc<Network>, u64) {
         let peer_key = Keypair::generate_ed25519();
-        let peer_address = multiaddr![Memory(peer_id)];
+        let peer_address = multiaddr![Memory(memory_address)];
         let peer_contact = PeerContact::new(
-            vec![peer_address.clone()],
+            Vec::new(),
             peer_key.public(),
             Services::all(),
             SystemTime::now()
@@ -85,12 +100,19 @@ impl TestNetwork for Network {
             1024,
         );
         let network = Arc::new(Network::new(config, ()).await);
-        network.listen_on(vec![peer_address]).await;
-        network
+        let allocated_address = network
+            .listen_on_address(peer_address)
+            .await
+            .expect("Failed to listen on provided address");
+        let allocated_memory_address = match allocated_address.iter().next() {
+            Some(Protocol::Memory(memory_address)) => memory_address,
+            _ => panic!("Expected a memory listen address, got {allocated_address}"),
+        };
+        (network, allocated_memory_address)
     }
 
-    async fn connect_networks(networks: &[Arc<Network>], seed_peer_id: u64) {
-        let seed = multiaddr![Memory(seed_peer_id)];
+    async fn connect_networks(networks: &[Arc<Network>], seed_memory_address: u64) {
+        let seed = multiaddr![Memory(seed_memory_address)];
         // Skip the last network assuming the last one is the seed and doesn't make
         // sense for the seed to connect to itself.
         for network in &networks[0..networks.len() - 1] {

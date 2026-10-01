@@ -113,12 +113,8 @@ pub async fn sync_two_peers(
     let producer = BlockProducer::new(signing_key(), voting_key());
     produce_macro_blocks_with_txns(&producer, &blockchain1, num_batches_macro_sync, 1, 2);
 
-    let net1: Arc<Network> = TestNetwork::build_network(
-        num_batches_macro_sync as u64 * 10,
-        Default::default(),
-        &mut Some(hub),
-    )
-    .await;
+    let (net1, _): (Arc<Network>, u64) =
+        TestNetwork::build_network_with_address(0, Default::default(), &mut Some(hub)).await;
     networks.push(Arc::clone(&net1));
     let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
     let syncer1 = SyncerProxy::new_history(
@@ -161,8 +157,8 @@ pub async fn sync_two_peers(
         }
     };
 
-    let net2: Arc<Network> = TestNetwork::build_network(
-        num_batches_macro_sync as u64 * 10 + 1,
+    let (net2, net2_address): (Arc<Network>, u64) = TestNetwork::build_network_with_address(
+        0,
         Default::default(),
         &mut Some(MockHub::default()),
     )
@@ -171,7 +167,7 @@ pub async fn sync_two_peers(
 
     let mut syncer2 = syncer(&sync_mode, &net2, &blockchain2_proxy).await;
 
-    Network::connect_networks(&networks, num_batches_macro_sync as u64 * 10 + 1).await;
+    Network::connect_networks(&networks, net2_address).await;
 
     let macro_sync_result = match syncer2 {
         SyncerProxy::History(ref mut syncer) => {
@@ -326,8 +322,8 @@ pub async fn sync_two_peers_across_protocol_upgrades(sync_mode: SyncMode, num_up
         expected_upgrades.push((upgrade_hash, upgrade_version));
     }
 
-    let net1: Arc<Network> =
-        TestNetwork::build_network(40, Default::default(), &mut Some(hub)).await;
+    let (net1, _): (Arc<Network>, u64) =
+        TestNetwork::build_network_with_address(0, Default::default(), &mut Some(hub)).await;
     networks.push(Arc::clone(&net1));
     let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
     let syncer1 = SyncerProxy::new_history(
@@ -365,13 +361,17 @@ pub async fn sync_two_peers_across_protocol_upgrades(sync_mode: SyncMode, num_up
     let mut upgrade_events = events
         .filter(|event| future::ready(matches!(event, BlockchainEvent::ProtocolUpgrade(_, _))));
 
-    let net2: Arc<Network> =
-        TestNetwork::build_network(41, Default::default(), &mut Some(MockHub::default())).await;
+    let (net2, net2_address): (Arc<Network>, u64) = TestNetwork::build_network_with_address(
+        0,
+        Default::default(),
+        &mut Some(MockHub::default()),
+    )
+    .await;
     networks.push(Arc::clone(&net2));
 
     let mut syncer2 = syncer(&sync_mode, &net2, &blockchain2_proxy).await;
 
-    Network::connect_networks(&networks, 41).await;
+    Network::connect_networks(&networks, net2_address).await;
 
     let macro_sync_result = match syncer2 {
         SyncerProxy::History(ref mut syncer) => syncer.macro_sync.next().await,
