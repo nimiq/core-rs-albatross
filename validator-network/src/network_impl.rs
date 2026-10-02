@@ -1,6 +1,5 @@
 use std::{collections::BTreeMap, error::Error, fmt::Debug, future, sync::Arc};
 
-use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt, TryFutureExt};
 use log::warn;
 use nimiq_keys::{Address, KeyPair};
@@ -320,7 +319,6 @@ impl<M: RequestCommon> RequestCommon for ValidatorMessage<M> {
 // LevelUpdate - multicast
 // StateEx - request/response
 
-#[async_trait]
 impl<N> ValidatorNetwork for ValidatorNetworkImpl<N>
 where
     N: Network,

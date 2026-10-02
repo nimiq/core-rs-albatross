@@ -18,7 +18,6 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-async-trait = "0.1"
 byteorder = "1.5"
 futures = { workspace = true }
 hashlink = "0.12"

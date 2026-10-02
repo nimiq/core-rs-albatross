@@ -1,4 +1,4 @@
-use async_trait::async_trait;
+use std::future::Future;
 
 use crate::contribution::AggregatableContribution;
 
@@ -16,11 +16,13 @@ impl VerificationResult {
 }
 
 /// Trait for a signature verification backend
-#[async_trait]
 pub trait Verifier: Send + Sync {
     type Contribution: AggregatableContribution;
 
     /// Verifies the correctness of `contribution`
     /// * `contribution` - The contribution to verify
-    async fn verify(&self, contribution: &Self::Contribution) -> VerificationResult;
+    fn verify(
+        &self,
+        contribution: &Self::Contribution,
+    ) -> impl Future<Output = VerificationResult> + Send;
 }

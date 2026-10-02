@@ -7,7 +7,6 @@ use std::{
     time::Duration,
 };
 
-use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt};
 use libp2p::{
@@ -463,7 +462,6 @@ impl Network {
     }
 }
 
-#[async_trait]
 impl NetworkInterface for Network {
     type PeerId = PeerId;
     type AddressType = Multiaddr;

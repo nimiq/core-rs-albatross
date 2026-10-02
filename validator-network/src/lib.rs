@@ -3,7 +3,8 @@ pub mod network_impl;
 pub mod single_response_requester;
 pub mod validator_record;
 
-use async_trait::async_trait;
+use std::future::Future;
+
 use futures::stream::BoxStream;
 use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
@@ -20,7 +21,6 @@ pub type PubsubId<TValidatorNetwork> =
 
 /// Fixed upper bound network.
 /// Peers are denoted by a usize identifier which deterministically identifies them.
-#[async_trait]
 pub trait ValidatorNetwork: Send + Sync {
     type Error: std::error::Error + Send + 'static;
     type NetworkType: Network;
@@ -36,17 +36,23 @@ pub trait ValidatorNetwork: Send + Sync {
     /// Sends a message to a validator identified by its ID (position) in the `validator keys`.
     /// It must make a reasonable effort to establish a connection to the peer denoted with `validator_id`
     /// before returning a connection not established error.
-    async fn send_to<M: Message>(&self, validator_id: u16, msg: M) -> Result<(), Self::Error>;
+    fn send_to<M: Message>(
+        &self,
+        validator_id: u16,
+        msg: M,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Performs a request to a validator identified by its ID.
-    async fn request<TRequest: Request>(
+    fn request<TRequest: Request>(
         &self,
         request: TRequest,
         validator_id: u16,
-    ) -> Result<
-        <TRequest as RequestCommon>::Response,
-        NetworkError<<Self::NetworkType as Network>::Error>,
-    >;
+    ) -> impl Future<
+        Output = Result<
+            <TRequest as RequestCommon>::Response,
+            NetworkError<<Self::NetworkType as Network>::Error>,
+        >,
+    > + Send;
 
     /// Returns a stream to receive certain types of messages from every peer.
     fn receive<M>(&self) -> MessageStream<M>
@@ -60,36 +66,39 @@ pub trait ValidatorNetwork: Send + Sync {
     ) -> BoxStream<'static, (TRequest, <Self::NetworkType as Network>::RequestId, u16)>;
 
     /// Sends a response to a specific request.
-    async fn respond<TRequest: Request>(
+    fn respond<TRequest: Request>(
         &self,
         request_id: <Self::NetworkType as Network>::RequestId,
         response: TRequest::Response,
-    ) -> Result<(), Self::Error>;
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Publishes an item into a Gossipsub topic.
-    async fn publish<TTopic: Topic + Sync>(&self, item: TTopic::Item) -> Result<(), Self::Error>;
+    fn publish<TTopic: Topic + Sync>(
+        &self,
+        item: TTopic::Item,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Subscribes to a specific Gossipsub topic.
-    async fn subscribe<'a, TTopic: Topic + Sync>(
+    fn subscribe<'a, TTopic: Topic + Sync>(
         &self,
-    ) -> Result<BoxStream<'a, (TTopic::Item, PubsubId<Self>)>, Self::Error>;
+    ) -> impl Future<Output = Result<BoxStream<'a, (TTopic::Item, PubsubId<Self>)>, Self::Error>> + Send;
 
     /// Subscribes to network events
     fn subscribe_events(&self) -> SubscribeEvents<<Self::NetworkType as Network>::PeerId>;
 
     /// Sets this node peer ID using its secret key and public key.
-    async fn set_public_key(
+    fn set_public_key(
         &self,
         validator_address: &Address,
         signing_key_pair: &KeyPair,
-    ) -> Result<(), Self::Error>;
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Closes the connection to the peer with `peer_id` with the given `close_reason`.
-    async fn disconnect_peer(
+    fn disconnect_peer(
         &self,
         peer_id: <Self::NetworkType as Network>::PeerId,
         close_reason: CloseReason,
-    );
+    ) -> impl Future<Output = ()> + Send;
 
     /// Signals that a Gossipsub'd message with `id` was verified successfully and can be relayed.
     fn validate_message<TTopic>(&self, id: PubsubId<Self>, acceptance: MsgAcceptance)

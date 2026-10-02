@@ -3990,7 +3990,6 @@ dependencies = [
 name = "nimiq-consensus"
 version = "2.2.0"
 dependencies = [
- "async-trait",
  "futures-util",
  "hashlink 0.12.2",
  "hex",
@@ -4143,7 +4142,6 @@ dependencies = [
 name = "nimiq-handel"
 version = "2.2.0"
 dependencies = [
- "async-trait",
  "futures-util",
  "hashlink 0.12.2",
  "instant",
@@ -4538,7 +4536,6 @@ dependencies = [
 name = "nimiq-network-interface"
 version = "2.2.0"
 dependencies = [
- "async-trait",
  "bitflags 2.13.2",
  "futures-util",
  "multiaddr",
@@ -4591,7 +4588,6 @@ dependencies = [
 name = "nimiq-network-mock"
 version = "2.2.0"
 dependencies = [
- "async-trait",
  "derive_more",
  "futures-util",
  "nimiq-keys",
@@ -4847,7 +4843,6 @@ dependencies = [
 name = "nimiq-test-utils"
 version = "2.2.0"
 dependencies = [
- "async-trait",
  "clap",
  "futures-util",
  "hex",
@@ -5029,7 +5024,6 @@ dependencies = [
 name = "nimiq-validator"
 version = "2.2.0"
 dependencies = [
- "async-trait",
  "byteorder",
  "futures-util",
  "hashlink 0.12.2",
@@ -5084,7 +5078,6 @@ dependencies = [
 name = "nimiq-validator-network"
 version = "2.2.0"
 dependencies = [
- "async-trait",
  "futures-util",
  "nimiq-keys",
  "nimiq-network-interface",

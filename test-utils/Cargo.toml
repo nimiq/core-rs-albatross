@@ -27,7 +27,6 @@ name = "nimiq-performance-blockchain-push"
 path = "src/performance/blockchain-push/main.rs"
 
 [dependencies]
-async-trait = "0.1"
 clap = { version = "4.6", features = ["derive"] }
 futures = { workspace = true }
 hex = "0.4"

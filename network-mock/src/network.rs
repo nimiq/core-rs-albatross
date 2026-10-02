@@ -6,7 +6,6 @@ use std::{
     time::Duration,
 };
 
-use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt};
 use nimiq_network_interface::{
     network::{
@@ -438,7 +437,6 @@ impl MockNetwork {
     }
 }
 
-#[async_trait]
 impl Network for MockNetwork {
     type PeerId = MockPeerId;
     type AddressType = MockAddress;
@@ -516,7 +514,7 @@ impl Network for MockNetwork {
         self.unsubscribe_with_name(topic_name).await
     }
 
-    async fn publish<T: Topic>(&self, item: T::Item) -> Result<(), Self::Error>
+    async fn publish<T>(&self, item: T::Item) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
     {
@@ -524,11 +522,7 @@ impl Network for MockNetwork {
         self.publish_with_name::<T>(topic_name, item).await
     }
 
-    async fn publish_subtopic<T: Topic>(
-        &self,
-        subtopic: String,
-        item: T::Item,
-    ) -> Result<(), Self::Error>
+    async fn publish_subtopic<T>(&self, subtopic: String, item: T::Item) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
     {

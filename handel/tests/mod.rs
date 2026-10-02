@@ -1,6 +1,5 @@
 use std::{fmt::Formatter, future::Future, sync::Arc, time::Duration};
 
-use async_trait::async_trait;
 use futures::StreamExt;
 use nimiq_bls::PublicKey;
 use nimiq_collections::bitset::BitSet;
@@ -81,7 +80,6 @@ impl IdentityRegistry for Registry {
 /// A dump Verifier who is happy with everything.
 pub struct DumbVerifier {}
 
-#[async_trait]
 impl Verifier for DumbVerifier {
     type Contribution = Contribution;
     async fn verify(&self, _contribution: &Self::Contribution) -> VerificationResult {

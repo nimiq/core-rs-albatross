@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-use async_trait::async_trait;
 use nimiq_bls::{AggregatePublicKey, G1Projective, Signature};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::{
@@ -35,7 +34,6 @@ impl<I: IdentityRegistry> TendermintVerifier<I> {
     }
 }
 
-#[async_trait]
 impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifier<I> {
     // type Output = CpuFuture<VerificationResult, ()>;
     type Contribution = TendermintContribution;
