@@ -4,7 +4,10 @@
 # Rust / Node / wasm tooling on the host. Used by docker-compose.yml ("build" service).
 #
 # It only sets up the toolchain; the repo is bind-mounted at run time and the build
-# writes back to web-client/dist on the host.
+# writes back to web-client/dist on the host. wasm-bindgen-cli is NOT baked in:
+# build.sh installs the version pinned in the mounted Cargo.lock at run time (into
+# the cargo target dir, i.e. the wasm-target volume), so bumping wasm-bindgen needs
+# no image rebuild.
 FROM rust:1-bookworm
 
 # clang provides the WebAssembly backend that cc-rs uses to compile C dependencies
@@ -18,9 +21,5 @@ RUN apt-get update \
     && npm install -g yarn
 
 RUN rustup target add wasm32-unknown-unknown
-
-# Pin wasm-bindgen-cli to the version locked in Cargo.lock (matches CI).
-ARG WASM_BINDGEN_VERSION=0.2.118
-RUN cargo install --locked wasm-bindgen-cli@${WASM_BINDGEN_VERSION}
 
 WORKDIR /repo/web-client
