@@ -48,7 +48,9 @@ docker compose -f web-client/upgrade-dashboard/docker-compose.yml up serve
 Then open <http://localhost:8000/upgrade-dashboard/>.
 
 The build only rebuilds the `web` target (main + worker wasm) and reuses the committed
-launcher, so it never invokes Node. See `Dockerfile` and `docker-compose.yml` here.
+launcher, so it never invokes Node. `build.sh` itself installs the `wasm-bindgen-cli`
+version pinned in `Cargo.lock` if needed (cached in the target-dir volume), so bumping
+that version needs no image rebuild. See `Dockerfile` and `docker-compose.yml` here.
 
 ## Build & run natively (alternative)
 

@@ -13,6 +13,8 @@ services:
   # Rust -> WASM build. Rebuilds the `web` target AND regenerates the launcher + lib so the
   # whole dist is internally consistent (the launcher/lib are gitignored build artifacts).
   # --skip-wasm-opt avoids binaryen (and its x86_64-only download) — fine for local use.
+  # build.sh installs the wasm-bindgen-cli version pinned in the mounted Cargo.lock at
+  # run time (cached in the wasm-target volume), so no version is baked into the image.
   build:
     build:
       context: .
