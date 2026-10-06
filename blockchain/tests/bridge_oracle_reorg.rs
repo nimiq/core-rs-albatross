@@ -44,8 +44,8 @@ const BURN_BLOCK_HEIGHT: u32 = 42;
 
 /// The oracle owner. Fixed rather than generated so every run builds the same transactions.
 const ORACLE_OWNER_KEY: &str = "9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0";
-/// Whoever submits the burn proof. Releases are permissionless and this one pays no fee, so the
-/// key needs no funds.
+/// Whoever submits the burn proof. Releases are permissionless and their fee comes out of the
+/// burned amount, so the key needs no funds.
 const SUBMITTER_KEY: &str = "0f0e0d0c0b0a09080706050403020100ffeeddccbbaa99887766554433221100";
 
 // ---------------------------------------------------------------------------------------------

@@ -1,11 +1,16 @@
 use nimiq_account::{
-    Account, AccountTransactionInteraction, BasicAccount, BlockLogger, BlockState, BridgeContract,
-    ReservedBalance, TransactionOperationReceipt,
+    Account, AccountTransactionInteraction, AccountsError, BasicAccount, BlockLogger, BlockState,
+    BridgeContract, ReservedBalance,
 };
 use nimiq_database::traits::Database;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+    networks::NetworkId,
+    policy::Policy,
+};
 use nimiq_serde::Serialize;
 use nimiq_test_utils::accounts_revert::TestCommitRevert;
 use nimiq_transaction::{
@@ -527,17 +532,13 @@ fn test_recipient_data_size_validation() {
     assert!(valid_no_data.validate(&chain_config).is_ok());
 }
 
-/// Regression test: the fee for a failed outgoing bridge transaction must be charged
-/// to the signer of the *verified* proof in `sender_data`, never to whatever key
-/// happens to sit in `transaction.proof`.
-///
-/// `transaction.proof` is never verified for `AccountType::Bridge` senders (the
-/// verified signature lives in `OutgoingBridgeTransactionData.proof`). Deriving the
-/// fee payer from `transaction.proof` would let a submitter charge the fee to an
-/// arbitrary victim by placing the victim's public key there. This test crafts
-/// exactly that divergence and asserts the fee lands on the real signer.
+/// A failed outgoing bridge transaction with a fee charges nobody. The fee of a release comes out
+/// of the burned amount, which a failed release does not release, and the bridge never pays for a
+/// failure. So the transaction cannot pay for its failure and is invalid: committing it fails, and
+/// neither the bridge, nor the signer of the burn proof, nor a key planted in `transaction.proof`
+/// is debited.
 #[test]
-fn fee_for_failed_outgoing_tx_is_charged_to_sender_data_signer() {
+fn failed_outgoing_tx_with_fee_is_invalid_and_charges_nobody() {
     let signer = KeyPair::generate_default_csprng(); // signs sender_data (the verified proof)
     let victim = KeyPair::generate_default_csprng(); // key placed in transaction.proof
     let signer_address = Address::from(&signer.public);
@@ -615,26 +616,34 @@ fn fee_for_failed_outgoing_tx_is_charged_to_sender_data_signer() {
     transaction.proof = victim_proof.serialize_to_vec();
 
     let block_state = BlockState::new(1, 1, Policy::max_supported_version());
-    let receipts = accounts
-        .commit_and_test(&[transaction], &[], &block_state, &mut BlockLogger::empty())
-        .expect("commit should succeed (transaction is committed as failed)");
+    let mut db_txn = accounts.env().write_transaction();
+    let mut txn: nimiq_trie::WriteTransactionProxy = (&mut db_txn).into();
+    let result = accounts.commit(
+        &mut txn,
+        &[transaction],
+        &[],
+        &block_state,
+        &mut BlockLogger::empty(),
+    );
+    assert!(
+        matches!(
+            result,
+            Err(AccountsError::InvalidTransaction(
+                AccountError::InvalidForSender,
+                _
+            ))
+        ),
+        "a failed release with a fee must not be committed: {result:?}",
+    );
+    drop(db_txn);
 
-    // The transaction must have failed and recorded the signer (not the victim) as fee payer.
-    match &receipts.transactions[0] {
-        TransactionOperationReceipt::Err(receipt, _) => {
-            assert_eq!(
-                receipt.fee_payer,
-                Some(signer_address.clone()),
-                "fee payer must be the sender_data signer"
-            );
-        }
-        other => panic!("expected a failed transaction receipt, got {other:?}"),
-    }
-
-    // The fee is deducted from the signer; the victim is untouched.
+    assert_eq!(
+        accounts.get_complete(&bridge_address, None).balance(),
+        Coin::from_u64_unchecked(1000),
+    );
     assert_eq!(
         accounts.get_complete(&signer_address, None).balance(),
-        initial_signer_balance - fee,
+        initial_signer_balance,
     );
     assert_eq!(
         accounts.get_complete(&victim_address, None).balance(),
@@ -642,13 +651,10 @@ fn fee_for_failed_outgoing_tx_is_charged_to_sender_data_signer() {
     );
 }
 
-/// Regression test: an outgoing bridge burn-release reserves only `value` against
-/// the bridge balance, NOT `value + fee`. The fee is paid by the burn-proof signer and
-/// is reserved against the signer by the mempool (`reserve_bridge_signer_fee`), not
-/// against the bridge here. Before the fix `reserve_balance` reserved `total_value`,
-/// which both over-reserved the bridge and left the signer fee unreserved.
+/// An outgoing bridge burn-release reserves `value + fee` against the bridge balance, like any
+/// sender: both come out of the bridge when the release is committed.
 #[test]
-fn reserve_balance_excludes_fee_for_bridge() {
+fn reserve_balance_includes_fee_for_bridge() {
     let signer = KeyPair::generate_default_csprng();
     let signer_address = Address::from(&signer.public);
     let bridge_address = Address::from([3u8; 20]);
@@ -713,7 +719,32 @@ fn reserve_balance_excludes_fee_for_bridge() {
             data_store.read(&mut db_txn),
         )
         .expect("reserve_balance should succeed");
+    assert_eq!(reserved_balance.balance(), value + fee);
 
-    // Only `value` is reserved against the bridge — not `value + fee`.
-    assert_eq!(reserved_balance.balance(), value);
+    // The bridge holds 1000, so beside the 110 already reserved a release of 890 plus a fee of 10
+    // no longer fits, even though its value alone would.
+    let mut second = transaction.clone();
+    second.value = Coin::from_u64_unchecked(890);
+    assert_eq!(
+        bridge_contract.reserve_balance(
+            &second,
+            &mut reserved_balance,
+            &block_state,
+            data_store.read(&mut db_txn),
+        ),
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(1010),
+            balance: Coin::from_u64_unchecked(1000),
+        }),
+    );
+    assert_eq!(reserved_balance.balance(), value + fee);
+
+    bridge_contract
+        .release_balance(
+            &transaction,
+            &mut reserved_balance,
+            data_store.read(&mut db_txn),
+        )
+        .expect("release_balance should succeed");
+    assert_eq!(reserved_balance.balance(), Coin::ZERO);
 }

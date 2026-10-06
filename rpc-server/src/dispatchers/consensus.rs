@@ -68,7 +68,7 @@ impl ConsensusDispatcher {
     }
 
     /// Checks a bridge release against the current state of the bridge and its oracle, so that a
-    /// release that would fail is not broadcast: a failed release still costs the signer its fee.
+    /// release that would fail is not broadcast.
     ///
     /// The check needs the full state, so it is skipped on other nodes.
     fn check_bridge_release(
@@ -76,6 +76,7 @@ impl ConsensusDispatcher {
         bridge_address: &Address,
         recipient: &Address,
         value: Coin,
+        fee: Coin,
         burn_proof: &OutgoingTransaction,
     ) -> Result<(), Error> {
         let BlockchainReadProxy::Full(blockchain) = self.consensus.blockchain.read() else {
@@ -112,6 +113,7 @@ impl ConsensusDispatcher {
             nonce,
             recipient,
             value,
+            fee,
             burn_proof,
         )
         .map_err(Error::BridgeReleaseRejected)
@@ -149,13 +151,23 @@ fn verify_bridge_release(
     nonce: u64,
     recipient: &Address,
     value: Coin,
+    fee: Coin,
     burn_proof: &OutgoingTransaction,
 ) -> Result<(), String> {
     let burn = burn_proof
         .parse_burn_data(&bridge.chain_config)
         .map_err(|error| format!("invalid burn transaction: {error}"))?;
-    if burn.amount != value {
-        return Err(format!("the burned amount is {}, not {value}", burn.amount));
+    if value.checked_add(fee) != Some(burn.amount) {
+        return Err(format!(
+            "the burned amount is {}, not the value {value} plus the fee {fee}",
+            burn.amount
+        ));
+    }
+    if value.is_zero() {
+        return Err(format!(
+            "the fee must be less than the burned amount {}",
+            burn.amount
+        ));
     }
     if &burn.target_address != recipient {
         return Err(format!(
@@ -214,7 +226,7 @@ fn verify_bridge_release(
         ));
     }
 
-    if bridge.balance < value {
+    if bridge.balance < burn.amount {
         return Err(format!("the bridge only holds {}", bridge.balance));
     }
 
@@ -1619,7 +1631,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let burn_proof =
             parse_burn_proof(&burn_transaction_data, &merkle_proof, oracle_state_index)?;
-        self.check_bridge_release(&bridge_address, &recipient, value, &burn_proof)?;
+        self.check_bridge_release(&bridge_address, &recipient, value, fee, &burn_proof)?;
 
         let raw_tx = self
             .create_bridge_release_transaction(
@@ -1927,14 +1939,34 @@ mod tests {
         value: u64,
         burn_proof: &OutgoingTransaction,
     ) -> Result<(), String> {
+        verify_with_fee(bridge, oracle, nonce, value, 0, burn_proof)
+    }
+
+    fn verify_with_fee(
+        bridge: &BridgeContract,
+        oracle: Option<&OracleContract>,
+        nonce: u64,
+        value: u64,
+        fee: u64,
+        burn_proof: &OutgoingTransaction,
+    ) -> Result<(), String> {
         verify_bridge_release(
             bridge,
             oracle,
             nonce,
             &target(),
             Coin::from_u64_unchecked(value),
+            Coin::from_u64_unchecked(fee),
             burn_proof,
         )
+    }
+
+    fn rejects(result: Result<(), String>, reason: &str) {
+        let error = result.expect_err("the release must be rejected");
+        assert!(
+            error.contains(reason),
+            "{error:?} does not mention {reason:?}"
+        );
     }
 
     #[test]
@@ -1958,13 +1990,6 @@ mod tests {
     fn rejects_releases_that_consensus_would_reject() {
         let oracle = oracle(&[burn_data(1)]);
         let proof = burn_proof(burn_data(1), 0);
-        let rejects = |result: Result<(), String>, reason: &str| {
-            let error = result.expect_err("the release must be rejected");
-            assert!(
-                error.contains(reason),
-                "{error:?} does not mention {reason:?}"
-            );
-        };
 
         rejects(
             verify(&bridge(10_000), Some(&oracle), 0, AMOUNT + 1, &proof),
@@ -1977,6 +2002,7 @@ mod tests {
                 0,
                 &Address::from([0xBBu8; 20]),
                 Coin::from_u64_unchecked(AMOUNT),
+                Coin::ZERO,
                 &proof,
             ),
             "pays",
@@ -2011,6 +2037,48 @@ mod tests {
         );
         rejects(
             verify(&bridge(AMOUNT - 1), Some(&oracle), 0, AMOUNT, &proof),
+            "only holds",
+        );
+    }
+
+    #[test]
+    fn takes_the_fee_from_the_burned_amount() {
+        let oracle = oracle(&[burn_data(1)]);
+        let proof = burn_proof(burn_data(1), 0);
+
+        for fee in [0, 1, 100, AMOUNT - 1] {
+            assert_eq!(
+                verify_with_fee(&bridge(10_000), Some(&oracle), 0, AMOUNT - fee, fee, &proof),
+                Ok(()),
+                "value {} plus fee {fee} is the burned amount",
+                AMOUNT - fee,
+            );
+        }
+
+        // Any other split is rejected, including the full amount plus a fee on top.
+        for (value, fee) in [(AMOUNT, 1), (AMOUNT - 100, 99), (AMOUNT - 100, 101)] {
+            rejects(
+                verify_with_fee(&bridge(10_000), Some(&oracle), 0, value, fee, &proof),
+                "burned amount",
+            );
+        }
+
+        // A fee of the whole amount leaves nothing to release.
+        rejects(
+            verify_with_fee(&bridge(10_000), Some(&oracle), 0, 0, AMOUNT, &proof),
+            "fee must be less",
+        );
+
+        // The bridge must hold the value and the fee, not just the value.
+        rejects(
+            verify_with_fee(
+                &bridge(AMOUNT - 1),
+                Some(&oracle),
+                0,
+                AMOUNT - 100,
+                100,
+                &proof,
+            ),
             "only holds",
         );
     }

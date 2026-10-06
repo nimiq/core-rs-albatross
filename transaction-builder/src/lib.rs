@@ -1821,21 +1821,20 @@ impl TransactionBuilder {
     /// Creates a transaction that releases funds from a bridge contract against a proof that the
     /// corresponding tokens were burned on the source chain.
     ///
-    /// Releases are permissionless: any key pair may sign the burn proof. The fee is not taken from
-    /// the bridge but from the basic account belonging to `key_pair`.
+    /// Releases are permissionless: any key pair may sign the burn proof. The fee is taken from the
+    /// burned amount, so `value + fee` must equal the amount encoded in the burn transaction.
     ///
     /// # Arguments
     ///
-    ///  - `key_pair`:              The key pair used to sign the burn proof. The transaction fee is
-    ///                             taken from the basic account belonging to this key pair.
+    ///  - `key_pair`:              The key pair used to sign the burn proof.
     ///  - `bridge_address`:        The address of the bridge contract.
     ///  - `recipient`:             The address that receives the funds. Must match the target
     ///                             address encoded in the burn transaction.
     ///  - `burn_proof`:            The burn transaction, its Merkle proof and the index of the
     ///                             oracle state it is proven against.
-    ///  - `value`:                 The value to release. Must match the amount encoded in the burn
-    ///                             transaction.
-    ///  - `fee`:                   Transaction fee.
+    ///  - `value`:                 The value the recipient receives.
+    ///  - `fee`:                   Transaction fee. Together with `value` it must add up to the
+    ///                             amount encoded in the burn transaction.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is meant.
     ///

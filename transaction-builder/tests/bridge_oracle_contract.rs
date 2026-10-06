@@ -325,17 +325,16 @@ fn it_can_create_bridge_release_transactions() {
     );
     let proof = sign(&signer, &expected);
     expected.sender_data =
-        OutgoingBridgeTransactionData::set_signature_on_data(&expected.sender_data, proof.clone())
-            .unwrap();
-    expected.proof = proof.serialize_to_vec();
+        OutgoingBridgeTransactionData::set_signature_on_data(&expected.sender_data, proof).unwrap();
     assert_eq!(tx, expected);
     assert_eq!(tx.verify(NETWORK_ID, PROTOCOL_VERSION), Ok(()));
 
-    // The embedded proof determines who pays the fee, so it must be the signer's.
+    // Consensus checks the proof embedded in `sender_data`. The fee comes out of the burned
+    // amount, so the transaction's own proof stays empty.
     let data = OutgoingBridgeTransactionData::parse(&tx).unwrap();
     assert!(data.proof.is_signed_by(&Address::from(&signer)));
     assert_eq!(data.burn_proof.oracle_state_index, 7);
-    assert!(tx.related_addresses().contains(&Address::from(&signer)));
+    assert!(tx.proof.is_empty());
 
     let result = TransactionBuilder::new_bridge_release(
         &signer,

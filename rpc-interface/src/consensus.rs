@@ -684,11 +684,12 @@ pub trait ConsensusInterface {
     /// Returns a serialized transaction that releases funds from a bridge contract against a proof
     /// that the corresponding tokens were burned on the source chain.
     ///
-    /// Releases are permissionless: `signer_wallet` signs the burn proof and pays the fee, which is
-    /// charged even if the release later fails.
+    /// Releases are permissionless: `signer_wallet` signs the burn proof. The fee is taken from the
+    /// burned amount, not from `signer_wallet`.
     ///
-    /// - `recipient` and `value` must match the target address and amount encoded in the burn
-    ///   transaction.
+    /// - `recipient` must match the target address encoded in the burn transaction.
+    /// - `value` is what `recipient` receives. `value + fee` must equal the amount encoded in the
+    ///   burn transaction, and `value` must not be zero, so the fee must be less than that amount.
     /// - `burn_transaction_data` is the raw burn transaction as a hex string.
     /// - `merkle_proof` is a hex-encoded, serialized `AnyMerkleProof` of the burn transaction.
     /// - `oracle_state_index` is the index of the oracle state the proof is verified against.
@@ -709,7 +710,7 @@ pub trait ConsensusInterface {
     /// `create_bridge_release_transaction` for the parameters.
     ///
     /// If the node has the full state, the burn transaction is checked against the bridge first,
-    /// so that a release that would fail is not broadcast and does not cost the signer a fee.
+    /// so that a release that would fail is not broadcast.
     async fn send_bridge_release_transaction(
         &self,
         signer_wallet: Address,

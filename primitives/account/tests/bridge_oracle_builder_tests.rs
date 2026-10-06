@@ -291,7 +291,7 @@ fn built_bridge_transactions_are_accepted() {
                     index as u64,
                 )
                 .unwrap(),
-                coin(released),
+                coin(released) - fee,
                 fee,
                 1,
                 NETWORK_ID,
@@ -300,10 +300,11 @@ fn built_bridge_transactions_are_accepted() {
         );
     }
 
-    // Releases pay the target from the bridge, and the fees from the relayer.
+    // Releases pay the whole burned amount from the bridge: the value to the target and the fee
+    // to the block reward. The relayer who signed them pays nothing.
     assert_eq!(
         test.get_complete(&target, None).balance(),
-        coin(2 * released)
+        coin(2 * (released - 10))
     );
     assert_eq!(
         test.get_complete(&bridge_address, None).balance(),
@@ -311,6 +312,6 @@ fn built_bridge_transactions_are_accepted() {
     );
     assert_eq!(
         test.get_complete(&Address::from(&relayer), None).balance(),
-        coin(100 - 2 * 10)
+        coin(100)
     );
 }

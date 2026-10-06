@@ -159,7 +159,7 @@ fn make_outgoing_tx(
         AccountType::Basic,
         vec![],
         amount,
-        Coin::ZERO, // zero fee avoids signer-deduction path
+        Coin::ZERO,
         1,
         NetworkId::UnitAlbatross,
     );
