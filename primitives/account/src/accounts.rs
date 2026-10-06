@@ -7,7 +7,6 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::{
     account::{AccountError, AccountType, FailReason},
-    coin::Coin,
     key_nibbles::KeyNibbles,
     trie::{
         error::IncompleteTrie,
@@ -19,16 +18,13 @@ use nimiq_primitives::{
     },
     TreeProof,
 };
-use nimiq_transaction::{
-    account::bridge_contract::OutgoingBridgeTransactionData, inherent::Inherent,
-    ExecutedTransaction, Transaction, TransactionFlags,
-};
+use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
 use nimiq_trie::{trie::MerkleRadixTrie, WriteTransactionProxy};
 
 use crate::{
     Account, AccountInherentInteraction, AccountPruningInteraction, AccountReceipt,
     AccountTransactionInteraction, AccountsError, BlockLogger, BlockState, DataStore,
-    InherentLogger, InherentOperationReceipt, Log, OperationReceipt, Receipts, ReservedBalance,
+    InherentLogger, InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance,
     RevertInfo, TransactionLog, TransactionOperationReceipt, TransactionReceipt,
 };
 
@@ -425,34 +421,6 @@ impl Accounts {
             tx_logger,
         )?;
 
-        // For outgoing bridge transactions, charge the fee to the burn-proof
-        // signer. `BridgeContract::commit_outgoing_transaction` debits only the
-        // released value from the bridge (burn proofs are permissionless), so the
-        // fee must be taken from the signer here — otherwise it is credited to the
-        // reward pot without ever being debited, inflating the total supply. On
-        // failure, revert the sender so this method stays atomic and the retry as
-        // a failed transaction starts from clean state.
-        let fee_payer =
-            if transaction.sender_type == AccountType::Bridge && transaction.fee != Coin::ZERO {
-                match self.charge_fee_to_signer(txn, transaction, tx_logger) {
-                    Ok(signer_address) => Some(signer_address),
-                    Err(e) => {
-                        sender_account
-                            .revert_outgoing_transaction(
-                                transaction,
-                                block_state,
-                                sender_receipt,
-                                sender_store.write(txn),
-                                tx_logger,
-                            )
-                            .expect("failed to revert sender account");
-                        return Err(e);
-                    }
-                }
-            } else {
-                None
-            };
-
         // Commit recipient.
         let recipient_address = &transaction.recipient;
         let mut recipient_account = Account::default();
@@ -466,12 +434,8 @@ impl Accounts {
             tx_logger,
         );
 
-        // If recipient failed, revert the fee charge (if any) and the sender.
+        // If recipient failed, revert sender.
         if let Err(e) = recipient_result {
-            if let Some(ref signer_address) = fee_payer {
-                self.restore_fee_to_signer(txn, transaction, signer_address, None, tx_logger)
-                    .expect("failed to refund fee to signer");
-            }
             sender_account
                 .revert_outgoing_transaction(
                     transaction,
@@ -495,7 +459,6 @@ impl Accounts {
             sender_receipt,
             recipient_receipt: recipient_result.unwrap(),
             pruned_account,
-            fee_payer,
         })
     }
 
@@ -573,145 +536,11 @@ impl Accounts {
 
         let pruned_account = self.put_or_prune(txn, sender_address, sender_account);
 
-        // If sender returned no-op (None receipt) and sender is a Bridge contract,
-        // deduct fee from the transaction signer instead. Skip when there is no fee
-        // to deduct: bridges accept permissionless burn submissions with `transaction.proof`
-        // empty and `fee = 0`, and `extract_signer_address` would otherwise fail to
-        // deserialize the empty proof and surface a misleading `InvalidSignature`,
-        // masking the real failure from `commit_outgoing_transaction`.
-        if sender_receipt.is_none()
-            && transaction.sender_type == AccountType::Bridge
-            && transaction.fee != Coin::ZERO
-        {
-            return self.deduct_fee_from_signer(txn, transaction, tx_logger, pruned_account);
-        }
-
         Ok(TransactionReceipt {
             sender_receipt,
             recipient_receipt: None,
             pruned_account,
-            fee_payer: None, // Sender paid the fee (or no fee was paid)
         })
-    }
-
-    /// Deduct transaction fee from the signer's account (for bridge contracts that return no-op).
-    /// This is used when a bridge contract returns None from commit_failed_transaction,
-    /// indicating that the fee should be deducted from the actual transaction submitter
-    /// rather than the bridge contract balance.
-    fn deduct_fee_from_signer(
-        &self,
-        txn: &mut WriteTransactionProxy,
-        transaction: &Transaction,
-        tx_logger: &mut TransactionLog,
-        sender_pruned_account: Option<AccountReceipt>,
-    ) -> Result<TransactionReceipt, AccountError> {
-        // Extract signer address from transaction proof
-        let signer_address = self.extract_signer_address(transaction)?;
-
-        // If signer is the same as sender, we already handled it (shouldn't happen for bridge)
-        if signer_address == transaction.sender {
-            return Ok(TransactionReceipt {
-                sender_receipt: None,
-                recipient_receipt: None,
-                pruned_account: sender_pruned_account,
-                fee_payer: None,
-            });
-        }
-
-        // Load signer's account (must be BasicAccount)
-        let mut signer_account = self.get_with_type(txn, &signer_address, AccountType::Basic)?;
-
-        // Deduct fee from signer's account
-        if let Account::Basic(ref mut basic_account) = signer_account {
-            // This will return InsufficientFunds error if balance < fee
-            basic_account.balance.safe_sub_assign(transaction.fee)?;
-            tx_logger.push_log(Log::PayFee {
-                from: signer_address.clone(),
-                fee: transaction.fee,
-            });
-        } else {
-            // Signer must be a basic account
-            log::error!(
-                signer_address = %signer_address,
-                "Bridge transaction signer is not a BasicAccount"
-            );
-            return Err(AccountError::InvalidForSender);
-        }
-
-        let signer_pruned = self.put_or_prune(txn, &signer_address, signer_account);
-
-        Ok(TransactionReceipt {
-            sender_receipt: sender_pruned_account, // Preserve sender's pruned data
-            recipient_receipt: None,
-            pruned_account: signer_pruned, // Keep signer's pruned data
-            fee_payer: Some(signer_address), // Track that signer paid the fee
-        })
-    }
-
-    /// Extract the signer address that pays the fee for an outgoing bridge transaction.
-    ///
-    /// The fee payer must be derived from the *same* signature proof that bridge
-    /// verification actually checks: for outgoing bridge transactions the verified
-    /// proof lives in `sender_data` (`OutgoingBridgeTransactionData.proof`), not in
-    /// `transaction.proof`. The latter is never verified for `AccountType::Bridge`
-    /// senders, so deriving the fee payer from it would let a submitter charge the
-    /// fee to an arbitrary account by placing any public key in `transaction.proof`.
-    pub fn extract_signer_address(
-        &self,
-        transaction: &Transaction,
-    ) -> Result<Address, AccountError> {
-        debug_assert_eq!(transaction.sender_type, AccountType::Bridge);
-
-        let outgoing_data = OutgoingBridgeTransactionData::parse(transaction)
-            .map_err(|_| AccountError::InvalidSignature)?;
-
-        // Compute signer address from the verified proof's public key.
-        let signer_address = outgoing_data.proof.compute_signer();
-
-        Ok(signer_address)
-    }
-
-    /// Charges the transaction fee to the burn-proof signer for a *successful*
-    /// outgoing bridge transaction, mirroring the failed-transaction path.
-    ///
-    /// `BridgeContract::commit_outgoing_transaction` debits only the released
-    /// `value` from the bridge, never the fee: burn proofs are submitted
-    /// permissionlessly, so the fee is charged to whoever signed the proof
-    /// (`OutgoingBridgeTransactionData.proof`, the signature bridge verification
-    /// actually checks), not to the bridge balance. Without this the fee would
-    /// still be credited to the validator reward pot while never being debited
-    /// from any account, inflating the total supply.
-    ///
-    /// Returns the signer address so it can be recorded as `fee_payer` and
-    /// refunded on revert via [`Self::restore_fee_to_signer`].
-    fn charge_fee_to_signer(
-        &self,
-        txn: &mut WriteTransactionProxy,
-        transaction: &Transaction,
-        tx_logger: &mut TransactionLog,
-    ) -> Result<Address, AccountError> {
-        let signer_address = self.extract_signer_address(transaction)?;
-
-        let mut signer_account = self.get_with_type(txn, &signer_address, AccountType::Basic)?;
-
-        if let Account::Basic(ref mut basic_account) = signer_account {
-            // Errors with InsufficientFunds if the signer cannot cover the fee.
-            basic_account.balance.safe_sub_assign(transaction.fee)?;
-            tx_logger.push_log(Log::PayFee {
-                from: signer_address.clone(),
-                fee: transaction.fee,
-            });
-        } else {
-            log::error!(
-                signer_address = %signer_address,
-                "Bridge transaction signer is not a BasicAccount"
-            );
-            return Err(AccountError::InvalidForSender);
-        }
-
-        self.put_or_prune(txn, &signer_address, signer_account);
-
-        Ok(signer_address)
     }
 
     fn commit_inherent(
@@ -895,15 +724,6 @@ impl Accounts {
             self.put_or_prune(txn, recipient_address, recipient_account);
         }
 
-        // Refund the fee to the burn-proof signer for outgoing bridge transactions
-        // (mirrors the fee charged in `try_commit_transaction`). `fee_payer` is
-        // `None` for every other transaction, so this is a no-op there. Placed
-        // between the recipient and sender reverts to invert the commit order
-        // (sender, fee, recipient).
-        if let Some(fee_payer_address) = receipt.fee_payer {
-            self.restore_fee_to_signer(txn, transaction, &fee_payer_address, None, tx_logger)?;
-        }
-
         // Revert sender. It might need to be restored first if it was pruned.
         let sender_address = &transaction.sender;
         if !self.mark_changed_if_missing(txn, sender_address) {
@@ -939,39 +759,18 @@ impl Accounts {
         receipt: TransactionReceipt,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
-        // Track whether fee was paid by a separate signer (before moving receipt.fee_payer)
-        let has_separate_fee_payer = receipt.fee_payer.is_some();
-
-        // If fee was paid by signer (not sender), restore fee to signer first
-        if let Some(fee_payer_address) = receipt.fee_payer {
-            self.restore_fee_to_signer(
-                txn,
-                transaction,
-                &fee_payer_address,
-                receipt.pruned_account.as_ref(),
-                tx_logger,
-            )?;
-            // Continue to revert sender side below
-        }
-
-        // Revert sender side (bridge contract or other sender)
         let sender_address = &transaction.sender;
         if self.mark_changed_if_missing(txn, sender_address) {
             return Ok(());
         }
 
         let sender_store = DataStore::new(&self.tree, sender_address);
-
-        // Use sender_receipt if available (for bridge transactions with separate signer),
-        // otherwise use pruned_account (for normal transactions)
-        let sender_pruned = if has_separate_fee_payer {
-            receipt.sender_receipt.as_ref()
-        } else {
-            receipt.pruned_account.as_ref()
-        };
-
-        let mut sender_account =
-            self.get_or_restore(txn, sender_address, transaction.sender_type, sender_pruned)?;
+        let mut sender_account = self.get_or_restore(
+            txn,
+            sender_address,
+            transaction.sender_type,
+            receipt.pruned_account.as_ref(),
+        )?;
 
         sender_account.revert_failed_transaction(
             transaction,
@@ -983,47 +782,6 @@ impl Accounts {
 
         // Reverting a zero-fee signaling transaction can create a prunable account.
         self.put_or_prune(txn, sender_address, sender_account);
-
-        Ok(())
-    }
-
-    /// Restore transaction fee to the signer's account (for bridge contract reverts).
-    /// This is used when reverting a failed transaction where the fee was deducted
-    /// from the signer rather than the sender.
-    fn restore_fee_to_signer(
-        &self,
-        txn: &mut WriteTransactionProxy,
-        transaction: &Transaction,
-        fee_payer_address: &Address,
-        pruned_account: Option<&AccountReceipt>,
-        tx_logger: &mut TransactionLog,
-    ) -> Result<(), AccountError> {
-        if self.mark_changed_if_missing(txn, fee_payer_address) {
-            return Ok(());
-        }
-
-        let mut signer_account =
-            self.get_or_restore(txn, fee_payer_address, AccountType::Basic, pruned_account)?;
-
-        // Restore fee to signer's account
-        if let Account::Basic(ref mut basic_account) = signer_account {
-            basic_account.balance += transaction.fee;
-            // Mirror the commit log: the fee was paid by the signer (`fee_payer_address`),
-            // not by `transaction.sender` (the bridge contract). Using `pay_fee_log` here
-            // would log the wrong `from` and make commit/revert logs inconsistent.
-            tx_logger.push_log(Log::PayFee {
-                from: fee_payer_address.clone(),
-                fee: transaction.fee,
-            });
-        } else {
-            log::error!(
-                fee_payer_address = %fee_payer_address,
-                "Fee payer is not a BasicAccount during revert"
-            );
-            return Err(AccountError::InvalidForSender);
-        }
-
-        self.put_or_prune(txn, fee_payer_address, signer_account);
 
         Ok(())
     }
