@@ -305,12 +305,14 @@ impl AccountTransactionInteraction for BridgeContract {
                 AccountError::InvalidTransaction(TransactionError::InvalidData)
             })?;
 
-        // Verify the transaction value matches the burn proof amount
-        if transaction.value != parsed_burn.amount {
+        // The fee is taken from the burned amount: the target receives `value` and the block
+        // reward receives `fee`, so together they must add up to exactly the burned amount.
+        if transaction.value.checked_add(transaction.fee) != Some(parsed_burn.amount) {
             log::warn!(
                 tx_value = %transaction.value,
+                tx_fee = %transaction.fee,
                 parsed_value = %parsed_burn.amount,
-                "Transaction value mismatch"
+                "Transaction value and fee do not add up to the burned amount"
             );
             return Err(AccountError::InvalidTransaction(
                 TransactionError::InvalidValue,
@@ -449,7 +451,7 @@ impl AccountTransactionInteraction for BridgeContract {
             ));
         }
 
-        // Decrement bridge balance (releasing funds)
+        // Decrement bridge balance by the whole burned amount, `value + fee`
         self.balance = self.balance.checked_sub(parsed_burn.amount).ok_or(
             AccountError::InsufficientFunds {
                 needed: parsed_burn.amount,
@@ -469,10 +471,11 @@ impl AccountTransactionInteraction for BridgeContract {
         self.transaction_count += 1;
 
         // Log the outgoing transaction
+        tx_logger.push_log(Log::pay_fee_log(transaction));
         tx_logger.push_log(Log::BridgeOutgoing {
             contract_address: transaction.sender.clone(),
             recipient: parsed_burn.target_address.clone(),
-            value: parsed_burn.amount,
+            value: transaction.value,
         });
 
         // Create receipt for revert
@@ -523,20 +526,27 @@ impl AccountTransactionInteraction for BridgeContract {
         tx_logger.push_log(Log::BridgeOutgoing {
             contract_address: transaction.sender.clone(),
             recipient: receipt.target_address.clone(),
-            value: receipt.amount,
+            value: transaction.value,
         });
+        tx_logger.push_log(Log::pay_fee_log(transaction));
 
         Ok(())
     }
 
     fn commit_failed_transaction(
         &mut self,
-        _transaction: &Transaction,
+        transaction: &Transaction,
         _block_state: &BlockState,
         _data_store: DataStoreWrite,
         _tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        // Do nothing: Fee deduction handled by `Accounts`
+        // The fee is paid out of a successful release, and the bridge never pays for a failed one.
+        // A failed release with a fee therefore cannot pay for its failure, so it is invalid: the
+        // block containing it is invalid, rather than the fee being credited without anybody
+        // paying it.
+        if !transaction.fee.is_zero() {
+            return Err(AccountError::InvalidForSender);
+        }
         Ok(None)
     }
 
@@ -548,7 +558,7 @@ impl AccountTransactionInteraction for BridgeContract {
         _data_store: DataStoreWrite,
         _tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
-        // Do nothing: Fee revert handled by `Accounts`
+        // Do nothing: only a failed release without a fee is ever committed.
         Ok(())
     }
 
@@ -559,17 +569,15 @@ impl AccountTransactionInteraction for BridgeContract {
         _block_state: &BlockState,
         _data_store: DataStoreRead,
     ) -> Result<(), AccountError> {
-        // Only the released `value` comes from the bridge balance. The fee is paid by
-        // the burn-proof signer (see `Accounts::charge_fee_to_signer`), so it is reserved
-        // against the signer's account by the mempool, not against the bridge here.
+        // Both the released `value` and the `fee` come out of the bridge balance.
         let needed = reserved_balance
             .balance()
-            .checked_add(transaction.value)
+            .checked_add(transaction.total_value())
             .ok_or(AccountError::InvalidCoinValue)?;
         let new_balance = self.balance.safe_sub(needed)?;
         self.can_change_balance(transaction, new_balance, true)?;
 
-        reserved_balance.reserve(self.balance, transaction.value)
+        reserved_balance.reserve(self.balance, transaction.total_value())
     }
 
     fn release_balance(
@@ -578,7 +586,7 @@ impl AccountTransactionInteraction for BridgeContract {
         reserved_balance: &mut ReservedBalance,
         _data_store: DataStoreRead,
     ) -> Result<(), AccountError> {
-        reserved_balance.release(transaction.value);
+        reserved_balance.release(transaction.total_value());
         Ok(())
     }
 }

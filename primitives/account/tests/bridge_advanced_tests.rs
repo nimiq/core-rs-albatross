@@ -308,7 +308,7 @@ fn bridge_permissionless_non_owner_submission_succeeds_at_commit() {
     ]);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
-    // Signed by the relayer, NOT the owner. Zero fee avoids the signer-fee path.
+    // Signed by the relayer, NOT the owner.
     let tx = make_outgoing_tx_full(
         RELEASE_AMOUNT,
         burn_data,

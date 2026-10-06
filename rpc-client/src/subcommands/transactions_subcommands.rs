@@ -405,10 +405,10 @@ pub enum TransactionCommand {
     },
 
     /// Sends a transaction releasing funds from a bridge contract to the network.
-    /// The release is proven by a burn of the corresponding tokens on the source chain, and its
-    /// value must match the burned amount.
+    /// The release is proven by a burn of the corresponding tokens on the source chain. The fee is
+    /// taken from the burned amount, so its value plus its fee must equal the burned amount.
     BridgeRelease {
-        /// This wallet signs the burn proof and pays the fee.
+        /// This wallet signs the burn proof.
         /// The signer wallet must be unlocked prior to this action.
         signer_wallet: Address,
 
