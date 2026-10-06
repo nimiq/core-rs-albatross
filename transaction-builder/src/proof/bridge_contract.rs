@@ -1,5 +1,4 @@
 use nimiq_keys::KeyPair;
-use nimiq_serde::Serialize;
 use nimiq_transaction::{
     account::bridge_contract::OutgoingBridgeTransactionData, SignatureProof, Transaction,
 };
@@ -7,8 +6,8 @@ use nimiq_transaction::{
 /// The `BridgeProofBuilder` can be used to build proofs for transactions that release funds
 /// from a bridge contract against a burn proof.
 ///
-/// Releases are permissionless: any key may sign the burn proof, and the account belonging to
-/// that key pays the transaction fee.
+/// Releases are permissionless: any key may sign the burn proof. The transaction fee is taken from
+/// the burned amount, not from the signer.
 #[derive(Clone, Debug)]
 pub struct BridgeProofBuilder {
     pub transaction: Transaction,
@@ -37,12 +36,9 @@ impl BridgeProofBuilder {
     pub fn generate(self) -> Option<Transaction> {
         let proof = self.proof?;
         let mut tx = self.transaction;
-        // Consensus only checks the proof embedded in `sender_data`. It is also placed in
-        // `proof` so the signer, who pays the fee, shows up in the transaction's related addresses.
+        // Consensus only checks the proof embedded in `sender_data`.
         tx.sender_data =
-            OutgoingBridgeTransactionData::set_signature_on_data(&tx.sender_data, proof.clone())
-                .ok()?;
-        tx.proof = proof.serialize_to_vec();
+            OutgoingBridgeTransactionData::set_signature_on_data(&tx.sender_data, proof).ok()?;
         Some(tx)
     }
 }
