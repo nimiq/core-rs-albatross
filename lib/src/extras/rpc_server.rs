@@ -33,13 +33,10 @@ pub fn initialize_rpc_server(
         Some(HashSet::from_iter(allowed_methods))
     };
 
-    let cors_domains = config.cors_domains.unwrap_or_default();
-    let is_cors_wildcard = cors_domains.iter().any(|origin| origin.trim() == "*");
-    let cors_config = if is_cors_wildcard {
-        Cors::new().with_any_origin()
-    } else {
-        Cors::new().with_origins(cors_domains)
-    };
+    // A `*` entry allows any origin
+    let cors_config = Cors::new()
+        .with_origins(config.cors_domains.unwrap_or_default())
+        .map_err(|e| Error::config_error(format!("rpc-server.cors_domains: {e}")))?;
 
     let mut dispatcher = ModularDispatcher::default();
 
