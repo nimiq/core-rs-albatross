@@ -74,7 +74,7 @@ impl ConsensusDispatcher {
     fn check_bridge_release(
         &self,
         bridge_address: &Address,
-        recipient: &Address,
+        target: &Address,
         value: Coin,
         fee: Coin,
         burn_proof: &OutgoingTransaction,
@@ -104,14 +104,14 @@ impl ConsensusDispatcher {
         let nonce = {
             let data_store = blockchain.state.accounts.data_store(bridge_address);
             let db_txn = blockchain.read_transaction();
-            bridge.get_nonce(&data_store.read(&db_txn), recipient)
+            bridge.get_nonce(&data_store.read(&db_txn), target)
         };
 
         verify_bridge_release(
             &bridge,
             oracle.as_ref(),
             nonce,
-            recipient,
+            target,
             value,
             fee,
             burn_proof,
@@ -141,15 +141,15 @@ fn parse_burn_proof(
     .map_err(|error| Error::InvalidArgument(format!("Burn Transaction Data: {error}")))
 }
 
-/// Checks a bridge release against the bridge, its oracle and the last `nonce` released to
-/// `recipient`. The checks mirror `BridgeContract::commit_outgoing_transaction`.
+/// Checks a release that `target` signs and receives against the bridge, its oracle and the last
+/// `nonce` released to `target`. The checks mirror `BridgeContract::commit_outgoing_transaction`.
 ///
 /// Returns the reason why the release would fail.
 fn verify_bridge_release(
     bridge: &BridgeContract,
     oracle: Option<&OracleContract>,
     nonce: u64,
-    recipient: &Address,
+    target: &Address,
     value: Coin,
     fee: Coin,
     burn_proof: &OutgoingTransaction,
@@ -157,6 +157,13 @@ fn verify_bridge_release(
     let burn = burn_proof
         .parse_burn_data(&bridge.chain_config)
         .map_err(|error| format!("invalid burn transaction: {error}"))?;
+    // The target both signs and receives the release.
+    if &burn.target_address != target {
+        return Err(format!(
+            "the burn transaction's target is {}, not {target}",
+            burn.target_address
+        ));
+    }
     if value.checked_add(fee) != Some(burn.amount) {
         return Err(format!(
             "the burned amount is {}, not the value {value} plus the fee {fee}",
@@ -169,12 +176,6 @@ fn verify_bridge_release(
             burn.amount
         ));
     }
-    if &burn.target_address != recipient {
-        return Err(format!(
-            "the burn transaction pays {}, not {recipient}",
-            burn.target_address
-        ));
-    }
     if burn.target_chain_id != bridge.source_chain_id {
         return Err(format!(
             "the burn transaction is for chain {}, but the bridge serves chain {}",
@@ -183,7 +184,7 @@ fn verify_bridge_release(
     }
     if Some(burn.target_nonce) != nonce.checked_add(1) {
         return Err(format!(
-            "the burn transaction has nonce {}, but the last nonce released to {recipient} is {nonce}",
+            "the burn transaction has nonce {}, but the last nonce released to {target} is {nonce}",
             burn.target_nonce
         ));
     }
@@ -1593,9 +1594,8 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn create_bridge_release_transaction(
         &self,
-        signer_wallet: Address,
+        target_wallet: Address,
         bridge_address: Address,
-        recipient: Address,
         burn_transaction_data: String,
         merkle_proof: String,
         oracle_state_index: u64,
@@ -1604,9 +1604,8 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
         let transaction = TransactionBuilder::new_bridge_release(
-            &self.get_wallet_keypair(&signer_wallet)?,
+            &self.get_wallet_keypair(&target_wallet)?,
             bridge_address,
-            recipient,
             parse_burn_proof(&burn_transaction_data, &merkle_proof, oracle_state_index)?,
             value,
             fee,
@@ -1619,9 +1618,8 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_bridge_release_transaction(
         &self,
-        signer_wallet: Address,
+        target_wallet: Address,
         bridge_address: Address,
-        recipient: Address,
         burn_transaction_data: String,
         merkle_proof: String,
         oracle_state_index: u64,
@@ -1631,13 +1629,12 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let burn_proof =
             parse_burn_proof(&burn_transaction_data, &merkle_proof, oracle_state_index)?;
-        self.check_bridge_release(&bridge_address, &recipient, value, fee, &burn_proof)?;
+        self.check_bridge_release(&bridge_address, &target_wallet, value, fee, &burn_proof)?;
 
         let raw_tx = self
             .create_bridge_release_transaction(
-                signer_wallet,
+                target_wallet,
                 bridge_address,
-                recipient,
                 burn_transaction_data,
                 merkle_proof,
                 oracle_state_index,
@@ -2005,7 +2002,7 @@ mod tests {
                 Coin::ZERO,
                 &proof,
             ),
-            "pays",
+            "target is",
         );
         rejects(
             verify(&bridge(10_000), Some(&oracle), 1, AMOUNT, &proof),

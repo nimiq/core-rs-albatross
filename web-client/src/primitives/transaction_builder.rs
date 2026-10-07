@@ -767,13 +767,13 @@ impl TransactionBuilder {
     }
 
     /// Releases `value` amount of luna (NIM's smallest unit) from a bridge contract to `recipient`,
-    /// against a proof that the corresponding tokens were burned on the source chain. `value` and
-    /// `recipient` must match the burn transaction. `merkle_proof` is the serialized
-    /// `AnyMerkleProof` of the burn transaction, and `oracle_state_index` the index of the oracle
-    /// state it is verified against.
+    /// against a proof that the corresponding tokens were burned on the source chain. `recipient`
+    /// must match the burn transaction, and `value + fee` must equal the burned amount, since the
+    /// fee comes out of it. `merkle_proof` is the serialized `AnyMerkleProof` of the burn
+    /// transaction, and `oracle_state_index` the index of the oracle state it is verified against.
     ///
-    /// The returned transaction is not yet signed. Anyone can sign it, e.g. with `tx.sign(keyPair)`;
-    /// the fee is paid by the account of that key pair, even if the release fails.
+    /// The returned transaction is not yet signed. Only the burn's target can sign it, e.g. with
+    /// `tx.sign(keyPair)`, but anyone can submit the signed transaction.
     ///
     /// Throws when the burn proof is invalid, the numbers given for value and fee do not fit within
     /// a u64 or the networkId is unknown.

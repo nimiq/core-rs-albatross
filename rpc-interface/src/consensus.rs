@@ -684,20 +684,20 @@ pub trait ConsensusInterface {
     /// Returns a serialized transaction that releases funds from a bridge contract against a proof
     /// that the corresponding tokens were burned on the source chain.
     ///
-    /// Releases are permissionless: `signer_wallet` signs the burn proof. The fee is taken from the
-    /// burned amount, not from `signer_wallet`.
+    /// `target_wallet` must be the target address encoded in the burn transaction. It signs the
+    /// burn proof and receives the funds. Anyone may submit the signed release. The fee is taken
+    /// from the burned amount, so the target needs no funds.
     ///
-    /// - `recipient` must match the target address encoded in the burn transaction.
-    /// - `value` is what `recipient` receives. `value + fee` must equal the amount encoded in the
-    ///   burn transaction, and `value` must not be zero, so the fee must be less than that amount.
+    /// - `value` is what `target_wallet` receives. `value + fee` must equal the amount encoded in
+    ///   the burn transaction, and `value` must not be zero, so the fee must be less than that
+    ///   amount.
     /// - `burn_transaction_data` is the raw burn transaction as a hex string.
     /// - `merkle_proof` is a hex-encoded, serialized `AnyMerkleProof` of the burn transaction.
     /// - `oracle_state_index` is the index of the oracle state the proof is verified against.
     async fn create_bridge_release_transaction(
         &self,
-        signer_wallet: Address,
+        target_wallet: Address,
         bridge_address: Address,
-        recipient: Address,
         burn_transaction_data: String,
         merkle_proof: String,
         oracle_state_index: u64,
@@ -713,9 +713,8 @@ pub trait ConsensusInterface {
     /// so that a release that would fail is not broadcast.
     async fn send_bridge_release_transaction(
         &self,
-        signer_wallet: Address,
+        target_wallet: Address,
         bridge_address: Address,
-        recipient: Address,
         burn_transaction_data: String,
         merkle_proof: String,
         oracle_state_index: u64,

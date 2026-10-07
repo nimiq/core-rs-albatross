@@ -4,7 +4,7 @@ use nimiq_account::{
 };
 use nimiq_database::traits::{Database, WriteTransaction};
 use nimiq_hash::{Blake2bHasher, HashOutput, Hasher};
-use nimiq_keys::{Address, KeyPair};
+use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::Serialize;
 use nimiq_test_log::test;
@@ -30,12 +30,17 @@ const SOURCE_CHAIN_ID: u32 = 1;
 const RELEASE_AMOUNT: u64 = 100;
 const BURN_BLOCK_HEIGHT: u32 = 42;
 
+/// The key of `target_address()`. Only the target can sign its releases.
+fn target_key() -> KeyPair {
+    KeyPair::from(PrivateKey::from([5u8; 32]))
+}
+
 fn target_address() -> Address {
-    Address::from([5u8; 20])
+    Address::from(&target_key().public)
 }
 
 fn target_address_bytes() -> [u8; 20] {
-    [5u8; 20]
+    <[u8; 20]>::try_from(target_address().as_bytes()).expect("a Nimiq address is 20 bytes")
 }
 
 /// Returns a ValidationProgram that reads all required fields from burn_data:
@@ -132,7 +137,7 @@ fn make_outgoing_tx(
     bridge_address: &Address,
     nonce: u64,
     oracle_state_index: u64,
-    owner_keypair: &KeyPair,
+    signer: &KeyPair,
 ) -> Transaction {
     let burn_data = make_burn_data(nonce);
 
@@ -166,8 +171,8 @@ fn make_outgoing_tx(
 
     // Sign over tx content (which already has zeroed proof in sender_data).
     // This matches what verify_transaction_signature does before checking the sig.
-    let sig = owner_keypair.sign(&tx.serialize_content());
-    let sig_proof = SignatureProof::from_ed25519(owner_keypair.public.clone(), sig);
+    let sig = signer.sign(&tx.serialize_content());
+    let sig_proof = SignatureProof::from_ed25519(signer.public.clone(), sig);
 
     // Set the real signature and update sender_data.
     bridge_data.set_signature(sig_proof);
@@ -246,8 +251,8 @@ fn test_nonce_revert_opens_replay_attack() {
 
     let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
-    let tx1 = make_outgoing_tx(&bridge_address, 1, 0, &owner_keypair);
-    let tx2 = make_outgoing_tx(&bridge_address, 2, 1, &owner_keypair);
+    let tx1 = make_outgoing_tx(&bridge_address, 1, 0, &target_key());
+    let tx2 = make_outgoing_tx(&bridge_address, 2, 1, &target_key());
 
     // Step 1: commit nonce=1 — must succeed.
     let receipts1 = commit_block(&test, &[tx1.clone()], &block_state);

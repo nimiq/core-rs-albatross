@@ -149,8 +149,8 @@ impl Transaction {
     /// The same applies to updates and owner changes of an oracle contract, where the inner key pair
     /// represents the oracle owner.
     ///
-    /// For releases from a bridge contract, the key pair signs the burn proof. The fee comes out of
-    /// the burned amount.
+    /// For releases from a bridge contract, the key pair signs the burn proof and must be the key of
+    /// the burn's target. The fee comes out of the burned amount.
     ///
     /// Throws when the transaction's recipient data is not valid data for an incoming staking
     /// transaction, or when an incoming staking transaction is not sent from a basic account or

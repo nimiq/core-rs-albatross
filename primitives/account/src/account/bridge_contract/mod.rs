@@ -80,9 +80,9 @@ impl BridgeContract {
         new_balance: Coin,
         is_reserve: bool,
     ) -> Result<(), AccountError> {
-        // Outgoing bridge transactions are permissionless burn-releases: the Merkle
-        // burn-proof verified in `commit_outgoing_transaction` is the sole authorization,
-        // so we deliberately do NOT require the owner's signature here. Requiring it made
+        // Outgoing bridge transactions are burn-releases, authorized by the Merkle burn-proof
+        // and the burn target's signature verified in `commit_outgoing_transaction`, so we
+        // deliberately do NOT require the owner's signature here. Requiring it made
         // `reserve_balance` (mempool admission) reject the very transactions that `commit`
         // accepts, diverging the mempool from consensus and breaking permissionless
         // submission. Balance availability is still enforced by `reserve_balance` itself.
@@ -289,8 +289,6 @@ impl AccountTransactionInteraction for BridgeContract {
         let outgoing_data = OutgoingBridgeTransactionData::parse(transaction)
             .map_err(AccountError::InvalidTransaction)?;
 
-        // Owner signature check is on purpose missing  to enable permissionless burn proof submission.
-
         // Verify the transaction signature
         outgoing_data
             .verify(transaction)
@@ -304,6 +302,20 @@ impl AccountTransactionInteraction for BridgeContract {
                 log::warn!(?error, "Failed to parse burn data");
                 AccountError::InvalidTransaction(TransactionError::InvalidData)
             })?;
+
+        // Only the target can release its burn, since the release consumes the target's nonce.
+        // Anyone can still submit a release that the target signed.
+        if !outgoing_data
+            .proof
+            .is_signed_by(&parsed_burn.target_address)
+        {
+            log::warn!(
+                signer = %outgoing_data.proof.compute_signer(),
+                target = %parsed_burn.target_address,
+                "Release is not signed by the burn target",
+            );
+            return Err(AccountError::InvalidSignature);
+        }
 
         // The fee is taken from the burned amount: the target receives `value` and the block
         // reward receives `fee`, so together they must add up to exactly the burned amount.

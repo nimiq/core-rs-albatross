@@ -408,15 +408,12 @@ pub enum TransactionCommand {
     /// The release is proven by a burn of the corresponding tokens on the source chain. The fee is
     /// taken from the burned amount, so its value plus its fee must equal the burned amount.
     BridgeRelease {
-        /// This wallet signs the burn proof.
-        /// The signer wallet must be unlocked prior to this action.
-        signer_wallet: Address,
+        /// The target of the burn transaction. This wallet signs the burn proof and receives the
+        /// funds. The target wallet must be unlocked prior to this action.
+        target_wallet: Address,
 
         /// The address of the bridge contract.
         bridge_address: Address,
-
-        /// The address that receives the funds. It must match the burn transaction.
-        recipient: Address,
 
         /// The raw burn transaction (in hex).
         burn_transaction_data: String,
@@ -1167,9 +1164,8 @@ impl HandleSubcommand for TransactionCommand {
                 }
             }
             TransactionCommand::BridgeRelease {
-                signer_wallet,
+                target_wallet,
                 bridge_address,
-                recipient,
                 burn_transaction_data,
                 merkle_proof,
                 oracle_state_index,
@@ -1179,9 +1175,8 @@ impl HandleSubcommand for TransactionCommand {
                     let tx = client
                         .consensus
                         .create_bridge_release_transaction(
-                            signer_wallet,
+                            target_wallet,
                             bridge_address,
-                            recipient,
                             burn_transaction_data,
                             merkle_proof,
                             oracle_state_index,
@@ -1195,9 +1190,8 @@ impl HandleSubcommand for TransactionCommand {
                     let txid = client
                         .consensus
                         .send_bridge_release_transaction(
-                            signer_wallet,
+                            target_wallet,
                             bridge_address,
-                            recipient,
                             burn_transaction_data,
                             merkle_proof,
                             oracle_state_index,
