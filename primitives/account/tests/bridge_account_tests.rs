@@ -4,7 +4,7 @@ use nimiq_account::{
 };
 use nimiq_database::traits::{Database, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
-use nimiq_keys::{Address, KeyPair};
+use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
@@ -40,8 +40,13 @@ const RELEASE_AMOUNT: u64 = 500;
 const BURN_BLOCK_HEIGHT: u32 = 42;
 const BRIDGE_DEPOSIT: u64 = 10_000;
 
+/// The key of `nimiq_target()`. Only the target can sign its releases.
+fn target_key() -> KeyPair {
+    KeyPair::from(PrivateKey::from([0xAAu8; 32]))
+}
+
 fn nimiq_target() -> Address {
-    Address::from([0xAAu8; 20])
+    Address::from(&target_key().public)
 }
 
 fn oracle_addr() -> Address {
@@ -87,9 +92,9 @@ fn standard_program() -> ValidationProgram {
     ])
 }
 
-fn make_burn_data(target: [u8; 20], amount: u64, nonce: u64, chain_id: u32) -> Vec<u8> {
+fn make_burn_data(target: &Address, amount: u64, nonce: u64, chain_id: u32) -> Vec<u8> {
     let mut d = Vec::with_capacity(44);
-    d.extend_from_slice(&target);
+    d.extend_from_slice(target.as_bytes());
     d.extend_from_slice(&amount.to_le_bytes());
     d.extend_from_slice(&nonce.to_le_bytes());
     d.extend_from_slice(&BURN_BLOCK_HEIGHT.to_le_bytes());
@@ -213,7 +218,7 @@ fn revert_block(test: &TestCommitRevert, txs: &[Transaction], r: Receipts, bs: &
 #[test]
 fn bridge_create_success_with_matching_oracle() {
     let owner = KeyPair::generate_default_csprng();
-    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let oracle = make_single_state_oracle(&burn_data);
 
     let test = TestCommitRevert::with_initial_state(&[(oracle_addr(), Account::Oracle(oracle))]);
@@ -444,7 +449,7 @@ fn bridge_create_accepts_empty_oracle_any_hash_type() {
 // =====================================================================
 
 fn make_bridge_state(owner: &KeyPair) -> (TestCommitRevert, OracleContract) {
-    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let oracle = make_single_state_oracle(&burn_data);
     let bridge = BridgeContract {
         owner: Address::from(&owner.public),
@@ -468,7 +473,7 @@ fn bridge_incoming_commit_revert_roundtrip() {
     let sender_addr = Address::from(&owner.public);
     let deposit = Coin::from_u64_unchecked(300);
 
-    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let oracle = make_single_state_oracle(&burn_data);
     let bridge = BridgeContract {
         owner: sender_addr.clone(),
@@ -521,7 +526,7 @@ fn bridge_incoming_commit_revert_roundtrip() {
 
 fn setup_outgoing_env() -> (TestCommitRevert, KeyPair, Vec<u8>) {
     let owner = KeyPair::generate_default_csprng();
-    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let oracle = make_single_state_oracle(&burn_data);
     let bridge = BridgeContract {
         owner: Address::from(&owner.public),
@@ -547,7 +552,7 @@ fn setup_outgoing_env() -> (TestCommitRevert, KeyPair, Vec<u8>) {
 /// Happy path: valid outgoing tx is committed and balance decremented.
 #[test]
 fn bridge_outgoing_commit_success() {
-    let (test, owner, burn_data) = setup_outgoing_env();
+    let (test, _, burn_data) = setup_outgoing_env();
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     let tx = make_outgoing_tx(
         &bridge_addr(),
@@ -555,7 +560,7 @@ fn bridge_outgoing_commit_success() {
         RELEASE_AMOUNT,
         burn_data,
         0,
-        &owner,
+        &target_key(),
     );
     let receipts = commit_block(&test, &[tx], &bs);
     assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
@@ -570,19 +575,18 @@ fn total_balance(test: &TestCommitRevert, addresses: &[Address]) -> Coin {
 }
 
 /// The fee comes out of the burned amount: the bridge is debited exactly the amount, the target
-/// receives `value`, and the fee goes to the block reward. The signer pays nothing, and no NIM is
-/// minted or destroyed: account balances drop by exactly the fee, which the block reward pays out
-/// again. `commit_and_test` also checks that the revert restores the state and mirrors the logs.
+/// receives `value`, and the fee goes to the block reward. The target signs but pays nothing from
+/// its own funds, and no NIM is minted or destroyed: account balances drop by exactly the fee,
+/// which the block reward pays out again. `commit_and_test` also checks that the revert restores
+/// the state and mirrors the logs.
 #[test]
 fn a_release_takes_its_fee_from_the_burned_amount() {
     for fee in [0, 1, 10, RELEASE_AMOUNT - 1] {
-        let signer = KeyPair::generate_default_csprng();
-        let signer_address = Address::from(&signer.public);
-        let signer_funds = Coin::from_u64_unchecked(1_000);
-        let burn_data = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+        let owner = KeyPair::generate_default_csprng();
+        let target_funds = Coin::from_u64_unchecked(1_000);
+        let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
 
-        // The target is left unseeded: a zero-balance basic account is not stored, so seeding it
-        // would make the revert's state-root check fail against the pruned trie.
+        // The target holds funds of its own, so that any charge to the signer would show.
         let test = TestCommitRevert::with_initial_state(&[
             (
                 oracle_addr(),
@@ -590,22 +594,16 @@ fn a_release_takes_its_fee_from_the_burned_amount() {
             ),
             (
                 bridge_addr(),
-                Account::Bridge(bridge_with(&oracle_addr(), &signer)),
+                Account::Bridge(bridge_with(&oracle_addr(), &owner)),
             ),
             (
-                signer_address.clone(),
+                nimiq_target(),
                 Account::Basic(BasicAccount {
-                    balance: signer_funds,
+                    balance: target_funds,
                 }),
             ),
         ]);
-        // Every account there is, including the target once the release creates it.
-        let accounts = [
-            oracle_addr(),
-            bridge_addr(),
-            signer_address.clone(),
-            nimiq_target(),
-        ];
+        let accounts = [oracle_addr(), bridge_addr(), nimiq_target()];
         let supply_before = total_balance(&test, &accounts);
 
         let fee = Coin::from_u64_unchecked(fee);
@@ -617,7 +615,7 @@ fn a_release_takes_its_fee_from_the_burned_amount() {
             fee,
             burn_data,
             0,
-            &signer,
+            &target_key(),
         );
         let bs = BlockState::new(1, 1, Policy::max_supported_version());
         let receipts = test
@@ -635,13 +633,8 @@ fn a_release_takes_its_fee_from_the_burned_amount() {
         );
         assert_eq!(
             test.get_complete(&nimiq_target(), None).balance(),
-            value,
-            "fee {fee}: the target receives the value",
-        );
-        assert_eq!(
-            test.get_complete(&signer_address, None).balance(),
-            signer_funds,
-            "fee {fee}: the signer pays nothing",
+            target_funds + value,
+            "fee {fee}: the target receives the value and pays nothing",
         );
         assert_eq!(
             total_balance(&test, &accounts) + fee,
@@ -674,7 +667,7 @@ fn a_release_whose_value_and_fee_do_not_add_up_to_the_burned_amount_is_rejected(
             Coin::from_u64_unchecked(fee),
             burn_data.clone(),
             0,
-            &owner,
+            &target_key(),
         );
         assert_eq!(
             outgoing_error(&test, &bridge, &tx, &bs),
@@ -693,8 +686,7 @@ fn a_release_whose_value_and_fee_do_not_add_up_to_the_burned_amount_is_rejected(
 /// fee must be strictly less than the burned amount.
 #[test]
 fn a_release_whose_fee_is_the_whole_burned_amount_is_rejected() {
-    let owner = KeyPair::generate_default_csprng();
-    let burn_data = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let tx = make_outgoing_tx_with_fee(
         &bridge_addr(),
         &nimiq_target(),
@@ -702,7 +694,7 @@ fn a_release_whose_fee_is_the_whole_burned_amount_is_rejected() {
         Coin::from_u64_unchecked(RELEASE_AMOUNT),
         burn_data,
         0,
-        &owner,
+        &target_key(),
     );
 
     assert_eq!(
@@ -714,17 +706,17 @@ fn a_release_whose_fee_is_the_whole_burned_amount_is_rejected() {
 /// Wrong chain_id in burn data → rejected.
 #[test]
 fn bridge_outgoing_rejects_wrong_chain_id() {
-    let (test, owner, _) = setup_outgoing_env();
+    let (test, _, _) = setup_outgoing_env();
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     let wrong_chain_id = SOURCE_CHAIN_ID + 1;
-    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, wrong_chain_id);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, wrong_chain_id);
     let tx = make_outgoing_tx(
         &bridge_addr(),
         &nimiq_target(),
         RELEASE_AMOUNT,
         burn_data,
         0,
-        &owner,
+        &target_key(),
     );
     let receipts = commit_block(&test, &[tx], &bs);
     assert!(matches!(
@@ -736,17 +728,17 @@ fn bridge_outgoing_rejects_wrong_chain_id() {
 /// Transaction recipient doesn't match burn data target address → rejected.
 #[test]
 fn bridge_outgoing_rejects_wrong_recipient() {
-    let (test, owner, burn_data) = setup_outgoing_env();
+    let (test, _, burn_data) = setup_outgoing_env();
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     let wrong_recipient = Address::from([0xBBu8; 20]);
-    // burn_data has [0xAA; 20] as target, but tx recipient is [0xBB; 20]
+    // burn_data names nimiq_target(), who signs, but tx recipient is [0xBB; 20]
     let tx = make_outgoing_tx(
         &bridge_addr(),
         &wrong_recipient,
         RELEASE_AMOUNT,
         burn_data,
         0,
-        &owner,
+        &target_key(),
     );
     let receipts = commit_block(&test, &[tx], &bs);
     assert!(matches!(
@@ -758,7 +750,7 @@ fn bridge_outgoing_rejects_wrong_recipient() {
 /// Transaction value doesn't match burn data amount → rejected.
 #[test]
 fn bridge_outgoing_rejects_wrong_value() {
-    let (test, owner, burn_data) = setup_outgoing_env();
+    let (test, _, burn_data) = setup_outgoing_env();
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     let wrong_amount = RELEASE_AMOUNT + 1;
     // burn_data says RELEASE_AMOUNT, but tx sends wrong_amount
@@ -768,7 +760,7 @@ fn bridge_outgoing_rejects_wrong_value() {
         wrong_amount,
         burn_data,
         0,
-        &owner,
+        &target_key(),
     );
     let receipts = commit_block(&test, &[tx], &bs);
     assert!(matches!(
@@ -782,7 +774,7 @@ fn bridge_outgoing_rejects_wrong_value() {
 fn bridge_outgoing_rejects_nonce_gap() {
     let owner = KeyPair::generate_default_csprng();
     // Build oracle for nonce=2 burn data
-    let burn_data_2 = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
+    let burn_data_2 = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
     let oracle = make_single_state_oracle(&burn_data_2);
     let bridge = BridgeContract {
         owner: Address::from(&owner.public),
@@ -804,7 +796,7 @@ fn bridge_outgoing_rejects_nonce_gap() {
         RELEASE_AMOUNT,
         burn_data_2,
         0,
-        &owner,
+        &target_key(),
     );
     let receipts = commit_block(&test, &[tx], &bs);
     assert!(matches!(
@@ -816,7 +808,7 @@ fn bridge_outgoing_rejects_nonce_gap() {
 /// Same nonce submitted twice → second submission rejected.
 #[test]
 fn bridge_outgoing_rejects_duplicate_nonce() {
-    let (test, owner, burn_data) = setup_outgoing_env();
+    let (test, _, burn_data) = setup_outgoing_env();
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     let tx = make_outgoing_tx(
         &bridge_addr(),
@@ -824,7 +816,7 @@ fn bridge_outgoing_rejects_duplicate_nonce() {
         RELEASE_AMOUNT,
         burn_data,
         0,
-        &owner,
+        &target_key(),
     );
     // First submission succeeds
     let r1 = commit_block(&test, &[tx.clone()], &bs);
@@ -837,7 +829,7 @@ fn bridge_outgoing_rejects_duplicate_nonce() {
 /// Oracle state index out of bounds → rejected.
 #[test]
 fn bridge_outgoing_rejects_oracle_index_out_of_bounds() {
-    let (test, owner, burn_data) = setup_outgoing_env();
+    let (test, _, burn_data) = setup_outgoing_env();
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     // Oracle has only index 0; submitting index 5 is out of bounds
     let tx = make_outgoing_tx(
@@ -846,7 +838,7 @@ fn bridge_outgoing_rejects_oracle_index_out_of_bounds() {
         RELEASE_AMOUNT,
         burn_data,
         5,
-        &owner,
+        &target_key(),
     );
     let receipts = commit_block(&test, &[tx], &bs);
     assert!(matches!(
@@ -864,7 +856,7 @@ fn bridge_outgoing_rejects_oracle_index_out_of_bounds() {
 fn bridge_outgoing_succeeds_with_wrapped_oracle_index() {
     let owner = KeyPair::generate_default_csprng();
 
-    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let leaf = blake2b(&burn_data);
     let zero = leaf.zero_of_same_type();
     // Oracle chain: data_i = H(data_{i-1} || state_i); state_2 is the burn's leaf,
@@ -901,7 +893,7 @@ fn bridge_outgoing_succeeds_with_wrapped_oracle_index() {
         RELEASE_AMOUNT,
         burn_data,
         2,
-        &owner,
+        &target_key(),
     );
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     let receipts = test
@@ -925,17 +917,17 @@ fn bridge_outgoing_succeeds_with_wrapped_oracle_index() {
 /// Merkle proof doesn't match oracle state hash → rejected.
 #[test]
 fn bridge_outgoing_rejects_wrong_merkle_proof() {
-    let (test, owner, _) = setup_outgoing_env();
+    let (test, _, _) = setup_outgoing_env();
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     // Use burn_data for a completely different transaction — leaf hash won't match oracle
-    let wrong_burn_data = make_burn_data([0xFFu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let wrong_burn_data = make_burn_data(&second_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let tx = make_outgoing_tx(
         &bridge_addr(),
-        &Address::from([0xFFu8; 20]),
+        &second_target(),
         RELEASE_AMOUNT,
         wrong_burn_data,
         0,
-        &owner,
+        &second_target_key(),
     );
     let receipts = commit_block(&test, &[tx], &bs);
     assert!(matches!(
@@ -948,7 +940,7 @@ fn bridge_outgoing_rejects_wrong_merkle_proof() {
 #[test]
 fn bridge_outgoing_rejects_proof_depth_exceeded() {
     let owner = KeyPair::generate_default_csprng();
-    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let oracle = make_single_state_oracle(&burn_data);
 
     // Bridge with a very tight max_proof_depth of 1
@@ -995,8 +987,9 @@ fn bridge_outgoing_rejects_proof_depth_exceeded() {
         1,
         NetworkId::UnitAlbatross,
     );
-    let sig = owner.sign(&tx.serialize_content());
-    bd.set_signature(SignatureProof::from_ed25519(owner.public.clone(), sig));
+    let target = target_key();
+    let sig = target.sign(&tx.serialize_content());
+    bd.set_signature(SignatureProof::from_ed25519(target.public, sig));
     tx.sender_data = bd.serialize_to_vec();
 
     let receipts = commit_block(&test, &[tx], &bs);
@@ -1014,7 +1007,7 @@ fn bridge_outgoing_rejects_proof_depth_exceeded() {
 /// Verifies the `receipt.nonce == 1 → remove_nonce` branch of the fix.
 #[test]
 fn bridge_outgoing_revert_nonce1_removes_entry() {
-    let (test, owner, burn_data) = setup_outgoing_env();
+    let (test, _, burn_data) = setup_outgoing_env();
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     let tx = make_outgoing_tx(
         &bridge_addr(),
@@ -1022,7 +1015,7 @@ fn bridge_outgoing_revert_nonce1_removes_entry() {
         RELEASE_AMOUNT,
         burn_data,
         0,
-        &owner,
+        &target_key(),
     );
 
     // Commit nonce=1 then revert it
@@ -1031,7 +1024,7 @@ fn bridge_outgoing_revert_nonce1_removes_entry() {
     revert_block(&test, &[tx.clone()], receipts, &bs);
 
     // After revert, nonce=1 must be accepted again (entry was cleanly removed)
-    let burn_data_again = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data_again = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let oracle = make_single_state_oracle(&burn_data_again);
     // Re-build oracle state (same as initial since we're re-using same burn data)
     // Re-submit nonce=1 — should succeed because the revert cleaned up correctly
@@ -1041,7 +1034,7 @@ fn bridge_outgoing_revert_nonce1_removes_entry() {
         RELEASE_AMOUNT,
         burn_data_again,
         0,
-        &owner,
+        &target_key(),
     );
     let r2 = commit_block(&test, &[tx2], &bs);
     assert!(
@@ -1549,7 +1542,7 @@ fn release_submitted_before_the_root_lands_is_rejected_and_then_succeeds_on_retr
     let bridge_owner = KeyPair::generate_default_csprng();
     let oracle_owner = KeyPair::generate_default_csprng();
 
-    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let test = TestCommitRevert::with_initial_state(&[
         // The oracle exists but has never been updated: the relayer has not published yet.
         (
@@ -1569,7 +1562,7 @@ fn release_submitted_before_the_root_lands_is_rejected_and_then_succeeds_on_retr
             RELEASE_AMOUNT,
             burn_data.clone(),
             0,
-            &bridge_owner,
+            &target_key(),
         )
     };
 
@@ -1632,7 +1625,7 @@ fn release_submitted_before_the_root_lands_is_rejected_and_then_succeeds_on_retr
 #[test]
 fn a_release_whose_oracle_index_was_evicted_still_succeeds_against_the_newest_root() {
     let owner = KeyPair::generate_default_csprng();
-    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
 
     // The burn's leaf, and the tree as it looked when the burn was first attested (alone) and
     // after another burn joined it.
@@ -1672,7 +1665,7 @@ fn a_release_whose_oracle_index_was_evicted_still_succeeds_against_the_newest_ro
         RELEASE_AMOUNT,
         burn_data.clone(),
         0,
-        &owner,
+        &target_key(),
     );
     assert!(
         matches!(
@@ -1708,8 +1701,9 @@ fn a_release_whose_oracle_index_was_evicted_still_succeeds_against_the_newest_ro
         1,
         NetworkId::UnitAlbatross,
     );
-    let sig = owner.sign(&fresh.serialize_content());
-    bridge_data.set_signature(SignatureProof::from_ed25519(owner.public, sig));
+    let target = target_key();
+    let sig = target.sign(&fresh.serialize_content());
+    bridge_data.set_signature(SignatureProof::from_ed25519(target.public, sig));
     fresh.sender_data = bridge_data.serialize_to_vec();
 
     let receipts = test
@@ -1735,7 +1729,7 @@ fn a_release_whose_oracle_index_was_evicted_still_succeeds_against_the_newest_ro
 #[test]
 fn releases_fail_closed_when_the_oracle_contract_is_gone_and_recover_when_it_returns() {
     let owner = KeyPair::generate_default_csprng();
-    let burn_data = make_burn_data([0xAAu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
     let release = || {
@@ -1745,7 +1739,7 @@ fn releases_fail_closed_when_the_oracle_contract_is_gone_and_recover_when_it_ret
             RELEASE_AMOUNT,
             burn_data.clone(),
             0,
-            &owner,
+            &target_key(),
         )
     };
 
@@ -1835,11 +1829,9 @@ fn releases_fail_closed_when_the_oracle_contract_is_gone_and_recover_when_it_ret
 // The bound has two halves. A forged root buys the attacker exactly one thing — the Merkle
 // inclusion check — and every other release rule still binds; and whatever they construct, the
 // bridge can only ever pay out NIM it already holds.
-
-/// The 20 raw bytes of `nimiq_target()`, which is how a burn payload names its target.
-fn target_bytes() -> [u8; 20] {
-    <[u8; 20]>::try_from(nimiq_target().as_bytes()).expect("a Nimiq address is 20 bytes")
-}
+//
+// Only the target can sign a release, so the forged burns pay `nimiq_target()`, an address the
+// attacker controls.
 
 /// Builds a bridge whose oracle attests `burn_data`, i.e. a compromised owner has published a root
 /// for it. `burn_data` need not correspond to anything that happened on the source chain.
@@ -1873,7 +1865,7 @@ fn env_with_attested_burn(
 fn a_forged_oracle_root_still_only_pays_out_well_formed_releases() {
     let attacker = KeyPair::generate_default_csprng();
     // A burn that never occurred on the source chain, invented by the oracle owner.
-    let forged = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let forged = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Taking more than the forged payload declares is refused: the root proves inclusion, not
@@ -1887,7 +1879,7 @@ fn a_forged_oracle_root_still_only_pays_out_well_formed_releases() {
         RELEASE_AMOUNT + 1,
         forged.clone(),
         0,
-        &attacker,
+        &target_key(),
     );
     assert!(matches!(
         outgoing_error(&test, &bridge_with(&oracle_addr(), &attacker), &greedy, &bs),
@@ -1901,7 +1893,7 @@ fn a_forged_oracle_root_still_only_pays_out_well_formed_releases() {
         RELEASE_AMOUNT,
         forged.clone(),
         0,
-        &attacker,
+        &target_key(),
     );
     assert!(matches!(
         outgoing_error(
@@ -1915,7 +1907,7 @@ fn a_forged_oracle_root_still_only_pays_out_well_formed_releases() {
 
     // A payload naming another chain is refused even though its root is genuinely attested: the
     // owner can forge roots, not the bridge's identity.
-    let wrong_chain = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID + 1);
+    let wrong_chain = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID + 1);
     let other_chain_env = env_with_attested_burn(&wrong_chain, &attacker, BRIDGE_DEPOSIT);
     let cross_chain = make_outgoing_tx(
         &bridge_addr(),
@@ -1923,7 +1915,7 @@ fn a_forged_oracle_root_still_only_pays_out_well_formed_releases() {
         RELEASE_AMOUNT,
         wrong_chain,
         0,
-        &attacker,
+        &target_key(),
     );
     assert!(matches!(
         outgoing_error(
@@ -1936,7 +1928,7 @@ fn a_forged_oracle_root_still_only_pays_out_well_formed_releases() {
     ));
 
     // Skipping the nonce sequence is refused: forged burns queue behind the target's real ones.
-    let nonce_gap = make_burn_data(target_bytes(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
+    let nonce_gap = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
     let gap_env = env_with_attested_burn(&nonce_gap, &attacker, BRIDGE_DEPOSIT);
     let skipped = make_outgoing_tx(
         &bridge_addr(),
@@ -1944,7 +1936,7 @@ fn a_forged_oracle_root_still_only_pays_out_well_formed_releases() {
         RELEASE_AMOUNT,
         nonce_gap,
         0,
-        &attacker,
+        &target_key(),
     );
     assert!(matches!(
         outgoing_error(
@@ -1969,7 +1961,7 @@ fn a_forged_oracle_root_still_only_pays_out_well_formed_releases() {
         RELEASE_AMOUNT,
         forged,
         0,
-        &attacker,
+        &target_key(),
     );
     let receipts = test
         .commit_and_test(&[well_formed], &[], &bs, &mut BlockLogger::empty())
@@ -1992,7 +1984,7 @@ fn a_forged_oracle_root_cannot_pay_out_more_nim_than_the_bridge_holds() {
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
     // One luna more than the bridge holds.
-    let too_much = make_burn_data(target_bytes(), BRIDGE_DEPOSIT + 1, 1, SOURCE_CHAIN_ID);
+    let too_much = make_burn_data(&nimiq_target(), BRIDGE_DEPOSIT + 1, 1, SOURCE_CHAIN_ID);
     let test = env_with_attested_burn(&too_much, &attacker, BRIDGE_DEPOSIT);
     let overdraw = make_outgoing_tx(
         &bridge_addr(),
@@ -2000,7 +1992,7 @@ fn a_forged_oracle_root_cannot_pay_out_more_nim_than_the_bridge_holds() {
         BRIDGE_DEPOSIT + 1,
         too_much,
         0,
-        &attacker,
+        &target_key(),
     );
     assert!(
         matches!(
@@ -2025,7 +2017,7 @@ fn a_forged_oracle_root_cannot_pay_out_more_nim_than_the_bridge_holds() {
     );
 
     // Exactly the locked balance is the ceiling, and it is reachable.
-    let everything = make_burn_data(target_bytes(), BRIDGE_DEPOSIT, 1, SOURCE_CHAIN_ID);
+    let everything = make_burn_data(&nimiq_target(), BRIDGE_DEPOSIT, 1, SOURCE_CHAIN_ID);
     let test = env_with_attested_burn(&everything, &attacker, BRIDGE_DEPOSIT);
     let drain = make_outgoing_tx(
         &bridge_addr(),
@@ -2033,7 +2025,7 @@ fn a_forged_oracle_root_cannot_pay_out_more_nim_than_the_bridge_holds() {
         BRIDGE_DEPOSIT,
         everything,
         0,
-        &attacker,
+        &target_key(),
     );
     let receipts = commit_block(&test, &[drain], &bs);
     assert!(
@@ -2051,8 +2043,12 @@ fn a_forged_oracle_root_cannot_pay_out_more_nim_than_the_bridge_holds() {
 // Release-path adversarial cases
 // =====================================================================
 
+fn second_target_key() -> KeyPair {
+    KeyPair::from(PrivateKey::from([0xBBu8; 32]))
+}
+
 fn second_target() -> Address {
-    Address::from([0xBBu8; 20])
+    Address::from(&second_target_key().public)
 }
 
 /// An oracle that attested one root per update: global index `i` commits to `burns[i]`'s leaf, so
@@ -2094,11 +2090,18 @@ fn env_with_chained_oracle(burns: &[&[u8]], owner: &KeyPair) -> TestCommitRevert
 #[test]
 fn a_release_for_a_zero_amount_burn_is_rejected() {
     let owner = KeyPair::generate_default_csprng();
-    let zero_burn = make_burn_data(target_bytes(), 0, 1, SOURCE_CHAIN_ID);
+    let zero_burn = make_burn_data(&nimiq_target(), 0, 1, SOURCE_CHAIN_ID);
     let test = env_with_chained_oracle(&[&zero_burn], &owner);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
-    let tx = make_outgoing_tx(&bridge_addr(), &nimiq_target(), 0, zero_burn, 0, &owner);
+    let tx = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        0,
+        zero_burn,
+        0,
+        &target_key(),
+    );
     assert!(matches!(
         outgoing_error(&test, &bridge_with(&oracle_addr(), &owner), &tx, &bs),
         AccountError::InvalidTransaction(TransactionError::InvalidData)
@@ -2114,8 +2117,8 @@ fn a_release_for_a_zero_amount_burn_is_rejected() {
 #[test]
 fn two_targets_may_release_the_same_nonce_in_one_block() {
     let owner = KeyPair::generate_default_csprng();
-    let first = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
-    let second = make_burn_data([0xBBu8; 20], RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let first = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let second = make_burn_data(&second_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let test = env_with_chained_oracle(&[&first, &second], &owner);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
@@ -2126,7 +2129,7 @@ fn two_targets_may_release_the_same_nonce_in_one_block() {
             RELEASE_AMOUNT,
             first,
             0,
-            &owner,
+            &target_key(),
         ),
         make_outgoing_tx(
             &bridge_addr(),
@@ -2134,7 +2137,7 @@ fn two_targets_may_release_the_same_nonce_in_one_block() {
             RELEASE_AMOUNT,
             second,
             1,
-            &owner,
+            &second_target_key(),
         ),
     ];
     let receipts = commit_block(&test, &txs, &bs);
@@ -2165,8 +2168,8 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Sequential nonces: both settle, and the target is credited twice.
-    let first = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
-    let second = make_burn_data(target_bytes(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
+    let first = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let second = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
     let test = env_with_chained_oracle(&[&first, &second], &owner);
     let txs = [
         make_outgoing_tx(
@@ -2175,7 +2178,7 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
             RELEASE_AMOUNT,
             first,
             0,
-            &owner,
+            &target_key(),
         ),
         make_outgoing_tx(
             &bridge_addr(),
@@ -2183,7 +2186,7 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
             RELEASE_AMOUNT,
             second,
             1,
-            &owner,
+            &target_key(),
         ),
     ];
     let receipts = commit_block(&test, &txs, &bs);
@@ -2204,7 +2207,7 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
     );
 
     // The same nonce twice: the second is refused inside the same block.
-    let burn = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let test = env_with_chained_oracle(&[&burn, &burn], &owner);
     let txs = [
         make_outgoing_tx(
@@ -2213,7 +2216,7 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
             RELEASE_AMOUNT,
             burn.clone(),
             0,
-            &owner,
+            &target_key(),
         ),
         // A second, distinct transaction carrying the very same burn.
         make_outgoing_tx(
@@ -2222,7 +2225,7 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
             RELEASE_AMOUNT,
             burn,
             1,
-            &owner,
+            &target_key(),
         ),
     ];
     let receipts = commit_block(&test, &txs, &bs);
@@ -2243,7 +2246,7 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
 #[test]
 fn a_burn_proof_signature_from_another_transaction_is_rejected() {
     let owner = KeyPair::generate_default_csprng();
-    let burn = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let test = env_with_chained_oracle(&[&burn], &owner);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
@@ -2254,7 +2257,7 @@ fn a_burn_proof_signature_from_another_transaction_is_rejected() {
         RELEASE_AMOUNT,
         burn.clone(),
         0,
-        &owner,
+        &target_key(),
     );
     let lifted = OutgoingBridgeTransactionData::parse(&signed)
         .expect("the signed release must parse")
@@ -2330,8 +2333,8 @@ fn a_release_beyond_the_remaining_balance_is_refused_without_partial_payout() {
     const FEE: u64 = 10;
     // Enough for one release and one luna short of a second.
     let balance = 2 * RELEASE_AMOUNT - 1;
-    let first = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
-    let second = make_burn_data(target_bytes(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
+    let first = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let second = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
     let bridge_holding = |bridge_balance: u64| BridgeContract {
@@ -2364,7 +2367,7 @@ fn a_release_beyond_the_remaining_balance_is_refused_without_partial_payout() {
         RELEASE_AMOUNT,
         first.clone(),
         0,
-        &owner,
+        &target_key(),
     );
     assert!(
         matches!(
@@ -2384,7 +2387,7 @@ fn a_release_beyond_the_remaining_balance_is_refused_without_partial_payout() {
             RELEASE_AMOUNT,
             first,
             0,
-            &owner,
+            &target_key(),
         )],
         &bs,
     );
@@ -2401,7 +2404,7 @@ fn a_release_beyond_the_remaining_balance_is_refused_without_partial_payout() {
         Coin::from_u64_unchecked(FEE),
         second,
         1,
-        &owner,
+        &target_key(),
     );
     assert!(
         matches!(
@@ -2430,7 +2433,7 @@ fn a_release_beyond_the_remaining_balance_is_refused_without_partial_payout() {
 #[test]
 fn a_bridge_holding_the_value_but_not_the_fee_refuses_the_release() {
     let owner = KeyPair::generate_default_csprng();
-    let burn_data = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let fee = 10;
     let short_bridge = BridgeContract {
         balance: Coin::from_u64_unchecked(RELEASE_AMOUNT - 1),
@@ -2452,7 +2455,7 @@ fn a_bridge_holding_the_value_but_not_the_fee_refuses_the_release() {
         Coin::from_u64_unchecked(fee),
         burn_data,
         0,
-        &owner,
+        &target_key(),
     );
     assert_eq!(
         outgoing_error(&test, &short_bridge, &tx, &bs),
@@ -2481,7 +2484,7 @@ fn a_bridge_holding_the_value_but_not_the_fee_refuses_the_release() {
 #[test]
 fn a_failed_release_with_a_fee_is_invalid_and_never_debits_the_bridge() {
     let owner = KeyPair::generate_default_csprng();
-    let burn_data = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let test = TestCommitRevert::with_initial_state(&[
         (
             oracle_addr(),
@@ -2503,7 +2506,7 @@ fn a_failed_release_with_a_fee_is_invalid_and_never_debits_the_bridge() {
             Coin::from_u64_unchecked(fee),
             burn_data.clone(),
             1,
-            &owner,
+            &target_key(),
         )
     };
 
@@ -2577,7 +2580,7 @@ fn a_release_against_a_bridge_whose_program_wraps_the_program_counter_is_rejecte
             chain_config: hostile,
             transaction_count: 0,
         };
-        let burn = make_burn_data(target_bytes(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+        let burn = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
         let test = TestCommitRevert::with_initial_state(&[
             (
                 oracle_addr(),
@@ -2592,7 +2595,7 @@ fn a_release_against_a_bridge_whose_program_wraps_the_program_counter_is_rejecte
             RELEASE_AMOUNT,
             burn,
             0,
-            &owner,
+            &target_key(),
         );
         let bs = BlockState::new(1, 1, Policy::max_supported_version());
 

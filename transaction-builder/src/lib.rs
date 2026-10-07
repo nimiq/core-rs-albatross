@@ -1821,18 +1821,18 @@ impl TransactionBuilder {
     /// Creates a transaction that releases funds from a bridge contract against a proof that the
     /// corresponding tokens were burned on the source chain.
     ///
-    /// Releases are permissionless: any key pair may sign the burn proof. The fee is taken from the
-    /// burned amount, so `value + fee` must equal the amount encoded in the burn transaction.
+    /// The release is signed by the target of the burn and pays the target, but anyone may submit
+    /// the signed release. The fee is taken from the burned amount, so `value + fee` must equal
+    /// the amount encoded in the burn transaction.
     ///
     /// # Arguments
     ///
-    ///  - `key_pair`:              The key pair used to sign the burn proof.
+    ///  - `key_pair`:              The key pair of the target address encoded in the burn
+    ///                             transaction. It signs the burn proof and receives the funds.
     ///  - `bridge_address`:        The address of the bridge contract.
-    ///  - `recipient`:             The address that receives the funds. Must match the target
-    ///                             address encoded in the burn transaction.
     ///  - `burn_proof`:            The burn transaction, its Merkle proof and the index of the
     ///                             oracle state it is proven against.
-    ///  - `value`:                 The value the recipient receives.
+    ///  - `value`:                 The value the target receives.
     ///  - `fee`:                   Transaction fee. Together with `value` it must add up to the
     ///                             amount encoded in the burn transaction.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
@@ -1845,7 +1845,6 @@ impl TransactionBuilder {
     pub fn new_bridge_release(
         key_pair: &KeyPair,
         bridge_address: Address,
-        recipient: Address,
         burn_proof: OutgoingTransaction,
         value: Coin,
         fee: Coin,
@@ -1855,7 +1854,7 @@ impl TransactionBuilder {
         let mut builder = Self::new();
         builder
             .with_sender(Sender::new_bridge(bridge_address, burn_proof))
-            .with_recipient(Recipient::new_basic(recipient))
+            .with_recipient(Recipient::new_basic(Address::from(key_pair)))
             .with_value(value)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)

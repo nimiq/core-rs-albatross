@@ -297,7 +297,6 @@ fn it_can_create_bridge_release_transactions() {
     let tx = TransactionBuilder::new_bridge_release(
         &signer,
         contract_address(),
-        recipient_address(),
         burn_proof(),
         value,
         fee,
@@ -306,7 +305,8 @@ fn it_can_create_bridge_release_transactions() {
     )
     .unwrap();
 
-    // The signature covers the content with a default proof in `sender_data`.
+    // The release pays the signer, the burn's target. The signature covers the content with a
+    // default proof in `sender_data`.
     let mut expected = Transaction::new_extended(
         contract_address(),
         AccountType::Bridge,
@@ -315,7 +315,7 @@ fn it_can_create_bridge_release_transactions() {
             proof: SignatureProof::default(),
         }
         .serialize_to_vec(),
-        recipient_address(),
+        Address::from(&signer),
         AccountType::Basic,
         vec![],
         value,
@@ -339,7 +339,6 @@ fn it_can_create_bridge_release_transactions() {
     let result = TransactionBuilder::new_bridge_release(
         &signer,
         contract_address(),
-        recipient_address(),
         burn_proof(),
         Coin::ZERO,
         fee,
