@@ -102,7 +102,7 @@ impl TestNetwork {
         self.next_address += 1;
 
         let net = Network::new(network_config(address.clone()), ()).await;
-        net.listen_on(vec![address.clone()]).await;
+        net.listen_on(vec![address.clone()]).await.unwrap();
 
         log::debug!(address = %address, peer_id = %net.get_local_peer_id(), "Creating node");
 
@@ -129,10 +129,10 @@ async fn create_connected_networks() -> (Network, Network) {
     let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
     let net1 = Network::new(network_config(addr1.clone()), ()).await;
-    net1.listen_on(vec![addr1.clone()]).await;
+    net1.listen_on(vec![addr1.clone()]).await.unwrap();
 
     let net2 = Network::new(network_config(addr2.clone()), ()).await;
-    net2.listen_on(vec![addr2.clone()]).await;
+    net2.listen_on(vec![addr2.clone()]).await.unwrap();
 
     log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
     log::debug!(address = %addr2, peer_id = %net2.get_local_peer_id(), "Network 2");
@@ -162,10 +162,10 @@ async fn create_double_connected_networks() -> (Network, Network) {
     let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
     let net1 = Network::new(network_config(addr1.clone()), ()).await;
-    net1.listen_on(vec![addr1.clone()]).await;
+    net1.listen_on(vec![addr1.clone()]).await.unwrap();
 
     let net2 = Network::new(network_config(addr2.clone()), ()).await;
-    net2.listen_on(vec![addr2.clone()]).await;
+    net2.listen_on(vec![addr2.clone()]).await.unwrap();
 
     log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
     log::debug!(address = %addr2, peer_id = %net2.get_local_peer_id(), "Network 2");
@@ -277,7 +277,7 @@ async fn create_network_with_n_peers(
         addresses.push(addr.clone());
 
         let network = Network::new(network_config(addr.clone()), Verifier::new(&keys)).await;
-        network.listen_on(vec![addr.clone()]).await;
+        network.listen_on(vec![addr.clone()]).await.unwrap();
 
         log::debug!(address = %addr, peer_id = %network.get_local_peer_id(), "Network {}", peer);
         let local_peer_id = network.get_local_peer_id();
@@ -436,6 +436,24 @@ async fn two_networks_can_connect_double_dial() {
 }
 
 #[test(tokio::test)]
+async fn listen_on_taken_address_returns_error() {
+    // A non-zero port, since `/memory/0` would give each network its own port.
+    let address = multiaddr![Memory(rand::random::<u64>().max(1))];
+    let net1 = Network::new(network_config(address.clone()), ()).await;
+    let net2 = Network::new(network_config(address.clone()), ()).await;
+
+    net1.listen_on(vec![address.clone()]).await.unwrap();
+    let result = net2.listen_on(vec![address.clone()]).await;
+    assert!(
+        matches!(&result, Err(NetworkError::Listen { address: failed, .. }) if *failed == address),
+        "unexpected result: {result:?}",
+    );
+
+    // The swarm task survives the failed listen.
+    net2.network_info().await.unwrap();
+}
+
+#[test(tokio::test)]
 async fn connections_are_properly_closed_events() {
     let (net1, net2) = create_connected_networks().await;
 
@@ -534,10 +552,10 @@ async fn dht_get_with_verifier_failure_returns_error() {
     let keys = Arc::new(RwLock::new(BTreeMap::default()));
 
     let net1 = Network::new(network_config(addr1.clone()), Verifier::new(&keys)).await;
-    net1.listen_on(vec![addr1.clone()]).await;
+    net1.listen_on(vec![addr1.clone()]).await.unwrap();
 
     let net2 = Network::new(network_config(addr2.clone()), RejectingVerifier).await;
-    net2.listen_on(vec![addr2.clone()]).await;
+    net2.listen_on(vec![addr2.clone()]).await.unwrap();
 
     let mut events1 = net1.subscribe_events();
     let mut events2 = net2.subscribe_events();

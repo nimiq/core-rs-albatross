@@ -84,7 +84,10 @@ impl TestNetwork for Network {
             1024,
         );
         let network = Arc::new(Network::new(config, ()).await);
-        network.listen_on(vec![peer_address]).await;
+        network
+            .listen_on(vec![peer_address])
+            .await
+            .expect("Failed to listen on provided address");
         network
     }
 

@@ -1368,11 +1368,16 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
             // The request initiator might no longer exist, so we silently ignore any errors here.
             output.send(result).ok();
         }
-        NetworkAction::ListenOn { listen_addresses } => {
-            for listen_address in listen_addresses {
-                Swarm::listen_on(swarm, listen_address)
-                    .expect("Failed to listen on provided address");
-            }
+        NetworkAction::ListenOn {
+            listen_addresses,
+            output,
+        } => {
+            let result = listen_addresses.into_iter().try_for_each(|address| {
+                Swarm::listen_on(swarm, address.clone())
+                    .map(|_| ())
+                    .map_err(|error| NetworkError::Listen { address, error })
+            });
+            output.send(result).ok();
         }
         NetworkAction::StartConnecting => {
             swarm.behaviour_mut().pool.start_connecting();
