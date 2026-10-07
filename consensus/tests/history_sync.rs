@@ -242,7 +242,7 @@ async fn sync_ingredients() {
 
     // Connect the two peers.
     let mut stream = net2.subscribe_events();
-    Network::connect_networks(&networks, 3u64).await;
+    Network::connect_networks(&networks).await;
     // Then wait for connection to be established.
     let _ = stream.next().await.unwrap();
     sleep(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this

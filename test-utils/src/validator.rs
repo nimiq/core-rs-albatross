@@ -125,7 +125,7 @@ where
     }
 
     // Connect network
-    N::connect_networks(&networks, *peer_ids.last().unwrap()).await;
+    N::connect_networks(&networks).await;
 
     // Wait until validators are connected.
     let mut events: Vec<BroadcastStream<ConsensusEvent>> =

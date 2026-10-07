@@ -90,6 +90,7 @@ pub(crate) enum NetworkAction {
     },
     ListenOn {
         listen_addresses: Vec<Multiaddr>,
+        output: oneshot::Sender<Result<(), NetworkError>>,
     },
     ConnectPeersByServices {
         services: Services,

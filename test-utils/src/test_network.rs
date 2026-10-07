@@ -22,7 +22,7 @@ where
         genesis_hash: Blake2bHash,
         hub: &mut Option<MockHub>,
     ) -> impl Future<Output = Arc<Self>> + Send;
-    fn connect_networks(networks: &[Arc<N>], seed_peer_id: u64) -> impl Future<Output = ()> + Send;
+    fn connect_networks(networks: &[Arc<N>]) -> impl Future<Output = ()> + Send;
 }
 
 impl TestNetwork for MockNetwork {
@@ -37,7 +37,7 @@ impl TestNetwork for MockNetwork {
         Arc::new(hub.new_network_with_address(peer_id))
     }
 
-    async fn connect_networks(networks: &[Arc<MockNetwork>], _seed_peer_id: u64) {
+    async fn connect_networks(networks: &[Arc<MockNetwork>]) {
         // Connect validators to each other.
         for (id, network) in networks.iter().enumerate() {
             for other_id in (id + 1)..networks.len() {
@@ -88,11 +88,14 @@ impl TestNetwork for Network {
             1024,
         );
         let network = Arc::new(Network::new(config, ()).await);
-        network.listen_on(vec![peer_address]).await;
+        network
+            .listen_on(vec![peer_address])
+            .await
+            .expect("Failed to listen on provided address");
         network
     }
 
-    async fn connect_networks(networks: &[Arc<Network>], _seed_peer_id: u64) {
+    async fn connect_networks(networks: &[Arc<Network>]) {
         // The last network is the seed and doesn't make sense for the seed to connect to itself.
         let (seed_network, networks) = networks.split_last().expect("No networks to connect");
         let seed = seed_network

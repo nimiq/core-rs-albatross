@@ -171,7 +171,7 @@ pub async fn sync_two_peers(
 
     let mut syncer2 = syncer(&sync_mode, &net2, &blockchain2_proxy).await;
 
-    Network::connect_networks(&networks, num_batches_macro_sync as u64 * 10 + 1).await;
+    Network::connect_networks(&networks).await;
 
     let macro_sync_result = match syncer2 {
         SyncerProxy::History(ref mut syncer) => {
@@ -369,7 +369,7 @@ pub async fn sync_two_peers_across_protocol_upgrades(sync_mode: SyncMode, num_up
 
     let mut syncer2 = syncer(&sync_mode, &net2, &blockchain2_proxy).await;
 
-    Network::connect_networks(&networks, 41).await;
+    Network::connect_networks(&networks).await;
 
     let macro_sync_result = match syncer2 {
         SyncerProxy::History(ref mut syncer) => syncer.macro_sync.next().await,

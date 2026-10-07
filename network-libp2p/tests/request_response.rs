@@ -78,10 +78,10 @@ impl TestNetwork {
         let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
         let net1 = Network::new(network_config(addr1.clone()), ()).await;
-        net1.listen_on(vec![addr1.clone()]).await;
+        net1.listen_on(vec![addr1.clone()]).await.unwrap();
 
         let net2 = Network::new(network_config(addr2.clone()), ()).await;
-        net2.listen_on(vec![addr2.clone()]).await;
+        net2.listen_on(vec![addr2.clone()]).await.unwrap();
 
         log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
         log::debug!(address = %addr2, peer_id = %net2.get_local_peer_id(), "Network 2");
@@ -118,16 +118,16 @@ impl TestNetwork {
         let addr4 = multiaddr![Memory(rand::random::<u64>())];
 
         let net1 = Network::new(network_config(addr1.clone()), ()).await;
-        net1.listen_on(vec![addr1.clone()]).await;
+        net1.listen_on(vec![addr1.clone()]).await.unwrap();
 
         let net2 = Network::new(network_config(addr2.clone()), ()).await;
-        net2.listen_on(vec![addr2.clone()]).await;
+        net2.listen_on(vec![addr2.clone()]).await.unwrap();
 
         let net3 = Network::new(network_config(addr3.clone()), ()).await;
-        net3.listen_on(vec![addr3.clone()]).await;
+        net3.listen_on(vec![addr3.clone()]).await.unwrap();
 
         let net4 = Network::new(network_config(addr4.clone()), ()).await;
-        net4.listen_on(vec![addr4.clone()]).await;
+        net4.listen_on(vec![addr4.clone()]).await.unwrap();
 
         log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
         log::debug!(address = %addr2, peer_id = %net2.get_local_peer_id(), "Network 2");
