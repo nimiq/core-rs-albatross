@@ -47,6 +47,7 @@ nimiq-jsonrpc-derive = { workspace = true }
 nimiq-jsonrpc-server = { workspace = true }
 nimiq-keys = { workspace = true, features = ["serde-derive"] }
 nimiq-mempool = { workspace = true }
+nimiq-mmr = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-network-libp2p = { workspace = true }
 nimiq-primitives = { workspace = true, features = [
@@ -67,4 +68,8 @@ nimiq-vrf = { workspace = true, features = ["serde-derive"] }
 nimiq-wallet = { workspace = true, features = ["store"] }
 
 [dev-dependencies]
+tokio = { version = "1.52", features = ["macros", "rt"] }
+
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
 nimiq-utils = { workspace = true, features = ["merkle"] }

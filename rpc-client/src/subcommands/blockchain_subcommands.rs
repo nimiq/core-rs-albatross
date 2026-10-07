@@ -198,6 +198,22 @@ pub enum BlockchainCommand {
         log_types: Vec<LogType>,
     },
 
+    /// Gets an inclusion proof for a transaction in the history tree, against the history root of
+    /// a macro block in the same epoch.
+    TransactionHistoryProof {
+        /// The transaction hash.
+        transaction_hash: Blake2bHash,
+
+        /// The macro block number to prove against.
+        macro_block_number: u32,
+    },
+
+    /// Query a raw macro block header (hex-encoded), whose Blake2b-256 hash is the block hash.
+    RawMacroHeader {
+        /// The macro block number.
+        block_number: u32,
+    },
+
     /// Gets the Keccak256 history root for a given macro block.
     Keccak256HistoryRoot {
         /// The macro block number to get the history root for.
@@ -435,6 +451,28 @@ impl HandleSubcommand for BlockchainCommand {
                 while let Some(blocklog) = stream.next().await {
                     println!("{blocklog:#?}");
                 }
+            }
+            BlockchainCommand::TransactionHistoryProof {
+                transaction_hash,
+                macro_block_number,
+            } => {
+                println!(
+                    "{:#?}",
+                    client
+                        .blockchain
+                        .get_transaction_history_proof(transaction_hash, macro_block_number)
+                        .await?
+                )
+            }
+            BlockchainCommand::RawMacroHeader { block_number } => {
+                println!(
+                    "{}",
+                    client
+                        .blockchain
+                        .get_raw_macro_header(block_number)
+                        .await?
+                        .data
+                )
             }
             BlockchainCommand::Keccak256HistoryRoot { block_number } => {
                 println!(
