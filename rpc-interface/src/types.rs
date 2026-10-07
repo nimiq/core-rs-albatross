@@ -1419,6 +1419,26 @@ impl MempoolInfo {
     }
 }
 
+/// An inclusion proof for one historic transaction in the history tree, against the
+/// `history_root` of a macro block.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryProofData {
+    /// The macro block the proof is against.
+    pub block_number: u32,
+    /// The `history_root` of that macro block.
+    pub history_root: Blake2bHash,
+    /// The number of nodes in the history tree at that macro block.
+    pub mmr_size: u64,
+    /// The position of the transaction among the leaves of its epoch's history tree, from 0.
+    pub leaf_index: u64,
+    /// The proof nodes, in the order the verifier consumes them.
+    pub nodes: Vec<Blake2bHash>,
+    /// The serialized historic transaction, hex encoded. Its leaf hash is
+    /// `blake2b256(u64be(1) ++ historicTransaction)`.
+    pub historic_transaction: String,
+}
+
 /// Represents a Merkle path proof for RPC responses.
 /// Contains the sibling hashes needed to verify a transaction's inclusion in a sorted Merkle tree.
 ///

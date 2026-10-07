@@ -1,18 +1,20 @@
 use async_trait::async_trait;
 use futures::{future, stream::BoxStream, StreamExt};
 use nimiq_account::{BlockLog as BBlockLog, TransactionLog};
+use nimiq_block::Block as BBlock;
 use nimiq_blockchain::interface::{HistoryIndexInterface, HistoryInterface};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
-use nimiq_hash::{Blake2bHash, Hash, HashOutput, Keccak256Hash};
+use nimiq_hash::{Blake2bHash, Hash, HashOutput, Keccak256Hash, SerializeContent};
 use nimiq_keys::Address;
+use nimiq_mmr::mmr::position::leaf_number_to_index;
 use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
     types::{
         is_of_log_type_and_related_to_addresses, Account, Block, BlockLog, BlockchainState,
-        ExecutedTransaction, Inherent, LogType, PenalizedSlots, RPCData, RPCResult, Slot, Staker,
-        Validator,
+        ExecutedTransaction, HistoryProofData, Inherent, LogType, PenalizedSlots, RPCData,
+        RPCResult, Slot, Staker, Validator,
     },
 };
 use nimiq_serde::Serialize;
@@ -856,6 +858,95 @@ impl BlockchainInterface for BlockchainDispatcher {
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }
+    }
+
+    async fn get_transaction_history_proof(
+        &self,
+        transaction_hash: Blake2bHash,
+        macro_block_number: u32,
+    ) -> RPCResult<HistoryProofData, (), Self::Error> {
+        let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() else {
+            return Err(Error::NotSupportedForLightBlockchain);
+        };
+
+        if !Policy::is_macro_block_at(macro_block_number) {
+            return Err(Error::NotAMacroBlock(macro_block_number));
+        }
+
+        let history_index = blockchain
+            .history_store
+            .history_index()
+            .ok_or(Error::RequiresHistoryIndex)?;
+
+        let BBlock::Macro(macro_block) = blockchain
+            .get_block_at(macro_block_number, false, None)
+            .map_err(|_| Error::BlockNotFound(macro_block_number))?
+        else {
+            return Err(Error::NotAMacroBlock(macro_block_number));
+        };
+
+        // The history tree is per epoch, so the transaction must be in the macro block's epoch
+        // and no later than the macro block itself.
+        let epoch_number = Policy::epoch_at(macro_block_number);
+        let hist_tx = history_index
+            .get_hist_tx_by_hash(&transaction_hash, None)
+            .ok_or_else(|| Error::TransactionNotFound(transaction_hash.clone()))?;
+        let leaf = history_index
+            .get_leaf_index_by_tx_hash(&transaction_hash, None)
+            .ok_or_else(|| Error::TransactionNotFound(transaction_hash.clone()))?;
+        if leaf.epoch_number != epoch_number || hist_tx.block_number > macro_block_number {
+            return Err(Error::TransactionNotInHistoryAt(
+                transaction_hash,
+                macro_block_number,
+            ));
+        }
+
+        // Prove against the tree as it was at the macro block, which for a checkpoint block is a
+        // prefix of the epoch's tree.
+        let num_leaves = blockchain
+            .history_store
+            .length_at(macro_block_number, None)
+            .ok_or_else(|| {
+                Error::HistoryProofFailed(transaction_hash.clone(), macro_block_number)
+            })?;
+        let mmr_size = leaf_number_to_index(num_leaves as usize);
+
+        let proof = history_index
+            .prove(epoch_number, vec![&transaction_hash], Some(mmr_size), None)
+            .filter(|proof| proof.positions == [leaf.index as usize])
+            .filter(|proof| proof.verify(macro_block.header.history_root.clone()) == Some(true))
+            .ok_or_else(|| {
+                Error::HistoryProofFailed(transaction_hash.clone(), macro_block_number)
+            })?;
+
+        Ok(HistoryProofData {
+            block_number: macro_block_number,
+            history_root: macro_block.header.history_root.clone(),
+            mmr_size: proof.proof.mmr_size as u64,
+            leaf_index: leaf.index as u64,
+            nodes: proof.proof.nodes,
+            historic_transaction: hex::encode(hist_tx.serialize_to_vec()),
+        }
+        .into())
+    }
+
+    async fn get_raw_macro_header(&self, block_number: u32) -> RPCResult<String, (), Self::Error> {
+        if !Policy::is_macro_block_at(block_number) {
+            return Err(Error::NotAMacroBlock(block_number));
+        }
+
+        let BBlock::Macro(macro_block) = self
+            .blockchain
+            .read()
+            .get_block_at(block_number, false)
+            .map_err(|_| Error::BlockNotFound(block_number))?
+        else {
+            return Err(Error::NotAMacroBlock(block_number));
+        };
+
+        let mut content = Vec::new();
+        SerializeContent::serialize_content::<_, Blake2bHash>(&macro_block.header, &mut content)?;
+        Ok(hex::encode(content).into())
     }
 
     async fn get_keccak256_history_root(
