@@ -5,8 +5,8 @@ use nimiq_keys::Address;
 use nimiq_primitives::networks::NetworkId;
 
 use crate::types::{
-    Account, Block, BlockLog, BlockchainState, ExecutedTransaction, Inherent, LogType,
-    MerklePathData, PenalizedSlots, RPCData, RPCResult, Slot, Staker, Validator,
+    Account, Block, BlockLog, BlockchainState, ExecutedTransaction, HistoryProofData, Inherent,
+    LogType, MerklePathData, PenalizedSlots, RPCData, RPCResult, Slot, Staker, Validator,
 };
 
 #[nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")]
@@ -224,6 +224,20 @@ pub trait BlockchainInterface {
         addresses: Vec<Address>,
         log_types: Vec<LogType>,
     ) -> Result<BoxStream<'static, RPCData<BlockLog, BlockchainState>>, Self::Error>;
+
+    /// Returns an inclusion proof for the transaction with the given hash in the history tree, as
+    /// committed to by the `history_root` of the macro block at `macro_block_number`. The
+    /// transaction must be in the same epoch as that macro block and not after it. Requires the
+    /// history index.
+    async fn get_transaction_history_proof(
+        &self,
+        transaction_hash: Blake2bHash,
+        macro_block_number: u32,
+    ) -> RPCResult<HistoryProofData, (), Self::Error>;
+
+    /// Returns the hex-encoded content serialization of the macro block header at the given block
+    /// number: the bytes whose Blake2b-256 hash is the block hash.
+    async fn get_raw_macro_header(&self, block_number: u32) -> RPCResult<String, (), Self::Error>;
 
     /// Gets the Keccak256 history root for a given epoch.
     async fn get_keccak256_history_root(

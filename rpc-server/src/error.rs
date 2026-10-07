@@ -99,6 +99,12 @@ pub enum Error {
     #[error("Block {0} is not a macro block")]
     NotAMacroBlock(u32),
 
+    #[error("Transaction {0} is not in the history tree at block {1}")]
+    TransactionNotInHistoryAt(Blake2bHash, u32),
+
+    #[error("Failed to prove transaction {0} against block {1}")]
+    HistoryProofFailed(Blake2bHash, u32),
+
     #[error("Invalid Keccak256 parameters: {0}")]
     InvalidKeccak256Parameters(String),
 
