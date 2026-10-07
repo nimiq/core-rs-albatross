@@ -46,12 +46,15 @@ impl TestNetwork for MockNetwork {
 
 impl TestNetwork for Network {
     async fn build_network(
-        peer_id: u64,
+        _peer_id: u64,
         genesis_hash: Blake2bHash,
         _hub: &mut Option<MockHub>,
     ) -> Arc<Network> {
         let peer_key = Keypair::generate_ed25519();
-        let peer_address = multiaddr![Memory(peer_id)];
+        // libp2p's memory transport only releases a listening port on `remove_listener`, not when
+        // the swarm is dropped, so a port stays taken for the rest of the process. Tests sharing a
+        // process (`cargo test`) would collide on fixed ports, so pick a random non-zero one.
+        let peer_address = multiaddr![Memory(rand::random::<u64>().max(1))];
         let peer_contact = PeerContact::new(
             vec![peer_address.clone()],
             peer_key.public(),
@@ -85,11 +88,15 @@ impl TestNetwork for Network {
         network
     }
 
-    async fn connect_networks(networks: &[Arc<Network>], seed_peer_id: u64) {
-        let seed = multiaddr![Memory(seed_peer_id)];
-        // Skip the last network assuming the last one is the seed and doesn't make
-        // sense for the seed to connect to itself.
-        for network in &networks[0..networks.len() - 1] {
+    async fn connect_networks(networks: &[Arc<Network>], _seed_peer_id: u64) {
+        // The last network is the seed and doesn't make sense for the seed to connect to itself.
+        let (seed_network, networks) = networks.split_last().expect("No networks to connect");
+        let seed = seed_network
+            .get_own_addresses()
+            .into_iter()
+            .next()
+            .expect("Seed has no address");
+        for network in networks {
             // Tell the network to connect to seed nodes
             network
                 .dial_address(seed.clone())

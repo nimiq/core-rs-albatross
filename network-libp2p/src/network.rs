@@ -161,6 +161,16 @@ impl Network {
         self.contacts.read().known_peers()
     }
 
+    /// Retrieves the addresses advertised in our own peer contact.
+    pub fn get_own_addresses(&self) -> Vec<Multiaddr> {
+        self.contacts
+            .read()
+            .get_own_contact()
+            .addresses()
+            .cloned()
+            .collect()
+    }
+
     /// Gets the network information
     pub async fn network_info(&self) -> Result<NetworkInfo, NetworkError> {
         let (output_tx, output_rx) = oneshot::channel();
