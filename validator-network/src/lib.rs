@@ -1,3 +1,4 @@
+pub mod binding;
 pub mod error;
 pub mod network_impl;
 pub mod single_response_requester;
