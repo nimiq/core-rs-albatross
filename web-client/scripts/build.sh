@@ -77,21 +77,20 @@ if [ -z "$LOCKED_WASM_BINDGEN_VERSION" ]; then
     exit 1
 fi
 
-if ! command -v wasm-bindgen &> /dev/null; then
-    echo "Error: wasm-bindgen-cli is not installed." >&2
-    echo "Install the version pinned in Cargo.lock with:" >&2
-    echo "    cargo install --locked wasm-bindgen-cli@$LOCKED_WASM_BINDGEN_VERSION" >&2
-    exit 1
-fi
+# A repo-local install of the locked wasm-bindgen-cli. It lives in the cargo target
+# dir so it is gitignored, never touches a global install, and is cached by the
+# upgrade-dashboard compose setup's target-dir volume.
+WASM_BINDGEN_ROOT="${CARGO_TARGET_DIR:-../target}/wasm-bindgen"
+mkdir -p "$WASM_BINDGEN_ROOT"
+WASM_BINDGEN_ROOT=$(cd "$WASM_BINDGEN_ROOT" && pwd)
+export PATH="$WASM_BINDGEN_ROOT/bin:$PATH"
 
-INSTALLED_WASM_BINDGEN_VERSION=$(wasm-bindgen --version | awk '{print $2}')
+# Install the locked version unless a matching wasm-bindgen (local or global, e.g.
+# preinstalled by CI) is already on the PATH.
+INSTALLED_WASM_BINDGEN_VERSION=$(wasm-bindgen --version 2>/dev/null | awk '{print $2}')
 if [ "$INSTALLED_WASM_BINDGEN_VERSION" != "$LOCKED_WASM_BINDGEN_VERSION" ]; then
-    echo "Error: wasm-bindgen-cli version mismatch." >&2
-    echo "  Cargo.lock pins:  $LOCKED_WASM_BINDGEN_VERSION" >&2
-    echo "  Installed:        $INSTALLED_WASM_BINDGEN_VERSION" >&2
-    echo "Reinstall with:" >&2
-    echo "    cargo install --locked wasm-bindgen-cli@$LOCKED_WASM_BINDGEN_VERSION" >&2
-    exit 1
+    echo "Installing wasm-bindgen-cli $LOCKED_WASM_BINDGEN_VERSION (found: ${INSTALLED_WASM_BINDGEN_VERSION:-none})..."
+    cargo install --locked --root "$WASM_BINDGEN_ROOT" "wasm-bindgen-cli@$LOCKED_WASM_BINDGEN_VERSION"
 fi
 if ! command -v wasm-opt &> /dev/null
 then
