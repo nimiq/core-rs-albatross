@@ -109,4 +109,10 @@ pub trait ValidatorNetwork: Send + Sync {
 
     /// Returns the network peer ID for the given `validator_id` if it is known.
     fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId>;
+
+    /// The timestamp of the newest verified copy of our own record seen with a timestamp at or
+    /// past our record's, until a record past it is set with [`Self::set_public_key`]. Such a
+    /// copy means a previous incarnation of ours signed later than we do now, e.g. after a
+    /// restart on a machine whose clock is behind, so the validator should set the key again.
+    fn own_record_superseded_at(&self) -> Option<u64>;
 }

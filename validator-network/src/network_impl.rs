@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, error::Error, fmt::Debug, future, sync::Arc};
+use std::{collections::BTreeMap, error::Error, fmt::Debug, future, sync::Arc, time::Duration};
 
 use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt, TryFutureExt};
 use log::warn;
@@ -76,6 +76,11 @@ where
     N::PeerId: Serialize + Deserialize,
     N::Error: Sync + Send,
 {
+    /// How long a pull of records from a peer may take before resolution moves on to the DHT.
+    pub const PULL_TIMEOUT: Duration = Duration::from_secs(2);
+    /// How many connected validator peers one pull asks.
+    pub const MAX_PULL_PEERS: usize = 3;
+
     pub fn new(network: Arc<N>) -> Self {
         Self::new_with_fallback(network, Arc::new(|_| future::ready(None).boxed()))
     }
@@ -532,6 +537,10 @@ where
         self.network.disconnect_peer(peer_id, close_reason).await
     }
 
+    fn own_record_superseded_at(&self) -> Option<u64> {
+        todo!()
+    }
+
     fn validate_message<TTopic>(&self, id: PubsubId<Self>, acceptance: MsgAcceptance)
     where
         TTopic: Topic + Sync,
@@ -547,6 +556,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use futures::{stream::BoxStream, FutureExt, StreamExt};
     use nimiq_bls::CompressedPublicKey;
     use nimiq_keys::SecureGenerate;
@@ -557,7 +568,7 @@ mod tests {
     use tokio::sync::Notify;
 
     use super::*;
-    use crate::record::{RecordAnnouncement, SignedValidatorRecord};
+    use crate::record::{RecordAnnouncement, RecordsRequest, SignedValidatorRecord};
 
     type ValNet = ValidatorNetworkImpl<MockNetwork>;
     type Inbox = BoxStream<'static, (RecordAnnouncement<MockPeerId>, MockPeerId)>;
@@ -565,6 +576,7 @@ mod tests {
     /// Validator IDs by position in the active set.
     const X: u16 = 0;
     const Y: u16 = 1;
+    const Z: u16 = 2;
 
     fn now_ms() -> u64 {
         (OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000) as u64
@@ -664,6 +676,97 @@ mod tests {
             "validator {validator_id} did not resolve to {expected}, got {:?}",
             network.get_peer_id(validator_id)
         );
+    }
+
+    /// Waits until `network` reports a copy of our record timestamped `expected`.
+    async fn wait_for_superseded_at(network: &ValNet, expected: u64) {
+        for _ in 0..200 {
+            if network.own_record_superseded_at() == Some(expected) {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+        panic!(
+            "the copy of our record was not reported, got {:?}",
+            network.own_record_superseded_at()
+        );
+    }
+
+    /// A mock peer that counts the pulls it receives and, if `answers`, answers them with
+    /// `records`.
+    struct Responder {
+        network: Arc<MockNetwork>,
+        pulls: Arc<AtomicUsize>,
+    }
+
+    impl Responder {
+        fn new(
+            hub: &mut MockHub,
+            services: Services,
+            records: Vec<SignedValidatorRecord<MockPeerId>>,
+            answers: bool,
+        ) -> Self {
+            let address = hub.new_address();
+            let network = Arc::new(hub.new_network_with_services(address, services));
+            let pulls = Arc::new(AtomicUsize::new(0));
+            let mut requests = network.receive_requests::<RecordsRequest<MockPeerId>>();
+            let (responder, counter) = (Arc::clone(&network), Arc::clone(&pulls));
+            spawn(async move {
+                while let Some((_, request_id, _)) = requests.next().await {
+                    counter.fetch_add(1, Ordering::Relaxed);
+                    if answers {
+                        let _ = responder
+                            .respond::<RecordsRequest<MockPeerId>>(request_id, records.clone())
+                            .await;
+                    }
+                }
+            });
+            Self { network, pulls }
+        }
+
+        /// A connected validator peer answering with `records`.
+        fn validator(
+            hub: &mut MockHub,
+            us: &MockNetwork,
+            records: Vec<SignedValidatorRecord<MockPeerId>>,
+        ) -> Self {
+            let responder = Self::new(hub, Services::all(), records, true);
+            responder.network.dial_mock(us);
+            responder
+        }
+
+        fn pulls(&self) -> usize {
+            self.pulls.load(Ordering::Relaxed)
+        }
+
+        /// Waits until the responder received at least one pull.
+        async fn pulled(&self) {
+            for _ in 0..200 {
+                if self.pulls() > 0 {
+                    return;
+                }
+                tokio::task::yield_now().await;
+            }
+            panic!("no pull arrived");
+        }
+    }
+
+    /// A fallback that answers `peer_id` and counts how often it is asked.
+    fn counting_fallback(peer_id: MockPeerId) -> (Arc<DhtFallback<MockNetwork>>, Arc<AtomicUsize>) {
+        let asked = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&asked);
+        let fallback: Arc<DhtFallback<MockNetwork>> = Arc::new(move |_| {
+            counter.fetch_add(1, Ordering::Relaxed);
+            future::ready(Some(peer_id)).boxed()
+        });
+        (fallback, asked)
+    }
+
+    /// Lets spawned tasks run for a while.
+    async fn settle() {
+        for _ in 0..50 {
+            tokio::task::yield_now().await;
+        }
     }
 
     /// Publishes a DHT record pointing `validator` at `peer_id`. The mock DHT needs a connection.
@@ -1020,5 +1123,440 @@ mod tests {
             tokio::task::yield_now().await;
             assert_eq!(network.get_peer_id(X), Some(peer.get_local_peer_id()));
         }
+    }
+
+    #[test(tokio::test)]
+    async fn a_cache_miss_asks_connected_validator_peers_before_the_dht() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let stale = hub.new_network();
+        let fresh = hub.new_network();
+        let x = TestValidator::new(1);
+        let timestamp = now_ms();
+        let responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![x.record(fresh.get_local_peer_id(), timestamp + 1)],
+        );
+        publish_dht(&us, &x, stale.get_local_peer_id(), timestamp).await;
+
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, fresh.get_local_peer_id()).await;
+        assert_eq!(responder.pulls(), 1);
+    }
+
+    #[test(tokio::test)]
+    async fn the_newest_signed_record_wins_regardless_of_source() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let stale = hub.new_network();
+        let fresh = hub.new_network();
+        let x = TestValidator::new(1);
+        let timestamp = now_ms();
+        let _responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![x.record(stale.get_local_peer_id(), timestamp)],
+        );
+        publish_dht(&us, &x, fresh.get_local_peer_id(), timestamp + 1).await;
+
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, fresh.get_local_peer_id()).await;
+    }
+
+    #[test(tokio::test)]
+    async fn one_pull_fills_the_bindings_of_every_validator_it_covers() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let (x, y, z) = (
+            TestValidator::new(1),
+            TestValidator::new(2),
+            TestValidator::new(3),
+        );
+        let (px, py, pz) = (hub.new_network(), hub.new_network(), hub.new_network());
+        let timestamp = now_ms();
+        let responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![
+                x.record(px.get_local_peer_id(), timestamp),
+                y.record(py.get_local_peer_id(), timestamp),
+                z.record(pz.get_local_peer_id(), timestamp),
+            ],
+        );
+
+        let network = validator_network(Arc::clone(&us), &[&x, &y, &z]);
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, px.get_local_peer_id()).await;
+
+        // The others are bound without a resolution of their own.
+        assert_eq!(network.get_peer_id(Y), Some(py.get_local_peer_id()));
+        assert_eq!(network.get_peer_id(Z), Some(pz.get_local_peer_id()));
+        settle().await;
+        assert_eq!(responder.pulls(), 1);
+    }
+
+    #[test(tokio::test)]
+    async fn concurrent_misses_share_one_pull() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let (x, y) = (TestValidator::new(1), TestValidator::new(2));
+        let (px, py) = (hub.new_network(), hub.new_network());
+        let timestamp = now_ms();
+        let responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![
+                x.record(px.get_local_peer_id(), timestamp),
+                y.record(py.get_local_peer_id(), timestamp),
+            ],
+        );
+
+        let network = validator_network(Arc::clone(&us), &[&x, &y]);
+        network.get_peer_id(X);
+        network.get_peer_id(Y);
+        wait_for_peer_id(&network, X, px.get_local_peer_id()).await;
+        wait_for_peer_id(&network, Y, py.get_local_peer_id()).await;
+        settle().await;
+        assert_eq!(responder.pulls(), 1);
+    }
+
+    #[test(tokio::test)]
+    async fn pulled_records_are_verified_individually() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let (x, y) = (TestValidator::new(1), TestValidator::new(2));
+        let (px, py) = (hub.new_network(), hub.new_network());
+        let wrong_key = TestValidator {
+            address: x.address.clone(),
+            key: KeyPair::generate_default_csprng(),
+        };
+        let timestamp = now_ms();
+        let _responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![
+                wrong_key.record(px.get_local_peer_id(), timestamp),
+                y.record(py.get_local_peer_id(), timestamp),
+            ],
+        );
+
+        let network = validator_network(Arc::clone(&us), &[&x, &y]);
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, Y, py.get_local_peer_id()).await;
+        assert_eq!(network.get_peer_id(X), None);
+    }
+
+    #[test(tokio::test)]
+    async fn a_pull_response_is_bounded_by_the_size_of_the_active_set() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let (x, y) = (TestValidator::new(1), TestValidator::new(2));
+        let px = hub.new_network();
+        let stranger = TestValidator::new(3);
+        let timestamp = now_ms();
+        // Two validators are active, so only the first two entries count.
+        let responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![
+                stranger.record(px.get_local_peer_id(), timestamp),
+                stranger.record(px.get_local_peer_id(), timestamp),
+                x.record(px.get_local_peer_id(), timestamp),
+            ],
+        );
+
+        let network = validator_network(Arc::clone(&us), &[&x, &y]);
+        network.get_peer_id(X);
+        responder.pulled().await;
+        settle().await;
+        assert_eq!(network.get_peer_id(X), None);
+    }
+
+    #[test(tokio::test)]
+    async fn a_pull_asks_at_most_a_few_validator_peers_and_no_others() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let x = TestValidator::new(1);
+        let px = hub.new_network();
+        let records = vec![x.record(px.get_local_peer_id(), now_ms())];
+        let validators: Vec<Responder> = (0..ValNet::MAX_PULL_PEERS + 1)
+            .map(|_| Responder::validator(&mut hub, &us, records.clone()))
+            .collect();
+        let full_node = Responder::new(&mut hub, Services::FULL_BLOCKS, records.clone(), true);
+        full_node.network.dial_mock(&us);
+
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, px.get_local_peer_id()).await;
+        settle().await;
+
+        let asked: usize = validators.iter().map(Responder::pulls).sum();
+        assert!((1..=ValNet::MAX_PULL_PEERS).contains(&asked), "{asked}");
+        assert_eq!(full_node.pulls(), 0);
+    }
+
+    #[test(tokio::test)]
+    async fn records_from_all_asked_peers_are_merged() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let (x, y) = (TestValidator::new(1), TestValidator::new(2));
+        let (px, py) = (hub.new_network(), hub.new_network());
+        let timestamp = now_ms();
+        let knows_x = Responder::validator(
+            &mut hub,
+            &us,
+            vec![x.record(px.get_local_peer_id(), timestamp)],
+        );
+        let knows_y = Responder::validator(
+            &mut hub,
+            &us,
+            vec![y.record(py.get_local_peer_id(), timestamp)],
+        );
+
+        let network = validator_network(Arc::clone(&us), &[&x, &y]);
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, px.get_local_peer_id()).await;
+        assert_eq!(network.get_peer_id(Y), Some(py.get_local_peer_id()));
+        settle().await;
+        assert_eq!((knows_x.pulls(), knows_y.pulls()), (1, 1));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_pull_that_is_not_answered_times_out_into_the_dht() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let x = TestValidator::new(1);
+        let px = hub.new_network();
+        let silent = Responder::new(&mut hub, Services::all(), vec![], false);
+        silent.network.dial_mock(&us);
+        publish_dht(&us, &x, px.get_local_peer_id(), now_ms()).await;
+
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        network.get_peer_id(X);
+        silent.pulled().await;
+        tokio::time::advance(ValNet::PULL_TIMEOUT + Duration::from_millis(1)).await;
+        wait_for_peer_id(&network, X, px.get_local_peer_id()).await;
+    }
+
+    #[test(tokio::test)]
+    async fn the_dht_is_asked_when_no_peer_knows_the_validator() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let x = TestValidator::new(1);
+        let px = hub.new_network();
+        let responder = Responder::validator(&mut hub, &us, vec![]);
+        publish_dht(&us, &x, px.get_local_peer_id(), now_ms()).await;
+
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, px.get_local_peer_id()).await;
+        assert_eq!(responder.pulls(), 1);
+    }
+
+    #[test(tokio::test)]
+    async fn the_fallback_is_not_asked_when_a_pull_or_the_dht_answers() {
+        let mut hub = MockHub::default();
+        let listed = hub.new_network();
+        let x = TestValidator::new(1);
+        let px = hub.new_network();
+
+        // A pull answers.
+        let us = Arc::new(hub.new_network());
+        let _responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![x.record(px.get_local_peer_id(), now_ms())],
+        );
+        let (fallback, asked) = counting_fallback(listed.get_local_peer_id());
+        let network = ValNet::new_with_fallback(Arc::clone(&us), fallback);
+        network.set_validators(&active_set(&[&x]));
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, px.get_local_peer_id()).await;
+        assert_eq!(asked.load(Ordering::Relaxed), 0);
+
+        // The DHT answers.
+        let us = Arc::new(hub.new_network());
+        let _responder = Responder::validator(&mut hub, &us, vec![]);
+        publish_dht(&us, &x, px.get_local_peer_id(), now_ms()).await;
+        let (fallback, asked) = counting_fallback(listed.get_local_peer_id());
+        let network = ValNet::new_with_fallback(Arc::clone(&us), fallback);
+        network.set_validators(&active_set(&[&x]));
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, px.get_local_peer_id()).await;
+        assert_eq!(asked.load(Ordering::Relaxed), 0);
+    }
+
+    #[test(tokio::test)]
+    async fn the_fallback_is_asked_when_no_signed_source_answers() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let listed = hub.new_network();
+        let x = TestValidator::new(1);
+        let responder = Responder::validator(&mut hub, &us, vec![]);
+        let (fallback, asked) = counting_fallback(listed.get_local_peer_id());
+
+        let network = ValNet::new_with_fallback(Arc::clone(&us), fallback);
+        network.set_validators(&active_set(&[&x]));
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, listed.get_local_peer_id()).await;
+        assert_eq!(asked.load(Ordering::Relaxed), 1);
+        assert_eq!(responder.pulls(), 1);
+    }
+
+    #[test(tokio::test)]
+    async fn a_responder_answers_with_its_newest_signed_record_per_validator_including_its_own() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        let (older, newer, py) = (hub.new_network(), hub.new_network(), hub.new_network());
+        for node in [&peer, &older, &newer] {
+            node.dial_mock(&us);
+        }
+        let us_peer_id = us.get_local_peer_id();
+        let (ours, x, y) = (
+            TestValidator::new(0),
+            TestValidator::new(1),
+            TestValidator::new(2),
+        );
+        let network = validator_network(Arc::clone(&us), &[&x, &y, &ours]);
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+
+        // Two announcements for `x`; `y` is only known through the DHT, which gives no signature.
+        let timestamp = now_ms();
+        announce(
+            &older,
+            us_peer_id,
+            x.announcement(older.get_local_peer_id(), timestamp),
+        )
+        .await;
+        announce(
+            &newer,
+            us_peer_id,
+            x.announcement(newer.get_local_peer_id(), timestamp + 1),
+        )
+        .await;
+        publish_dht(&us, &y, py.get_local_peer_id(), timestamp).await;
+        network.get_peer_id(Y);
+        wait_for_peer_id(&network, X, newer.get_local_peer_id()).await;
+        wait_for_peer_id(&network, Y, py.get_local_peer_id()).await;
+
+        let mut records = peer
+            .request(RecordsRequest::<MockPeerId>::default(), us_peer_id)
+            .await
+            .unwrap();
+        records.sort_by(|a, b| a.record.validator_address.cmp(&b.record.validator_address));
+        let summary: Vec<_> = records
+            .iter()
+            .map(|signed| {
+                (
+                    signed.record.validator_address.clone(),
+                    signed.record.peer_id,
+                )
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            vec![
+                (ours.address.clone(), us_peer_id),
+                (x.address.clone(), newer.get_local_peer_id()),
+            ]
+        );
+        assert_eq!(records[1].record.timestamp, timestamp + 1);
+        assert!(records[0].verify(&ours.key.public));
+        assert!(records[1].verify(&x.key.public));
+    }
+
+    #[test(tokio::test)]
+    async fn a_pulled_record_for_our_own_address_is_never_applied() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        let (elsewhere, px) = (hub.new_network(), hub.new_network());
+        peer.dial_mock(&us);
+        let us_peer_id = us.get_local_peer_id();
+        let (ours, x) = (TestValidator::new(0), TestValidator::new(1));
+        let timestamp = now_ms();
+        let _responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![
+                ours.record(elsewhere.get_local_peer_id(), timestamp + 1000),
+                x.record(px.get_local_peer_id(), timestamp),
+            ],
+        );
+
+        let network = validator_network(Arc::clone(&us), &[&x, &ours]);
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, px.get_local_peer_id()).await;
+
+        // We are not redirected, and we do not relay the copy either.
+        assert_ne!(network.get_peer_id(Y), Some(elsewhere.get_local_peer_id()));
+        let records = peer
+            .request(RecordsRequest::<MockPeerId>::default(), us_peer_id)
+            .await
+            .unwrap();
+        let own: Vec<_> = records
+            .iter()
+            .filter(|signed| signed.record.validator_address == ours.address)
+            .map(|signed| signed.record.peer_id)
+            .collect();
+        assert_eq!(own, vec![us_peer_id]);
+    }
+
+    #[test(tokio::test)]
+    async fn a_newer_copy_of_our_own_record_makes_us_re_sign_past_it() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        let previous_node = hub.new_network();
+        peer.dial_mock(&us);
+        let mut inbox = inbox(&peer);
+        let ours = TestValidator::new(0);
+        // A record of our previous incarnation, whose clock was ahead of ours.
+        let ahead = now_ms() + 1000;
+        let _responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![ours.record(previous_node.get_local_peer_id(), ahead)],
+        );
+
+        let network = validator_network(Arc::clone(&us), &[&ours]);
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        let (first, _) = next_announcement(&mut inbox)
+            .await
+            .expect("no announcement");
+        assert!(first.record.record.timestamp < ahead);
+        assert_eq!(network.own_record_superseded_at(), None);
+
+        // Resolving our own address pulls the copy. The network only reports it: the validator
+        // holds the key and re-signs by setting the public key again.
+        network.get_peer_id(X);
+        wait_for_superseded_at(&network, ahead).await;
+        assert!(next_announcement(&mut inbox).await.is_none());
+
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        let (again, _) = next_announcement(&mut inbox)
+            .await
+            .expect("no re-announcement");
+        assert_eq!(again.record.record.peer_id, us.get_local_peer_id());
+        assert!(again.record.record.timestamp > ahead);
+        assert!(again.record.verify(&ours.key.public));
+        assert_eq!(network.own_record_superseded_at(), None);
     }
 }
