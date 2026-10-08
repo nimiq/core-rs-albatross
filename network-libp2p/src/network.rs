@@ -161,6 +161,16 @@ impl Network {
         self.contacts.read().known_peers()
     }
 
+    /// Retrieves the addresses advertised in our own peer contact.
+    pub fn get_own_addresses(&self) -> Vec<Multiaddr> {
+        self.contacts
+            .read()
+            .get_own_contact()
+            .addresses()
+            .cloned()
+            .collect()
+    }
+
     /// Gets the network information
     pub async fn network_info(&self) -> Result<NetworkInfo, NetworkError> {
         let (output_tx, output_rx) = oneshot::channel();
@@ -172,17 +182,21 @@ impl Network {
         Ok(output_rx.await?)
     }
 
-    /// Tells the network to listen on a specific address received in a
-    /// `Multiaddr` format.
-    pub async fn listen_on(&self, listen_addresses: Vec<Multiaddr>) {
-        if let Err(error) = self
-            .action_tx
+    /// Tells the network to listen on the given addresses in `Multiaddr` format.
+    ///
+    /// Returns an error for the first address that can't be listened on, e.g. because it's
+    /// already in use.
+    pub async fn listen_on(&self, listen_addresses: Vec<Multiaddr>) -> Result<(), NetworkError> {
+        let (output_tx, output_rx) = oneshot::channel();
+
+        self.action_tx
             .clone()
-            .send(NetworkAction::ListenOn { listen_addresses })
-            .await
-        {
-            error!(%error, "Failed to send NetworkAction::ListenOnAddress");
-        }
+            .send(NetworkAction::ListenOn {
+                listen_addresses,
+                output: output_tx,
+            })
+            .await?;
+        output_rx.await?
     }
 
     /// Tells the network to start connecting to any available peer or seed

@@ -540,7 +540,7 @@ impl ClientInner {
         }
 
         // Start network.
-        network.listen_on(config.network.listen_addresses).await;
+        network.listen_on(config.network.listen_addresses).await?;
         network.start_connecting().await;
 
         Ok(Client {
