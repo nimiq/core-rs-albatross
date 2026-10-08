@@ -544,3 +544,481 @@ where
             .potentially_outdated_peer_id()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use futures::{stream::BoxStream, FutureExt, StreamExt};
+    use nimiq_bls::CompressedPublicKey;
+    use nimiq_keys::SecureGenerate;
+    use nimiq_network_interface::peer_info::Services;
+    use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
+    use nimiq_test_log::test;
+    use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSigned};
+    use tokio::sync::Notify;
+
+    use super::*;
+    use crate::record::{RecordAnnouncement, SignedValidatorRecord};
+
+    type ValNet = ValidatorNetworkImpl<MockNetwork>;
+    type Inbox = BoxStream<'static, (RecordAnnouncement<MockPeerId>, MockPeerId)>;
+
+    /// Validator IDs by position in the active set.
+    const X: u16 = 0;
+    const Y: u16 = 1;
+
+    fn now_ms() -> u64 {
+        (OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000) as u64
+    }
+
+    /// A validator of the test's active set.
+    struct TestValidator {
+        address: Address,
+        key: KeyPair,
+    }
+
+    impl TestValidator {
+        fn new(seed: u8) -> Self {
+            Self {
+                address: Address::from([seed; 20]),
+                key: KeyPair::generate_default_csprng(),
+            }
+        }
+
+        fn record(&self, peer_id: MockPeerId, timestamp: u64) -> SignedValidatorRecord<MockPeerId> {
+            let record = ValidatorRecord::new(peer_id, self.address.clone(), timestamp);
+            let signature = self.key.tagged_sign(&record);
+            TaggedSigned::new(record, signature)
+        }
+
+        fn announcement(
+            &self,
+            peer_id: MockPeerId,
+            timestamp: u64,
+        ) -> RecordAnnouncement<MockPeerId> {
+            RecordAnnouncement {
+                record: self.record(peer_id, timestamp),
+            }
+        }
+    }
+
+    /// The active set in which the `i`-th validator has slot band `i`.
+    fn active_set(validators: &[&TestValidator]) -> Validators {
+        Validators::new(
+            validators
+                .iter()
+                .map(|validator| {
+                    Validator::new(
+                        validator.address.clone(),
+                        CompressedPublicKey::default(),
+                        validator.key.public,
+                        0..1,
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    /// A validator network for `us` with `validators` as the active set.
+    fn validator_network(us: Arc<MockNetwork>, validators: &[&TestValidator]) -> ValNet {
+        let network = ValNet::new(us);
+        network.set_validators(&active_set(validators));
+        network
+    }
+
+    fn inbox(peer: &MockNetwork) -> Inbox {
+        peer.receive_messages::<RecordAnnouncement<MockPeerId>>()
+    }
+
+    /// The next announcement delivered to `inbox`, giving the sender a few polls to send it.
+    async fn next_announcement(
+        inbox: &mut Inbox,
+    ) -> Option<(RecordAnnouncement<MockPeerId>, MockPeerId)> {
+        for _ in 0..100 {
+            if let Some(item) = inbox.next().now_or_never() {
+                return item;
+            }
+            tokio::task::yield_now().await;
+        }
+        None
+    }
+
+    async fn announce(
+        from: &MockNetwork,
+        to: MockPeerId,
+        announcement: RecordAnnouncement<MockPeerId>,
+    ) {
+        from.message(announcement, to)
+            .await
+            .expect("the announcement was not accepted");
+    }
+
+    /// Waits until `network` resolves `validator_id` to `expected`.
+    async fn wait_for_peer_id(network: &ValNet, validator_id: u16, expected: MockPeerId) {
+        for _ in 0..200 {
+            if network.get_peer_id(validator_id) == Some(expected) {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+        panic!(
+            "validator {validator_id} did not resolve to {expected}, got {:?}",
+            network.get_peer_id(validator_id)
+        );
+    }
+
+    /// Publishes a DHT record pointing `validator` at `peer_id`. The mock DHT needs a connection.
+    async fn publish_dht(
+        us: &MockNetwork,
+        validator: &TestValidator,
+        peer_id: MockPeerId,
+        timestamp: u64,
+    ) {
+        let record = ValidatorRecord::new(peer_id, validator.address.clone(), timestamp);
+        us.dht_put(&validator.address, &record, &validator.key)
+            .await
+            .unwrap();
+    }
+
+    #[test(tokio::test)]
+    async fn setting_the_public_key_announces_our_record_to_connected_validator_peers() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        peer.dial_mock(&us);
+        let mut inbox = inbox(&peer);
+
+        let ours = TestValidator::new(0);
+        let network = validator_network(Arc::clone(&us), &[]);
+        let before = now_ms();
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+
+        let (announcement, from) = next_announcement(&mut inbox)
+            .await
+            .expect("no announcement");
+        assert_eq!(from, us.get_local_peer_id());
+        let record = &announcement.record.record;
+        assert_eq!(record.peer_id, us.get_local_peer_id());
+        assert_eq!(record.validator_address, ours.address);
+        assert!((before..=now_ms()).contains(&record.timestamp));
+        assert!(announcement.record.verify(&ours.key.public));
+    }
+
+    #[test(tokio::test)]
+    async fn our_record_is_announced_to_a_validator_peer_that_joins_later() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let first = hub.new_network();
+        first.dial_mock(&us);
+
+        let ours = TestValidator::new(0);
+        let network = validator_network(Arc::clone(&us), &[]);
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+
+        let later = hub.new_network();
+        let mut inbox = inbox(&later);
+        later.dial_mock(&us);
+
+        let (announcement, from) = next_announcement(&mut inbox)
+            .await
+            .expect("no announcement");
+        assert_eq!(from, us.get_local_peer_id());
+        assert_eq!(announcement.record.record.validator_address, ours.address);
+    }
+
+    #[test(tokio::test)]
+    async fn our_record_is_not_announced_to_peers_without_the_validator_service() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let validator_peer = hub.new_network();
+        let address = hub.new_address();
+        let full_node = hub.new_network_with_services(address, Services::FULL_BLOCKS);
+        validator_peer.dial_mock(&us);
+        full_node.dial_mock(&us);
+        let mut validator_inbox = inbox(&validator_peer);
+        let mut full_node_inbox = inbox(&full_node);
+
+        let ours = TestValidator::new(0);
+        let network = validator_network(Arc::clone(&us), &[]);
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+
+        assert!(next_announcement(&mut validator_inbox).await.is_some());
+        assert!(next_announcement(&mut full_node_inbox).await.is_none());
+
+        // Nor when such a peer joins later.
+        let address = hub.new_address();
+        let late_full_node = hub.new_network_with_services(address, Services::FULL_BLOCKS);
+        let mut late_inbox = inbox(&late_full_node);
+        late_full_node.dial_mock(&us);
+        assert!(next_announcement(&mut late_inbox).await.is_none());
+    }
+
+    #[test(tokio::test)]
+    async fn a_new_validator_set_triggers_a_re_announcement() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        peer.dial_mock(&us);
+        let mut inbox = inbox(&peer);
+
+        let ours = TestValidator::new(0);
+        let network = validator_network(Arc::clone(&us), &[]);
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        let (first, _) = next_announcement(&mut inbox)
+            .await
+            .expect("no announcement");
+
+        network.set_validators(&active_set(&[&TestValidator::new(1)]));
+        let (again, _) = next_announcement(&mut inbox)
+            .await
+            .expect("no re-announcement");
+        assert_eq!(again.record.record, first.record.record);
+    }
+
+    #[test(tokio::test)]
+    async fn announcing_does_not_depend_on_the_dht_publish() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let ours = TestValidator::new(0);
+        let network = validator_network(Arc::clone(&us), &[]);
+        // Without a connection, the mock DHT rejects the publish.
+        assert!(network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .is_err());
+
+        let peer = hub.new_network();
+        let mut inbox = inbox(&peer);
+        peer.dial_mock(&us);
+        assert!(next_announcement(&mut inbox).await.is_some());
+    }
+
+    #[test(tokio::test)]
+    async fn an_announcement_that_cannot_be_delivered_is_ignored() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        // An old node: connected, but without a receiver for announcements.
+        let old_node = hub.new_network();
+        old_node.dial_mock(&us);
+        let old_peer_id = old_node.get_local_peer_id();
+
+        let x = TestValidator::new(1);
+        publish_dht(&us, &x, old_peer_id, now_ms()).await;
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, old_peer_id).await;
+
+        let ours = TestValidator::new(0);
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        assert_eq!(network.get_peer_id(X), Some(old_peer_id));
+    }
+
+    #[test(tokio::test)]
+    async fn a_verified_announcement_binds_the_sender() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        peer.dial_mock(&us);
+
+        let x = TestValidator::new(1);
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        announce(
+            &peer,
+            us.get_local_peer_id(),
+            x.announcement(peer.get_local_peer_id(), now_ms()),
+        )
+        .await;
+
+        wait_for_peer_id(&network, X, peer.get_local_peer_id()).await;
+    }
+
+    #[test(tokio::test)]
+    async fn an_unverifiable_announcement_does_not_bind() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        let other = hub.new_network();
+        peer.dial_mock(&us);
+        other.dial_mock(&us);
+        let us_peer_id = us.get_local_peer_id();
+
+        let x = TestValidator::new(1);
+        let y = TestValidator::new(2);
+        let network = validator_network(Arc::clone(&us), &[&x, &y]);
+
+        // Naming another peer, signed with another key, and for an address outside the set.
+        let wrong_key = TestValidator {
+            address: x.address.clone(),
+            key: KeyPair::generate_default_csprng(),
+        };
+        let stranger = TestValidator::new(3);
+        for bad in [
+            x.announcement(other.get_local_peer_id(), now_ms()),
+            wrong_key.announcement(peer.get_local_peer_id(), now_ms()),
+            stranger.announcement(peer.get_local_peer_id(), now_ms()),
+        ] {
+            announce(&peer, us_peer_id, bad).await;
+        }
+        // A good one afterwards shows that the bad ones were processed.
+        announce(
+            &other,
+            us_peer_id,
+            y.announcement(other.get_local_peer_id(), now_ms()),
+        )
+        .await;
+        wait_for_peer_id(&network, Y, other.get_local_peer_id()).await;
+
+        assert_eq!(network.get_peer_id(X), None);
+    }
+
+    #[test(tokio::test)]
+    async fn a_newer_announcement_replaces_the_binding_from_the_dht() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let old_node = hub.new_network();
+        let new_node = hub.new_network();
+        old_node.dial_mock(&us);
+        new_node.dial_mock(&us);
+
+        let x = TestValidator::new(1);
+        let published_at = now_ms();
+        publish_dht(&us, &x, old_node.get_local_peer_id(), published_at).await;
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, old_node.get_local_peer_id()).await;
+
+        announce(
+            &new_node,
+            us.get_local_peer_id(),
+            x.announcement(new_node.get_local_peer_id(), published_at + 1),
+        )
+        .await;
+        wait_for_peer_id(&network, X, new_node.get_local_peer_id()).await;
+    }
+
+    #[test(tokio::test)]
+    async fn an_announcement_with_an_older_record_is_ignored() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let old_node = hub.new_network();
+        let new_node = hub.new_network();
+        let other = hub.new_network();
+        for peer in [&old_node, &new_node, &other] {
+            peer.dial_mock(&us);
+        }
+        let us_peer_id = us.get_local_peer_id();
+
+        let x = TestValidator::new(1);
+        let y = TestValidator::new(2);
+        let network = validator_network(Arc::clone(&us), &[&x, &y]);
+        let timestamp = now_ms();
+        announce(
+            &new_node,
+            us_peer_id,
+            x.announcement(new_node.get_local_peer_id(), timestamp),
+        )
+        .await;
+        wait_for_peer_id(&network, X, new_node.get_local_peer_id()).await;
+
+        announce(
+            &old_node,
+            us_peer_id,
+            x.announcement(old_node.get_local_peer_id(), timestamp - 1),
+        )
+        .await;
+        announce(
+            &other,
+            us_peer_id,
+            y.announcement(other.get_local_peer_id(), timestamp),
+        )
+        .await;
+        wait_for_peer_id(&network, Y, other.get_local_peer_id()).await;
+
+        assert_eq!(network.get_peer_id(X), Some(new_node.get_local_peer_id()));
+    }
+
+    #[test(tokio::test)]
+    async fn a_repeated_identical_announcement_changes_nothing() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        let other = hub.new_network();
+        peer.dial_mock(&us);
+        other.dial_mock(&us);
+        let us_peer_id = us.get_local_peer_id();
+
+        let x = TestValidator::new(1);
+        let y = TestValidator::new(2);
+        let network = validator_network(Arc::clone(&us), &[&x, &y]);
+        let announcement = x.announcement(peer.get_local_peer_id(), now_ms());
+        announce(&peer, us_peer_id, announcement.clone()).await;
+        wait_for_peer_id(&network, X, peer.get_local_peer_id()).await;
+
+        announce(&peer, us_peer_id, announcement).await;
+        announce(
+            &other,
+            us_peer_id,
+            y.announcement(other.get_local_peer_id(), now_ms()),
+        )
+        .await;
+        wait_for_peer_id(&network, Y, other.get_local_peer_id()).await;
+
+        assert_eq!(network.get_peer_id(X), Some(peer.get_local_peer_id()));
+    }
+
+    #[test(tokio::test)]
+    async fn an_announcement_during_a_resolution_survives_an_older_result() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        let listed = hub.new_network();
+        peer.dial_mock(&us);
+
+        // The fallback answers only once released, so the resolution stays in flight.
+        let release = Arc::new(Notify::new());
+        let fallback: Arc<DhtFallback<MockNetwork>> = {
+            let release = Arc::clone(&release);
+            let listed = listed.get_local_peer_id();
+            Arc::new(move |_| {
+                let release = Arc::clone(&release);
+                async move {
+                    release.notified().await;
+                    Some(listed)
+                }
+                .boxed()
+            })
+        };
+        let x = TestValidator::new(1);
+        let network = ValNet::new_with_fallback(Arc::clone(&us), fallback);
+        network.set_validators(&active_set(&[&x]));
+        assert_eq!(network.get_peer_id(X), None);
+
+        announce(
+            &peer,
+            us.get_local_peer_id(),
+            x.announcement(peer.get_local_peer_id(), now_ms()),
+        )
+        .await;
+        wait_for_peer_id(&network, X, peer.get_local_peer_id()).await;
+
+        release.notify_one();
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+            assert_eq!(network.get_peer_id(X), Some(peer.get_local_peer_id()));
+        }
+    }
+}

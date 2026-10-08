@@ -113,8 +113,10 @@ where
 mod tests {
     use nimiq_bls::CompressedPublicKey;
     use nimiq_keys::{Address, KeyPair, SecureGenerate};
+    use std::time::Duration;
+
     use nimiq_network_interface::{
-        request::{RequestSerialize, RequestType},
+        request::{RequestCommon, RequestSerialize, RequestType},
         validator_record::ValidatorRecord,
     };
     use nimiq_primitives::slots_allocation::{Validator, Validators};
@@ -343,5 +345,16 @@ mod tests {
             assert_eq!(received.record, sent.record);
             assert_eq!(received.signature.as_bytes(), sent.signature.as_bytes());
         }
+    }
+
+    #[test]
+    fn announcements_are_limited_per_peer_by_the_network_layer() {
+        // Enforced by libp2p before dispatch, per peer and message type.
+        assert_eq!(RecordAnnouncement::<u32>::MAX_REQUESTS, 8);
+        assert_eq!(
+            RecordAnnouncement::<u32>::TIME_WINDOW,
+            Duration::from_secs(10)
+        );
+        assert_eq!(RecordsRequest::<u32>::MAX_REQUESTS, 4);
     }
 }
