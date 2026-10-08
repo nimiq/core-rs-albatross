@@ -59,17 +59,23 @@ where
     )
 }
 
-pub async fn build_validators<N: TestNetwork + NetworkInterface>(
-    env: MdbxDatabase,
-    peer_ids: &[u64],
-    hub: &mut Option<MockHub>,
-) -> Vec<Validator<ValidatorNetworkImpl<N>>>
-where
-    N::Error: Send + Sync,
-    N::PeerId: Deserialize + Serialize,
-{
-    let num_validators = peer_ids.len();
-    // Generate validator key pairs.
+/// Keys of a test validator.
+#[derive(Clone)]
+pub struct ValidatorKeys {
+    pub validator_key: SchnorrKeyPair,
+    pub signing_key: SchnorrKeyPair,
+    pub voting_key: BlsKeyPair,
+    pub fee_key: SchnorrKeyPair,
+}
+
+impl ValidatorKeys {
+    pub fn address(&self) -> Address {
+        Address::from(&self.validator_key)
+    }
+}
+
+/// Deterministic keys for `num_validators` validators.
+pub fn validator_keys(num_validators: usize) -> Vec<ValidatorKeys> {
     let mut rng = seeded_rng(0);
     let voting_keys: Vec<BlsKeyPair> = (0..num_validators)
         .map(|_| BlsKeyPair::generate(&mut rng))
@@ -84,21 +90,67 @@ where
         .map(|_| SchnorrKeyPair::generate(&mut rng))
         .collect();
 
+    voting_keys
+        .into_iter()
+        .zip(validator_keys)
+        .zip(signing_keys)
+        .zip(fee_keys)
+        .map(
+            |(((voting_key, validator_key), signing_key), fee_key)| ValidatorKeys {
+                validator_key,
+                signing_key,
+                voting_key,
+                fee_key,
+            },
+        )
+        .collect()
+}
+
+pub async fn build_validators<N: TestNetwork + NetworkInterface>(
+    env: MdbxDatabase,
+    peer_ids: &[u64],
+    hub: &mut Option<MockHub>,
+) -> Vec<Validator<ValidatorNetworkImpl<N>>>
+where
+    N::Error: Send + Sync,
+    N::PeerId: Deserialize + Serialize,
+{
+    let keys = validator_keys(peer_ids.len());
+    build_validators_with_keys(env, peer_ids, &keys, hub)
+        .await
+        .0
+}
+
+/// Builds validators with `keys` and a genesis that registers them. The genesis is returned as
+/// well, so that a validator can be rebuilt later, e.g. under another peer ID.
+pub async fn build_validators_with_keys<N: TestNetwork + NetworkInterface>(
+    env: MdbxDatabase,
+    peer_ids: &[u64],
+    keys: &[ValidatorKeys],
+    hub: &mut Option<MockHub>,
+) -> (Vec<Validator<ValidatorNetworkImpl<N>>>, GenesisInfo)
+where
+    N::Error: Send + Sync,
+    N::PeerId: Deserialize + Serialize,
+{
+    assert_eq!(peer_ids.len(), keys.len());
+    let num_validators = peer_ids.len();
+
     // Generate genesis block.
     let mut genesis_builder = GenesisBuilder::default();
-    genesis_builder.with_network(NetworkId::UnitAlbatross);
-    for i in 0..num_validators {
-        genesis_builder
-            .with_genesis_validator(
-                Address::from(&validator_keys[i]),
-                signing_keys[i].public,
-                voting_keys[i].public_key,
-                Address::default(),
-                None,
-                None,
-                false,
-            )
-            .with_genesis_block_number(Policy::genesis_block_number());
+    genesis_builder
+        .with_network(NetworkId::UnitAlbatross)
+        .with_genesis_block_number(Policy::genesis_block_number());
+    for keys in keys {
+        genesis_builder.with_genesis_validator(
+            keys.address(),
+            keys.signing_key.public,
+            keys.voting_key.public_key,
+            Address::default(),
+            None,
+            None,
+            false,
+        );
     }
     let genesis = genesis_builder.generate(env).unwrap();
 
@@ -109,11 +161,11 @@ where
     for i in 0..num_validators {
         let (v, c) = build_validator(
             peer_ids[i],
-            Address::from(&validator_keys[i]),
+            keys[i].address(),
             false,
-            signing_keys[i].clone(),
-            voting_keys[i].clone(),
-            fee_keys[i].clone(),
+            keys[i].signing_key.clone(),
+            keys[i].voting_key.clone(),
+            keys[i].fee_key.clone(),
             genesis.clone(),
             hub,
         )
@@ -138,7 +190,7 @@ where
 
     future::join_all(events.iter_mut().map(|e| e.next())).await;
 
-    validators
+    (validators, genesis)
 }
 
 pub fn validator_for_slot<N: TestNetwork + NetworkInterface>(
