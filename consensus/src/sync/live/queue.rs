@@ -156,6 +156,7 @@ pub struct QueueConfig {
     pub window_ahead_max: u32,
 
     /// How many blocks back into the past we tolerate without returning a peer as Outdated.
+    /// Half of it is also how far back the `BlockQueue` re-gossips blocks it already knows.
     pub tolerate_past_max: u32,
 
     /// Flag to indicate if blocks should carry a body.

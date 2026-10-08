@@ -176,9 +176,12 @@ impl<N: Network> BlockQueue<N> {
         let block_number = block.block_number();
         let head_height = blockchain.block_number();
 
-        // Ignore blocks that we already know.
+        // Ignore blocks that we already know. Only re-gossip recent ones, at most half as far back
+        // as peers evict for (`tolerate_past_max`): a peer that pruned the block would drop us.
         if let Ok(info) = blockchain.get_chain_info(&block_hash, false) {
-            if info.on_main_chain {
+            let recent =
+                block_number >= head_height.saturating_sub(self.config.tolerate_past_max / 2);
+            if info.on_main_chain && recent {
                 block_source.accept_block(&self.network)
             } else {
                 block_source.ignore_block(&self.network)
