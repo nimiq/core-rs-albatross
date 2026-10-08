@@ -9,7 +9,9 @@ where
     const TAG: u8 = 0x03;
 }
 
-/// Validator record that is going to be stored into the DHT
+/// Binds a validator to the peer ID of its node at a point in time, signed with the validator's
+/// signing key. A validator publishes its record to the DHT and announces it to the other
+/// validators, which relay it on request; the newest record wins everywhere.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(bound = "TPeerId: Serialize + Deserialize")]
 pub struct ValidatorRecord<TPeerId>
