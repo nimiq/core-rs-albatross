@@ -561,7 +561,10 @@ mod tests {
     use futures::{stream::BoxStream, FutureExt, StreamExt};
     use nimiq_bls::CompressedPublicKey;
     use nimiq_keys::SecureGenerate;
-    use nimiq_network_interface::peer_info::Services;
+    use nimiq_network_interface::{
+        peer_info::Services,
+        request::{MessageMarker, RequestMarker},
+    };
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
     use nimiq_test_log::test;
     use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSigned};
@@ -767,6 +770,63 @@ mod tests {
         for _ in 0..50 {
             tokio::task::yield_now().await;
         }
+    }
+
+    /// A message sent over the validator network in these tests.
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct Note(u32);
+
+    impl RequestCommon for Note {
+        type Kind = MessageMarker;
+        type Response = ();
+        const TYPE_ID: u16 = 1;
+        const MAX_REQUESTS: u32 = 100;
+    }
+
+    /// A request sent over the validator network in these tests, answered with its number.
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    struct Ping(u32);
+
+    impl RequestCommon for Ping {
+        type Kind = RequestMarker;
+        type Response = u32;
+        const TYPE_ID: u16 = 2;
+        const MAX_REQUESTS: u32 = 100;
+    }
+
+    /// Sends `Note(note)` to `to`, claiming to come from `validator_id`.
+    async fn send_note(from: &MockNetwork, to: MockPeerId, validator_id: u16, note: u32) {
+        let message = ValidatorMessage {
+            validator_id,
+            inner: Note(note),
+        };
+        from.message(message, to).await.unwrap();
+    }
+
+    /// Makes `peer` answer every `Ping` it receives over the validator network.
+    fn answer_pings(peer: Arc<MockNetwork>) {
+        let mut requests = peer.receive_requests::<ValidatorMessage<Ping>>();
+        spawn(async move {
+            while let Some((request, request_id, _)) = requests.next().await {
+                let _ = peer
+                    .respond::<ValidatorMessage<Ping>>(request_id, request.inner.0)
+                    .await;
+            }
+        });
+    }
+
+    /// Binds `validator`, at `validator_id`, to `peer_id` through the DHT.
+    async fn bind_via_dht(
+        network: &ValNet,
+        us: &MockNetwork,
+        validator: &TestValidator,
+        validator_id: u16,
+        peer_id: MockPeerId,
+        timestamp: u64,
+    ) {
+        publish_dht(us, validator, peer_id, timestamp).await;
+        network.get_peer_id(validator_id);
+        wait_for_peer_id(network, validator_id, peer_id).await;
     }
 
     /// Publishes a DHT record pointing `validator` at `peer_id`. The mock DHT needs a connection.
@@ -1558,5 +1618,289 @@ mod tests {
         assert!(again.record.record.timestamp > ahead);
         assert!(again.record.verify(&ours.key.public));
         assert_eq!(network.own_record_superseded_at(), None);
+    }
+
+    #[test(tokio::test)]
+    async fn messages_are_accepted_only_from_the_bound_peer() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let bound = hub.new_network();
+        let stranger = hub.new_network();
+        bound.dial_mock(&us);
+        stranger.dial_mock(&us);
+        let us_peer_id = us.get_local_peer_id();
+
+        let x = TestValidator::new(1);
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        bind_via_dht(&network, &us, &x, X, bound.get_local_peer_id(), now_ms()).await;
+        let mut notes = network.receive::<Note>();
+
+        send_note(&stranger, us_peer_id, X, 1).await;
+        // A validator ID outside the set.
+        send_note(&bound, us_peer_id, Y, 2).await;
+        send_note(&bound, us_peer_id, X, 3).await;
+
+        assert_eq!(notes.next().now_or_never(), Some(Some((Note(3), X))));
+        assert!(notes.next().now_or_never().is_none());
+    }
+
+    #[test(tokio::test)]
+    async fn requests_are_accepted_only_from_the_bound_peer() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let bound = hub.new_network();
+        let stranger = hub.new_network();
+        bound.dial_mock(&us);
+        stranger.dial_mock(&us);
+        let us_peer_id = us.get_local_peer_id();
+
+        let x = TestValidator::new(1);
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        bind_via_dht(&network, &us, &x, X, bound.get_local_peer_id(), now_ms()).await;
+        let mut pings = network.receive_requests::<Ping>();
+
+        // The stranger's request is never answered, so it is only polled once to send it.
+        let stranger_request = stranger.request(
+            ValidatorMessage {
+                validator_id: X,
+                inner: Ping(1),
+            },
+            us_peer_id,
+        );
+        let mut stranger_request = std::pin::pin!(stranger_request);
+        assert!(stranger_request.as_mut().now_or_never().is_none());
+
+        let request = bound.request(
+            ValidatorMessage {
+                validator_id: X,
+                inner: Ping(2),
+            },
+            us_peer_id,
+        );
+        let mut request = std::pin::pin!(request);
+        assert!(request.as_mut().now_or_never().is_none());
+        let (ping, request_id, validator_id) = pings
+            .next()
+            .now_or_never()
+            .flatten()
+            .expect("the request was dropped");
+        assert_eq!((ping.0, validator_id), (2, X));
+        network.respond::<Ping>(request_id, 20).await.unwrap();
+        assert_eq!(request.await.unwrap(), 20);
+        assert!(pings.next().now_or_never().is_none());
+    }
+
+    #[test(tokio::test)]
+    async fn a_newer_announcement_moves_acceptance_to_the_new_peer_and_away_from_the_old_one() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let old = hub.new_network();
+        let new = hub.new_network();
+        old.dial_mock(&us);
+        new.dial_mock(&us);
+        let us_peer_id = us.get_local_peer_id();
+
+        let x = TestValidator::new(1);
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        let timestamp = now_ms();
+        bind_via_dht(&network, &us, &x, X, old.get_local_peer_id(), timestamp).await;
+        let mut notes = network.receive::<Note>();
+        send_note(&old, us_peer_id, X, 1).await;
+        assert_eq!(notes.next().now_or_never(), Some(Some((Note(1), X))));
+
+        announce(
+            &new,
+            us_peer_id,
+            x.announcement(new.get_local_peer_id(), timestamp + 1),
+        )
+        .await;
+        wait_for_peer_id(&network, X, new.get_local_peer_id()).await;
+
+        send_note(&old, us_peer_id, X, 2).await;
+        send_note(&new, us_peer_id, X, 3).await;
+        assert_eq!(notes.next().now_or_never(), Some(Some((Note(3), X))));
+        assert!(notes.next().now_or_never().is_none());
+    }
+
+    #[test(tokio::test)]
+    async fn an_older_claimant_is_dropped_even_while_connected() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let old = hub.new_network();
+        let new = hub.new_network();
+        old.dial_mock(&us);
+        new.dial_mock(&us);
+        let us_peer_id = us.get_local_peer_id();
+
+        let x = TestValidator::new(1);
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        let timestamp = now_ms();
+        announce(
+            &new,
+            us_peer_id,
+            x.announcement(new.get_local_peer_id(), timestamp + 1),
+        )
+        .await;
+        wait_for_peer_id(&network, X, new.get_local_peer_id()).await;
+        announce(
+            &old,
+            us_peer_id,
+            x.announcement(old.get_local_peer_id(), timestamp),
+        )
+        .await;
+        settle().await;
+
+        let mut notes = network.receive::<Note>();
+        send_note(&old, us_peer_id, X, 1).await;
+        send_note(&new, us_peer_id, X, 2).await;
+        assert_eq!(notes.next().now_or_never(), Some(Some((Note(2), X))));
+        assert!(notes.next().now_or_never().is_none());
+        assert_eq!(network.get_peer_id(X), Some(new.get_local_peer_id()));
+    }
+
+    #[test(tokio::test)]
+    async fn a_message_is_sent_to_exactly_one_peer() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let old = hub.new_network();
+        let new = hub.new_network();
+        old.dial_mock(&us);
+        new.dial_mock(&us);
+        let mut old_inbox = old.receive_messages::<ValidatorMessage<Note>>();
+        let mut new_inbox = new.receive_messages::<ValidatorMessage<Note>>();
+
+        let x = TestValidator::new(1);
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        network.set_validator_id(Some(7));
+        let timestamp = now_ms();
+        bind_via_dht(&network, &us, &x, X, old.get_local_peer_id(), timestamp).await;
+        announce(
+            &new,
+            us.get_local_peer_id(),
+            x.announcement(new.get_local_peer_id(), timestamp + 1),
+        )
+        .await;
+        wait_for_peer_id(&network, X, new.get_local_peer_id()).await;
+
+        network.send_to(X, Note(1)).await.unwrap();
+
+        let (message, from) = new_inbox
+            .next()
+            .now_or_never()
+            .flatten()
+            .expect("the new node got nothing");
+        assert_eq!(
+            (message.validator_id, message.inner, from),
+            (7, Note(1), us.get_local_peer_id())
+        );
+        assert!(old_inbox.next().now_or_never().is_none());
+    }
+
+    #[test(tokio::test)]
+    async fn get_peer_id_follows_the_binding() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let old = hub.new_network();
+        let new = hub.new_network();
+        old.dial_mock(&us);
+        new.dial_mock(&us);
+
+        let x = TestValidator::new(1);
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        let timestamp = now_ms();
+        bind_via_dht(&network, &us, &x, X, old.get_local_peer_id(), timestamp).await;
+        assert_eq!(network.get_peer_id(X), Some(old.get_local_peer_id()));
+
+        announce(
+            &new,
+            us.get_local_peer_id(),
+            x.announcement(new.get_local_peer_id(), timestamp + 1),
+        )
+        .await;
+        wait_for_peer_id(&network, X, new.get_local_peer_id()).await;
+        assert_eq!(network.get_peer_id(X), Some(new.get_local_peer_id()));
+    }
+
+    #[test(tokio::test)]
+    async fn a_restarted_validator_is_reached_again_without_the_dht() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let old_node = hub.new_network();
+        old_node.dial_mock(&us);
+        let mut old_inbox = old_node.receive_messages::<ValidatorMessage<Note>>();
+        let us_peer_id = us.get_local_peer_id();
+
+        let x = TestValidator::new(1);
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        network.set_validator_id(Some(7));
+        let timestamp = now_ms();
+        announce(
+            &old_node,
+            us_peer_id,
+            x.announcement(old_node.get_local_peer_id(), timestamp),
+        )
+        .await;
+        wait_for_peer_id(&network, X, old_node.get_local_peer_id()).await;
+        network.send_to(X, Note(1)).await.unwrap();
+        assert!(old_inbox.next().now_or_never().flatten().is_some());
+
+        // The validator comes back under a new peer ID. The DHT stays empty throughout.
+        old_node.shutdown();
+        assert!(network.send_to(X, Note(2)).await.is_err());
+        let new_node = hub.new_network();
+        let mut new_inbox = new_node.receive_messages::<ValidatorMessage<Note>>();
+        new_node.dial_mock(&us);
+        announce(
+            &new_node,
+            us_peer_id,
+            x.announcement(new_node.get_local_peer_id(), timestamp + 1),
+        )
+        .await;
+        wait_for_peer_id(&network, X, new_node.get_local_peer_id()).await;
+
+        network.send_to(X, Note(3)).await.unwrap();
+        let (message, _) = new_inbox
+            .next()
+            .now_or_never()
+            .flatten()
+            .expect("the new node got nothing");
+        assert_eq!(message.inner, Note(3));
+    }
+
+    #[test(tokio::test)]
+    async fn a_transient_failure_binds_the_same_peer_again_when_nothing_newer_exists() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = Arc::new(hub.new_network());
+        peer.dial_mock(&us);
+
+        let x = TestValidator::new(1);
+        let network = validator_network(Arc::clone(&us), &[&x]);
+        network.set_validator_id(Some(7));
+        announce(
+            &peer,
+            us.get_local_peer_id(),
+            x.announcement(peer.get_local_peer_id(), now_ms()),
+        )
+        .await;
+        wait_for_peer_id(&network, X, peer.get_local_peer_id()).await;
+
+        // The peer does not answer requests yet, so one fails and drops the binding.
+        assert!(matches!(
+            network.request(Ping(1), X).await,
+            Err(NetworkError::Request(_))
+        ));
+
+        // Now it does. No source points elsewhere, so the record we hold binds it again.
+        answer_pings(Arc::clone(&peer));
+        let mut answer = None;
+        for _ in 0..200 {
+            if let Ok(value) = network.request(Ping(2), X).await {
+                answer = Some(value);
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(answer, Some(2));
     }
 }
