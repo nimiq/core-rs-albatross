@@ -72,7 +72,10 @@ pub async fn create_mock_validator_network(n: usize, dial: bool) -> Vec<MockNetw
 pub mod tests {
     use futures::{Stream, StreamExt};
     use nimiq_keys::{KeyPair, SecureGenerate as _};
-    use nimiq_network_interface::network::{Network, NetworkEvent, SubscribeEvents, Topic};
+    use nimiq_network_interface::{
+        network::{Network, NetworkEvent, SubscribeEvents, Topic},
+        peer_info::Services,
+    };
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng;
     use nimiq_utils::{spawn, tagged_signing::TaggedSignable};
@@ -138,6 +141,50 @@ pub mod tests {
         expected_peer_ids.sort();
 
         assert_eq!(peer_ids, expected_peer_ids);
+    }
+
+    #[test(tokio::test)]
+    async fn peers_report_the_services_each_network_advertises() {
+        let mut hub = MockHub::default();
+        let full = hub.new_network();
+        let address = hub.new_address();
+        let light = hub.new_network_with_services(address, Services::FULL_BLOCKS);
+
+        let mut events = full.subscribe_events();
+        light.dial_mock(&full);
+
+        // Each side sees what the other advertises.
+        assert_eq!(
+            full.get_peer_info(light.peer_id()).unwrap().get_services(),
+            Services::FULL_BLOCKS
+        );
+        assert_eq!(
+            light.get_peer_info(full.peer_id()).unwrap().get_services(),
+            Services::all()
+        );
+        assert!(full.peer_provides_services(light.peer_id(), Services::FULL_BLOCKS));
+        assert!(!full.peer_provides_services(light.peer_id(), Services::VALIDATOR));
+        assert!(full
+            .get_peers_by_services(Services::VALIDATOR, 1)
+            .await
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            light
+                .get_peers_by_services(Services::VALIDATOR, 1)
+                .await
+                .unwrap(),
+            vec![full.peer_id()]
+        );
+
+        // The join event carries them as well.
+        match events.next().await {
+            Some(Ok(NetworkEvent::PeerJoined(peer_id, peer_info))) => {
+                assert_eq!(peer_id, light.peer_id());
+                assert_eq!(peer_info.get_services(), Services::FULL_BLOCKS);
+            }
+            other => panic!("expected the join of the light peer, got {other:?}"),
+        }
     }
 
     // Copied straight from nimiq_network_libp2p::network

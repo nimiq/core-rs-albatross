@@ -73,6 +73,7 @@ impl PubsubId<MockPeerId> for MockId<MockPeerId> {
 #[derive(Debug)]
 pub struct MockNetwork {
     address: MockAddress,
+    services: Services,
     peers: Arc<RwLock<ObservableHashMap<MockPeerId, PeerInfo>>>,
     hub: Arc<Mutex<MockHubInner>>,
     is_connected: Arc<AtomicBool>,
@@ -82,7 +83,11 @@ pub struct MockNetwork {
 impl MockNetwork {
     const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
-    pub(crate) fn new(address: MockAddress, hub: Arc<Mutex<MockHubInner>>) -> Self {
+    pub(crate) fn new(
+        address: MockAddress,
+        services: Services,
+        hub: Arc<Mutex<MockHubInner>>,
+    ) -> Self {
         let peers = Arc::new(RwLock::new(ObservableHashMap::new()));
 
         let is_connected = {
@@ -92,6 +97,7 @@ impl MockNetwork {
             if hub.peer_maps.insert(address, peers.clone()).is_some() {
                 panic!("address/peer_id of MockNetwork must be unique: address={address}");
             }
+            hub.services.insert(address, services);
 
             // Insert our is_connected bool into the hub
             let is_connected = Arc::new(AtomicBool::new(false));
@@ -102,6 +108,7 @@ impl MockNetwork {
 
         Self {
             address,
+            services,
             peers,
             hub,
             is_connected,
@@ -128,6 +135,11 @@ impl MockNetwork {
         let hub = self.hub.lock();
 
         log::trace!("Peer {} dialing peer {}", self.address, address);
+        let other_services = hub
+            .services
+            .get(&address)
+            .copied()
+            .unwrap_or(Services::all());
 
         // Insert ourselves into peer's peer list.
         // This also makes sure the other peer actually exists.
@@ -140,7 +152,7 @@ impl MockNetwork {
                 .write();
             is_new = !other_peers.contains_key(&self.peer_id());
             if is_new {
-                let peer_info = PeerInfo::new(address.into(), Services::all());
+                let peer_info = PeerInfo::new(address.into(), self.services);
                 other_peers.insert(self.peer_id(), peer_info);
             }
         }
@@ -152,7 +164,7 @@ impl MockNetwork {
             // Are we connecting to someone that is not ourselves?
             if self.address != address {
                 // Insert peer into our peer list
-                let peer_info = PeerInfo::new(address.into(), Services::all());
+                let peer_info = PeerInfo::new(address.into(), other_services);
                 assert!(self
                     .peers
                     .write()
@@ -642,8 +654,11 @@ impl Network for MockNetwork {
         true
     }
 
-    fn peer_provides_services(&self, _peer_id: Self::PeerId, _services: Services) -> bool {
-        true
+    fn peer_provides_services(&self, peer_id: Self::PeerId, services: Services) -> bool {
+        self.peers
+            .read()
+            .get(&peer_id)
+            .is_some_and(|peer_info| peer_info.get_services().contains(services))
     }
 
     fn get_peer_info(&self, peer_id: Self::PeerId) -> Option<PeerInfo> {
@@ -652,9 +667,13 @@ impl Network for MockNetwork {
 
     async fn get_peers_by_services(
         &self,
-        _services: Services,
+        services: Services,
         _peers: usize,
     ) -> Result<Vec<Self::PeerId>, MockNetworkError> {
-        Ok(self.get_peers())
+        Ok(self
+            .get_peers()
+            .into_iter()
+            .filter(|peer_id| self.peer_provides_services(*peer_id, services))
+            .collect())
     }
 }

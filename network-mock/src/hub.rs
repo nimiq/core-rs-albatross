@@ -4,7 +4,10 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use nimiq_network_interface::{peer_info::PeerInfo, request::RequestType};
+use nimiq_network_interface::{
+    peer_info::{PeerInfo, Services},
+    request::RequestType,
+};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
@@ -45,6 +48,9 @@ pub(crate) struct MockTopic {
 pub(crate) struct MockHubInner {
     /// Peer maps of all networks.
     pub peer_maps: HashMap<MockAddress, Arc<RwLock<ObservableHashMap<MockPeerId, PeerInfo>>>>,
+
+    /// Services each network advertises.
+    pub services: HashMap<MockAddress, Services>,
 
     /// Senders for direct message sending
     pub network_senders: HashMap<SenderKey, mpsc::Sender<Vec<u8>>>,
@@ -144,8 +150,17 @@ impl MockHub {
     }
 
     pub fn new_network_with_address<A: Into<MockAddress>>(&mut self, address: A) -> MockNetwork {
+        self.new_network_with_services(address, Services::all())
+    }
+
+    /// Creates a network that advertises `services` to its peers.
+    pub fn new_network_with_services<A: Into<MockAddress>>(
+        &mut self,
+        address: A,
+        services: Services,
+    ) -> MockNetwork {
         let address: MockAddress = address.into();
         log::trace!("New mock network with address={}", address);
-        MockNetwork::new(address, Arc::clone(&self.inner))
+        MockNetwork::new(address, services, Arc::clone(&self.inner))
     }
 }
