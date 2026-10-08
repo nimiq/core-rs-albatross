@@ -209,11 +209,11 @@ fn burn_data(target: &Address, amount: u64, nonce: u64) -> Vec<u8> {
 #[test]
 fn built_bridge_transactions_are_accepted() {
     let depositor = KeyPair::generate_default_csprng();
-    let relayer = KeyPair::generate_default_csprng();
+    let target_key = KeyPair::generate_default_csprng();
     let oracle_owner = KeyPair::generate_default_csprng();
     let oracle_address = Address::from([0x0Eu8; 20]);
     let bridge_address = Address::from([0x0Bu8; 20]);
-    let target = Address::from([0xAAu8; 20]);
+    let target = Address::from(&target_key);
     let bridge_balance = 10_000;
     let released = 500;
     let fee = coin(10);
@@ -237,7 +237,6 @@ fn built_bridge_transactions_are_accepted() {
         (oracle_address.clone(), Account::Oracle(oracle)),
         (bridge_address.clone(), Account::Bridge(bridge)),
         (Address::from(&depositor), basic(5_000)),
-        (Address::from(&relayer), basic(100)),
     ]);
 
     commit(
@@ -282,9 +281,8 @@ fn built_bridge_transactions_are_accepted() {
         commit(
             &test,
             TransactionBuilder::new_bridge_release(
-                &relayer,
+                &target_key,
                 bridge_address.clone(),
-                target.clone(),
                 OutgoingTransaction::new(
                     burn,
                     AnyMerkleProof::Blake2bPath(MerklePath::empty()),
@@ -301,7 +299,7 @@ fn built_bridge_transactions_are_accepted() {
     }
 
     // Releases pay the whole burned amount from the bridge: the value to the target and the fee
-    // to the block reward. The relayer who signed them pays nothing.
+    // to the block reward. The target, who signed them, had no NIM and paid nothing.
     assert_eq!(
         test.get_complete(&target, None).balance(),
         coin(2 * (released - 10))
@@ -309,9 +307,5 @@ fn built_bridge_transactions_are_accepted() {
     assert_eq!(
         test.get_complete(&bridge_address, None).balance(),
         coin(bridge_balance + 2_000 - 2 * released)
-    );
-    assert_eq!(
-        test.get_complete(&Address::from(&relayer), None).balance(),
-        coin(100)
     );
 }

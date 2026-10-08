@@ -44,9 +44,9 @@ const BURN_BLOCK_HEIGHT: u32 = 42;
 
 /// The oracle owner. Fixed rather than generated so every run builds the same transactions.
 const ORACLE_OWNER_KEY: &str = "9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0";
-/// Whoever submits the burn proof. Releases are permissionless and their fee comes out of the
-/// burned amount, so the key needs no funds.
-const SUBMITTER_KEY: &str = "0f0e0d0c0b0a09080706050403020100ffeeddccbbaa99887766554433221100";
+/// The burn target, which signs its release. The fee comes out of the burned amount, so the key
+/// needs no funds.
+const TARGET_KEY: &str = "0f0e0d0c0b0a09080706050403020100ffeeddccbbaa99887766554433221100";
 
 // ---------------------------------------------------------------------------------------------
 // Keys, config, payloads
@@ -199,14 +199,14 @@ fn lock_tx(bridge: &Address, amount: u64, validity_start_height: u32) -> Transac
     tx
 }
 
-/// A release: the burn proof against oracle state `oracle_state_index`, signed by `submitter`.
+/// A release: the burn proof against oracle state `oracle_state_index`, signed by `signer`.
 fn release_tx(
     bridge: &Address,
     target: &Address,
     amount: u64,
     burn: Vec<u8>,
     oracle_state_index: u64,
-    submitter: &KeyPair,
+    signer: &KeyPair,
     validity_start_height: u32,
 ) -> Transaction {
     let mut bridge_data = OutgoingBridgeTransactionData {
@@ -230,8 +230,8 @@ fn release_tx(
         NetworkId::UnitAlbatross,
     );
     bridge_data.set_signature(SignatureProof::from_ed25519(
-        submitter.public,
-        submitter.sign(&tx.serialize_content()),
+        signer.public,
+        signer.sign(&tx.serialize_content()),
     ));
     tx.sender_data = bridge_data.serialize_to_vec();
     tx
@@ -403,8 +403,8 @@ impl World {
 fn a_reorg_that_drops_a_release_restores_the_bridge_and_its_nonce_ledger() {
     let w = World::new();
     let owner = key(ORACLE_OWNER_KEY);
-    let submitter = key(SUBMITTER_KEY);
-    let target = Address::from([0xAAu8; 20]);
+    let target_key = key(TARGET_KEY);
+    let target = Address::from(&target_key);
 
     let create_oracle = create_oracle_tx(&owner, 10, w.validity_start_height);
     let oracle = create_oracle.recipient.clone();
@@ -426,7 +426,7 @@ fn a_reorg_that_drops_a_release_restores_the_bridge_and_its_nonce_ledger() {
     let funds_before = luna(&w.main, &funds_address());
     assert_eq!(luna(&w.main, &target), 0);
 
-    // The doomed block: a user locks NIM and the submitter releases the burn.
+    // The doomed block: a user locks NIM and the target releases the burn.
     let lock = lock_tx(&bridge, LOCK_AMOUNT, w.validity_start_height);
     let release = release_tx(
         &bridge,
@@ -434,7 +434,7 @@ fn a_reorg_that_drops_a_release_restores_the_bridge_and_its_nonce_ledger() {
         RELEASE_AMOUNT,
         burn,
         0,
-        &submitter,
+        &target_key,
         w.validity_start_height,
     );
     w.doomed_block(vec![lock.clone(), release.clone()]);

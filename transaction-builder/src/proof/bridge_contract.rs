@@ -6,8 +6,8 @@ use nimiq_transaction::{
 /// The `BridgeProofBuilder` can be used to build proofs for transactions that release funds
 /// from a bridge contract against a burn proof.
 ///
-/// Releases are permissionless: any key may sign the burn proof. The transaction fee is taken from
-/// the burned amount, not from the signer.
+/// The burn proof must be signed by the target of the burn, but anyone may submit the signed
+/// release. The transaction fee is taken from the burned amount, not from the signer.
 #[derive(Clone, Debug)]
 pub struct BridgeProofBuilder {
     pub transaction: Transaction,

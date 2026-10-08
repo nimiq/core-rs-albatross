@@ -89,7 +89,7 @@ impl CreationTransactionData {
 pub struct OutgoingBridgeTransactionData {
     /// Proof of burn on the source chain (contains all transaction data)
     pub burn_proof: OutgoingTransaction,
-    /// Signature proof signed by the bridge owner
+    /// Signature proof signed by the burn target
     pub proof: SignatureProof,
 }
 
