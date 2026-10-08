@@ -37,3 +37,5 @@ url = "2.5.8"
 
 [dev-dependencies]
 tokio = { version = "1.52", features = ["macros"] }
+
+nimiq-bls = { workspace = true }

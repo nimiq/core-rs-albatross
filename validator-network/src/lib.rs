@@ -1,6 +1,7 @@
 pub mod binding;
 pub mod error;
 pub mod network_impl;
+pub mod record;
 pub mod single_response_requester;
 
 use std::future::Future;
