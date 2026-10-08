@@ -228,23 +228,33 @@ impl Mempool {
             return;
         }
 
-        // Unsubscribe to the network TX topic before killing the executor
-        network.unsubscribe::<TransactionTopic>().await.unwrap();
+        // Unsubscribe from the network TX topic before killing the executor
+        if let Err(error) = network.unsubscribe::<TransactionTopic>().await {
+            warn!(
+                topic = TransactionTopic::NAME,
+                %error,
+                "Failed to unsubscribe from topic"
+            );
+        }
 
         // Stop the executor
-        handle.take().expect("Expected an executor handle").abort();
+        if let Some(handle) = handle.take() {
+            handle.abort();
+        }
 
-        // Unsubscribe to the network control TX topic before killing the executor
-        network
-            .unsubscribe::<ControlTransactionTopic>()
-            .await
-            .unwrap();
+        // Unsubscribe from the network control TX topic before killing the control executor
+        if let Err(error) = network.unsubscribe::<ControlTransactionTopic>().await {
+            warn!(
+                topic = ControlTransactionTopic::NAME,
+                %error,
+                "Failed to unsubscribe from topic"
+            );
+        }
 
         // Stop the control executor
-        control_executor_handle
-            .take()
-            .expect("Expected a control executor handle")
-            .abort();
+        if let Some(handle) = control_executor_handle.take() {
+            handle.abort();
+        }
     }
 
     /// Stops the mempool executor without TX stream
@@ -805,5 +815,56 @@ impl TransactionVerificationCache for Mempool {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_blockchain::BlockchainConfig;
+    use nimiq_database::mdbx::MdbxDatabase;
+    use nimiq_network_mock::MockHub;
+    use nimiq_primitives::networks::NetworkId;
+    use nimiq_test_log::test;
+    use nimiq_utils::time::OffsetTime;
+
+    use super::*;
+
+    /// Stopping the executors must not panic when unsubscribing from the transaction topics
+    /// fails (e.g. because the network is no longer connected), and the executors must still
+    /// be stopped.
+    #[test(tokio::test)]
+    async fn stop_executors_tolerates_unsubscribe_errors() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let blockchain = Arc::new(RwLock::new(
+            Blockchain::new(
+                env,
+                BlockchainConfig::default(),
+                NetworkId::UnitAlbatross,
+                Arc::new(OffsetTime::new()),
+            )
+            .unwrap(),
+        ));
+        let mempool = Mempool::new(blockchain, MempoolConfig::default());
+
+        // Connect the mock network to a peer, so that disconnecting below changes its state.
+        let mut hub = MockHub::new();
+        let network = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        network.dial_mock(&peer);
+
+        mempool
+            .start_executors(Arc::clone(&network), None, None)
+            .await;
+        assert!(mempool.executor_handle.lock().await.is_some());
+        assert!(mempool.control_executor_handle.lock().await.is_some());
+
+        // Once disconnected, the mock network fails every unsubscribe with `NotConnected`.
+        network.disconnect();
+        assert!(network.unsubscribe::<TransactionTopic>().await.is_err());
+
+        mempool.stop_executors(Arc::clone(&network)).await;
+
+        assert!(mempool.executor_handle.lock().await.is_none());
+        assert!(mempool.control_executor_handle.lock().await.is_none());
     }
 }
