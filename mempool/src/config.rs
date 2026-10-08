@@ -12,6 +12,9 @@ pub struct MempoolConfig {
     pub control_size_limit: usize,
     /// Maximum number of transactions stored per sender
     pub tx_per_sender_limit: usize,
+    /// Maximum number of transactions verified at the same time. Verification runs on blocking
+    /// threads, so this is a CPU budget for transaction verification, not a thread count.
+    pub max_concurrent_verifications: usize,
     /// Mempool filter rules
     pub filter_rules: MempoolRules,
     /// Mempool filter limit or size
@@ -24,6 +27,7 @@ impl Default for MempoolConfig {
             size_limit: Mempool::DEFAULT_SIZE_LIMIT,
             control_size_limit: Mempool::DEFAULT_CONTROL_SIZE_LIMIT,
             tx_per_sender_limit: Mempool::DEFAULT_TX_PER_SENDER_LIMIT,
+            max_concurrent_verifications: Mempool::default_max_concurrent_verifications(),
             filter_rules: MempoolRules::default(),
             filter_limit: MempoolFilter::DEFAULT_BLACKLIST_SIZE,
         }

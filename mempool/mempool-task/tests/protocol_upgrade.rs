@@ -211,6 +211,7 @@ async fn mempool_task_transactions_evicted_after_protocol_upgrade() {
         mempool_task
             .mempool
             .add_transaction(tx.clone(), None)
+            .await
             .unwrap();
     }
     assert_eq!(mempool_task.mempool.num_transactions(), 2);

@@ -1,4 +1,4 @@
-use std::{env, str::FromStr, sync::Arc};
+use std::{env, str::FromStr, sync::Arc, time::Duration};
 
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
@@ -26,7 +26,7 @@ use nimiq_test_utils::{
 };
 use nimiq_transaction::{ExecutedTransaction, SignatureProof, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_utils::time::OffsetTime;
+use nimiq_utils::{spawn_blocking, time::OffsetTime};
 use nimiq_vrf::VrfSeed;
 use parking_lot::RwLock;
 use tokio::{sync::mpsc, task::yield_now};
@@ -88,6 +88,7 @@ async fn send_txn_to_mempool(
         .await;
 
     // Send the transactions
+    let probe = txn_stream_tx.clone();
     tokio::task::spawn(async move {
         for txn in transactions {
             txn_stream_tx
@@ -98,6 +99,11 @@ async fn send_txn_to_mempool(
     })
     .await
     .expect("Send failed");
+
+    // Stopping aborts the executor, so let it drain the channel first.
+    while probe.capacity() < probe.max_capacity() {
+        yield_now().await;
+    }
 
     mempool.stop_executor_without_unsubscribe().await;
 }
@@ -120,6 +126,7 @@ async fn send_control_txn_to_mempool(
         .await;
 
     // Send the transactions
+    let probe = txn_stream_tx.clone();
     tokio::task::spawn(async move {
         for txn in transactions {
             txn_stream_tx
@@ -130,6 +137,11 @@ async fn send_control_txn_to_mempool(
     })
     .await
     .expect("Send failed");
+
+    // Stopping aborts the executor, so let it drain the channel first.
+    while probe.capacity() < probe.max_capacity() {
+        yield_now().await;
+    }
 
     mempool.stop_control_executor_without_unsubscribe().await;
 }
@@ -1679,6 +1691,7 @@ async fn mempool_basic_prioritization_control_tx() {
     // Insert reactivate with high priority
     mempool
         .add_transaction(reactivate.clone(), Some(TxPriority::High))
+        .await
         .unwrap();
 
     // Get control txns from mempool
@@ -1923,7 +1936,7 @@ async fn applies_total_tx_size_limits() {
     let worst_tx = txns[1].hash::<Blake2bHash>();
 
     for tx in txns {
-        mempool.add_transaction(tx, None).unwrap();
+        mempool.add_transaction(tx, None).await.unwrap();
     }
 
     let (mempool_txns, _) = mempool.get_transactions_for_block(txns_len);
@@ -2328,7 +2341,7 @@ async fn tx_per_sender_limit_is_enforced() {
     // The first `tx_per_sender_limit` transactions must be accepted.
     for tx in txns.iter().take(tx_per_sender_limit) {
         assert_eq!(
-            mempool.add_transaction(tx.clone(), None),
+            mempool.add_transaction(tx.clone(), None).await,
             Ok(()),
             "Expected transaction to be accepted"
         );
@@ -2337,7 +2350,9 @@ async fn tx_per_sender_limit_is_enforced() {
 
     // The next transaction from the same sender must be rejected.
     assert_eq!(
-        mempool.add_transaction(txns[tx_per_sender_limit].clone(), None),
+        mempool
+            .add_transaction(txns[tx_per_sender_limit].clone(), None)
+            .await,
         Err(VerifyErr::SenderLimitReached),
         "Expected transaction to be rejected due to per-sender limit"
     );
@@ -2442,12 +2457,215 @@ async fn it_refuses_transactions_signed_by_small_order_keys() {
 
     // Direct submission is refused too; an honest transaction is accepted.
     assert_eq!(
-        mempool.add_transaction(small_order_tx.clone(), None),
+        mempool.add_transaction(small_order_tx.clone(), None).await,
         Err(VerifyErr::SmallOrderKey)
     );
     assert_eq!(
-        mempool.add_transaction(honest_txns[1].clone(), None),
+        mempool.add_transaction(honest_txns[1].clone(), None).await,
         Ok(())
     );
     assert_eq!(mempool.num_transactions(), 2);
+}
+
+/// `add_transaction` waits for a verification permit too, so RPC callers share the budget.
+#[test]
+fn add_transaction_waits_for_a_verification_permit() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(2)
+        .build()
+        .unwrap()
+        .block_on(add_transaction_one_at_a_time());
+}
+
+#[allow(clippy::await_holding_lock)]
+async fn add_transaction_one_at_a_time() {
+    let mut rng = test_rng(true);
+    let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
+
+    let sender_accounts =
+        generate_accounts(vec![1_000_000; 1], &mut genesis_builder, true, &mut rng);
+    let recipient_accounts = generate_accounts(vec![0; 2], &mut genesis_builder, false, &mut rng);
+    let mempool_transactions = (0..2)
+        .map(|i| TestTransaction {
+            fee: (i + 1) as u64,
+            value: 1,
+            sender: sender_accounts[0].clone(),
+            recipient: recipient_accounts[i].clone(),
+        })
+        .collect();
+    let (mut txns, _) = generate_transactions(mempool_transactions, true);
+
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+        None,
+        None,
+        false,
+    );
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+    let genesis_block = match genesis_info.block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env,
+            BlockchainConfig::default(),
+            Arc::new(OffsetTime::new()),
+            NetworkId::UnitAlbatross,
+            genesis_block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+    let mempool = Mempool::new(
+        Arc::clone(&blockchain),
+        MempoolConfig {
+            max_concurrent_verifications: 1,
+            ..Default::default()
+        },
+    );
+
+    // Park the first verification at its blockchain read; it holds the only permit.
+    let parked = blockchain.write();
+    let second_tx = txns.pop().unwrap();
+    let first_tx = txns.pop().unwrap();
+    let mut first = Box::pin(mempool.add_transaction(first_tx, None));
+    let mut second = Box::pin(mempool.add_transaction(second_tx, None));
+    assert!(futures::FutureExt::now_or_never(first.as_mut()).is_none());
+    assert!(futures::FutureExt::now_or_never(second.as_mut()).is_none());
+
+    // The second call must be waiting for the permit, not holding the other blocking thread.
+    nimiq_time::timeout(Duration::from_secs(5), spawn_blocking(|| ()))
+        .await
+        .expect("add_transaction verified without a permit");
+    drop(parked);
+
+    assert_eq!(first.await, Ok(()));
+    assert_eq!(second.await, Ok(()));
+    assert_eq!(mempool.num_transactions(), 2);
+}
+
+/// With a single verification permit, a burst of transactions is verified one at a time on a
+/// blocking thread and none of them is lost.
+#[test]
+fn verification_permit_limit_keeps_all_transactions() {
+    // Two blocking threads: a running verification may hold one, the probe needs the other.
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(2)
+        .build()
+        .unwrap()
+        .block_on(verify_one_at_a_time());
+}
+
+// The chain lock is held across awaits on purpose: it parks the verifications.
+#[allow(clippy::await_holding_lock)]
+async fn verify_one_at_a_time() {
+    let mut rng = test_rng(true);
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
+
+    let balance = 100;
+    let num_txns = 200;
+    let sender_balances = vec![balance + num_txns * num_txns; num_txns as usize];
+    let recipient_balances = vec![0; num_txns as usize];
+    let recipient_accounts =
+        generate_accounts(recipient_balances, &mut genesis_builder, false, &mut rng);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true, &mut rng);
+
+    let mut mempool_transactions = vec![];
+    for i in 0..num_txns {
+        mempool_transactions.push(TestTransaction {
+            fee: i + 1,
+            value: balance,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        });
+    }
+    let (txns, txns_len) = generate_transactions(mempool_transactions, true);
+
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+        None,
+        None,
+        false,
+    );
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+    let genesis_block = match genesis_info.block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            BlockchainConfig::default(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+
+    let mempool = Mempool::new(
+        Arc::clone(&blockchain),
+        MempoolConfig {
+            max_concurrent_verifications: 1,
+            ..Default::default()
+        },
+    );
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    let (txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
+    mempool
+        .start_executor_with_txn_stream::<MockNetwork>(
+            Box::pin(ReceiverStream::new(txn_stream_rx)),
+            mock_network,
+        )
+        .await;
+
+    // Park every verification at its first blockchain read, so that the ones running at once sit
+    // on blocking threads.
+    let parked = blockchain.write();
+    for txn in txns {
+        txn_stream_tx.send((txn, mock_id.clone())).await.unwrap();
+    }
+    while txn_stream_tx.capacity() < txn_stream_tx.max_capacity() {
+        yield_now().await;
+    }
+    for _ in 0..10 {
+        yield_now().await;
+    }
+
+    // One parked verification leaves the second blocking thread to the probe. Without the permit,
+    // the queued verifications would hold both threads and the probe would wait.
+    nimiq_time::timeout(Duration::from_secs(5), spawn_blocking(|| ()))
+        .await
+        .expect("more than one verification ran at once");
+    drop(parked);
+
+    mempool.stop_executor_without_unsubscribe().await;
+
+    // The block selector accounts one extra byte per transaction for its execution status.
+    let (txns, _) = mempool.get_transactions_for_block(txns_len + num_txns as usize);
+    assert_eq!(txns.len(), num_txns as usize);
 }

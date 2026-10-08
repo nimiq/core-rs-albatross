@@ -14,8 +14,9 @@ use nimiq_blockchain::Blockchain;
 use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
-use nimiq_utils::spawn;
+use nimiq_utils::{spawn, spawn_blocking};
 use parking_lot::RwLock;
+use tokio::sync::Semaphore;
 
 use crate::{
     filter::MempoolFilter,
@@ -42,6 +43,9 @@ pub(crate) struct MempoolExecutor<N: Network, T: Topic + Unpin + Sync> {
     // Ongoing verification tasks counter
     verification_tasks: Arc<AtomicU32>,
 
+    // Permits bounding how many verifications run at the same time
+    verification_permits: Arc<Semaphore>,
+
     // Reference to the network, to allow for message validation
     network: Arc<N>,
 
@@ -64,6 +68,7 @@ impl<N: Network, T: Topic + Unpin + Sync> MempoolExecutor<N, T> {
         network: Arc<N>,
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
         verification_tasks: Arc<AtomicU32>,
+        verification_permits: Arc<Semaphore>,
     ) -> Self {
         Self {
             blockchain: Arc::clone(&blockchain),
@@ -73,6 +78,7 @@ impl<N: Network, T: Topic + Unpin + Sync> MempoolExecutor<N, T> {
             network,
             network_id: blockchain.read().network_id,
             verification_tasks,
+            verification_permits,
             txn_stream,
             _phantom: PhantomData,
         }
@@ -107,18 +113,31 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
             let filter = Arc::clone(&self.filter);
             let network = Arc::clone(&self.network);
             let network_id = self.network_id;
+            let permits = Arc::clone(&self.verification_permits);
 
             // Spawn the transaction verification task
             spawn(async move {
-                let verify_tx_ret = verify_tx(
-                    tx,
-                    blockchain,
-                    *protocol_version.read(),
-                    network_id,
-                    &mempool_state,
-                    filter,
-                    TxPriority::Medium,
-                );
+                // Verifying can cost tens of milliseconds (BLS proof of knowledge); do it on a blocking
+                // thread behind a permit so a flood cannot starve consensus and block production.
+                let Ok(permit) = permits.acquire_owned().await else {
+                    // The semaphore is never closed; treat this like a dropped message.
+                    network.validate_message::<T>(pubsub_id, MsgAcceptance::Ignore);
+                    return;
+                };
+                let protocol_version = *protocol_version.read();
+                let verify_tx_ret = spawn_blocking(move || {
+                    verify_tx(
+                        tx,
+                        blockchain,
+                        protocol_version,
+                        network_id,
+                        &mempool_state,
+                        filter,
+                        TxPriority::Medium,
+                    )
+                })
+                .await;
+                drop(permit);
 
                 let acceptance = match verify_tx_ret {
                     Ok(_) => MsgAcceptance::Accept,

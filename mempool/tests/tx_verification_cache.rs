@@ -68,7 +68,7 @@ async fn forged_proof_is_rejected_even_when_the_honest_twin_is_cached() {
         Arc::clone(&cached_node.blockchain),
         MempoolConfig::default(),
     ));
-    mempool.add_transaction(honest.clone(), None).unwrap();
+    mempool.add_transaction(honest.clone(), None).await.unwrap();
     assert!(mempool.contains_transaction_by_hash(&honest.hash::<Blake2bHash>()));
     cached_node.blockchain.write().tx_verification_cache =
         Arc::clone(&mempool) as Arc<dyn TransactionVerificationCache>;

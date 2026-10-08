@@ -803,6 +803,7 @@ impl ClientConfigBuilder {
             size_limit,
             control_size_limit,
             tx_per_sender_limit: MempoolConfig::default().tx_per_sender_limit,
+            max_concurrent_verifications: MempoolConfig::default().max_concurrent_verifications,
             filter_rules,
             filter_limit,
         });

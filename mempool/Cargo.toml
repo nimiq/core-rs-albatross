@@ -43,6 +43,7 @@ nimiq-keys = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["coin", "networks"] }
 nimiq-serde = { workspace = true }
+nimiq-time = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = ["spawn", "time"] }
 

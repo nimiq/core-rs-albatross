@@ -1,6 +1,10 @@
 use std::{
     collections::HashSet,
-    sync::{atomic::AtomicU32, Arc},
+    sync::{
+        atomic::{AtomicU32, Ordering as AtomicOrdering},
+        Arc,
+    },
+    time::Duration,
 };
 
 use futures::{
@@ -20,8 +24,9 @@ use nimiq_transaction::{
     historic_transaction::RawTransactionHash, ControlTransactionTopic, Transaction,
     TransactionTopic,
 };
-use nimiq_utils::spawn;
+use nimiq_utils::{spawn, spawn_blocking};
 use parking_lot::RwLock;
+use tokio::sync::Semaphore;
 use tokio_metrics::TaskMonitor;
 
 #[cfg(feature = "metrics")]
@@ -57,6 +62,9 @@ pub struct Mempool {
 
     /// Total number of ongoing verification tasks
     verification_tasks: Arc<AtomicU32>,
+
+    /// Permits bounding how many transactions are verified at the same time
+    verification_permits: Arc<Semaphore>,
 }
 
 impl Mempool {
@@ -68,6 +76,11 @@ impl Mempool {
 
     /// Default maximum number of transactions per sender stored in the mempool
     pub const DEFAULT_TX_PER_SENDER_LIMIT: usize = 1000;
+
+    /// Default number of concurrent transaction verifications: half the cores, at least one.
+    pub fn default_max_concurrent_verifications() -> usize {
+        std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1))
+    }
 
     /// Creates a new mempool
     pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Self {
@@ -90,6 +103,16 @@ impl Mempool {
             executor_handle: Mutex::new(None),
             control_executor_handle: Mutex::new(None),
             verification_tasks: Arc::new(AtomicU32::new(0)),
+            verification_permits: Arc::new(Semaphore::new(
+                config.max_concurrent_verifications.max(1),
+            )),
+        }
+    }
+
+    /// Waits until no verification task is in flight.
+    async fn drain_verifications(&self) {
+        while self.verification_tasks.load(AtomicOrdering::Relaxed) > 0 {
+            nimiq_time::sleep(Duration::from_millis(1)).await;
         }
     }
 
@@ -116,6 +139,7 @@ impl Mempool {
             Arc::clone(&network),
             txn_stream,
             Arc::clone(&self.verification_tasks),
+            Arc::clone(&self.verification_permits),
         );
 
         // Create the AbortHandle
@@ -274,6 +298,10 @@ impl Mempool {
 
         // Stop the executor
         handle.take().expect("Expected an executor handle").abort();
+
+        // Verification runs on blocking threads; let the in-flight ones finish so that callers
+        // can inspect the mempool deterministically.
+        self.drain_verifications().await;
     }
 
     /// Stops the control mempool executor without TX stream
@@ -295,6 +323,8 @@ impl Mempool {
             .take()
             .expect("Expected a control executor handle")
             .abort();
+
+        self.drain_verifications().await;
     }
 
     /// Updates the mempool given a set of reverted and adopted blocks.
@@ -703,7 +733,8 @@ impl Mempool {
     }
 
     /// Adds a transaction to the local mempool without broadcasting it over the network.
-    pub fn add_transaction(
+    /// Verification takes a permit and runs on a blocking thread, like gossiped transactions.
+    pub async fn add_transaction(
         &self,
         transaction: Transaction,
         tx_priority: Option<TxPriority>,
@@ -711,19 +742,27 @@ impl Mempool {
         let blockchain = Arc::clone(&self.blockchain);
         let mempool_state = Arc::clone(&self.state);
         let filter = Arc::clone(&self.filter);
-        let (network_id, protocol_version) = {
-            let blockchain = blockchain.read();
-            (blockchain.network_id, blockchain.protocol_version())
-        };
-        verify_tx(
-            transaction,
-            blockchain,
-            protocol_version,
-            network_id,
-            &mempool_state,
-            filter,
-            tx_priority.unwrap_or(TxPriority::Medium),
-        )
+        let _permit = self
+            .verification_permits
+            .acquire()
+            .await
+            .expect("the verification semaphore is never closed");
+        spawn_blocking(move || {
+            let (network_id, protocol_version) = {
+                let blockchain = blockchain.read();
+                (blockchain.network_id, blockchain.protocol_version())
+            };
+            verify_tx(
+                transaction,
+                blockchain,
+                protocol_version,
+                network_id,
+                &mempool_state,
+                filter,
+                tx_priority.unwrap_or(TxPriority::Medium),
+            )
+        })
+        .await
     }
 
     /// Returns the protocol version currently used for transaction verification.

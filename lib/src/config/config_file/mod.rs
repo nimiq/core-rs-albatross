@@ -409,6 +409,7 @@ pub struct MempoolSettings {
     pub size_limit: Option<usize>,
     pub control_size_limit: Option<usize>,
     pub tx_per_sender_limit: Option<usize>,
+    pub max_concurrent_verifications: Option<usize>,
     pub blacklist_limit: Option<usize>,
 }
 
@@ -473,6 +474,9 @@ impl From<MempoolSettings> for MempoolConfig {
             tx_per_sender_limit: mempool
                 .tx_per_sender_limit
                 .unwrap_or(Mempool::DEFAULT_TX_PER_SENDER_LIMIT),
+            max_concurrent_verifications: mempool
+                .max_concurrent_verifications
+                .unwrap_or_else(Mempool::default_max_concurrent_verifications),
             filter_limit: mempool
                 .blacklist_limit
                 .unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE),

@@ -90,6 +90,7 @@ async fn control_spam_cannot_starve_regular_txs() {
         .unwrap();
         mempool
             .add_transaction(tx, None)
+            .await
             .expect("free signaling transaction should be admitted");
     }
 
@@ -104,7 +105,7 @@ async fn control_spam_cannot_starve_regular_txs() {
             network_id,
         )
         .unwrap();
-        mempool.add_transaction(tx, None).unwrap();
+        mempool.add_transaction(tx, None).await.unwrap();
     }
 
     let mut events = blockchain.read().notifier_as_stream();

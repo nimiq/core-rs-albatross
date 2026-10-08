@@ -643,7 +643,7 @@ mod tests {
         let tx = generate_transactions(&key_pair, height, NetworkId::UnitAlbatross, 1, 7)
             .pop()
             .unwrap();
-        mempool.add_transaction(tx.clone(), None).unwrap();
+        mempool.add_transaction(tx.clone(), None).await.unwrap();
         temp_producer.next_block_with_txs(vec![], false, vec![tx]);
 
         let mut hub = MockHub::default();

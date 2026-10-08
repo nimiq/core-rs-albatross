@@ -35,7 +35,7 @@ impl MempoolInterface for MempoolDispatcher {
         let tx = Transaction::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
 
-        match self.mempool.add_transaction(tx.clone(), None) {
+        match self.mempool.add_transaction(tx.clone(), None).await {
             Ok(_) => self
                 .consensus
                 .send_transaction(tx)
@@ -56,6 +56,7 @@ impl MempoolInterface for MempoolDispatcher {
         match self
             .mempool
             .add_transaction(tx.clone(), Some(TxPriority::High))
+            .await
         {
             Ok(_) => self
                 .consensus

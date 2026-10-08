@@ -443,7 +443,7 @@ async fn spam(
             let consensus1 = consensus.clone();
             let mp = Arc::clone(&mempool);
             spawn(async move {
-                if let Err(e) = mp.add_transaction(tx.clone(), None) {
+                if let Err(e) = mp.add_transaction(tx.clone(), None).await {
                     log::warn!("Mempool rejected transaction: {:?}", e);
                 }
                 if let Err(e) = consensus1.send_transaction(tx).await {
