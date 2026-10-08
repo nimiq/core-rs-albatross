@@ -1,23 +1,47 @@
-use std::{collections::BTreeMap, error::Error, fmt::Debug, future, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    error::Error,
+    fmt::Debug,
+    future,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
-use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt, TryFutureExt};
+use futures::{
+    future::{join_all, BoxFuture},
+    stream::BoxStream,
+    FutureExt, StreamExt, TryFutureExt,
+};
 use log::warn;
 use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
-    network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
+    network::{CloseReason, MsgAcceptance, Network, NetworkEvent, SubscribeEvents, Topic},
+    peer_info::Services,
     request::{InboundRequestError, Message, Request, RequestCommon, RequestError},
 };
 use nimiq_primitives::slots_allocation::{Validator, Validators};
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_utils::spawn;
+use nimiq_utils::{
+    spawn,
+    tagged_signing::{TaggedKeyPair, TaggedSigned},
+};
 use parking_lot::RwLock;
 use time::OffsetDateTime;
 
 use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
 use crate::{
     binding::{Binding, CacheState},
+    record::{verify_record, RecordAnnouncement, SignedValidatorRecord},
     validator_record::ValidatorRecord,
 };
+
+/// Milliseconds since the Unix epoch.
+fn now_ms() -> u64 {
+    (OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000) as u64
+}
 
 pub type DhtFallback<N> =
     dyn Fn(Address) -> BoxFuture<'static, Option<<N as Network>::PeerId>> + Send + Sync;
@@ -37,6 +61,12 @@ where
     /// The peer ID each validator is bound to, by validator address.
     validator_peer_id_cache: Arc<RwLock<BTreeMap<Address, CacheState<N::PeerId>>>>,
     dht_fallback: Arc<DhtFallback<N>>,
+    /// Our own signed record, once `set_public_key` created it.
+    own_record: Arc<RwLock<Option<SignedValidatorRecord<N::PeerId>>>>,
+    /// Whether the task receiving records from peers runs.
+    receiving: Arc<AtomicBool>,
+    /// Whether the task announcing our record to joining validator peers runs.
+    announcing_on_join: Arc<AtomicBool>,
 }
 
 impl<N> ValidatorNetworkImpl<N>
@@ -61,6 +91,9 @@ where
             validators: Arc::new(RwLock::new(None)),
             validator_peer_id_cache: Arc::new(RwLock::new(BTreeMap::new())),
             dht_fallback,
+            own_record: Arc::new(RwLock::new(None)),
+            receiving: Arc::new(AtomicBool::new(false)),
+            announcing_on_join: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -72,7 +105,127 @@ where
             validators: Arc::clone(&self.validators),
             validator_peer_id_cache: Arc::clone(&self.validator_peer_id_cache),
             dht_fallback: Arc::clone(&self.dht_fallback),
+            own_record: Arc::clone(&self.own_record),
+            receiving: Arc::clone(&self.receiving),
+            announcing_on_join: Arc::clone(&self.announcing_on_join),
         }
+    }
+
+    /// Whether `peer_id` is a connected peer advertising the validator service.
+    fn is_validator_peer(&self, peer_id: N::PeerId) -> bool {
+        self.network
+            .get_peer_info(peer_id)
+            .is_some_and(|info| info.get_services().contains(Services::VALIDATOR))
+    }
+
+    /// Our record for `validator_address` under our current peer ID, created if we have none.
+    fn own_record(
+        &self,
+        validator_address: &Address,
+        signing_key_pair: &KeyPair,
+    ) -> SignedValidatorRecord<N::PeerId> {
+        let peer_id = self.network.get_local_peer_id();
+        let mut own_record = self.own_record.write();
+        if let Some(record) = own_record.as_ref()
+            && record.record.validator_address == *validator_address
+            && record.record.peer_id == peer_id
+        {
+            return record.clone();
+        }
+        let record = ValidatorRecord::new(peer_id, validator_address.clone(), now_ms());
+        let signature = signing_key_pair.tagged_sign(&record);
+        let signed = TaggedSigned::new(record, signature);
+        *own_record = Some(signed.clone());
+        signed
+    }
+
+    /// Sends `record`, our own, to `peer_id`. Failures are expected from peers without a
+    /// receiver, e.g. old nodes, and only logged.
+    async fn announce_to(&self, peer_id: N::PeerId, record: SignedValidatorRecord<N::PeerId>) {
+        if let Err(error) = self
+            .network
+            .message(RecordAnnouncement { record }, peer_id)
+            .await
+        {
+            log::debug!(%peer_id, ?error, "Could not announce our validator record");
+        }
+    }
+
+    /// Sends `record`, our own, to every connected peer advertising the validator service.
+    async fn announce_to_validator_peers(&self, record: &SignedValidatorRecord<N::PeerId>) {
+        let announcements = self
+            .network
+            .get_peers()
+            .into_iter()
+            .filter(|peer_id| self.is_validator_peer(*peer_id))
+            .map(|peer_id| self.announce_to(peer_id, record.clone()));
+        join_all(announcements).await;
+    }
+
+    /// Starts announcing our record to validator peers as they join, once.
+    fn start_announcing_on_join(&self) {
+        if self.announcing_on_join.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let self_ = self.arc_clone();
+        let mut events = self.network.subscribe_events();
+        spawn(async move {
+            while let Some(event) = events.next().await {
+                let Ok(NetworkEvent::PeerJoined(peer_id, info)) = event else {
+                    continue;
+                };
+                if !info.get_services().contains(Services::VALIDATOR) {
+                    continue;
+                }
+                let record = self_.own_record.read().clone();
+                if let Some(record) = record {
+                    self_.announce_to(peer_id, record).await;
+                }
+            }
+        });
+    }
+
+    /// Starts receiving records announced by peers, once.
+    fn start_receiving(&self) {
+        if self.receiving.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let self_ = self.arc_clone();
+        let mut announcements = self
+            .network
+            .receive_messages::<RecordAnnouncement<N::PeerId>>();
+        spawn(async move {
+            while let Some((announcement, peer_id)) = announcements.next().await {
+                self_.accept_record(announcement.record, Some(peer_id));
+            }
+        });
+    }
+
+    /// Verifies a record against the active set and offers its binding to the validator's slot.
+    /// `sender` is the peer that announced the record as its own, `None` if it was relayed.
+    fn accept_record(
+        &self,
+        record: SignedValidatorRecord<N::PeerId>,
+        sender: Option<N::PeerId>,
+    ) -> Option<u16> {
+        let validators = self.validators.read();
+        let validator_id = match verify_record(&record, validators.as_ref()?, sender, now_ms()) {
+            Ok(validator_id) => validator_id,
+            Err(error) => {
+                log::debug!(?sender, ?error, "Rejecting validator record");
+                return None;
+            }
+        };
+
+        let binding = Binding::signed(record.record.peer_id, record.record.timestamp);
+        let mut cache = self.validator_peer_id_cache.write();
+        let slot = cache
+            .entry(record.record.validator_address.clone())
+            .or_insert(CacheState::Error(None));
+        if slot.offer(binding) {
+            log::debug!(validator_id, peer_id = %binding.peer_id, "Bound validator to the peer of its record");
+        }
+        Some(validator_id)
     }
 
     /// Returns the local validator ID, if elected, `Err(NotElected)` otherwise.
@@ -294,6 +447,14 @@ where
             });
 
         *self.validators.write() = Some(validators.clone());
+
+        self.start_receiving();
+        // Validators that entered the set could not verify our record before.
+        let record = self.own_record.read().clone();
+        if let Some(record) = record {
+            let self_ = self.arc_clone();
+            spawn(async move { self_.announce_to_validator_peers(&record).await });
+        }
     }
 
     async fn send_to<M: Message>(&self, validator_id: u16, msg: M) -> Result<(), Self::Error> {
@@ -446,14 +607,12 @@ where
         validator_address: &Address,
         signing_key_pair: &KeyPair,
     ) -> Result<(), Self::Error> {
-        let peer_id = self.network.get_local_peer_id();
-        let record = ValidatorRecord::new(
-            peer_id,
-            validator_address.clone(),
-            (OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000) as u64,
-        );
+        let record = self.own_record(validator_address, signing_key_pair);
+        self.start_announcing_on_join();
+        self.announce_to_validator_peers(&record).await;
+
         self.network
-            .dht_put(validator_address, &record, signing_key_pair)
+            .dht_put(validator_address, &record.record, signing_key_pair)
             .await?;
 
         Ok(())
