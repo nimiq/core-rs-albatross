@@ -98,15 +98,30 @@ pub enum RecordError {
 /// Checks `record` against the active `validators` and returns the validator's slot band.
 /// `sender` is the peer that announced the record as its own, `None` if it was relayed.
 pub fn verify_record<TPeerId>(
-    _record: &SignedValidatorRecord<TPeerId>,
-    _validators: &Validators,
-    _sender: Option<TPeerId>,
-    _now_ms: u64,
+    record: &SignedValidatorRecord<TPeerId>,
+    validators: &Validators,
+    sender: Option<TPeerId>,
+    now_ms: u64,
 ) -> Result<u16, RecordError>
 where
     TPeerId: PartialEq + Serialize + Deserialize,
 {
-    todo!()
+    let address = &record.record.validator_address;
+    let validator = validators
+        .get_validator_by_address(address)
+        .ok_or(RecordError::UnknownValidator)?;
+    if sender.is_some_and(|sender| sender != record.record.peer_id) {
+        return Err(RecordError::PeerIdMismatch);
+    }
+    if record.record.timestamp > now_ms.saturating_add(MAX_TIMESTAMP_DRIFT_MS) {
+        return Err(RecordError::TimestampInFuture);
+    }
+    if !record.verify(&validator.signing_key) {
+        return Err(RecordError::InvalidSignature);
+    }
+    validators
+        .get_slot_band_by_address(address)
+        .ok_or(RecordError::UnknownValidator)
 }
 
 #[cfg(test)]
