@@ -89,6 +89,8 @@ where
 
     state: Arc<RwLock<ValidatorState>>,
     inactivity_state: Option<InactivityState>,
+    /// The timestamp of the newest copy of our own record we re-signed past, see `poll`.
+    re_signed_past: Option<u64>,
 
     proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
@@ -219,6 +221,7 @@ where
                 consensus: blockchain_state,
             })),
             inactivity_state: None,
+            re_signed_past: None,
 
             proposal_receiver,
 
@@ -394,6 +397,14 @@ where
 
         // Set the elected validators of the current epoch in the network as well.
         self.network.set_validators(validators);
+
+        // Make us reachable, whether or not the DHT is ready.
+        let elected = state.slot_band.is_some();
+        drop(state);
+        drop(blockchain);
+        if elected {
+            self.publish_record();
+        }
     }
 
     fn init_block_producer(&mut self, head_hash: Option<&Blake2bHash>) {
@@ -661,8 +672,8 @@ where
         {}
     }
 
-    /// Publish our own validator record to the DHT.
-    fn publish_dht(&self) {
+    /// Announces our validator record to the other validators and publishes it to the DHT.
+    fn publish_record(&self) {
         let state = self.state.read();
         let key_pair = state.signing_key.clone();
         let validator_address = state.validator_address.clone();
@@ -670,7 +681,10 @@ where
 
         spawn(async move {
             if let Err(err) = network.set_public_key(&validator_address, &key_pair).await {
-                error!("could not set up DHT record: {:?}", err);
+                warn!(
+                    "could not publish our validator record to the DHT: {:?}",
+                    err
+                );
             }
         });
     }
@@ -855,11 +869,19 @@ where
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
             match result {
                 Ok(NetworkEvent::DhtReady) => {
-                    self.publish_dht();
+                    self.publish_record();
                 }
                 Ok(_) => {}
                 Err(e) => error!("{}", e),
             }
+        }
+
+        // A copy of our record signed later than ours was seen; publishing re-signs past it.
+        if let Some(seen) = self.network.own_record_superseded_at()
+            && self.re_signed_past.is_none_or(|past| past < seen)
+        {
+            self.re_signed_past = Some(seen);
+            self.publish_record();
         }
 
         Poll::Pending
