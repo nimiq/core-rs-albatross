@@ -24,8 +24,12 @@ impl<TPeerId: Copy + PartialEq> Binding<TPeerId> {
     }
 
     /// Signed beats unsigned, a later timestamp beats an earlier one.
-    pub fn is_newer_than(&self, _other: &Self) -> bool {
-        todo!()
+    pub fn is_newer_than(&self, other: &Self) -> bool {
+        match (self.signed_at, other.signed_at) {
+            (Some(ours), Some(theirs)) => ours > theirs,
+            (Some(_), None) => true,
+            (None, _) => false,
+        }
     }
 }
 
@@ -45,33 +49,72 @@ pub enum CacheState<TPeerId> {
 impl<TPeerId: Copy + PartialEq> CacheState<TPeerId> {
     /// The binding if the slot is resolved.
     pub fn current(&self) -> Option<Binding<TPeerId>> {
-        todo!()
+        match *self {
+            CacheState::Resolved(binding) => Some(binding),
+            _ => None,
+        }
     }
 
     /// The newest binding known, possibly outdated.
     pub fn latest(&self) -> Option<Binding<TPeerId>> {
-        todo!()
+        match *self {
+            CacheState::Resolved(binding) | CacheState::Empty(binding) => Some(binding),
+            CacheState::Error(previous) | CacheState::InProgress(previous) => previous,
+        }
     }
 
     /// Takes `binding` if newer than a resolved one, or at least as new as a failed one.
     /// Returns whether the slot is now bound.
-    pub fn offer(&mut self, _binding: Binding<TPeerId>) -> bool {
-        todo!()
+    pub fn offer(&mut self, binding: Binding<TPeerId>) -> bool {
+        let taken = match *self {
+            CacheState::Resolved(current) => binding.is_newer_than(&current),
+            CacheState::Empty(previous) => !previous.is_newer_than(&binding),
+            CacheState::Error(previous) | CacheState::InProgress(previous) => {
+                previous.is_none_or(|previous| !previous.is_newer_than(&binding))
+            }
+        };
+        if taken {
+            *self = CacheState::Resolved(binding);
+        }
+        taken
     }
 
     /// Starts a resolution unless one is running or the slot is resolved; returns whether it did.
     pub fn start_resolving(&mut self) -> bool {
-        todo!()
+        let previous = match *self {
+            CacheState::Error(previous) => previous,
+            CacheState::Empty(previous) => Some(previous),
+            CacheState::Resolved(_) | CacheState::InProgress(_) => return false,
+        };
+        *self = CacheState::InProgress(previous);
+        true
     }
 
     /// Applies a resolution outcome like an offer; a rejected outcome fails a running resolution.
-    pub fn resolved(&mut self, _outcome: Option<Binding<TPeerId>>) {
-        todo!()
+    pub fn resolved(&mut self, outcome: Option<Binding<TPeerId>>) {
+        if let CacheState::InProgress(previous) = *self {
+            *self = match outcome {
+                Some(binding)
+                    if previous.is_none_or(|previous| !previous.is_newer_than(&binding)) =>
+                {
+                    CacheState::Resolved(binding)
+                }
+                _ => CacheState::Error(previous),
+            };
+        } else if let Some(binding) = outcome {
+            self.offer(binding);
+        }
     }
 
     /// Drops the binding to `peer_id` after a failed request; returns whether it did.
-    pub fn mark_failed(&mut self, _peer_id: TPeerId) -> bool {
-        todo!()
+    pub fn mark_failed(&mut self, peer_id: TPeerId) -> bool {
+        match *self {
+            CacheState::Resolved(binding) if binding.peer_id == peer_id => {
+                *self = CacheState::Empty(binding);
+                true
+            }
+            _ => false,
+        }
     }
 }
 
