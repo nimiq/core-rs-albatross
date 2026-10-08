@@ -22,7 +22,7 @@ use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
     test_rng,
-    test_transaction::{generate_accounts, generate_transactions, TestTransaction},
+    test_transaction::{generate_accounts, generate_transactions, TestAccount, TestTransaction},
 };
 use nimiq_transaction::{ExecutedTransaction, SignatureProof, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
@@ -2782,4 +2782,229 @@ async fn local_submission_bypasses_gossip_queue() {
     assert_eq!(local.await, Ok(()));
     mempool.stop_executor_without_unsubscribe().await;
     assert_eq!(mempool.num_transactions(), 3);
+}
+
+/// A syntactically valid signature proof that does not belong to the transaction it is put on.
+const WRONG_PROOF: &str = "0222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0003fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30b";
+
+/// Genesis with one validator, one recipient and one sender, funded only if `sender_balance` is nonzero.
+fn blockchain_with_sender(
+    sender_balance: u64,
+) -> (Arc<RwLock<Blockchain>>, TestAccount, TestAccount) {
+    let mut rng = test_rng(true);
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
+    let recipient = generate_accounts(vec![0], &mut genesis_builder, false, &mut rng).remove(0);
+    let sender = generate_accounts(
+        vec![sender_balance],
+        &mut genesis_builder,
+        sender_balance > 0,
+        &mut rng,
+    )
+    .remove(0);
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+        None,
+        None,
+        false,
+    );
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+    let genesis_block = match genesis_info.block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env,
+            BlockchainConfig::default(),
+            Arc::new(OffsetTime::new()),
+            NetworkId::UnitAlbatross,
+            genesis_block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+    (blockchain, sender, recipient)
+}
+
+/// An unfunded sender is refused on the balance check, before the signature is looked at.
+#[test(tokio::test)]
+async fn unfunded_sender_is_refused_before_signature_verification() {
+    let (blockchain, sender, recipient) = blockchain_with_sender(0);
+    let (mut txns, _) = generate_transactions(
+        vec![TestTransaction {
+            fee: 0,
+            value: 10,
+            recipient,
+            sender,
+        }],
+        true,
+    );
+    txns[0].proof = hex::decode(WRONG_PROOF).unwrap();
+
+    let mempool = Mempool::new(blockchain, MempoolConfig::default());
+    assert!(matches!(
+        mempool.add_transaction(txns[0].clone(), None).await,
+        Err(VerifyErr::InvalidAccount(_))
+    ));
+}
+
+/// The sender's pending reservation counts in the pre-check: a second transaction that no longer
+/// fits is refused without verifying its signature.
+#[test(tokio::test)]
+async fn pending_reservation_is_checked_before_signature_verification() {
+    let (blockchain, sender, recipient) = blockchain_with_sender(15);
+    let (mut txns, _) = generate_transactions(
+        vec![
+            TestTransaction {
+                fee: 0,
+                value: 10,
+                recipient: recipient.clone(),
+                sender: sender.clone(),
+            },
+            TestTransaction {
+                fee: 0,
+                value: 9,
+                recipient,
+                sender,
+            },
+        ],
+        true,
+    );
+
+    let mempool = Mempool::new(blockchain, MempoolConfig::default());
+    assert_eq!(mempool.add_transaction(txns[0].clone(), None).await, Ok(()));
+
+    txns[1].proof = hex::decode(WRONG_PROOF).unwrap();
+    assert!(matches!(
+        mempool.add_transaction(txns[1].clone(), None).await,
+        Err(VerifyErr::InvalidAccount(_))
+    ));
+}
+
+/// A funded sender with a small-order key is refused before its signature is looked at.
+#[test(tokio::test)]
+async fn small_order_key_is_refused_before_signature_verification() {
+    let mut rng = test_rng(true);
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
+
+    // The identity point (`y = 1`), funded so that the balance check passes
+    let mut small_order_key = [0u8; SchnorrPublicKey::SIZE];
+    small_order_key[0] = 1;
+    let small_order_key = SchnorrPublicKey::from(small_order_key);
+    let small_order_address = Address::from(&small_order_key);
+    genesis_builder.with_basic_account(
+        small_order_address.clone(),
+        Coin::from_u64_unchecked(1_000_000),
+    );
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+        None,
+        None,
+        false,
+    );
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+    let genesis_block = match genesis_info.block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env,
+            BlockchainConfig::default(),
+            Arc::new(OffsetTime::new()),
+            NetworkId::UnitAlbatross,
+            genesis_block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+
+    // A well-formed signature by another key: verifying it would fail with `InvalidProof`
+    let mut tx = Transaction::new_basic(
+        small_order_address,
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        Coin::from_u64_unchecked(1),
+        Coin::from_u64_unchecked(1),
+        1 + Policy::genesis_block_number(),
+        NetworkId::UnitAlbatross,
+    );
+    let wrong_signature = SchnorrKeyPair::generate(&mut rng).sign(&tx.serialize_content());
+    tx.proof = SignatureProof::from_ed25519(small_order_key, wrong_signature).serialize_to_vec();
+
+    let mempool = Mempool::new(blockchain, MempoolConfig::default());
+    assert_eq!(
+        mempool.add_transaction(tx, None).await,
+        Err(VerifyErr::SmallOrderKey)
+    );
+}
+
+/// Cold key of the validator in the unit-test genesis (`unit-albatross.toml`).
+const VALIDATOR_COLD_SECRET_KEY: &str =
+    "6927eb8de74e8ea06a8afae5a66db176a7031f742b656651ac53bddb8a4ad3f3";
+
+/// An `UpdateValidator` for a validator that does not exist is refused before its proof of
+/// knowledge or signature is verified; one for an existing validator is admitted.
+#[test(tokio::test)]
+async fn update_validator_for_unknown_validator_is_refused_before_verification() {
+    let mut rng = test_rng(true);
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            Arc::new(OffsetTime::new()),
+        )
+        .unwrap(),
+    ));
+    let mempool = Mempool::new(blockchain, MempoolConfig::default());
+    let validity_start_height = 1 + Policy::genesis_block_number();
+
+    // Unknown validator from an unfunded sender, as in the mempool proof-of-knowledge finding.
+    let mut tx = TransactionBuilder::new_update_validator(
+        &SchnorrKeyPair::generate(&mut rng),
+        &SchnorrKeyPair::generate(&mut rng),
+        None,
+        Some(&BlsKeyPair::generate(&mut rng)),
+        None,
+        None,
+        Coin::ZERO,
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    );
+    tx.proof = hex::decode(WRONG_PROOF).unwrap();
+    assert_eq!(
+        mempool.add_transaction(tx, None).await,
+        Err(VerifyErr::UnknownValidator)
+    );
+
+    // The genesis validator can still rotate its voting key.
+    let tx = TransactionBuilder::new_update_validator(
+        &ed25519_key_pair(ACCOUNT_SECRET_KEY),
+        &ed25519_key_pair(VALIDATOR_COLD_SECRET_KEY),
+        None,
+        Some(&BlsKeyPair::generate(&mut rng)),
+        None,
+        None,
+        Coin::ZERO,
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    );
+    assert_eq!(mempool.add_transaction(tx, None).await, Ok(()));
 }

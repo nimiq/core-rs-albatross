@@ -69,6 +69,37 @@ impl MempoolState {
         }
     }
 
+    /// The checks of `put` without the insertion, so that they can run before the costly
+    /// signature verification. `put` repeats them under the write lock.
+    pub(crate) fn check_put(
+        &self,
+        blockchain: &Blockchain,
+        tx: &Transaction,
+    ) -> Result<(), VerifyErr> {
+        if tx.uses_small_order_key() {
+            return Err(VerifyErr::SmallOrderKey);
+        }
+
+        if let Some(sender_state) = self.state_by_sender.get(&tx.sender)
+            && sender_state.txns.len() >= self.tx_per_sender_limit
+        {
+            return Err(VerifyErr::SenderLimitReached);
+        }
+
+        let sender_account = blockchain
+            .get_account_if_complete(&tx.sender)
+            .ok_or(VerifyErr::NoConsensus)?;
+
+        // Dry run against the sender's pending reservation, not a fresh one: a funded sender
+        // gets one admitted transaction per balance held, and every further one fails here.
+        let mut reserved_balance = match self.state_by_sender.get(&tx.sender) {
+            Some(sender_state) => sender_state.reserved_balance.clone(),
+            None => ReservedBalance::new(tx.sender.clone()),
+        };
+        blockchain.reserve_balance(&sender_account, tx, &mut reserved_balance)?;
+        Ok(())
+    }
+
     pub(crate) fn put(
         &mut self,
         blockchain: &Blockchain,
