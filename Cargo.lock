@@ -5086,6 +5086,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-serde",
  "nimiq-test-log",
+ "nimiq-time",
  "nimiq-utils",
  "parking_lot",
  "serde",

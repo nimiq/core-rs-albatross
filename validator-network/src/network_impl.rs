@@ -4,14 +4,14 @@ use std::{
     fmt::Debug,
     future,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     time::Duration,
 };
 
 use futures::{
-    future::{join_all, BoxFuture},
+    future::{join_all, BoxFuture, Shared},
     stream::BoxStream,
     FutureExt, StreamExt, TryFutureExt,
 };
@@ -24,17 +24,18 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::slots_allocation::{Validator, Validators};
 use nimiq_serde::{Deserialize, Serialize};
+use nimiq_time::timeout;
 use nimiq_utils::{
     spawn,
     tagged_signing::{TaggedKeyPair, TaggedSigned},
 };
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use time::OffsetDateTime;
 
 use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
 use crate::{
     binding::{Binding, CacheState},
-    record::{verify_record, RecordAnnouncement, SignedValidatorRecord},
+    record::{verify_record, RecordAnnouncement, RecordsRequest, SignedValidatorRecord},
     validator_record::ValidatorRecord,
 };
 
@@ -63,7 +64,15 @@ where
     dht_fallback: Arc<DhtFallback<N>>,
     /// Our own signed record, once `set_public_key` created it.
     own_record: Arc<RwLock<Option<SignedValidatorRecord<N::PeerId>>>>,
-    /// Whether the task receiving records from peers runs.
+    /// The timestamp of the newest verified copy of our own record seen at or past ours, zero if
+    /// none. See [`ValidatorNetwork::own_record_superseded_at`].
+    superseded_at: Arc<AtomicU64>,
+    /// The newest verified record of each active validator that we received signed, to answer
+    /// pulls with and to fall back on.
+    known_records: Arc<RwLock<BTreeMap<Address, SignedValidatorRecord<N::PeerId>>>>,
+    /// The pull round in flight, shared by every resolution that starts meanwhile.
+    pull: Arc<Mutex<Option<Shared<BoxFuture<'static, ()>>>>>,
+    /// Whether the tasks receiving records from peers and answering pulls run.
     receiving: Arc<AtomicBool>,
     /// Whether the task announcing our record to joining validator peers runs.
     announcing_on_join: Arc<AtomicBool>,
@@ -92,6 +101,9 @@ where
             validator_peer_id_cache: Arc::new(RwLock::new(BTreeMap::new())),
             dht_fallback,
             own_record: Arc::new(RwLock::new(None)),
+            superseded_at: Arc::new(AtomicU64::new(0)),
+            known_records: Arc::new(RwLock::new(BTreeMap::new())),
+            pull: Arc::new(Mutex::new(None)),
             receiving: Arc::new(AtomicBool::new(false)),
             announcing_on_join: Arc::new(AtomicBool::new(false)),
         }
@@ -106,6 +118,9 @@ where
             validator_peer_id_cache: Arc::clone(&self.validator_peer_id_cache),
             dht_fallback: Arc::clone(&self.dht_fallback),
             own_record: Arc::clone(&self.own_record),
+            superseded_at: Arc::clone(&self.superseded_at),
+            known_records: Arc::clone(&self.known_records),
+            pull: Arc::clone(&self.pull),
             receiving: Arc::clone(&self.receiving),
             announcing_on_join: Arc::clone(&self.announcing_on_join),
         }
@@ -118,24 +133,35 @@ where
             .is_some_and(|info| info.get_services().contains(Services::VALIDATOR))
     }
 
-    /// Our record for `validator_address` under our current peer ID, created if we have none.
+    /// Our record for `validator_address` under our current peer ID. It is created if we have
+    /// none, or re-signed past a newer copy of it that was seen.
     fn own_record(
         &self,
         validator_address: &Address,
         signing_key_pair: &KeyPair,
     ) -> SignedValidatorRecord<N::PeerId> {
         let peer_id = self.network.get_local_peer_id();
+        let superseded_at = self.superseded_at.load(Ordering::SeqCst);
         let mut own_record = self.own_record.write();
         if let Some(record) = own_record.as_ref()
             && record.record.validator_address == *validator_address
             && record.record.peer_id == peer_id
+            && record.record.timestamp > superseded_at
         {
             return record.clone();
         }
-        let record = ValidatorRecord::new(peer_id, validator_address.clone(), now_ms());
+
+        let timestamp = now_ms().max(superseded_at + 1);
+        let record = ValidatorRecord::new(peer_id, validator_address.clone(), timestamp);
         let signature = signing_key_pair.tagged_sign(&record);
         let signed = TaggedSigned::new(record, signature);
         *own_record = Some(signed.clone());
+        // A copy reported meanwhile may be newer still; that one stays reported.
+        let _ = self
+            .superseded_at
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |seen| {
+                (seen < timestamp).then_some(0)
+            });
         signed
     }
 
@@ -185,7 +211,7 @@ where
         });
     }
 
-    /// Starts receiving records announced by peers, once.
+    /// Starts receiving records announced by peers and answering pulls, once.
     fn start_receiving(&self) {
         if self.receiving.swap(true, Ordering::SeqCst) {
             return;
@@ -199,6 +225,30 @@ where
                 self_.accept_record(announcement.record, Some(peer_id));
             }
         });
+
+        let self_ = self.arc_clone();
+        let mut pulls = self.network.receive_requests::<RecordsRequest<N::PeerId>>();
+        spawn(async move {
+            while let Some((_, request_id, peer_id)) = pulls.next().await {
+                let records = self_.records_to_share();
+                if let Err(error) = self_
+                    .network
+                    .respond::<RecordsRequest<N::PeerId>>(request_id, records)
+                    .await
+                {
+                    log::debug!(%peer_id, ?error, "Could not answer a pull of validator records");
+                }
+            }
+        });
+    }
+
+    /// The records we hold, ours last, so that a receiver that trims to its active set drops ours
+    /// first if we are not in it.
+    fn records_to_share(&self) -> Vec<SignedValidatorRecord<N::PeerId>> {
+        let mut records: Vec<_> = self.known_records.read().values().cloned().collect();
+        let own_record = self.own_record.read().clone();
+        records.extend(own_record);
+        records
     }
 
     /// Verifies a record against the active set and offers its binding to the validator's slot.
@@ -217,6 +267,24 @@ where
             }
         };
 
+        // A copy of our own record never binds us elsewhere. One at least as new as ours means a
+        // previous incarnation of ours signed later than we do now. It is reported, and the
+        // validator re-signs past it through `set_public_key` (see `own_record`).
+        let own_record = self.own_record.read().clone();
+        if let Some(own_record) = own_record
+            && own_record.record.validator_address == record.record.validator_address
+        {
+            if record.record.timestamp >= own_record.record.timestamp {
+                log::info!(
+                    timestamp = record.record.timestamp,
+                    "A copy of our validator record signed later than ours was seen"
+                );
+                self.superseded_at
+                    .fetch_max(record.record.timestamp, Ordering::SeqCst);
+            }
+            return Some(validator_id);
+        }
+
         let binding = Binding::signed(record.record.peer_id, record.record.timestamp);
         let mut cache = self.validator_peer_id_cache.write();
         let slot = cache
@@ -224,6 +292,15 @@ where
             .or_insert(CacheState::Error(None));
         if slot.offer(binding) {
             log::debug!(validator_id, peer_id = %binding.peer_id, "Bound validator to the peer of its record");
+        }
+        drop(cache);
+
+        let mut known_records = self.known_records.write();
+        let newer = known_records
+            .get(&record.record.validator_address)
+            .is_none_or(|known| known.record.timestamp < record.record.timestamp);
+        if newer {
+            known_records.insert(record.record.validator_address.clone(), record);
         }
         Some(validator_id)
     }
@@ -240,19 +317,73 @@ where
         validators.and_then(|validators| validators.get_validator_by_slot_band(validator_id))
     }
 
-    /// Looks up the binding for a validator address in the DHT, or the unsigned fallback.
-    async fn resolve_peer_id(
-        network: &N,
-        validator_address: &Address,
-        fallback: Arc<DhtFallback<N>>,
-    ) -> Result<Option<Binding<N::PeerId>>, NetworkError<N::Error>> {
-        let result = Self::resolve_peer_id_dht(network, validator_address).await;
-        if !matches!(result, Ok(Some(_)))
-            && let Some(peer_id) = fallback(validator_address.clone()).await
-        {
-            return Ok(Some(Binding::unsigned(peer_id)));
+    /// Whether the slot of `validator_address` is bound.
+    fn is_bound(&self, validator_address: &Address) -> bool {
+        self.validator_peer_id_cache
+            .read()
+            .get(validator_address)
+            .is_some_and(|slot| slot.current().is_some())
+    }
+
+    /// The binding of the record we hold for `validator_address`, if any.
+    fn held_binding(&self, validator_address: &Address) -> Option<Binding<N::PeerId>> {
+        self.known_records
+            .read()
+            .get(validator_address)
+            .map(|record| Binding::signed(record.record.peer_id, record.record.timestamp))
+    }
+
+    /// Joins the pull round in flight or starts one.
+    async fn pull(&self) {
+        let round = {
+            let mut pull = self.pull.lock();
+            match pull.as_ref() {
+                Some(round) => round.clone(),
+                None => {
+                    let self_ = self.arc_clone();
+                    let round = async move { self_.pull_round().await }.boxed().shared();
+                    *pull = Some(round.clone());
+                    round
+                }
+            }
+        };
+        round.await;
+    }
+
+    /// Asks a few connected validator peers for the records they hold and applies every record
+    /// that verifies to the slot of its validator.
+    async fn pull_round(&self) {
+        let peers: Vec<_> = self
+            .network
+            .get_peers()
+            .into_iter()
+            .filter(|peer_id| self.is_validator_peer(*peer_id))
+            .take(Self::MAX_PULL_PEERS)
+            .collect();
+        let requests = peers.into_iter().map(|peer_id| async move {
+            let request = self
+                .network
+                .request(RecordsRequest::<N::PeerId>::default(), peer_id);
+            match timeout(Self::PULL_TIMEOUT, request).await {
+                Ok(Ok(records)) => self.accept_pulled(records),
+                Ok(Err(error)) => log::debug!(%peer_id, ?error, "Pulling validator records failed"),
+                Err(_) => log::debug!(%peer_id, "Pulling validator records timed out"),
+            }
+        });
+        join_all(requests).await;
+        *self.pull.lock() = None;
+    }
+
+    /// Applies pulled records, at most one per active validator.
+    fn accept_pulled(&self, records: Vec<SignedValidatorRecord<N::PeerId>>) {
+        let limit = self
+            .validators
+            .read()
+            .as_ref()
+            .map_or(0, |validators| validators.num_validators());
+        for record in records.into_iter().take(limit) {
+            self.accept_record(record, None);
         }
-        result
     }
 
     async fn resolve_peer_id_dht(
@@ -267,38 +398,36 @@ where
 
     /// Resolves the binding for a validator address and applies the outcome to its slot.
     ///
+    /// Peers are asked first, since they answer within milliseconds and their records bind the
+    /// slot right away. The DHT is asked regardless, as its record may be newer. The unsigned
+    /// fallback is asked only if neither bound the slot, and the record we hold is the last
+    /// resort, so that a peer that failed is tried again only if nothing points elsewhere.
+    ///
     /// The given `validator_id` is used for logging purposes only.
     async fn update_peer_id_cache(&self, validator_id: u16, validator_address: &Address) {
-        let outcome = match Self::resolve_peer_id(
-            &self.network,
-            validator_address,
-            Arc::clone(&self.dht_fallback),
-        )
-        .await
-        {
-            Ok(Some(binding)) => {
-                log::trace!(
-                    peer_id = %binding.peer_id,
-                    validator_id,
-                    %validator_address,
-                    "Resolved validator peer ID"
-                );
-                Some(binding)
-            }
-            Ok(None) => {
-                log::debug!(validator_id, %validator_address, "Unable to resolve validator peer ID: Entry not found in DHT");
-                None
-            }
+        self.pull().await;
+
+        let mut outcome = match Self::resolve_peer_id_dht(&self.network, validator_address).await {
+            Ok(binding) => binding,
             Err(error) => {
-                log::debug!(
-                    validator_id,
-                    ?error,
-                    %validator_address,
-                    "Unable to resolve validator peer ID: Network error"
-                );
+                log::debug!(validator_id, ?error, %validator_address, "Unable to resolve validator peer ID: Network error");
                 None
             }
         };
+        if outcome.is_none() && !self.is_bound(validator_address) {
+            outcome = (self.dht_fallback)(validator_address.clone())
+                .await
+                .map(Binding::unsigned)
+                .or_else(|| self.held_binding(validator_address));
+        }
+        match outcome {
+            Some(binding) => {
+                log::trace!(peer_id = %binding.peer_id, validator_id, %validator_address, "Resolved validator peer ID")
+            }
+            None => {
+                log::debug!(validator_id, %validator_address, "Unable to resolve validator peer ID")
+            }
+        }
 
         // The slot may be gone if the validator left the active set meanwhile.
         if let Some(slot) = self
@@ -446,6 +575,9 @@ where
                 Some(key) == cur_key
             });
 
+        self.known_records
+            .write()
+            .retain(|address, _| validators.get_validator_by_address(address).is_some());
         *self.validators.write() = Some(validators.clone());
 
         self.start_receiving();
@@ -623,7 +755,8 @@ where
     }
 
     fn own_record_superseded_at(&self) -> Option<u64> {
-        todo!()
+        let seen = self.superseded_at.load(Ordering::SeqCst);
+        (seen != 0).then_some(seen)
     }
 
     fn validate_message<TTopic>(&self, id: PubsubId<Self>, acceptance: MsgAcceptance)
