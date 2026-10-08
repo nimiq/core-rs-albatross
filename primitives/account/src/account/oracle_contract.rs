@@ -39,10 +39,12 @@ pub struct OracleContract {
 
     /// Ring buffer storage for hashes.
     /// Before the first write, this is empty. After that, it has exactly `hash_count` elements.
-    /// Access entry at global index `i` via `hashes[i % hash_count]`.
+    /// Writing `value` at global index `i` replaces slot `i % hash_count` with
+    /// `H(hashes[i % hash_count] ++ value)`, a Merkle node over the slot's previous value (zero
+    /// on first use) and the new one, so each slot commits to every value ever written to it.
     pub hashes: Vec<AnyHash>,
 
-    /// The latest valid index in the hash chain.
+    /// The latest written global index. It never wraps.
     /// `None` means no hashes have been written yet.
     /// `Some(n)` means the latest valid index is `n`.
     pub latest_index: Option<u64>,
@@ -198,19 +200,13 @@ impl AccountTransactionInteraction for OracleContract {
                     // Validate that all new hashes match the contract's hash type
                     self.validate_hash_types(&hashes)?;
 
-                    // A *non-first* update may not write more hashes than the ring
-                    // buffer holds. With more than `hash_count` hashes the update
-                    // wraps over its own positions, so `removed_hashes` captures a
-                    // value written earlier *in the same update* instead of the true
-                    // pre-transaction value; the revert then restores that wrong
-                    // value and diverges the accounts-tree root on a reorg (a
-                    // consensus fork). The eviction receipt and the revert index math
-                    // both assume at most one write per position, which this
-                    // guarantees. The first-ever update is exempt: its revert clears
-                    // the buffer back to the fresh (empty) state via the
-                    // `num_hashes > current_latest` branch and never consults
-                    // `removed_hashes`, so the double-write cannot corrupt it.
-                    if self.latest_index.is_some() && hashes.len() > self.hash_count as usize {
+                    // No update may write more hashes than the ring buffer holds, the first
+                    // one included. Each slot is then written at most once per update, so
+                    // `removed_hashes` captures every overwritten slot's pre-transaction
+                    // value, and the revert restores exactly that. With more hashes the
+                    // update would fold into a slot it already wrote in the same update,
+                    // and the receipt would no longer describe the state before it.
+                    if hashes.len() > self.hash_count as usize {
                         return Err(AccountError::InvalidTransaction(
                             TransactionError::InvalidData,
                         ));
@@ -221,25 +217,12 @@ impl AccountTransactionInteraction for OracleContract {
                         return Ok(None);
                     }
 
-                    // Zero hash for chaining (same type as first new hash or existing)
-                    let zero_hash = hashes
-                        .first()
-                        .map(|h| h.zero_of_same_type())
-                        .or_else(|| self.hashes.first().map(|h| h.zero_of_same_type()))
-                        .unwrap_or_default();
-
-                    // First write: establish fixed-size ring buffer.
+                    // First write: establish fixed-size ring buffer of zero hashes, of the
+                    // same type as the written hashes.
                     if self.latest_index.is_none() {
                         self.hashes
-                            .resize(self.hash_count as usize, zero_hash.clone());
+                            .resize(self.hash_count as usize, hashes[0].zero_of_same_type());
                     }
-
-                    let mut current_hash = if let Some(prev_index) = self.latest_index {
-                        let prev_pos = (prev_index % self.hash_count as u64) as usize;
-                        self.hashes[prev_pos].clone()
-                    } else {
-                        zero_hash
-                    };
 
                     let start_index = self.latest_index.map(|i| i + 1).unwrap_or(0);
                     let mut removed_hashes = Vec::new();
@@ -254,14 +237,12 @@ impl AccountTransactionInteraction for OracleContract {
                             removed_hashes.push(self.hashes[pos].clone());
                         }
 
-                        // data_i = H(data_{i-1} || state_i)
-                        current_hash = current_hash.digest(new_hash);
-                        self.hashes[pos] = current_hash.clone();
+                        // hashes[i mod n] = H(hashes[i mod n] || state_i): a Merkle node over
+                        // the slot's previous value (left) and the written value (right).
+                        self.hashes[pos] = self.hashes[pos].digest(new_hash);
                     }
 
-                    if !hashes.is_empty() {
-                        self.latest_index = Some(start_index + hashes.len() as u64 - 1);
-                    }
+                    self.latest_index = Some(start_index + hashes.len() as u64 - 1);
 
                     tx_logger.push_log(Log::OracleUpdate {
                         contract_address: transaction.recipient.clone(),
@@ -332,6 +313,7 @@ impl AccountTransactionInteraction for OracleContract {
                             // Empty update is a no-op.
                             return Ok(());
                         }
+                        // Only the first update started at index 0: back to the fresh state.
                         if num_hashes > current_latest {
                             self.latest_index = None;
                             self.hashes.clear();
@@ -368,7 +350,7 @@ impl AccountTransactionInteraction for OracleContract {
                             }
                         }
 
-                        // Clear positions written by the reverted update without eviction (they overwrote the resize default)
+                        // Slots first used by the reverted update held the zero hash before it
                         let num_without_eviction = (self.hash_count as u64)
                             .saturating_sub(start_index)
                             .min(num_hashes);
@@ -586,10 +568,12 @@ impl From<PrunedOracleContract> for OracleContract {
 convert_receipt!(PrunedOracleContract);
 
 /// Receipt for update transactions. This is necessary to be able to revert
-/// these transactions when hashes were removed due to ring buffer behavior.
+/// these transactions once they overwrite slots that already held a value: a slot's
+/// new value is a hash over its old one, which cannot be recovered from it.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 struct UpdateReceipt {
-    /// The hashes that were removed from the beginning when the ring buffer limit was reached
+    /// The previous values of the slots written at indices `>= hash_count`, in write order.
+    /// Slots written at a lower index held the zero hash before.
     pub removed_hashes: Vec<AnyHash>,
 
     /// The ring-buffer position of `removed_hashes[0]`.
@@ -610,8 +594,8 @@ convert_receipt!(ChangeOwnerReceipt);
 
 // Helper methods for accessing ring buffer data
 impl OracleContract {
-    /// Returns the earliest index still retained in the ring buffer.
-    /// All indices < earliest_index have been overwritten.
+    /// Returns the earliest index whose slot still holds the entry written at it.
+    /// The slots of all indices < earliest_index have been written again since.
     pub fn earliest_index(&self) -> Option<u64> {
         if let Some(latest) = self.latest_index {
             if latest < self.hash_count as u64 {
@@ -624,26 +608,23 @@ impl OracleContract {
         }
     }
 
-    /// Gets the hash at a given global index.
-    /// Returns None if the index is outside the retained window [earliest_index, latest_index] (inclusive).
+    /// Gets the current value of the slot that a given global index was written to,
+    /// `index % hash_count`. This is the value a burn proof for `index` must end in.
+    ///
+    /// Inside the window [earliest_index, latest_index] (inclusive) that is the entry written at
+    /// `index`. An older index still names its slot, which has been written again since; a proof
+    /// reaches the newer value with one more node per rotation.
+    /// Returns None if `index` has not been written yet.
     pub fn get_hash_at_index(&self, index: u64) -> Option<&AnyHash> {
-        if let Some(latest) = self.latest_index {
-            let first = self.earliest_index().unwrap_or(0);
-            if index < first || index > latest {
-                return None;
-            }
-            let pos = (index % self.hash_count as u64) as usize;
-            if pos < self.hashes.len() {
-                Some(&self.hashes[pos])
-            } else {
-                None
-            }
-        } else {
-            None
+        if index > self.latest_index? {
+            return None;
         }
+        self.hashes
+            .get(index.checked_rem(self.hash_count as u64)? as usize)
     }
 
-    /// Returns all hashes in chronological order (oldest to newest).
+    /// Returns the slot values in the chronological order of the indices that last wrote them
+    /// (oldest to newest).
     pub fn get_hashes_chronological(&self) -> Vec<AnyHash> {
         if let Some(latest) = self.latest_index {
             let first = self.earliest_index().unwrap_or(0);

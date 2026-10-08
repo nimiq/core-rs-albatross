@@ -3,7 +3,9 @@ use nimiq_primitives::{account::AccountError, coin::Coin, transaction::Transacti
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::{account::AccountType, key_nibbles::KeyNibbles};
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_transaction::account::bridge_contract::ChainConfig;
+use nimiq_transaction::account::bridge_contract::{
+    AnyMerkleProof, BridgeError, ChainConfig, OutgoingTransaction,
+};
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::account::bridge_contract::{
     CreationTransactionData, OutgoingBridgeTransactionData,
@@ -14,8 +16,12 @@ use nimiq_transaction::{inherent::Inherent, HashType, Transaction};
 pub use store::BridgeContractStoreWrite;
 pub use store::BridgeNonce;
 use store::{BridgeContractStoreRead, BridgeContractStoreReadOps};
+use thiserror::Error;
 
-use crate::{convert_receipt, data_store_ops::DataStoreReadOps, AccountReceipt};
+use crate::{
+    account::oracle_contract::OracleContract, convert_receipt, data_store_ops::DataStoreReadOps,
+    AccountReceipt,
+};
 #[cfg(feature = "interaction-traits")]
 use crate::{
     data_store::{DataStoreRead, DataStoreWrite},
@@ -70,6 +76,72 @@ impl BridgeContract {
             .map(|n| n.nonce)
             .unwrap_or(0)
     }
+
+    /// Checks that `burn_proof` proves its burn record against `oracle`, the bridge's oracle.
+    ///
+    /// Every oracle write replaces slot `i mod n` with `H(old ++ value)`, so the proof is one
+    /// `MerklePath`: from the record's leaf through the record tree to the root the oracle wrote
+    /// at `oracle_state_index`, then through the slot's buffer levels, first the value that root
+    /// overwrote (a left sibling, the zero hash on the slot's first use) and then every value
+    /// written to the slot since (right siblings). It must end in the slot's current value. An
+    /// index older than the oracle's window still names its slot, so a proof never expires but
+    /// grows by one node per rotation; `max_proof_depth` bounds all levels together.
+    pub fn verify_burn_proof(
+        &self,
+        oracle: &OracleContract,
+        burn_proof: &OutgoingTransaction,
+    ) -> Result<(), BurnProofError> {
+        match burn_proof.merkle_proof {
+            AnyMerkleProof::Blake2bPath(_)
+            | AnyMerkleProof::Sha256Path(_)
+            | AnyMerkleProof::Keccak256Path(_) => {}
+            AnyMerkleProof::Blake2b(_)
+            | AnyMerkleProof::Sha256(_)
+            | AnyMerkleProof::Keccak256(_) => return Err(BurnProofError::NotAMerklePath),
+        }
+
+        if !burn_proof.is_proof_depth_valid(self.chain_config.max_proof_depth) {
+            return Err(BurnProofError::TooDeep {
+                depth: burn_proof.proof_depth(),
+                max_depth: self.chain_config.max_proof_depth,
+            });
+        }
+
+        let index = burn_proof.oracle_state_index;
+        let slot_value = oracle
+            .get_hash_at_index(index)
+            .ok_or(BurnProofError::UnwrittenIndex(index))?;
+
+        let leaf_hash = burn_proof
+            .extract_burn_transaction_hash(&self.chain_config.hash_function)
+            .map_err(BurnProofError::InvalidRecord)?;
+
+        // Folding fails only if the path's hash type differs from the leaf's.
+        let root = burn_proof
+            .compute_merkle_root(leaf_hash)
+            .map_err(|_| BurnProofError::SlotMismatch(index))?;
+
+        if &root != slot_value {
+            return Err(BurnProofError::SlotMismatch(index));
+        }
+
+        Ok(())
+    }
+}
+
+/// Why a burn proof does not prove its record against the bridge's oracle.
+#[derive(Clone, Debug, Error)]
+pub enum BurnProofError {
+    #[error("the burn proof is not a Merkle path")]
+    NotAMerklePath,
+    #[error("the Merkle path has {depth} nodes, more than the maximum of {max_depth}")]
+    TooDeep { depth: usize, max_depth: u32 },
+    #[error("oracle index {0} has not been written")]
+    UnwrittenIndex(u64),
+    #[error("cannot hash the burn record: {0}")]
+    InvalidRecord(BridgeError),
+    #[error("the Merkle path does not end in the current value of the oracle slot of index {0}")]
+    SlotMismatch(u64),
 }
 
 #[cfg(feature = "interaction-traits")]
@@ -389,79 +461,22 @@ impl AccountTransactionInteraction for BridgeContract {
             }
         };
 
-        // The relayer supplies a *global* index into the oracle's hash history.
-        // Validity is decided by `get_hash_at_index` below, which returns `None`
-        // (→ InvalidData) for any index outside the retained window
-        // [earliest_index, latest_index]. A physical `index >= oracle.hashes.len()`
-        // check would be wrong: `hashes` is a fixed-size ring buffer of length
-        // `hash_count`, so once it wraps, every valid global index is >= hash_count
-        // and would be rejected, permanently locking all withdrawals.
-        let oracle_state_index = outgoing_data.burn_proof.oracle_state_index;
-
-        // Compute the leaf hash from burn transaction data
-        let leaf_hash = outgoing_data
-            .burn_proof
-            .extract_burn_transaction_hash(&self.chain_config.hash_function)
+        // The proof must end in the current value of the oracle slot that the relayer's root was
+        // written to.
+        self.verify_burn_proof(&oracle, &outgoing_data.burn_proof)
             .map_err(|error| {
-                log::warn!(?error, "Failed to compute leaf hash");
-                AccountError::InvalidTransaction(TransactionError::InvalidData)
+                log::warn!(%error, "Invalid burn proof");
+                match error {
+                    BurnProofError::UnwrittenIndex(_) | BurnProofError::InvalidRecord(_) => {
+                        AccountError::InvalidTransaction(TransactionError::InvalidData)
+                    }
+                    BurnProofError::NotAMerklePath
+                    | BurnProofError::TooDeep { .. }
+                    | BurnProofError::SlotMismatch(_) => {
+                        AccountError::InvalidTransaction(TransactionError::InvalidProof)
+                    }
+                }
             })?;
-
-        let zero_hash = leaf_hash.zero_of_same_type();
-
-        // Get the oracle state hash at the specified index and its predecessor
-        let (prev_oracle_state_hash, current_oracle_state_hash) = {
-            let prev_oracle_state_hash = if oracle_state_index > 0 {
-                oracle
-                    .get_hash_at_index(oracle_state_index.saturating_sub(1))
-                    .ok_or(AccountError::InvalidTransaction(
-                        TransactionError::InvalidData,
-                    ))?
-            } else {
-                &zero_hash
-            };
-            (
-                prev_oracle_state_hash,
-                oracle.get_hash_at_index(oracle_state_index).ok_or(
-                    AccountError::InvalidTransaction(TransactionError::InvalidData),
-                )?,
-            )
-        };
-
-        // Reject proofs that exceed the chain's configured maximum depth.
-        // An empty proof is valid (single-leaf tree where leaf == root).
-        if !outgoing_data
-            .burn_proof
-            .is_proof_depth_valid(self.chain_config.max_proof_depth)
-        {
-            log::warn!(
-                proof_depth = outgoing_data.burn_proof.proof_depth(),
-                max_depth = self.chain_config.max_proof_depth,
-                "Merkle proof exceeds maximum allowed depth"
-            );
-            return Err(AccountError::InvalidTransaction(
-                TransactionError::InvalidProof,
-            ));
-        }
-
-        // Verify the merkle proof
-        let merkle_root = outgoing_data
-            .burn_proof
-            .compute_merkle_root(leaf_hash)
-            .map_err(|error| {
-                log::warn!(
-                    ?error,
-                    "Unable to compute root given the proof and transaction"
-                );
-                AccountError::InvalidTransaction(TransactionError::InvalidProof)
-            })?;
-
-        if current_oracle_state_hash != &prev_oracle_state_hash.digest(&merkle_root) {
-            log::warn!("Proof and oracle state mismatch");
-            return Err(AccountError::InvalidTransaction(
-                TransactionError::InvalidProof,
-            ));
-        }
 
         // Decrement bridge balance by the whole burned amount, `value + fee`
         self.balance = self.balance.checked_sub(parsed_burn.amount).ok_or(

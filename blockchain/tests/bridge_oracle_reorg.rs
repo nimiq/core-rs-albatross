@@ -3,14 +3,14 @@
 //! Bridge and oracle state lives inside consensus, so a revert that does not restore it exactly is
 //! not a lost transfer but a chain fork: two honest nodes that reached the same chain by different
 //! routes end up with different accounts-tree roots. These tests drive real micro-block rebranches
-//! — not account-layer `revert_*` calls — through releases, locks, ring-wrapping oracle updates and
-//! the contract creations themselves. Each scenario runs four nodes: one that applies the doomed
+//! — not account-layer `revert_*` calls — through releases, locks, ring-wrapping oracle updates,
+//! releases whose proofs cross a wrap, and the contract creations themselves. Each scenario runs four nodes: one that applies the doomed
 //! blocks and has to rebranch, one that authors the winning fork and never saw them, one that
 //! mirrors the first, and a late joiner that only ever receives the canonical chain in order. All
 //! four must agree on the head and the accounts root at every step, and the accounts a reorg puts
 //! back must match what was there before, byte for byte.
 
-use nimiq_account::{Account, OracleContract};
+use nimiq_account::{Account, BridgeContract, OracleContract};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_genesis::NetworkId;
@@ -199,22 +199,48 @@ fn lock_tx(bridge: &Address, amount: u64, validity_start_height: u32) -> Transac
     tx
 }
 
-/// A release: the burn proof against oracle state `oracle_state_index`, signed by `signer`.
+/// A Blake2b Merkle path from `(sibling, sibling_is_left)` nodes, leaf first.
+fn blake2b_path(nodes: &[(AnyHash, bool)]) -> MerklePath<Blake2bHash> {
+    let (siblings, left) = nodes
+        .iter()
+        .map(|(hash, left)| {
+            let bytes = <[u8; 32]>::try_from(hash.as_bytes()).unwrap();
+            (Blake2bHash::from(bytes), *left)
+        })
+        .unzip();
+    MerklePath::from_sibling_hashes(siblings, left)
+}
+
+/// The proof of a burn whose single-leaf tree root was written to an oracle slot for the first
+/// time, extended by the values written to that slot since: the slot's zero hash on the left, then
+/// one right sibling per rotation.
+fn burn_proof(
+    burn: Vec<u8>,
+    oracle_state_index: u64,
+    rotations: &[AnyHash],
+) -> OutgoingTransaction {
+    let zero = AnyHash::Blake2b(AnyHash32::default());
+    let nodes: Vec<(AnyHash, bool)> = std::iter::once((zero, true))
+        .chain(rotations.iter().map(|value| (value.clone(), false)))
+        .collect();
+    OutgoingTransaction {
+        burn_transaction_data: burn,
+        merkle_proof: AnyMerkleProof::Blake2bPath(blake2b_path(&nodes)),
+        oracle_state_index,
+    }
+}
+
+/// A release carrying `burn_proof`, signed by `signer`.
 fn release_tx(
     bridge: &Address,
     target: &Address,
     amount: u64,
-    burn: Vec<u8>,
-    oracle_state_index: u64,
+    burn_proof: OutgoingTransaction,
     signer: &KeyPair,
     validity_start_height: u32,
 ) -> Transaction {
     let mut bridge_data = OutgoingBridgeTransactionData {
-        burn_proof: OutgoingTransaction {
-            burn_transaction_data: burn,
-            merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
-            oracle_state_index,
-        },
+        burn_proof,
         proof: SignatureProof::default(),
     };
     let mut tx = Transaction::new_extended(
@@ -283,6 +309,25 @@ fn oracle_contract(node: &TemporaryBlockProducer, address: &Address) -> OracleCo
         Some(Account::Oracle(oracle)) => oracle,
         other => panic!("expected an oracle contract at {address}, found {other:?}"),
     }
+}
+
+fn bridge_contract(node: &TemporaryBlockProducer, address: &Address) -> BridgeContract {
+    match account(node, address) {
+        Some(Account::Bridge(bridge)) => bridge,
+        other => panic!("expected a bridge contract at {address}, found {other:?}"),
+    }
+}
+
+/// Whether `proof` ends in the current value of its oracle slot on `node`'s chain.
+fn proves(
+    node: &TemporaryBlockProducer,
+    bridge: &Address,
+    oracle: &Address,
+    proof: &OutgoingTransaction,
+) -> bool {
+    bridge_contract(node, bridge)
+        .verify_burn_proof(&oracle_contract(node, oracle), proof)
+        .is_ok()
 }
 
 fn extend(label: &str, node: &TemporaryBlockProducer, block: &Block) {
@@ -432,8 +477,7 @@ fn a_reorg_that_drops_a_release_restores_the_bridge_and_its_nonce_ledger() {
         &bridge,
         &target,
         RELEASE_AMOUNT,
-        burn,
-        0,
+        burn_proof(burn, 0, &[]),
         &target_key,
         w.validity_start_height,
     );
@@ -483,10 +527,10 @@ fn a_reorg_that_drops_a_release_restores_the_bridge_and_its_nonce_ledger() {
     assert_same_chain(&w.all(), "after the replay");
 }
 
-/// A reorg drops two oracle updates, each of which had wrapped a two-slot ring buffer and evicted
-/// an entry. The ring must come back exactly as it was when full — evicted entries included — and
-/// replaying the same updates on the canonical chain must reach the same bytes the doomed branch
-/// had, on all four nodes.
+/// A reorg drops two oracle updates, each of which had wrapped a two-slot ring buffer and folded new
+/// values into slots that already held entries. The ring must come back exactly as it was when
+/// full — overwritten entries included — and replaying the same updates on the canonical chain must
+/// reach the same bytes the doomed branch had, on all four nodes.
 #[test]
 fn a_reorg_that_drops_oracle_updates_restores_the_ring_buffer_across_a_wrap() {
     let w = World::new();
@@ -507,7 +551,7 @@ fn a_reorg_that_drops_oracle_updates_restores_the_ring_buffer_across_a_wrap() {
     assert_eq!(ring_full.latest_index, Some(1));
     let oracle_full = account_bytes(&w.main, &oracle);
 
-    // Doomed: two updates that each wrap the ring and evict its oldest entry.
+    // Doomed: two updates that each wrap the ring and overwrite its oldest entry.
     let wrap_once = update(vec![leaf(3)]);
     let wrap_twice = update(vec![leaf(4), leaf(5)]);
     w.doomed_block(vec![wrap_once.clone()]);
@@ -522,7 +566,7 @@ fn a_reorg_that_drops_oracle_updates_restores_the_ring_buffer_across_a_wrap() {
     assert_eq!(
         account_bytes(&w.main, &oracle),
         oracle_full,
-        "the ring must be restored byte for byte, evicted entries included"
+        "the ring must be restored byte for byte, overwritten entries included"
     );
 
     w.canonical_block(vec![wrap_once]);
@@ -590,4 +634,102 @@ fn a_reorg_that_drops_the_contract_creations_removes_the_accounts_and_refunds_th
     assert_eq!(account_bytes(&w.main, &oracle), oracle_created);
     assert_eq!(account_bytes(&w.main, &bridge), bridge_created);
     assert_same_chain(&w.all(), "after re-creation");
+}
+
+/// A release whose proof crosses a wrap, on either side of a reorg. The burn's root sits in slot 0 of
+/// a two-slot ring. On the doomed branch the relayer's next update wraps the ring onto that slot, so
+/// the proof built when the root landed no longer verifies and the release goes through with one
+/// more node instead. The reorg drops the wrap and the release: the slot is back to the root's own
+/// entry, the short proof verifies again and the extended one does not. On the canonical chain the
+/// short proof releases before the same wrap is replayed, and the bridge and the oracle end in the
+/// very bytes the doomed branch reached, on all four nodes.
+#[test]
+fn a_reorg_across_a_wrap_moves_a_release_between_its_short_and_extended_proof() {
+    let w = World::new();
+    let owner = key(ORACLE_OWNER_KEY);
+    let target_key = key(TARGET_KEY);
+    let target = Address::from(&target_key);
+
+    let create_oracle = create_oracle_tx(&owner, 2, w.validity_start_height);
+    let oracle = create_oracle.recipient.clone();
+    let create_bridge = create_bridge_tx(&owner, &oracle, w.validity_start_height);
+    let bridge = create_bridge.recipient.clone();
+    let burn = burn_data(&target, RELEASE_AMOUNT, 1);
+    let update =
+        |hashes: Vec<AnyHash>| oracle_update_tx(&oracle, &owner, hashes, w.validity_start_height);
+    let release = |proof: OutgoingTransaction| {
+        release_tx(
+            &bridge,
+            &target,
+            RELEASE_AMOUNT,
+            proof,
+            &target_key,
+            w.validity_start_height,
+        )
+    };
+
+    // Common prefix: the contracts exist and the burn's root was written at index 0, slot 0.
+    w.common_block(vec![create_oracle]);
+    w.common_block(vec![create_bridge]);
+    w.common_block(vec![update(vec![blake2b(&burn)])]);
+    let bridge_before = account_bytes(&w.main, &bridge);
+    let oracle_before = account_bytes(&w.main, &oracle);
+
+    // Index 1 goes to slot 1, index 2 wraps onto slot 0.
+    let wrap_values = vec![blake2b(b"index 1"), blake2b(b"index 2")];
+    let short = burn_proof(burn.clone(), 0, &[]);
+    let extended = burn_proof(burn.clone(), 0, &wrap_values[1..]);
+    for node in w.all() {
+        assert!(proves(node, &bridge, &oracle, &short));
+        assert!(!proves(node, &bridge, &oracle, &extended));
+    }
+
+    // Doomed: the wrap, then the release with the extended proof.
+    let wrap = update(wrap_values.clone());
+    w.doomed_block(vec![wrap.clone()]);
+    assert!(
+        !proves(&w.main, &bridge, &oracle, &short),
+        "after the wrap the short proof ends in a superseded slot value"
+    );
+    assert!(proves(&w.main, &bridge, &oracle, &extended));
+    w.doomed_block(vec![release(extended.clone())]);
+    assert_eq!(luna(&w.main, &target), RELEASE_AMOUNT);
+    assert_eq!(
+        luna(&w.main, &bridge),
+        BRIDGE_DEPOSIT - RELEASE_AMOUNT,
+        "the extended release paid out"
+    );
+    let bridge_released = account_bytes(&w.main, &bridge);
+    let oracle_wrapped = account_bytes(&w.main, &oracle);
+    assert_same_chain(&[&w.main, &w.follower], "doomed branch");
+
+    w.overtake(2);
+
+    assert_eq!(account_bytes(&w.main, &bridge), bridge_before);
+    assert_eq!(
+        account_bytes(&w.main, &oracle),
+        oracle_before,
+        "the slot must be back to the root's own entry"
+    );
+    assert_eq!(luna(&w.main, &target), 0, "the payout must be gone");
+    for node in w.all() {
+        assert!(proves(node, &bridge, &oracle, &short));
+        assert!(!proves(node, &bridge, &oracle, &extended));
+    }
+
+    // Canonical: the short proof releases, then the same wrap lands.
+    w.canonical_block(vec![release(short.clone())]);
+    assert_eq!(luna(&w.main, &target), RELEASE_AMOUNT);
+    w.canonical_block(vec![wrap]);
+    assert_eq!(
+        account_bytes(&w.main, &bridge),
+        bridge_released,
+        "either proof must reach the same bridge bytes"
+    );
+    assert_eq!(account_bytes(&w.main, &oracle), oracle_wrapped);
+    for node in w.all() {
+        assert!(!proves(node, &bridge, &oracle, &short));
+        assert!(proves(node, &bridge, &oracle, &extended));
+    }
+    assert_same_chain(&w.all(), "after the replay");
 }

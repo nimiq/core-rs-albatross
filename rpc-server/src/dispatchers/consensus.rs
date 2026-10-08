@@ -188,44 +188,16 @@ fn verify_bridge_release(
             burn.target_nonce
         ));
     }
-    if !burn_proof.is_proof_depth_valid(bridge.chain_config.max_proof_depth) {
-        return Err(format!(
-            "the Merkle proof is deeper than the maximum of {}",
-            bridge.chain_config.max_proof_depth
-        ));
-    }
-
-    // The proof is verified against the oracle state at `index`, chained onto the state before it
-    // (or onto a zero hash for the very first state).
+    // The proof must end in the current value of the oracle slot that `oracle_state_index` names.
     let oracle = oracle.ok_or_else(|| {
         format!(
             "the bridge's oracle {} does not exist",
             bridge.oracle_address
         )
     })?;
-    let index = burn_proof.oracle_state_index;
-    let unavailable = |index: u64| format!("oracle state {index} is not available");
-    let state = oracle
-        .get_hash_at_index(index)
-        .ok_or_else(|| unavailable(index))?;
-    let leaf = burn_proof
-        .extract_burn_transaction_hash(&bridge.chain_config.hash_function)
-        .map_err(|error| format!("cannot hash the burn transaction: {error}"))?;
-    let previous_state = match index.checked_sub(1) {
-        Some(previous) => oracle
-            .get_hash_at_index(previous)
-            .cloned()
-            .ok_or_else(|| unavailable(previous))?,
-        None => leaf.zero_of_same_type(),
-    };
-    let root = burn_proof
-        .compute_merkle_root(leaf)
-        .map_err(|error| format!("invalid Merkle proof: {error}"))?;
-    if *state != previous_state.digest(&root) {
-        return Err(format!(
-            "the Merkle proof does not match oracle state {index}"
-        ));
-    }
+    bridge
+        .verify_burn_proof(oracle, burn_proof)
+        .map_err(|error| error.to_string())?;
 
     if bridge.balance < burn.amount {
         return Err(format!("the bridge only holds {}", bridge.balance));
@@ -1812,7 +1784,7 @@ impl ConsensusInterface for ConsensusDispatcher {
 #[cfg(test)]
 mod tests {
     use nimiq_account::{BridgeContract, OracleContract};
-    use nimiq_hash::{Blake2bHasher, HashOutput, Hasher};
+    use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
     use nimiq_keys::Address;
     use nimiq_primitives::coin::Coin;
     use nimiq_transaction::account::{
@@ -1822,7 +1794,7 @@ mod tests {
         },
         htlc_contract::{AnyHash, AnyHash32},
     };
-    use nimiq_utils::merkle::MerklePath;
+    use nimiq_utils::merkle::{MerklePath, MerkleProof};
 
     use super::verify_bridge_release;
 
@@ -1901,24 +1873,38 @@ mod tests {
         data
     }
 
+    /// A burn proof for a single-leaf tree written once to its slot: the path holds just the
+    /// slot's previous value, the zero hash, on the left.
     fn burn_proof(burn_data: Vec<u8>, oracle_state_index: u64) -> OutgoingTransaction {
+        burn_proof_with_path(
+            burn_data,
+            vec![Blake2bHash::default()],
+            vec![true],
+            oracle_state_index,
+        )
+    }
+
+    fn burn_proof_with_path(
+        burn_data: Vec<u8>,
+        siblings: Vec<Blake2bHash>,
+        left: Vec<bool>,
+        oracle_state_index: u64,
+    ) -> OutgoingTransaction {
         OutgoingTransaction::new(
             burn_data,
-            AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+            AnyMerkleProof::Blake2bPath(MerklePath::from_sibling_hashes(siblings, left)),
             oracle_state_index,
         )
         .unwrap()
     }
 
-    /// An oracle whose states commit to single-leaf trees holding the given burn transactions,
-    /// chained the same way the oracle contract chains its updates.
+    /// An oracle whose slots commit to single-leaf trees holding the given burn transactions,
+    /// each written to its own slot the way the oracle contract writes its updates.
     fn oracle(burns: &[Vec<u8>]) -> OracleContract {
         let hash_count = 4;
         let mut hashes = vec![blake2b(&[]).zero_of_same_type(); hash_count];
-        let mut state = hashes[0].clone();
         for (index, burn) in burns.iter().enumerate() {
-            state = state.digest(&blake2b(burn));
-            hashes[index] = state.clone();
+            hashes[index] = hashes[index].digest(&blake2b(burn));
         }
         OracleContract {
             owner: Address::from([0x01u8; 20]),
@@ -1967,7 +1953,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_releases_proven_against_the_first_and_a_chained_state() {
+    fn accepts_releases_proven_against_their_slots() {
         let oracle = oracle(&[burn_data(1), burn_data(2)]);
 
         let first = burn_proof(burn_data(1), 0);
@@ -2020,7 +2006,7 @@ mod tests {
                 AMOUNT,
                 &burn_proof(burn_data(1), 1),
             ),
-            "not available",
+            "has not been written",
         );
         rejects(
             verify(
@@ -2030,7 +2016,28 @@ mod tests {
                 AMOUNT,
                 &burn_proof(burn_data(2), 0),
             ),
-            "does not match",
+            "does not end in the current value",
+        );
+        rejects(
+            verify(
+                &bridge(10_000),
+                Some(&oracle),
+                0,
+                AMOUNT,
+                &OutgoingTransaction::new(
+                    burn_data(1),
+                    AnyMerkleProof::Blake2b(MerkleProof::new(&[], &[])),
+                    0,
+                )
+                .unwrap(),
+            ),
+            "not a Merkle path",
+        );
+        let mut shallow = bridge(10_000);
+        shallow.chain_config.max_proof_depth = 0;
+        rejects(
+            verify(&shallow, Some(&oracle), 0, AMOUNT, &proof),
+            "more than the maximum of 0",
         );
         rejects(
             verify(&bridge(AMOUNT - 1), Some(&oracle), 0, AMOUNT, &proof),
@@ -2077,6 +2084,39 @@ mod tests {
                 &proof,
             ),
             "only holds",
+        );
+    }
+
+    #[test]
+    fn follows_a_rotated_slot_with_one_more_node() {
+        let mut oracle = oracle(&[burn_data(1)]);
+        let original = burn_proof(burn_data(1), 0);
+        assert_eq!(
+            verify(&bridge(10_000), Some(&oracle), 0, AMOUNT, &original),
+            Ok(())
+        );
+
+        // Index 4 lands in slot 0 again, so the slot now holds a node over the burn's entry.
+        let later = blake2b(b"a later root");
+        oracle.hashes[0] = oracle.hashes[0].digest(&later);
+        oracle.latest_index = Some(4);
+
+        rejects(
+            verify(&bridge(10_000), Some(&oracle), 0, AMOUNT, &original),
+            "does not end in the current value",
+        );
+        let AnyHash::Blake2b(later) = later else {
+            unreachable!()
+        };
+        let extended = burn_proof_with_path(
+            burn_data(1),
+            vec![Blake2bHash::default(), Blake2bHash::from(later.0)],
+            vec![true, false],
+            0,
+        );
+        assert_eq!(
+            verify(&bridge(10_000), Some(&oracle), 0, AMOUNT, &extended),
+            Ok(())
         );
     }
 }

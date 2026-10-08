@@ -46,6 +46,18 @@ fn earliest_index(oracle: &OracleContract) -> Result<u64, Error> {
     oracle.earliest_index().ok_or_else(empty_oracle_data_error)
 }
 
+/// The current value of the slot that `index` was written to. An index older than the window
+/// still names its slot, so only an index that has not been written yet is an error.
+fn entry(oracle: &OracleContract, index: u64) -> Result<AnyHash, Error> {
+    let latest = latest_index(oracle)?;
+    oracle.get_hash_at_index(index).cloned().ok_or_else(|| {
+        Error::InvalidData(format!(
+            "Index {} has not been written yet, the latest index is {}",
+            index, latest
+        ))
+    })
+}
+
 #[nimiq_jsonrpc_derive::service(rename_all = "camelCase")]
 #[async_trait]
 impl OracleInterface for OracleDispatcher {
@@ -96,23 +108,7 @@ impl OracleInterface for OracleDispatcher {
         index: u64,
     ) -> RPCResult<AnyHash, (), Self::Error> {
         let oracle = self.get_oracle_contract(contract_address)?;
-
-        // Check if index is within the retained window
-        let earliest = earliest_index(&oracle)?;
-        let latest = latest_index(&oracle)?;
-        if index < earliest || index > latest {
-            return Err(Error::InvalidData(format!(
-                "Index {} is outside the retained window [{}, {}]",
-                index, earliest, latest
-            )));
-        }
-
-        // Get the hash at the given index
-        let hash = oracle
-            .get_hash_at_index(index)
-            .ok_or_else(|| Error::InvalidData(format!("Failed to get hash at index {}", index)))?;
-
-        Ok(hash.clone().into())
+        Ok(entry(&oracle, index)?.into())
     }
 }
 
@@ -121,8 +117,9 @@ mod tests {
     use nimiq_account::OracleContract;
     use nimiq_keys::Address;
     use nimiq_primitives::coin::Coin;
+    use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32};
 
-    use super::{earliest_index, latest_index};
+    use super::{earliest_index, entry, latest_index};
     use crate::error::Error;
 
     #[test]
@@ -142,6 +139,36 @@ mod tests {
         assert!(matches!(
             earliest_index(&oracle),
             Err(Error::InvalidData(message)) if message == "Oracle contract has no data"
+        ));
+        assert!(matches!(
+            entry(&oracle, 0),
+            Err(Error::InvalidData(message)) if message == "Oracle contract has no data"
+        ));
+    }
+
+    #[test]
+    fn an_index_older_than_the_window_still_names_its_slot() {
+        let slot = |tag: u8| AnyHash::Blake2b(AnyHash32([tag; 32]));
+        // Four slots after indices 0..=5: slots 0 and 1 were written again at 4 and 5.
+        let oracle = OracleContract {
+            owner: Address([0u8; 20]),
+            balance: Coin::ZERO,
+            hash_count: 4,
+            hashes: vec![slot(4), slot(5), slot(2), slot(3)],
+            latest_index: Some(5),
+        };
+        assert_eq!(earliest_index(&oracle).ok(), Some(2));
+
+        for index in 0..=5 {
+            assert_eq!(
+                entry(&oracle, index).ok(),
+                Some(slot([4, 5, 2, 3][index as usize % 4])),
+                "index {index}"
+            );
+        }
+        assert!(matches!(
+            entry(&oracle, 6),
+            Err(Error::InvalidData(message)) if message.contains("has not been written yet")
         ));
     }
 }
