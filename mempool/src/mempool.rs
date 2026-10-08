@@ -228,23 +228,33 @@ impl Mempool {
             return;
         }
 
-        // Unsubscribe to the network TX topic before killing the executor
-        network.unsubscribe::<TransactionTopic>().await.unwrap();
+        // Unsubscribe from the network TX topic before killing the executor
+        if let Err(error) = network.unsubscribe::<TransactionTopic>().await {
+            warn!(
+                topic = TransactionTopic::NAME,
+                %error,
+                "Failed to unsubscribe from topic"
+            );
+        }
 
         // Stop the executor
-        handle.take().expect("Expected an executor handle").abort();
+        if let Some(handle) = handle.take() {
+            handle.abort();
+        }
 
-        // Unsubscribe to the network control TX topic before killing the executor
-        network
-            .unsubscribe::<ControlTransactionTopic>()
-            .await
-            .unwrap();
+        // Unsubscribe from the network control TX topic before killing the control executor
+        if let Err(error) = network.unsubscribe::<ControlTransactionTopic>().await {
+            warn!(
+                topic = ControlTransactionTopic::NAME,
+                %error,
+                "Failed to unsubscribe from topic"
+            );
+        }
 
         // Stop the control executor
-        control_executor_handle
-            .take()
-            .expect("Expected a control executor handle")
-            .abort();
+        if let Some(handle) = control_executor_handle.take() {
+            handle.abort();
+        }
     }
 
     /// Stops the mempool executor without TX stream
