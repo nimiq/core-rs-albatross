@@ -4,7 +4,7 @@ use std::{
     fmt::Debug,
     future,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
         Arc,
     },
     time::Duration,
@@ -24,7 +24,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::slots_allocation::{Validator, Validators};
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_time::timeout;
+use nimiq_time::{timeout, Instant};
 use nimiq_utils::{
     spawn,
     tagged_signing::{TaggedKeyPair, TaggedSigned},
@@ -38,6 +38,15 @@ use crate::{
     record::{verify_record, RecordAnnouncement, RecordsRequest, SignedValidatorRecord},
     validator_record::ValidatorRecord,
 };
+
+/// A copy of our own record signed later than ours, see
+/// [`ValidatorNetwork::own_record_superseded_at`].
+#[derive(Clone, Copy)]
+struct Superseding<TPeerId> {
+    timestamp: u64,
+    /// The peer the copy came from.
+    peer_id: TPeerId,
+}
 
 /// Milliseconds since the Unix epoch.
 fn now_ms() -> u64 {
@@ -64,9 +73,11 @@ where
     dht_fallback: Arc<DhtFallback<N>>,
     /// Our own signed record, once `set_public_key` created it.
     own_record: Arc<RwLock<Option<SignedValidatorRecord<N::PeerId>>>>,
-    /// The timestamp of the newest verified copy of our own record seen at or past ours, zero if
-    /// none. See [`ValidatorNetwork::own_record_superseded_at`].
-    superseded_at: Arc<AtomicU64>,
+    /// The newest verified copy of our own record seen at or past ours, until we re-signed past
+    /// it. See [`ValidatorNetwork::own_record_superseded_at`].
+    superseded: Arc<Mutex<Option<Superseding<N::PeerId>>>>,
+    /// When we last re-signed our record past a copy of it.
+    last_resign: Arc<Mutex<Option<Instant>>>,
     /// The newest verified record of each active validator that we received signed, to answer
     /// pulls with and to fall back on.
     known_records: Arc<RwLock<BTreeMap<Address, SignedValidatorRecord<N::PeerId>>>>,
@@ -107,7 +118,8 @@ where
             validator_peer_id_cache: Arc::new(RwLock::new(BTreeMap::new())),
             dht_fallback,
             own_record: Arc::new(RwLock::new(None)),
-            superseded_at: Arc::new(AtomicU64::new(0)),
+            superseded: Arc::new(Mutex::new(None)),
+            last_resign: Arc::new(Mutex::new(None)),
             known_records: Arc::new(RwLock::new(BTreeMap::new())),
             pull: Arc::new(Mutex::new(None)),
             receiving: Arc::new(AtomicBool::new(false)),
@@ -131,7 +143,8 @@ where
             validator_peer_id_cache: Arc::clone(&self.validator_peer_id_cache),
             dht_fallback: Arc::clone(&self.dht_fallback),
             own_record: Arc::clone(&self.own_record),
-            superseded_at: Arc::clone(&self.superseded_at),
+            superseded: Arc::clone(&self.superseded),
+            last_resign: Arc::clone(&self.last_resign),
             known_records: Arc::clone(&self.known_records),
             pull: Arc::clone(&self.pull),
             receiving: Arc::clone(&self.receiving),
@@ -155,27 +168,39 @@ where
         signing_key_pair: &KeyPair,
     ) -> SignedValidatorRecord<N::PeerId> {
         let peer_id = self.network.get_local_peer_id();
-        let superseded_at = self.superseded_at.load(Ordering::SeqCst);
+        let superseding = *self.superseded.lock();
         let mut own_record = self.own_record.write();
         if let Some(record) = own_record.as_ref()
             && record.record.validator_address == *validator_address
             && record.record.peer_id == peer_id
-            && record.record.timestamp > superseded_at
         {
-            return record.clone();
+            let Some(copy) = superseding.filter(|copy| copy.timestamp >= record.record.timestamp)
+            else {
+                return record.clone();
+            };
+            let mut last_resign = self.last_resign.lock();
+            if last_resign.is_some_and(|last| last.elapsed() < self.resign_cooldown) {
+                log::warn!(
+                    peer_id = %copy.peer_id,
+                    timestamp = copy.timestamp,
+                    "Not re-signing our validator record past another copy so soon; is a second instance running with our signing key?"
+                );
+                return record.clone();
+            }
+            *last_resign = Some(Instant::now());
         }
 
-        let timestamp = now_ms().max(superseded_at + 1);
+        let floor = superseding.map_or(0, |copy| copy.timestamp);
+        let timestamp = now_ms().max(floor + 1);
         let record = ValidatorRecord::new(peer_id, validator_address.clone(), timestamp);
         let signature = signing_key_pair.tagged_sign(&record);
         let signed = TaggedSigned::new(record, signature);
         *own_record = Some(signed.clone());
         // A copy reported meanwhile may be newer still; that one stays reported.
-        let _ = self
-            .superseded_at
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |seen| {
-                (seen < timestamp).then_some(0)
-            });
+        let mut superseded = self.superseded.lock();
+        if superseded.is_some_and(|copy| copy.timestamp < timestamp) {
+            *superseded = None;
+        }
         signed
     }
 
@@ -294,11 +319,17 @@ where
                 && record.record.timestamp >= own_record.record.timestamp
             {
                 log::info!(
+                    peer_id = %record.record.peer_id,
                     timestamp = record.record.timestamp,
                     "A copy of our validator record signed later than ours was seen"
                 );
-                self.superseded_at
-                    .fetch_max(record.record.timestamp, Ordering::SeqCst);
+                let mut superseded = self.superseded.lock();
+                if superseded.is_none_or(|copy| copy.timestamp < record.record.timestamp) {
+                    *superseded = Some(Superseding {
+                        timestamp: record.record.timestamp,
+                        peer_id: record.record.peer_id,
+                    });
+                }
             }
             return Some(validator_id);
         }
@@ -773,8 +804,7 @@ where
     }
 
     fn own_record_superseded_at(&self) -> Option<u64> {
-        let seen = self.superseded_at.load(Ordering::SeqCst);
-        (seen != 0).then_some(seen)
+        self.superseded.lock().map(|copy| copy.timestamp)
     }
 
     fn validate_message<TTopic>(&self, id: PubsubId<Self>, acceptance: MsgAcceptance)
