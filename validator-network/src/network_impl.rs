@@ -30,6 +30,7 @@ use nimiq_utils::{
     tagged_signing::{TaggedKeyPair, TaggedSigned},
 };
 use parking_lot::{Mutex, RwLock};
+use rand::seq::IteratorRandom;
 use time::OffsetDateTime;
 
 use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
@@ -83,6 +84,8 @@ where
     known_records: Arc<RwLock<BTreeMap<Address, SignedValidatorRecord<N::PeerId>>>>,
     /// The pull round in flight, shared by every resolution that starts meanwhile.
     pull: Arc<Mutex<Option<Shared<BoxFuture<'static, ()>>>>>,
+    /// When the last pull round ended.
+    last_pull: Arc<Mutex<Option<Instant>>>,
     /// Whether the tasks receiving records from peers and answering pulls run.
     receiving: Arc<AtomicBool>,
     /// Minimum time between two re-signings of our record past a copy of it.
@@ -127,6 +130,7 @@ where
             last_resign: Arc::new(Mutex::new(None)),
             known_records: Arc::new(RwLock::new(BTreeMap::new())),
             pull: Arc::new(Mutex::new(None)),
+            last_pull: Arc::new(Mutex::new(None)),
             receiving: Arc::new(AtomicBool::new(false)),
             announcing_on_join: Arc::new(AtomicBool::new(false)),
             resign_cooldown: Self::RESIGN_COOLDOWN,
@@ -159,6 +163,7 @@ where
             last_resign: Arc::clone(&self.last_resign),
             known_records: Arc::clone(&self.known_records),
             pull: Arc::clone(&self.pull),
+            last_pull: Arc::clone(&self.last_pull),
             receiving: Arc::clone(&self.receiving),
             announcing_on_join: Arc::clone(&self.announcing_on_join),
             resign_cooldown: self.resign_cooldown,
@@ -395,13 +400,21 @@ where
             .map(|record| Binding::signed(record.record.peer_id, record.record.timestamp))
     }
 
-    /// Joins the pull round in flight or starts one.
+    /// Joins the pull round in flight or starts one, unless the last one ended within the
+    /// cooldown; then the resolution goes on without a pull.
     async fn pull(&self) {
         let round = {
             let mut pull = self.pull.lock();
             match pull.as_ref() {
                 Some(round) => round.clone(),
                 None => {
+                    if self
+                        .last_pull
+                        .lock()
+                        .is_some_and(|last| last.elapsed() < self.pull_cooldown)
+                    {
+                        return;
+                    }
                     let self_ = self.arc_clone();
                     let round = async move { self_.pull_round().await }.boxed().shared();
                     *pull = Some(round.clone());
@@ -412,16 +425,15 @@ where
         round.await;
     }
 
-    /// Asks a few connected validator peers for the records they hold and applies every record
-    /// that verifies to the slot of its validator.
+    /// Asks a few connected validator peers, chosen at random, for the records they hold and
+    /// applies every record that verifies to the slot of its validator.
     async fn pull_round(&self) {
-        let peers: Vec<_> = self
+        let peers = self
             .network
             .get_peers()
             .into_iter()
             .filter(|peer_id| self.is_validator_peer(*peer_id))
-            .take(Self::MAX_PULL_PEERS)
-            .collect();
+            .sample(&mut rand::rng(), Self::MAX_PULL_PEERS);
         let requests = peers.into_iter().map(|peer_id| async move {
             let request = self
                 .network
@@ -433,6 +445,7 @@ where
             }
         });
         join_all(requests).await;
+        *self.last_pull.lock() = Some(Instant::now());
         *self.pull.lock() = None;
     }
 

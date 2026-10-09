@@ -5089,6 +5089,7 @@ dependencies = [
  "nimiq-time",
  "nimiq-utils",
  "parking_lot",
+ "rand 0.10.3",
  "serde",
  "thiserror 2.0.21",
  "time",
