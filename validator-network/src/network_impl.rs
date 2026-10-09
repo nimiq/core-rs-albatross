@@ -900,6 +900,33 @@ mod tests {
         );
     }
 
+    /// Waits until no resolution of `address` runs on `network`.
+    async fn wait_for_resolution(network: &ValNet, address: &Address) {
+        for _ in 0..200 {
+            let slot = network.validator_peer_id_cache.read().get(address).copied();
+            if !matches!(slot, Some(CacheState::InProgress(_))) {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+        panic!("the resolution did not finish");
+    }
+
+    /// Our record as `reader`, a plain peer, gets it from `us` on a pull.
+    async fn our_record_via(
+        reader: &MockNetwork,
+        us: MockPeerId,
+        address: &Address,
+    ) -> SignedValidatorRecord<MockPeerId> {
+        reader
+            .request(RecordsRequest::<MockPeerId>::default(), us)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|record| record.record.validator_address == *address)
+            .expect("our record is not shared")
+    }
+
     /// Waits until `network` reports a copy of our record timestamped `expected`.
     async fn wait_for_superseded_at(network: &ValNet, expected: u64) {
         for _ in 0..200 {
@@ -2121,5 +2148,41 @@ mod tests {
             tokio::task::yield_now().await;
         }
         assert_eq!(answer, Some(2));
+    }
+
+    #[test(tokio::test)]
+    async fn our_own_record_returned_by_a_pull_does_not_supersede_us() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = Arc::new(hub.new_network());
+        let reader = hub.new_network();
+        peer.dial_mock(&us);
+        reader.dial_mock(&us);
+        let us_peer_id = us.get_local_peer_id();
+
+        // `peer` runs a validator network of its own, so it keeps our record and returns it on
+        // pulls, as every validator does.
+        let (x, ours) = (TestValidator::new(1), TestValidator::new(0));
+        let network = validator_network(Arc::clone(&us), &[&x, &ours]);
+        let peer_network = validator_network(Arc::clone(&peer), &[&x, &ours]);
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        wait_for_peer_id(&peer_network, Y, us_peer_id).await;
+        let before = our_record_via(&reader, us_peer_id, &ours.address).await;
+
+        // Resolving `x` pulls from `peer`, which answers with our own record.
+        network.get_peer_id(X);
+        wait_for_resolution(&network, &x.address).await;
+        assert_eq!(network.own_record_superseded_at(), None);
+
+        // Our record stays as it is.
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        let after = our_record_via(&reader, us_peer_id, &ours.address).await;
+        assert_eq!(after.record, before.record);
     }
 }
