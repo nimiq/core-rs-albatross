@@ -107,6 +107,24 @@ fn blake2b(data: &[u8]) -> AnyHash {
     AnyHash::Blake2b(AnyHash32::from(<[u8; 32]>::try_from(h.as_bytes()).unwrap()))
 }
 
+/// A Blake2b Merkle path from `(sibling, sibling_is_left)` nodes, leaf first.
+fn blake2b_path(nodes: &[(&AnyHash, bool)]) -> MerklePath<Blake2bHash> {
+    let (siblings, left) = nodes
+        .iter()
+        .map(|(hash, left)| {
+            let bytes = <[u8; 32]>::try_from(hash.as_bytes()).unwrap();
+            (Blake2bHash::from(bytes), *left)
+        })
+        .unzip();
+    MerklePath::from_sibling_hashes(siblings, left)
+}
+
+/// The proof of a single-leaf tree whose root was written once, to a slot used for the first time:
+/// its only node is the slot's previous value, the zero hash, on the left.
+fn first_write_path() -> MerklePath<Blake2bHash> {
+    MerklePath::from_sibling_hashes(vec![Blake2bHash::default()], vec![true])
+}
+
 /// Build an oracle whose first state-hash is derived from `burn_data`.
 /// oracle.hashes[0] = zero.digest(Blake2b(burn_data))
 fn make_single_state_oracle(burn_data: &[u8]) -> OracleContract {
@@ -156,9 +174,34 @@ fn make_outgoing_tx_with_fee(
     oracle_state_index: u64,
     owner: &KeyPair,
 ) -> Transaction {
+    make_outgoing_tx_with_path(
+        bridge,
+        target,
+        value,
+        fee,
+        burn_data,
+        first_write_path(),
+        oracle_state_index,
+        owner,
+    )
+}
+
+/// Like `make_outgoing_tx_with_fee`, with the Merkle path through the record tree and the oracle
+/// slot's buffer levels.
+#[allow(clippy::too_many_arguments)]
+fn make_outgoing_tx_with_path(
+    bridge: &Address,
+    target: &Address,
+    value: u64,
+    fee: Coin,
+    burn_data: Vec<u8>,
+    path: MerklePath<Blake2bHash>,
+    oracle_state_index: u64,
+    owner: &KeyPair,
+) -> Transaction {
     let outgoing = OutgoingTransaction {
         burn_transaction_data: burn_data,
-        merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        merkle_proof: AnyMerkleProof::Blake2bPath(path),
         oracle_state_index,
     };
     let mut bridge_data = OutgoingBridgeTransactionData {
@@ -850,8 +893,9 @@ fn bridge_outgoing_rejects_oracle_index_out_of_bounds() {
 /// Regression: once the oracle ring buffer wraps, valid global indices are
 /// `>= hash_count`. The old `oracle_state_index >= oracle.hashes.len()` guard
 /// rejected them, permanently locking every withdrawal. Here `hash_count = 2`
-/// and the buffer has wrapped (`latest_index = 2`), so the burn's covering state
-/// lives at global index 2; the release against index 2 must commit.
+/// and the buffer has wrapped (`latest_index = 2`), so the burn's root was
+/// written at global index 2, into slot 0 over the entry of index 0; the release
+/// against index 2 must commit, with that entry as its first buffer node.
 #[test]
 fn bridge_outgoing_succeeds_with_wrapped_oracle_index() {
     let owner = KeyPair::generate_default_csprng();
@@ -859,18 +903,17 @@ fn bridge_outgoing_succeeds_with_wrapped_oracle_index() {
     let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let leaf = blake2b(&burn_data);
     let zero = leaf.zero_of_same_type();
-    // Oracle chain: data_i = H(data_{i-1} || state_i); state_2 is the burn's leaf,
-    // so a proof covering index 2 verifies. state_0/state_1 are arbitrary.
-    let data_0 = zero.digest(&blake2b(b"state0"));
-    let data_1 = data_0.digest(&blake2b(b"state1"));
-    let data_2 = data_1.digest(&leaf);
+    // Each write folds into its slot: hashes[i mod 2] = H(hashes[i mod 2] || state_i). state_2 is
+    // the burn's leaf; state_0/state_1 are arbitrary.
+    let entry_0 = zero.digest(&blake2b(b"state0"));
+    let entry_1 = zero.digest(&blake2b(b"state1"));
+    let entry_2 = entry_0.digest(&leaf);
     // Ring buffer of size 2 after writing indices 0,1,2: pos0 = index 2, pos1 = index 1.
-    // earliest_index = 1, so index 0 is evicted and the retained window is [1, 2].
     let oracle = OracleContract {
         owner: Address::from([0x01u8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count: 2,
-        hashes: vec![data_2, data_1],
+        hashes: vec![entry_2, entry_1],
         latest_index: Some(2),
     };
     let bridge = BridgeContract {
@@ -886,12 +929,15 @@ fn bridge_outgoing_succeeds_with_wrapped_oracle_index() {
         (bridge_addr(), Account::Bridge(bridge)),
     ]);
 
-    // Release against global oracle index 2 (== hash_count, i.e. past the wrap).
-    let tx = make_outgoing_tx(
+    // Release against global oracle index 2 (== hash_count, i.e. past the wrap). The root
+    // overwrote the entry of index 0, which is its left sibling.
+    let tx = make_outgoing_tx_with_path(
         &bridge_addr(),
         &nimiq_target(),
         RELEASE_AMOUNT,
+        Coin::ZERO,
         burn_data,
+        blake2b_path(&[(&entry_0, true)]),
         2,
         &target_key(),
     );
@@ -960,15 +1006,13 @@ fn bridge_outgoing_rejects_proof_depth_exceeded() {
     ]);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
-    // Build a proof with 2 sibling nodes — exceeds max_proof_depth=1
-    use nimiq_hash::Blake2bHash;
-    use nimiq_utils::merkle::MerkleProof;
-    let dummy = Blake2bHasher::default().digest(b"a");
-    let proof =
-        MerkleProof::<Blake2bHash>::new(&[dummy.clone(), dummy.clone(), dummy.clone()], &[dummy]);
+    // Build a path with 2 nodes — a sibling leaf in the record tree, then the slot's zero hash —
+    // which exceeds max_proof_depth=1: the bound counts tree and buffer levels together.
+    let dummy = blake2b(b"a");
+    let zero = dummy.zero_of_same_type();
     let outgoing = OutgoingTransaction {
         burn_transaction_data: burn_data,
-        merkle_proof: AnyMerkleProof::Blake2b(proof),
+        merkle_proof: AnyMerkleProof::Blake2bPath(blake2b_path(&[(&dummy, false), (&zero, true)])),
         oracle_state_index: 0,
     };
     let mut bd = OutgoingBridgeTransactionData {
@@ -1618,12 +1662,13 @@ fn release_submitted_before_the_root_lands_is_rejected_and_then_succeeds_on_retr
     );
 }
 
-/// The oracle window rotates past the index the user's proof was built against. The stale
-/// index must be refused, and a fresh proof against the newest retained root must still release
-/// the funds — the relayer's burn tree is append-only, so such a proof always exists. This is what
-/// makes window rotation a delay rather than a way to strand money.
+/// The oracle window rotates past the index the user's proof was built against, and the slot that
+/// index names is written again. The original proof now ends in a superseded slot value and is
+/// refused, but the release is never stranded: the same index extended by one node per rotation
+/// still verifies, and so does a fresh proof against the newest root, which the relayer's
+/// append-only burn tree always allows.
 #[test]
-fn a_release_whose_oracle_index_was_evicted_still_succeeds_against_the_newest_root() {
+fn a_release_whose_oracle_slot_was_overwritten_succeeds_with_one_more_node() {
     let owner = KeyPair::generate_default_csprng();
     let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
 
@@ -1631,26 +1676,28 @@ fn a_release_whose_oracle_index_was_evicted_still_succeeds_against_the_newest_ro
     // after another burn joined it.
     let leaf = Blake2bHasher::default().digest(&burn_data);
     let sibling = Blake2bHasher::default().digest(b"a later burn");
-    let newest_path = MerklePath::<Blake2bHash>::from_sibling_hashes(vec![sibling], vec![false]);
+    let newest_tree_path =
+        MerklePath::<Blake2bHash>::from_sibling_hashes(vec![sibling.clone()], vec![false]);
     let root_when_alone = AnyHash::from(leaf.clone());
-    let root_now = AnyHash::from(newest_path.compute_root_from_hash(leaf));
+    let root_now = AnyHash::from(newest_tree_path.compute_root_from_hash(leaf));
 
-    // Oracle chain over three updates into a two-slot ring: index 0 attested the burn alone,
-    // index 1 something unrelated, index 2 the tree the burn now lives in. With hash_count 2 the
-    // retained window is [1, 2], so the user's original index 0 is gone.
+    // Three updates into a two-slot ring: index 0 attested the burn alone, index 1 something
+    // unrelated, index 2 the tree the burn now lives in. Index 2 went into slot 0 again, so the
+    // window is [1, 2] and slot 0 now holds a node over index 0's entry and the newest root.
     let zero = root_when_alone.zero_of_same_type();
-    let data_0 = zero.digest(&root_when_alone);
-    let data_1 = data_0.digest(&blake2b(b"an unrelated root"));
-    let data_2 = data_1.digest(&root_now);
+    let entry_0 = zero.digest(&root_when_alone);
+    let entry_1 = zero.digest(&blake2b(b"an unrelated root"));
+    let entry_2 = entry_0.digest(&root_now);
     let oracle = OracleContract {
         owner: Address::from([0x01u8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count: 2,
-        hashes: vec![data_2, data_1], // ring positions 0 and 1 hold indices 2 and 1
+        hashes: vec![entry_2, entry_1], // ring positions 0 and 1 hold indices 2 and 1
         latest_index: Some(2),
     };
+    assert_eq!(oracle.earliest_index(), Some(1));
     let test = TestCommitRevert::with_initial_state(&[
-        (oracle_addr(), Account::Oracle(oracle)),
+        (oracle_addr(), Account::Oracle(oracle.clone())),
         (
             bridge_addr(),
             Account::Bridge(bridge_with(&oracle_addr(), &owner)),
@@ -1658,7 +1705,8 @@ fn a_release_whose_oracle_index_was_evicted_still_succeeds_against_the_newest_ro
     ]);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
-    // The proof the user originally built, against the now-evicted index 0.
+    // The proof the user originally built against index 0. It ends in index 0's entry, which slot
+    // 0 no longer holds.
     let stale = make_outgoing_tx(
         &bridge_addr(),
         &nimiq_target(),
@@ -1670,9 +1718,9 @@ fn a_release_whose_oracle_index_was_evicted_still_succeeds_against_the_newest_ro
     assert!(
         matches!(
             outgoing_error(&test, &bridge_with(&oracle_addr(), &owner), &stale, &bs),
-            AccountError::InvalidTransaction(TransactionError::InvalidData)
+            AccountError::InvalidTransaction(TransactionError::InvalidProof)
         ),
-        "an index below the retained window must be refused",
+        "a proof ending in a superseded slot value must be refused",
     );
     assert_eq!(
         test.get_complete(&bridge_addr(), None).balance(),
@@ -1680,35 +1728,32 @@ fn a_release_whose_oracle_index_was_evicted_still_succeeds_against_the_newest_ro
         "the refused release must not move custody",
     );
 
-    // The same burn, re-proved against the newest retained root.
-    let mut bridge_data = OutgoingBridgeTransactionData {
-        burn_proof: OutgoingTransaction {
-            burn_transaction_data: burn_data,
-            merkle_proof: AnyMerkleProof::Blake2bPath(newest_path),
-            oracle_state_index: 2,
-        },
-        proof: SignatureProof::default(),
+    // The newest root, re-proved through the newest tree and then the entry it overwrote, also
+    // ends in slot 0's current value.
+    let fresh_path = blake2b_path(&[(&AnyHash::from(sibling), false), (&entry_0, true)]);
+    let fresh_proof = OutgoingTransaction {
+        burn_transaction_data: burn_data.clone(),
+        merkle_proof: AnyMerkleProof::Blake2bPath(fresh_path),
+        oracle_state_index: 2,
     };
-    let mut fresh = Transaction::new_extended(
-        bridge_addr(),
-        AccountType::Bridge,
-        bridge_data.serialize_to_vec(),
-        nimiq_target(),
-        AccountType::Basic,
-        vec![],
-        Coin::from_u64_unchecked(RELEASE_AMOUNT),
-        Coin::ZERO,
-        1,
-        NetworkId::UnitAlbatross,
-    );
-    let target = target_key();
-    let sig = target.sign(&fresh.serialize_content());
-    bridge_data.set_signature(SignatureProof::from_ed25519(target.public, sig));
-    fresh.sender_data = bridge_data.serialize_to_vec();
+    assert!(bridge_with(&oracle_addr(), &owner)
+        .verify_burn_proof(&oracle, &fresh_proof)
+        .is_ok());
 
+    // The original proof, extended by the root written to its slot since, still releases.
+    let extended = make_outgoing_tx_with_path(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        Coin::ZERO,
+        burn_data,
+        blake2b_path(&[(&zero, true), (&root_now, false)]),
+        0,
+        &target_key(),
+    );
     let receipts = test
-        .commit_and_test(&[fresh], &[], &bs, &mut BlockLogger::empty())
-        .expect("a fresh proof against the newest root must commit");
+        .commit_and_test(&[extended], &[], &bs, &mut BlockLogger::empty())
+        .expect("the extended proof must commit");
     assert!(
         matches!(receipts.transactions[0], OperationReceipt::Ok(_)),
         "window rotation must delay a release, never strand it",
@@ -2051,19 +2096,18 @@ fn second_target() -> Address {
     Address::from(&second_target_key().public)
 }
 
-/// An oracle that attested one root per update: global index `i` commits to `burns[i]`'s leaf, so
-/// a release for that burn verifies against index `i` with an empty proof.
-fn make_chained_oracle(burns: &[&[u8]]) -> OracleContract {
+/// An oracle that attested one root per update: global index `i` commits to `burns[i]`'s leaf in a
+/// slot of its own, so a release for that burn verifies against index `i` with `first_write_path`.
+fn make_multi_root_oracle(burns: &[&[u8]]) -> OracleContract {
     assert!(!burns.is_empty());
     let hash_count: u16 = 10;
+    assert!(burns.len() <= hash_count as usize);
     let leaves: Vec<AnyHash> = burns.iter().map(|burn| blake2b(burn)).collect();
     let zero = leaves[0].zero_of_same_type();
 
-    let mut hashes = vec![zero.clone(); hash_count as usize];
-    let mut head = zero;
+    let mut hashes = vec![zero; hash_count as usize];
     for (index, leaf) in leaves.iter().enumerate() {
-        head = head.digest(leaf);
-        hashes[index % hash_count as usize] = head.clone();
+        hashes[index] = hashes[index].digest(leaf);
     }
 
     OracleContract {
@@ -2075,9 +2119,12 @@ fn make_chained_oracle(burns: &[&[u8]]) -> OracleContract {
     }
 }
 
-fn env_with_chained_oracle(burns: &[&[u8]], owner: &KeyPair) -> TestCommitRevert {
+fn env_with_multi_root_oracle(burns: &[&[u8]], owner: &KeyPair) -> TestCommitRevert {
     TestCommitRevert::with_initial_state(&[
-        (oracle_addr(), Account::Oracle(make_chained_oracle(burns))),
+        (
+            oracle_addr(),
+            Account::Oracle(make_multi_root_oracle(burns)),
+        ),
         (
             bridge_addr(),
             Account::Bridge(bridge_with(&oracle_addr(), owner)),
@@ -2091,7 +2138,7 @@ fn env_with_chained_oracle(burns: &[&[u8]], owner: &KeyPair) -> TestCommitRevert
 fn a_release_for_a_zero_amount_burn_is_rejected() {
     let owner = KeyPair::generate_default_csprng();
     let zero_burn = make_burn_data(&nimiq_target(), 0, 1, SOURCE_CHAIN_ID);
-    let test = env_with_chained_oracle(&[&zero_burn], &owner);
+    let test = env_with_multi_root_oracle(&[&zero_burn], &owner);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
     let tx = make_outgoing_tx(
@@ -2119,7 +2166,7 @@ fn two_targets_may_release_the_same_nonce_in_one_block() {
     let owner = KeyPair::generate_default_csprng();
     let first = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let second = make_burn_data(&second_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
-    let test = env_with_chained_oracle(&[&first, &second], &owner);
+    let test = env_with_multi_root_oracle(&[&first, &second], &owner);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
     let txs = [
@@ -2170,7 +2217,7 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
     // Sequential nonces: both settle, and the target is credited twice.
     let first = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let second = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
-    let test = env_with_chained_oracle(&[&first, &second], &owner);
+    let test = env_with_multi_root_oracle(&[&first, &second], &owner);
     let txs = [
         make_outgoing_tx(
             &bridge_addr(),
@@ -2208,7 +2255,7 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
 
     // The same nonce twice: the second is refused inside the same block.
     let burn = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
-    let test = env_with_chained_oracle(&[&burn, &burn], &owner);
+    let test = env_with_multi_root_oracle(&[&burn, &burn], &owner);
     let txs = [
         make_outgoing_tx(
             &bridge_addr(),
@@ -2247,7 +2294,7 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
 fn a_burn_proof_signature_from_another_transaction_is_rejected() {
     let owner = KeyPair::generate_default_csprng();
     let burn = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
-    let test = env_with_chained_oracle(&[&burn], &owner);
+    let test = env_with_multi_root_oracle(&[&burn], &owner);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
     // A valid release, and the proof it carries.
@@ -2268,7 +2315,7 @@ fn a_burn_proof_signature_from_another_transaction_is_rejected() {
     let mut bridge_data = OutgoingBridgeTransactionData {
         burn_proof: OutgoingTransaction {
             burn_transaction_data: burn,
-            merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+            merkle_proof: AnyMerkleProof::Blake2bPath(first_write_path()),
             oracle_state_index: 0,
         },
         proof: SignatureProof::default(),
@@ -2349,7 +2396,7 @@ fn a_release_beyond_the_remaining_balance_is_refused_without_partial_payout() {
         TestCommitRevert::with_initial_state(&[
             (
                 oracle_addr(),
-                Account::Oracle(make_chained_oracle(&[&first, &second])),
+                Account::Oracle(make_multi_root_oracle(&[&first, &second])),
             ),
             (
                 bridge_addr(),

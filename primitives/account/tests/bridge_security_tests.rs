@@ -3,7 +3,7 @@ use nimiq_account::{
     RevertInfo,
 };
 use nimiq_database::traits::{Database, WriteTransaction};
-use nimiq_hash::{Blake2bHasher, HashOutput, Hasher};
+use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::Serialize;
@@ -98,11 +98,11 @@ fn blake2b_hash(data: &[u8]) -> AnyHash {
     AnyHash::Blake2b(AnyHash32::from(<[u8; 32]>::try_from(h.as_bytes()).unwrap()))
 }
 
-/// Build the oracle contract with exactly two chained state-hashes so that both
+/// Build the oracle contract with exactly two state-hashes, one per slot, so that both
 /// nonce=1 and nonce=2 outgoing transactions can be verified.
 ///
 /// oracle.hashes[0] = zero.digest(leaf_hash_1)
-/// oracle.hashes[1] = oracle.hashes[0].digest(leaf_hash_2)
+/// oracle.hashes[1] = zero.digest(leaf_hash_2)
 fn make_oracle_for_two_txs() -> (OracleContract, AnyHash, AnyHash) {
     let burn_data_1 = make_burn_data(1);
     let burn_data_2 = make_burn_data(2);
@@ -112,7 +112,7 @@ fn make_oracle_for_two_txs() -> (OracleContract, AnyHash, AnyHash) {
 
     let zero_hash = leaf_hash_1.zero_of_same_type();
     let oracle_hash_0 = zero_hash.digest(&leaf_hash_1);
-    let oracle_hash_1 = oracle_hash_0.digest(&leaf_hash_2);
+    let oracle_hash_1 = zero_hash.digest(&leaf_hash_2);
 
     let hash_count: u16 = 10;
     let mut hashes = vec![zero_hash; hash_count as usize];
@@ -143,9 +143,14 @@ fn make_outgoing_tx(
 
     let outgoing = OutgoingTransaction {
         burn_transaction_data: burn_data,
-        // Empty MerklePath → compute_root_from_hash returns leaf unchanged, so
-        // merkle_root == leaf_hash == Blake2b(burn_data). This is what the oracle stores.
-        merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        // Single-leaf tree: the root is leaf_hash == Blake2b(burn_data). It was written once, to
+        // a slot used for the first time, so the path's only node is the slot's previous value,
+        // the zero hash, on the left: the root folds to H(zero || leaf_hash), which the oracle
+        // stores.
+        merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::from_sibling_hashes(
+            vec![Blake2bHash::default()],
+            vec![true],
+        )),
         oracle_state_index,
     };
 

@@ -88,30 +88,25 @@ fn make_hash_keccak256(value: u8) -> AnyHash {
     AnyHash::from(Keccak256Hasher::default().digest(&[value; 32]))
 }
 
-// Helper to compute chained hashes as the contract does: data_i = H(data_{i-1} || state_i)
-fn compute_chained_hashes(hashes: &[AnyHash]) -> Vec<AnyHash> {
-    if hashes.is_empty() {
-        return Vec::new();
+/// The ring buffer after writing `values` at global indices 0, 1, 2, …, computed independently of
+/// the contract: every slot starts at the zero hash, and writing `value` at index `i` replaces
+/// slot `i mod hash_count` with `H(slot || value)`.
+fn expected_ring(hash_count: usize, values: &[AnyHash]) -> Vec<AnyHash> {
+    let mut ring = vec![values[0].zero_of_same_type(); hash_count];
+    for (index, value) in values.iter().enumerate() {
+        let slot = index % hash_count;
+        ring[slot] = ring[slot].digest(value);
     }
-    let zero_hash = hashes[0].zero_of_same_type();
-    compute_chained_hashes_from_previous(hashes, &zero_hash)
+    ring
 }
 
-// Helper to compute chained hashes starting from a previous hash (uses AnyHash::digest like the contract)
-fn compute_chained_hashes_from_previous(
-    hashes: &[AnyHash],
-    previous_hash: &AnyHash,
-) -> Vec<AnyHash> {
-    if hashes.is_empty() {
-        return Vec::new();
-    }
-    let mut result = Vec::new();
-    let mut current_hash = previous_hash.clone();
-    for new_hash in hashes {
-        current_hash = current_hash.digest(new_hash);
-        result.push(current_hash.clone());
-    }
-    result
+/// The entries of a ring that has not wrapped yet, in index order: each slot was written once,
+/// so it holds `H(0 || value)`.
+fn first_writes(values: &[AnyHash]) -> Vec<AnyHash> {
+    values
+        .iter()
+        .map(|value| value.zero_of_same_type().digest(value))
+        .collect()
 }
 
 fn make_update_transaction(
@@ -307,8 +302,16 @@ fn it_can_update_contract_with_hashes() {
         oracle_contract.hash_count as usize
     );
     assert_eq!(oracle_contract.latest_index, Some(2));
-    let expected_chained = compute_chained_hashes(&hashes);
-    assert_eq!(oracle_contract.get_hashes_chronological(), expected_chained);
+    // Each value went into a slot of its own, folded onto the slot's zero hash, and the unused
+    // slots are still zero.
+    assert_eq!(oracle_contract.hashes, expected_ring(10, &hashes));
+    assert_eq!(
+        oracle_contract.get_hashes_chronological(),
+        first_writes(&hashes)
+    );
+    assert!(oracle_contract.hashes[3..]
+        .iter()
+        .all(|slot| *slot == make_hash(0).zero_of_same_type()));
 
     assert_eq!(
         tx_logger.logs,
@@ -326,7 +329,7 @@ fn it_implements_ring_buffer() {
     let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // First, fill the contract to capacity (hash_count = 10)
-    let initial_hashes: Vec<AnyHash> = (0..10).map(|i| make_hash(i)).collect();
+    let initial_hashes: Vec<AnyHash> = (0..10).map(make_hash).collect();
     let tx1 = make_update_transaction(Address([1u8; 20]), &key_1, initial_hashes.clone());
     let mut tx_logger = TransactionLog::empty();
     accounts
@@ -340,11 +343,12 @@ fn it_implements_ring_buffer() {
         .expect("Failed to add initial hashes");
     assert_eq!(oracle_contract.hashes.len(), 10);
 
-    // Now add 3 more hashes - should remove the oldest 3 and add the new ones.
-    // Note: This update starts at index 10 (== hash_count), so every write evicts; removed_hashes
-    // align with (start_index + i) % hash_count. For the straddle case (some evictions, some not),
+    // Now add 3 more hashes - they go into slots 0-2 again, each folded onto the entry it
+    // overwrites.
+    // Note: This update starts at index 10 (== hash_count), so every write overwrites; removed_hashes
+    // align with (start_index + i) % hash_count. For the straddle case (some overwrites, some not),
     // see it_reverts_update_straddling_hash_count_boundary.
-    let new_hashes: Vec<AnyHash> = (10..13).map(|i| make_hash(i)).collect();
+    let new_hashes: Vec<AnyHash> = (10..13).map(make_hash).collect();
     let tx2 = make_update_transaction(Address([1u8; 20]), &key_1, new_hashes.clone());
     let mut tx_logger2 = TransactionLog::empty();
     let receipt = accounts
@@ -361,27 +365,23 @@ fn it_implements_ring_buffer() {
     assert_eq!(oracle_contract.hashes.len(), 10);
     assert_eq!(oracle_contract.latest_index, Some(12));
     // With ring buffer, after writing indices 0-9, then 10-12:
-    // - Positions 0-2 have indices 10-12 (newest, overwriting 0-2)
-    // - Positions 3-9 have indices 3-9 (oldest remaining)
-    // Check using chronological order helper
-    let expected_all = compute_chained_hashes(&initial_hashes);
-    // The new hashes are chained from the last hash in expected_all, not from zero
-    let previous_hash = expected_all
-        .last()
-        .cloned()
-        .unwrap_or_else(|| new_hashes[0].zero_of_same_type());
-    let expected_new = compute_chained_hashes_from_previous(&new_hashes, &previous_hash);
-    let expected_remaining: Vec<AnyHash> = expected_all[3..].to_vec();
-    let expected_final: Vec<AnyHash> = expected_remaining
-        .into_iter()
-        .chain(expected_new.into_iter())
-        .collect();
+    // - Slots 0-2 hold H(entry_i || value_{i+10}) for i in 0-2: a Merkle node over the entry
+    //   written at index i and the value written at index i + 10
+    // - Slots 3-9 still hold the entries written at indices 3-9
+    let first_entries = first_writes(&initial_hashes);
+    for slot in 0..3 {
+        assert_eq!(
+            oracle_contract.hashes[slot],
+            first_entries[slot].digest(&new_hashes[slot]),
+            "slot {slot} must fold the value written at index {} onto its previous entry",
+            slot + 10
+        );
+    }
+    assert_eq!(oracle_contract.hashes[3..], first_entries[3..]);
+    let all_hashes: Vec<AnyHash> = initial_hashes.iter().chain(&new_hashes).cloned().collect();
+    assert_eq!(oracle_contract.hashes, expected_ring(10, &all_hashes));
 
-    // Get hashes in chronological order
-    let chronological = oracle_contract.get_hashes_chronological();
-    assert_eq!(chronological, expected_final);
-
-    // Should have a receipt with the removed hashes
+    // Should have a receipt with the overwritten hashes
     assert!(receipt.is_some());
 
     // Test revert - should restore the removed hashes
@@ -397,17 +397,17 @@ fn it_implements_ring_buffer() {
             &mut tx_logger2,
         )
         .expect("Failed to revert");
-    // Should be back to the original 10 chained hashes
+    // Should be back to the original 10 entries
     assert_eq!(oracle_contract.hashes.len(), 10);
     assert_eq!(oracle_contract.latest_index, Some(9));
-    let chronological_after_revert = oracle_contract.get_hashes_chronological();
-    assert_eq!(chronological_after_revert, expected_all);
+    assert_eq!(oracle_contract.hashes, first_entries);
 }
 
-/// Revert when an update **straddles** the hash_count boundary: some writes don't evict (index < hash_count),
-/// some do. The only revert test above uses start_index = hash_count (all evictions), so (start_index + i) % hash_count
-/// accidentally matches the correct (hash_count + i) % hash_count. This test uses start_index = 9, add 3 hashes
-/// (indices 9, 10, 11) so only indices 10 and 11 evict; revert must restore removed_hashes to positions 0 and 1.
+/// Revert when an update **straddles** the hash_count boundary: some writes use a slot for the first time
+/// (index < hash_count), some overwrite one. The only revert test above uses start_index = hash_count (all
+/// overwrites), so (start_index + i) % hash_count accidentally matches the correct (hash_count + i) % hash_count.
+/// This test uses start_index = 9, add 3 hashes (indices 9, 10, 11) so only indices 10 and 11 overwrite; revert
+/// must restore removed_hashes to positions 0 and 1, and the zero hash to position 9.
 #[test]
 fn it_reverts_update_straddling_hash_count_boundary() {
     let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
@@ -415,7 +415,7 @@ fn it_reverts_update_straddling_hash_count_boundary() {
     let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Fill to 9 hashes (indices 0..8), so latest_index = 8 and next start_index = 9
-    let initial_hashes: Vec<AnyHash> = (0..9).map(|i| make_hash(i)).collect();
+    let initial_hashes: Vec<AnyHash> = (0..9).map(make_hash).collect();
     let tx1 = make_update_transaction(Address([1u8; 20]), &key_1, initial_hashes.clone());
     let mut tx_logger = TransactionLog::empty();
     accounts
@@ -431,8 +431,9 @@ fn it_reverts_update_straddling_hash_count_boundary() {
     assert_eq!(oracle_contract.hashes.len(), 10);
     assert_eq!(oracle_contract.latest_index, Some(8));
 
-    // Add 3 hashes (indices 9, 10, 11): index 9 does not evict (9 < 10), indices 10 and 11 evict (positions 0, 1)
-    let straddle_hashes: Vec<AnyHash> = (9..12).map(|i| make_hash(i)).collect();
+    // Add 3 hashes (indices 9, 10, 11): index 9 uses slot 9 for the first time (9 < 10), indices 10 and 11
+    // overwrite slots 0 and 1
+    let straddle_hashes: Vec<AnyHash> = (9..12).map(make_hash).collect();
     let tx2 = make_update_transaction(Address([1u8; 20]), &key_1, straddle_hashes.clone());
     let mut tx_logger2 = TransactionLog::empty();
     let receipt = accounts
@@ -449,21 +450,14 @@ fn it_reverts_update_straddling_hash_count_boundary() {
     assert_eq!(oracle_contract.latest_index, Some(11));
     assert!(receipt.is_some());
 
-    // After commit: ring has indices 2..11 (positions 2-8 = indices 2-8, pos 9 = index 9, pos 0-1 = indices 10-11)
-    let expected_after_commit = {
-        let expected_all = compute_chained_hashes(&initial_hashes);
-        let previous = expected_all.last().cloned().unwrap();
-        let expected_new = compute_chained_hashes_from_previous(&straddle_hashes, &previous);
-        let remaining = expected_all[2..].to_vec();
-        remaining
-            .into_iter()
-            .chain(expected_new.into_iter())
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(
-        oracle_contract.get_hashes_chronological(),
-        expected_after_commit
-    );
+    // After commit: slots 2-8 hold the entries of indices 2-8, slot 9 the first entry of index 9, and
+    // slots 0-1 nodes over the entries of indices 0-1 and the values of indices 10-11
+    let all_hashes: Vec<AnyHash> = initial_hashes
+        .iter()
+        .chain(&straddle_hashes)
+        .cloned()
+        .collect();
+    assert_eq!(oracle_contract.hashes, expected_ring(10, &all_hashes));
 
     // Revert: must restore removed_hashes[0] to pos 0 and removed_hashes[1] to pos 1 (not to pos 9 and 0)
     let mut db_txn = accounts.env().write_transaction();
@@ -479,11 +473,12 @@ fn it_reverts_update_straddling_hash_count_boundary() {
         )
         .expect("Failed to revert");
 
-    // Revert does not shrink the ring buffer; chronological content is restored
+    // Revert does not shrink the ring buffer; slot 9 is back to the zero hash and slots 0-1 to their
+    // previous entries
     assert_eq!(oracle_contract.hashes.len(), 10);
     assert_eq!(oracle_contract.latest_index, Some(8));
-    let expected_all = compute_chained_hashes(&initial_hashes);
-    assert_eq!(oracle_contract.get_hashes_chronological(), expected_all);
+    assert_eq!(oracle_contract.hashes, expected_ring(10, &initial_hashes));
+    assert_eq!(oracle_contract.hashes[9], make_hash(0).zero_of_same_type());
 }
 
 /// Revert after the ring buffer has already wrapped multiple times.
@@ -494,23 +489,23 @@ fn it_reverts_update_after_multiple_wraps() {
     let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
     // Fill the buffer twice plus one entry, so latest_index = 20 and the next write starts at pos 1.
-    let initial_hashes: Vec<AnyHash> = (0..21).map(|i| make_hash(i)).collect();
-    let tx1 = make_update_transaction(Address([1u8; 20]), &key_1, initial_hashes.clone());
-    let mut tx_logger = TransactionLog::empty();
-    accounts
-        .test_commit_incoming_transaction(
+    // No update may carry more than hash_count hashes, so this takes three.
+    let initial_hashes: Vec<AnyHash> = (0..21).map(make_hash).collect();
+    for chunk in initial_hashes.chunks(10) {
+        apply_update(
+            &accounts,
             &mut oracle_contract,
-            &tx1,
+            &key_1,
+            chunk.to_vec(),
             &block_state,
-            &mut tx_logger,
-            true,
-        )
-        .expect("Failed to pre-fill oracle");
+        );
+    }
 
     assert_eq!(oracle_contract.hashes.len(), 10);
     assert_eq!(oracle_contract.latest_index, Some(20));
+    assert_eq!(oracle_contract.hashes, expected_ring(10, &initial_hashes));
 
-    let wrap_hashes: Vec<AnyHash> = (21..24).map(|i| make_hash(i)).collect();
+    let wrap_hashes: Vec<AnyHash> = (21..24).map(make_hash).collect();
     let tx2 = make_update_transaction(Address([1u8; 20]), &key_1, wrap_hashes.clone());
     let mut tx_logger2 = TransactionLog::empty();
     let receipt = {
@@ -530,17 +525,15 @@ fn it_reverts_update_after_multiple_wraps() {
     assert_eq!(oracle_contract.latest_index, Some(23));
     assert!(receipt.is_some());
 
-    let expected_all = compute_chained_hashes(&initial_hashes);
-    let expected_previous = expected_all.last().cloned().unwrap();
-    let expected_new = compute_chained_hashes_from_previous(&wrap_hashes, &expected_previous);
-    let expected_after_commit = expected_all[14..]
-        .iter()
-        .cloned()
-        .chain(expected_new)
-        .collect::<Vec<_>>();
+    // Slots 1-3 have now been written three times each.
+    let all_hashes: Vec<AnyHash> = initial_hashes.iter().chain(&wrap_hashes).cloned().collect();
+    assert_eq!(oracle_contract.hashes, expected_ring(10, &all_hashes));
+    let zero = make_hash(0).zero_of_same_type();
     assert_eq!(
-        oracle_contract.get_hashes_chronological(),
-        expected_after_commit
+        oracle_contract.hashes[1],
+        zero.digest(&make_hash(1))
+            .digest(&make_hash(11))
+            .digest(&make_hash(21)),
     );
 
     let mut db_txn = accounts.env().write_transaction();
@@ -558,21 +551,18 @@ fn it_reverts_update_after_multiple_wraps() {
 
     assert_eq!(oracle_contract.hashes.len(), 10);
     assert_eq!(oracle_contract.latest_index, Some(20));
-    assert_eq!(
-        oracle_contract.get_hashes_chronological(),
-        expected_all[11..].to_vec()
-    );
+    assert_eq!(oracle_contract.hashes, expected_ring(10, &initial_hashes));
 }
 
-/// Regression: a *non-first* update carrying more hashes than `hash_count` wraps
-/// over its own ring positions, so `removed_hashes` captures a value written
-/// earlier in the same update. The revert then restores that wrong value instead
-/// of the true prior one, diverging the accounts-tree root on a reorg (consensus
-/// fork). Such an update must be rejected. Concretely, with `hash_count = 3` and a
-/// full buffer, a follow-up 4-hash update evicts position 0 twice; before the fix
-/// the revert would restore `data_3` there instead of `data_0`.
+/// Regression: an update carrying more hashes than `hash_count` wraps over its own
+/// ring positions, so `removed_hashes` captures a value written earlier in the same
+/// update. The revert then restores that wrong value instead of the true prior one,
+/// diverging the accounts-tree root on a reorg (consensus fork). Such an update must
+/// be rejected, the first update included. Concretely, with `hash_count = 3` and a
+/// full buffer, a follow-up 4-hash update folds into position 0 twice; the revert
+/// would restore `H(entry_0 || value_3)` there instead of `entry_0`.
 #[test]
-fn oracle_rejects_non_first_update_exceeding_hash_count() {
+fn oracle_rejects_any_update_exceeding_hash_count() {
     let mut rng = test_rng(true);
     let key = KeyPair::generate(&mut rng);
     let contract_addr = Address([1u8; 20]);
@@ -594,10 +584,34 @@ fn oracle_rejects_non_first_update_exceeding_hash_count() {
         (contract_addr.clone(), Account::Oracle(oracle.clone())),
     ]);
     let block_state = BlockState::new(1, 1, Policy::max_supported_version());
-
-    // Fill the buffer to capacity (a first update of exactly hash_count is allowed),
-    // so every position holds real data and the next update is *non-first*.
     let mut oracle = oracle;
+
+    // Not even the first update may exceed hash_count, and the rejection must not
+    // initialize the ring buffer.
+    let too_many_first = make_update_transaction(
+        contract_addr.clone(),
+        &key,
+        vec![make_hash(1), make_hash(2), make_hash(3), make_hash(4)],
+    );
+    let result = accounts.test_commit_incoming_transaction(
+        &mut oracle,
+        &too_many_first,
+        &block_state,
+        &mut TransactionLog::empty(),
+        false,
+    );
+    assert_eq!(
+        result,
+        Err(AccountError::InvalidTransaction(
+            TransactionError::InvalidData
+        )),
+        "a first update exceeding hash_count must be rejected",
+    );
+    assert_eq!(oracle.latest_index, None);
+    assert!(oracle.hashes.is_empty());
+
+    // Fill the buffer to capacity (an update of exactly hash_count is allowed),
+    // so every position holds real data and the next update is *non-first*.
     let fill = make_update_transaction(
         contract_addr.clone(),
         &key,
@@ -822,8 +836,10 @@ fn it_can_apply_and_revert_transaction() {
         oracle_contract.hashes.len(),
         oracle_contract.hash_count as usize
     );
-    let expected_hashes = compute_chained_hashes(&hashes);
-    assert_eq!(oracle_contract.get_hashes_chronological(), expected_hashes);
+    assert_eq!(
+        oracle_contract.get_hashes_chronological(),
+        first_writes(&hashes)
+    );
 }
 
 #[test]
@@ -1361,8 +1377,8 @@ fn it_rejects_revert_owner_change_with_invalid_receipt_serialization() {
 // `it_rejects_owner_change_with_invalid_signature` and
 // `it_rejects_withdrawal_with_invalid_signature`; these cover the update path itself.
 
-/// A non-owner cannot attest state hashes: the existing ring buffer, its chained hashes and
-/// `latest_index` must all survive untouched, so they cannot overwrite or extend the chain the
+/// A non-owner cannot attest state hashes: the existing ring buffer, its entries and
+/// `latest_index` must all survive untouched, so they cannot overwrite or extend the slots the
 /// bridge verifies against.
 #[test]
 fn it_rejects_update_from_non_owner_without_disturbing_existing_hashes() {
@@ -1404,8 +1420,8 @@ fn it_rejects_update_from_non_owner_without_disturbing_existing_hashes() {
     assert_eq!(oracle_contract.latest_index, latest_before);
     assert_eq!(
         oracle_contract.get_hashes_chronological(),
-        compute_chained_hashes(&owner_hashes),
-        "the attested chain must be exactly what the owner attested"
+        first_writes(&owner_hashes),
+        "the attested entries must be exactly what the owner attested"
     );
     assert!(tx_logger.logs.is_empty());
 }
@@ -1465,12 +1481,13 @@ fn it_rejects_unsigned_update() {
 //
 // A compromised oracle owner can attest anything they like *next*, but they must not be able to
 // change what they already attested: a burn proof verified against index `i` yesterday must still
-// verify against it today, or a release that consensus already accepted could be retroactively
-// invalidated. The ring-buffer tests imply this; these assert it directly.
+// verify against it today, extended by the values written to its slot since, or a release that
+// consensus already accepted could be retroactively invalidated. The ring-buffer tests imply this;
+// these assert it directly.
 //
 // Three properties together make an in-place rewrite impossible: the update payload carries only
-// hashes and no index, `latest_index` only ever moves forward, and each entry is
-// `H(previous_entry || attested_root)` so its value is fixed by its position in the chain.
+// hashes and no index, `latest_index` only ever moves forward, and each write replaces its slot
+// with `H(slot || attested_root)`, so a slot's value commits to every value ever written to it.
 
 /// Applies an owner-signed update and leaves the contract in the committed state.
 fn apply_update(
@@ -1496,16 +1513,16 @@ fn oracle_updates_are_append_only_and_never_rewrite_a_retained_index() {
     let (accounts, mut oracle, key_1, _key_2) = init_tree();
     let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
-    // Six entries into a ten-slot ring: indices 0..=5, nothing evicted yet.
+    // Six entries into a ten-slot ring: indices 0..=5, no slot written twice yet.
     let first: Vec<AnyHash> = (1..=6).map(make_hash).collect();
     apply_update(&accounts, &mut oracle, &key_1, first.clone(), &block_state);
     assert_eq!(oracle.latest_index, Some(5));
 
-    let before: Vec<_> = (0..=5)
-        .map(|i| oracle.get_hash_at_index(i).cloned())
+    let before: Vec<AnyHash> = (0..=5)
+        .map(|i| oracle.get_hash_at_index(i).cloned().unwrap())
         .collect();
 
-    // Six more. The ring now holds twelve writes in ten slots, so indices 0 and 1 fall out.
+    // Six more. The ring now holds twelve writes in ten slots, so slots 0 and 1 are written again.
     let second: Vec<AnyHash> = (7..=12).map(make_hash).collect();
     apply_update(&accounts, &mut oracle, &key_1, second.clone(), &block_state);
 
@@ -1516,42 +1533,51 @@ fn oracle_updates_are_append_only_and_never_rewrite_a_retained_index() {
     );
     assert_eq!(oracle.earliest_index(), Some(2));
 
-    // Everything still retained holds exactly the value it was written with. The owner's second
-    // update could not touch them.
+    // Everything inside the window still holds exactly the value it was written with. The owner's
+    // second update could not touch them.
     for index in 2..=5u64 {
         assert_eq!(
-            oracle.get_hash_at_index(index).cloned(),
-            before[index as usize],
+            oracle.get_hash_at_index(index),
+            Some(&before[index as usize]),
             "index {index} was rewritten by a later update"
         );
     }
 
-    // The two that fell out are gone, not silently replaced by a different value at the same
-    // index: a stale proof against them is refused rather than verified against new content.
+    // Indices 0 and 1 are older than the window but still name their slots. The slots were not
+    // replaced with unrelated content: each now holds a node over the entry written at the old index
+    // and the value written at index 10 or 11, so a proof for the old index extends by one node.
     for index in [0u64, 1] {
-        assert!(
-            oracle.get_hash_at_index(index).is_none(),
-            "evicted index {index} must not resolve at all"
+        assert_eq!(
+            oracle.get_hash_at_index(index),
+            Some(&before[index as usize].digest(&second[index as usize + 4])),
+            "index {index} must resolve to its slot, folded onto the entry written at it"
+        );
+        assert_eq!(
+            oracle.get_hash_at_index(index),
+            oracle.get_hash_at_index(index + 10),
+            "index {index} and index {} share a slot",
+            index + 10
         );
     }
 
-    // And the appended entries chain onto the previous head, so their values are determined by
-    // the history in front of them rather than chosen freely.
-    let mut expected = before[5].clone().expect("index 5 is retained");
-    for (offset, attested) in second.iter().enumerate() {
-        expected = expected.digest(attested);
+    // The appended entries in slots never written before fold onto the zero hash.
+    for (offset, attested) in second[..4].iter().enumerate() {
         assert_eq!(
             oracle.get_hash_at_index(6 + offset as u64),
-            Some(&expected),
-            "entry {} is not the fold of its predecessor and the attested root",
+            Some(&attested.zero_of_same_type().digest(attested)),
+            "entry {} is not the fold of its slot's zero hash and the attested root",
             6 + offset
         );
     }
+
+    // An index not written yet does not resolve.
+    assert_eq!(oracle.get_hash_at_index(12), None);
 }
 
 /// Re-attesting a root the oracle already holds appends a new entry rather than replacing the old
-/// one — the update payload has no index to target — and the two entries differ, because each
-/// folds in a different predecessor.
+/// one — the update payload has no index to target. The new entry lands in the next slot, and when a
+/// later write brings the same root back to the first slot, the slot records it as a second write
+/// instead of staying unchanged.
 #[test]
 fn re_attesting_the_same_root_appends_instead_of_replacing() {
     let (accounts, mut oracle, key_1, _key_2) = init_tree();
@@ -1566,6 +1592,7 @@ fn re_attesting_the_same_root_appends_instead_of_replacing() {
         &block_state,
     );
     let first_entry = oracle.get_hash_at_index(0).cloned().unwrap();
+    assert_eq!(first_entry, root.zero_of_same_type().digest(&root));
 
     apply_update(
         &accounts,
@@ -1577,30 +1604,87 @@ fn re_attesting_the_same_root_appends_instead_of_replacing() {
 
     assert_eq!(oracle.latest_index, Some(1), "the update appended");
     assert_eq!(
-        oracle.get_hash_at_index(0),
-        Some(&first_entry),
+        oracle.hashes[0], first_entry,
         "the original entry is untouched",
     );
     assert_eq!(
-        oracle.get_hash_at_index(1),
-        Some(&first_entry.digest(&root)),
-        "the new entry folds the same root onto a different predecessor",
+        oracle.hashes[1], first_entry,
+        "the same root folded onto a fresh slot gives the same entry, in a different slot",
     );
+
+    // Indices 2..=9 fill the rest of the ring; index 10 writes the same root to slot 0 again.
+    let filler: Vec<AnyHash> = (20..28).map(make_hash).collect();
+    apply_update(&accounts, &mut oracle, &key_1, filler, &block_state);
+    apply_update(
+        &accounts,
+        &mut oracle,
+        &key_1,
+        vec![root.clone()],
+        &block_state,
+    );
+    assert_eq!(oracle.latest_index, Some(10));
+    assert_eq!(oracle.hashes[0], first_entry.digest(&root));
     assert_ne!(
-        oracle.get_hash_at_index(1),
-        Some(&first_entry),
-        "so the same root at a new index is a distinct entry, not a replacement",
+        oracle.hashes[0], first_entry,
+        "a second write of the same root still changes its slot",
     );
 }
 
+/// Every update is reverted exactly, across several wraps and with every update size from one to
+/// `hash_count`: each update is committed, reverted and re-applied by the test harness, and then
+/// all of them are reverted again in reverse order with the receipts they produced, passing back
+/// through every intermediate ring down to the fresh, empty contract.
+#[test]
+fn every_update_reverts_exactly_across_wraps() {
+    let (accounts, mut oracle, key_1, _key_2) = init_tree();
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
+    let fresh = oracle.clone();
+
+    let mut written: Vec<AnyHash> = Vec::new();
+    let mut history = Vec::new();
+    for (round, size) in [1usize, 10, 3, 9, 10, 7, 2, 10, 5, 1]
+        .into_iter()
+        .enumerate()
+    {
+        let hashes: Vec<AnyHash> = (0..size)
+            .map(|i| make_hash((round * 10 + i) as u8))
+            .collect();
+        let before = oracle.clone();
+        let (tx, receipt) = commit_update_returning_receipt(
+            &accounts,
+            &mut oracle,
+            &key_1,
+            hashes.clone(),
+            &block_state,
+        );
+
+        written.extend(hashes);
+        assert_eq!(oracle.latest_index, Some(written.len() as u64 - 1));
+        assert_eq!(oracle.hashes, expected_ring(10, &written));
+        assert_eq!(
+            receipt.is_some(),
+            written.len() > 10,
+            "an update gets a receipt exactly when it overwrites a slot"
+        );
+        history.push((before, tx, receipt));
+    }
+
+    for (before, tx, receipt) in history.into_iter().rev() {
+        assert_eq!(revert_with(&accounts, &mut oracle, &tx, receipt), Ok(()));
+        assert_eq!(oracle, before);
+    }
+    assert_eq!(oracle, fresh);
+}
+
 // =====================================================================
-// Revert receipts for evicting updates
+// Revert receipts for overwriting updates
 // =====================================================================
 //
-// An update that wraps the ring buffer overwrites entries, so reverting it needs the receipt to
-// put the evicted hashes back. Getting that wrong is a consensus fault rather than a lost
-// transfer: two nodes replaying the same blocks would reach different accounts-tree roots. Owner
-// changes already had receipt-rejection tests; these cover the eviction receipt.
+// An update that wraps the ring buffer folds new values into slots that already hold entries, so
+// reverting it needs the receipt to put the overwritten entries back. Getting that wrong is a
+// consensus fault rather than a lost transfer: two nodes replaying the same blocks would reach
+// different accounts-tree roots. Owner changes already had receipt-rejection tests; these cover
+// the update receipt.
 
 /// Commits an update and hands back the receipt it produced.
 fn commit_update_returning_receipt(
@@ -1623,7 +1707,8 @@ fn commit_update_returning_receipt(
     (tx, receipt)
 }
 
-/// Fills the ten-slot ring and then writes `follow_up` more hashes, every one of which evicts.
+/// Fills the ten-slot ring and then writes `follow_up` more hashes, every one of which overwrites a
+/// slot.
 /// Returns the environment, the contract, the evicting transaction and its receipt.
 fn evicting_update(
     follow_up: &[u8],
@@ -1646,7 +1731,7 @@ fn evicting_update(
         commit_update_returning_receipt(&accounts, &mut oracle, &key_1, hashes, &block_state);
     assert!(
         receipt.is_some(),
-        "an update that evicts must produce a receipt"
+        "an update that overwrites must produce a receipt"
     );
     (accounts, oracle, tx, receipt)
 }
@@ -1670,8 +1755,8 @@ fn revert_with(
     )
 }
 
-/// Without the receipt the evicted hashes are unrecoverable, so the revert must refuse rather than
-/// leave the ring holding the newer values.
+/// Without the receipt the overwritten entries are unrecoverable, since each slot now holds a hash
+/// over them, so the revert must refuse rather than leave the ring holding the newer values.
 #[test]
 fn it_rejects_revert_of_an_evicting_update_without_receipt() {
     let (accounts, mut oracle, tx, receipt) = evicting_update(&[11, 12, 13]);
@@ -1687,13 +1772,13 @@ fn it_rejects_revert_of_an_evicting_update_without_receipt() {
     assert_eq!(revert_with(&accounts, &mut oracle, &tx, receipt), Ok(()));
     assert_eq!(oracle.latest_index, Some(9));
     assert_eq!(
-        oracle.get_hashes_chronological(),
-        compute_chained_hashes(&(1..=10).map(make_hash).collect::<Vec<_>>()),
+        oracle.hashes,
+        expected_ring(10, &(1..=10).map(make_hash).collect::<Vec<_>>()),
         "the pre-update ring is restored exactly",
     );
 }
 
-/// A receipt that decodes but carries the wrong number of evicted hashes must be refused: the
+/// A receipt that decodes but carries the wrong number of overwritten hashes must be refused: the
 /// count is what ties the receipt to the update being reverted, and restoring a different number
 /// of slots would leave the ring in a state no commit ever produced.
 #[test]
@@ -1701,7 +1786,7 @@ fn it_rejects_revert_of_an_evicting_update_whose_receipt_has_the_wrong_length() 
     let (accounts, mut oracle, tx, _receipt) = evicting_update(&[11, 12, 13]);
     let before = oracle.clone();
 
-    // A genuine receipt from a *different* update, which evicted two hashes rather than three.
+    // A genuine receipt from a *different* update, which overwrote two hashes rather than three.
     let (_other_accounts, _other_oracle, _other_tx, shorter) = evicting_update(&[11, 12]);
 
     assert_eq!(

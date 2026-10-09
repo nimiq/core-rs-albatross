@@ -3,7 +3,9 @@ use nimiq_account::{
     OperationReceipt, Receipts, ReservedBalance, TransactionLog,
 };
 use nimiq_database::traits::{Database, WriteTransaction};
-use nimiq_hash::{Blake2bHasher, Hasher, Keccak256Hasher, Sha256Hasher};
+use nimiq_hash::{
+    Blake2bHash, Blake2bHasher, Hasher, Keccak256Hash, Keccak256Hasher, Sha256Hash, Sha256Hasher,
+};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
     account::{AccountError, AccountType},
@@ -104,6 +106,15 @@ fn commit_block(test: &TestCommitRevert, txs: &[Transaction], bs: &BlockState) -
     r
 }
 
+/// The proof of a single-leaf tree whose root was written once, to a slot used for the first time:
+/// its only node is the slot's previous value, the zero hash, on the left.
+fn first_write_proof() -> AnyMerkleProof {
+    AnyMerkleProof::Blake2bPath(MerklePath::from_sibling_hashes(
+        vec![Blake2bHash::default()],
+        vec![true],
+    ))
+}
+
 /// Build a signed outgoing bridge tx using an explicit Merkle-proof variant and signer.
 fn make_outgoing_tx_full(
     amount: u64,
@@ -187,7 +198,7 @@ fn bridge_reserve_and_release_balance() {
     let tx = make_outgoing_tx_full(
         RELEASE_AMOUNT,
         burn_data,
-        AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        first_write_proof(),
         0,
         &target_key(),
     );
@@ -233,7 +244,7 @@ fn bridge_reserve_balance_accepts_non_owner() {
     let tx = make_outgoing_tx_full(
         RELEASE_AMOUNT,
         burn_data,
-        AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        first_write_proof(),
         0,
         &target_key(),
     );
@@ -271,7 +282,7 @@ fn bridge_reserve_balance_rejects_insufficient_funds() {
     let tx = make_outgoing_tx_full(
         RELEASE_AMOUNT,
         burn_data,
-        AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        first_write_proof(),
         0,
         &target_key(),
     );
@@ -299,8 +310,8 @@ fn blake2b_bridge(owner: &KeyPair) -> BridgeContract {
     }
 }
 
-/// `bridge`, an oracle attesting `burn_data` at index 0 so that an empty proof verifies, and the
-/// given extra accounts.
+/// `bridge`, an oracle attesting `burn_data` at index 0 so that `first_write_proof` verifies, and
+/// the given extra accounts.
 fn env_with_attested_burn(
     burn_data: &[u8],
     bridge: BridgeContract,
@@ -343,7 +354,7 @@ fn a_release_signed_by_anyone_but_the_target_is_rejected() {
         let tx = make_outgoing_tx_full(
             RELEASE_AMOUNT,
             burn_data.clone(),
-            AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+            first_write_proof(),
             0,
             signer,
         );
@@ -384,7 +395,7 @@ fn a_release_signed_by_anyone_but_the_target_is_rejected() {
     let tx = make_outgoing_tx_full(
         RELEASE_AMOUNT,
         burn_data,
-        AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        first_write_proof(),
         0,
         &target_key(),
     );
@@ -423,7 +434,7 @@ fn a_target_signed_release_submitted_by_a_third_party_is_accepted() {
         RELEASE_AMOUNT - FEE,
         FEE,
         burn_data,
-        AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        first_write_proof(),
         0,
         &target_key(),
     )
@@ -475,10 +486,17 @@ fn config_hash_for(kind: HashKind) -> AnyHash {
     }
 }
 
-fn empty_path_for(kind: HashKind) -> AnyMerkleProof {
+/// `first_write_proof` for the given hash type.
+fn first_write_proof_for(kind: HashKind) -> AnyMerkleProof {
     match kind {
-        HashKind::Sha256 => AnyMerkleProof::Sha256Path(MerklePath::empty()),
-        HashKind::Keccak256 => AnyMerkleProof::Keccak256Path(MerklePath::empty()),
+        HashKind::Sha256 => AnyMerkleProof::Sha256Path(MerklePath::from_sibling_hashes(
+            vec![Sha256Hash::default()],
+            vec![true],
+        )),
+        HashKind::Keccak256 => AnyMerkleProof::Keccak256Path(MerklePath::from_sibling_hashes(
+            vec![Keccak256Hash::default()],
+            vec![true],
+        )),
     }
 }
 
@@ -525,7 +543,7 @@ fn run_outgoing_success_for(kind: HashKind) {
     let tx = make_outgoing_tx_full(
         RELEASE_AMOUNT,
         burn_data,
-        empty_path_for(kind),
+        first_write_proof_for(kind),
         0,
         &target_key(),
     );
@@ -591,7 +609,7 @@ fn bridge_outgoing_rejects_mismatched_proof_variant() {
     let tx = make_outgoing_tx_full(
         RELEASE_AMOUNT,
         burn_data,
-        AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+        first_write_proof(),
         0,
         &target_key(),
     );
