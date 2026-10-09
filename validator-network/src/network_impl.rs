@@ -267,14 +267,18 @@ where
             }
         };
 
-        // A copy of our own record never binds us elsewhere. One at least as new as ours means a
-        // previous incarnation of ours signed later than we do now. It is reported, and the
-        // validator re-signs past it through `set_public_key` (see `own_record`).
+        // A copy of our own record never binds us elsewhere. One under another peer ID at least
+        // as new as ours means a previous incarnation of ours signed later than we do now. It is
+        // reported, and the validator re-signs past it through `set_public_key` (see
+        // `own_record`). A copy under our own peer ID already points at us; peers return our
+        // current record on every pull.
         let own_record = self.own_record.read().clone();
         if let Some(own_record) = own_record
             && own_record.record.validator_address == record.record.validator_address
         {
-            if record.record.timestamp >= own_record.record.timestamp {
+            if record.record.peer_id != own_record.record.peer_id
+                && record.record.timestamp >= own_record.record.timestamp
+            {
                 log::info!(
                     timestamp = record.record.timestamp,
                     "A copy of our validator record signed later than ours was seen"
