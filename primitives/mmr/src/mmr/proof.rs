@@ -99,6 +99,14 @@ impl<H: Merge + Clone> Proof<H> {
         let mut positions = positions?;
         positions.sort_unstable_by_key(|(pos, _)| *pos);
 
+        // A leaf can only be proven once. If a position is listed twice, both copies climb the
+        // tree independently and only the first one to reach the peak is hashed into the root,
+        // so a second (forged) item at an already-proven position would be accepted without
+        // ever being hashed
+        if positions.windows(2).any(|w| w[0].0 == w[1].0) {
+            return Err(Error::InvalidProof);
+        }
+
         let peaks = self.calculate_peak_roots(&positions)?;
         bagging(peaks.into_iter().map(Ok).rev())
     }
@@ -571,6 +579,64 @@ mod tests {
         assert_eq!(
             proof.verify(&mmr.get_root().unwrap(), &[(2, &0)]),
             Err(Error::ProveInvalidLeaves)
+        );
+    }
+
+    #[test]
+    fn it_rejects_duplicate_leaf_positions() {
+        let nodes = [2, 3, 4, 5];
+
+        let store = MemoryStore::new();
+        let mut mmr = MerkleMountainRange::<TestHash, _>::new(store);
+
+        for &v in nodes.iter() {
+            mmr.push(&v).unwrap();
+        }
+        let root = mmr.get_root().unwrap();
+
+        /*        6
+         *      /   \
+         *     2     5
+         *    / \   / \
+         *   0   1 3   4
+         */
+        // The prover does not reject duplicates either, so this is exactly what a malicious
+        // peer would send: every sibling on the path of leaf 1 appears twice
+        let proof = mmr.prove(&[1, 1], None).unwrap();
+        assert_eq!(proof.nodes.len(), 4);
+
+        // Genuine item followed by a forged one at the same position
+        assert_eq!(
+            proof.verify(&root, &[(1, &3), (1, &99)]),
+            Err(Error::InvalidProof)
+        );
+        // Forged item first
+        assert_eq!(
+            proof.verify(&root, &[(1, &99), (1, &3)]),
+            Err(Error::InvalidProof)
+        );
+        // Even the genuine item twice is not a valid proof
+        assert_eq!(
+            proof.verify(&root, &[(1, &3), (1, &3)]),
+            Err(Error::InvalidProof)
+        );
+        // Duplicates are rejected regardless of the input order
+        let proof = mmr.prove(&[1, 3, 1], None).unwrap();
+        assert_eq!(
+            proof.verify(&root, &[(1, &3), (3, &5), (1, &99)]),
+            Err(Error::InvalidProof)
+        );
+
+        // Single-leaf tree, where the leaf is the peak itself
+        let store = MemoryStore::new();
+        let mut mmr = MerkleMountainRange::<TestHash, _>::new(store);
+        mmr.push(&2).unwrap();
+        let root = mmr.get_root().unwrap();
+
+        let proof = mmr.prove(&[0, 0], None).unwrap();
+        assert_eq!(
+            proof.verify(&root, &[(0, &2), (0, &99)]),
+            Err(Error::InvalidProof)
         );
     }
 
