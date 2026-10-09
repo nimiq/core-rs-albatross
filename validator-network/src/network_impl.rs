@@ -87,6 +87,8 @@ where
     receiving: Arc<AtomicBool>,
     /// Minimum time between two re-signings of our record past a copy of it.
     resign_cooldown: Duration,
+    /// Minimum time between two pull rounds.
+    pull_cooldown: Duration,
     /// Whether the task announcing our record to joining validator peers runs.
     announcing_on_join: Arc<AtomicBool>,
 }
@@ -101,6 +103,9 @@ where
     pub const PULL_TIMEOUT: Duration = Duration::from_secs(2);
     /// How many connected validator peers one pull asks.
     pub const MAX_PULL_PEERS: usize = 3;
+    /// Minimum time between two pull rounds. Peers answer at most four pulls per ten seconds from
+    /// the same requester, so this keeps a run of misses from exceeding that.
+    pub const PULL_COOLDOWN: Duration = Duration::from_secs(3);
     /// Minimum time between two re-signings of our record past a copy of it. Copies keep coming
     /// while another instance runs with our signing key; this keeps the two from re-signing past
     /// each other without pause.
@@ -125,7 +130,14 @@ where
             receiving: Arc::new(AtomicBool::new(false)),
             announcing_on_join: Arc::new(AtomicBool::new(false)),
             resign_cooldown: Self::RESIGN_COOLDOWN,
+            pull_cooldown: Self::PULL_COOLDOWN,
         }
+    }
+
+    /// Overrides the minimum time between two pull rounds.
+    pub fn with_pull_cooldown(mut self, cooldown: Duration) -> Self {
+        self.pull_cooldown = cooldown;
+        self
     }
 
     /// Overrides the minimum time between two re-signings of our record.
@@ -150,6 +162,7 @@ where
             receiving: Arc::clone(&self.receiving),
             announcing_on_join: Arc::clone(&self.announcing_on_join),
             resign_cooldown: self.resign_cooldown,
+            pull_cooldown: self.pull_cooldown,
         }
     }
 
@@ -2302,5 +2315,59 @@ mod tests {
             .expect("no re-announcement");
         assert!(third.record.record.timestamp > copy);
         assert_eq!(network.own_record_superseded_at(), None);
+    }
+
+    #[test(tokio::test)]
+    async fn a_miss_within_the_pull_cooldown_does_not_pull_again() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let (x, y) = (TestValidator::new(1), TestValidator::new(2));
+        let px = hub.new_network();
+        // The responder knows only `x`, so a miss for `y` stays a miss.
+        let responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![x.record(px.get_local_peer_id(), now_ms())],
+        );
+        let cooldown = Duration::from_millis(200);
+        let network = ValNet::new(Arc::clone(&us)).with_pull_cooldown(cooldown);
+        network.set_validators(&active_set(&[&x, &y]));
+
+        network.get_peer_id(X);
+        wait_for_peer_id(&network, X, px.get_local_peer_id()).await;
+        settle().await;
+        assert_eq!(responder.pulls(), 1);
+
+        // A miss within the cooldown resolves without a pull...
+        network.get_peer_id(Y);
+        wait_for_resolution(&network, &y.address).await;
+        assert_eq!(responder.pulls(), 1);
+
+        // ...and one after it pulls again.
+        nimiq_time::sleep(cooldown + Duration::from_millis(100)).await;
+        network.get_peer_id(Y);
+        wait_for_resolution(&network, &y.address).await;
+        assert_eq!(responder.pulls(), 2);
+    }
+
+    #[test(tokio::test)]
+    async fn pulls_ask_different_validator_peers_over_time() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let x = TestValidator::new(1);
+        let responders: Vec<Responder> = (0..2 * ValNet::MAX_PULL_PEERS)
+            .map(|_| Responder::validator(&mut hub, &us, vec![]))
+            .collect();
+        let network = ValNet::new(Arc::clone(&us)).with_pull_cooldown(Duration::ZERO);
+        network.set_validators(&active_set(&[&x]));
+
+        // Nobody knows `x`, so every miss pulls again.
+        for _ in 0..30 {
+            network.get_peer_id(X);
+            wait_for_resolution(&network, &x.address).await;
+        }
+        for responder in &responders {
+            assert!(responder.pulls() > 0, "a peer was never asked");
+        }
     }
 }
