@@ -32,7 +32,7 @@ use nimiq_network_interface::{
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::spawn;
-use nimiq_validator_network::{PubsubId, ValidatorNetwork};
+use nimiq_validator_network::{validator_claim::ValidatorClaimSigner, PubsubId, ValidatorNetwork};
 use parking_lot::RwLock;
 #[cfg(feature = "metrics")]
 use tokio_metrics::TaskMonitor;
@@ -90,6 +90,10 @@ where
     state: Arc<RwLock<ValidatorState>>,
     inactivity_state: Option<InactivityState>,
 
+    /// Whether we currently advertise our validator claim to other peers. See
+    /// [`Self::advertise_validator_claim`].
+    validator_info_advertised: bool,
+
     proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
     consensus_event_rx: BroadcastStream<ConsensusEvent>,
@@ -117,7 +121,12 @@ impl ValidatorState {
     }
 
     fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
-        self.get_validator(blockchain).map_or(
+        Self::staking_state_of(self.get_validator(blockchain).as_ref())
+    }
+
+    /// Derives the staking state from an already fetched validator account.
+    fn staking_state_of(validator: Option<&ValidatorAccount>) -> ValidatorStakingState {
+        validator.map_or(
             ValidatorStakingState::UnknownOrNoStake,
             |validator| match validator.inactive_from {
                 Some(_) => ValidatorStakingState::Inactive(validator.jailed_from),
@@ -219,6 +228,7 @@ where
                 consensus: blockchain_state,
             })),
             inactivity_state: None,
+            validator_info_advertised: false,
 
             proposal_receiver,
 
@@ -482,6 +492,39 @@ where
         self.state.write().slot_band = None;
         self.macro_producer = None;
         self.micro_producer = None;
+
+        // While we are not synced, we cannot tell whether the staking contract still backs our
+        // validator claim, e.g. whether our signing key was rotated away in the meantime, so stop
+        // advertising it. It is advertised again on the first poll after we are synced (see
+        // `poll`).
+        self.advertise_validator_claim(None);
+    }
+
+    /// Starts advertising our validator claim to other peers with `signer`, or stops advertising
+    /// it with `None`, unless that is what we do already.
+    ///
+    /// We only advertise the claim while we are synced and the staking contract backs it, i.e.
+    /// our validator is registered with our configured signing key: advertising before our
+    /// registration is mined, or after our signing key was rotated away, would just hand peers a
+    /// claim that cannot check out. Whether that is the case is checked on every poll while we
+    /// are synced (see `poll`), and advertising stops when we lose consensus (see [`Self::pause`]).
+    /// Peers then drop the binding they hold for us until they have verified the claim we
+    /// advertise again, and rely on their peer ID cache and our DHT record in the meantime.
+    ///
+    /// This must not be called while holding the blockchain or validator state lock: the network
+    /// takes the peer contact book lock to re-sign our contact, and that lock must stay below the
+    /// blockchain lock.
+    fn advertise_validator_claim(&mut self, signer: Option<ValidatorClaimSigner>) {
+        let advertise = signer.is_some();
+        if advertise == self.validator_info_advertised {
+            return;
+        }
+        self.validator_info_advertised = advertise;
+        info!(
+            advertising = advertise,
+            "Changed whether we advertise our validator claim to peers"
+        );
+        self.network.set_validator_claim_signer(signer);
     }
 
     fn on_blockchain_event(&mut self, event: BlockchainEvent) {
@@ -820,10 +863,27 @@ where
         }
 
         // Once the validator can be active is established, check the validator staking state.
+        let mut signer_update = None;
         if self.is_synced() {
             let blockchain = self.blockchain.read();
             let state = self.state.read();
-            match state.get_staking_state(&blockchain) {
+            let validator = state.get_validator(&blockchain);
+
+            // Only advertise our validator claim to other peers while the staking contract backs
+            // the claim (see `advertise_validator_claim`).
+            let advertise = validator
+                .as_ref()
+                .is_some_and(|account| account.signing_key == state.signing_key.public);
+            if advertise != self.validator_info_advertised {
+                signer_update = Some(advertise.then(|| {
+                    ValidatorClaimSigner::new(
+                        state.validator_address.clone(),
+                        state.signing_key.clone(),
+                    )
+                }));
+            }
+
+            match ValidatorState::staking_state_of(validator.as_ref()) {
                 ValidatorStakingState::Active => {
                     drop(state);
                     drop(blockchain);
@@ -849,6 +909,11 @@ where
                 }
                 ValidatorStakingState::UnknownOrNoStake => {}
             }
+        }
+
+        // Applied once the blockchain and validator state guards above are released.
+        if let Some(signer) = signer_update {
+            self.advertise_validator_claim(signer);
         }
 
         // Check if DHT is bootstrapped and we can publish our record

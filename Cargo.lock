@@ -5086,10 +5086,14 @@ name = "nimiq-validator-network"
 version = "2.2.0"
 dependencies = [
  "futures-util",
+ "nimiq-bls",
  "nimiq-keys",
  "nimiq-network-interface",
+ "nimiq-network-mock",
  "nimiq-primitives",
  "nimiq-serde",
+ "nimiq-test-log",
+ "nimiq-test-utils",
  "nimiq-utils",
  "parking_lot",
  "serde",
