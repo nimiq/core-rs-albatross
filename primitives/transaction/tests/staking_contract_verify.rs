@@ -189,6 +189,29 @@ fn create_validator() {
             Err(TransactionError::InvalidProof)
         );
     });
+
+    // Invalid signature and invalid proof of knowledge: the cheap signature check comes first, so
+    // the pairing never runs for a transaction the cold key did not sign.
+    let tx = make_signed_incoming_tx(
+        IncomingStakingTransactionData::CreateValidator {
+            signing_key,
+            voting_key: voting_key.clone(),
+            proof_of_knowledge: invalid_pok.compress(),
+            reward_address: Address::from([3u8; 20]),
+            signal_data: None,
+            proof: SignatureProof::default(),
+        },
+        Policy::VALIDATOR_DEPOSIT,
+        &cold_keypair,
+        Some(other_pair.public),
+    );
+
+    for_each_protocol_version(|v| {
+        assert_eq!(
+            AccountType::verify_incoming_transaction(&tx, v),
+            Err(TransactionError::InvalidProof)
+        );
+    });
 }
 
 #[test]
@@ -309,6 +332,29 @@ fn update_validator() {
                     .sign(&voting_key.serialize_to_vec())
                     .compress(),
             ),
+            new_reward_address: Some(Address::from([3u8; 20])),
+            new_signal_data: Some(Some(Blake2bHash::default())),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &cold_keypair,
+        Some(other_pair.public),
+    );
+
+    for_each_protocol_version(|v| {
+        assert_eq!(
+            AccountType::verify_incoming_transaction(&tx, v),
+            Err(TransactionError::InvalidProof)
+        );
+    });
+
+    // Invalid signature and invalid proof of knowledge: the cheap signature check comes first, so
+    // the pairing never runs for a transaction the cold key did not sign.
+    let tx = make_signed_incoming_tx(
+        IncomingStakingTransactionData::UpdateValidator {
+            new_signing_key: Some(signing_key),
+            new_voting_key: Some(voting_key.clone()),
+            new_proof_of_knowledge: Some(invalid_pok.compress()),
             new_reward_address: Some(Address::from([3u8; 20])),
             new_signal_data: Some(Some(Blake2bHash::default())),
             proof: SignatureProof::default(),

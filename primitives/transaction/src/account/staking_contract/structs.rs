@@ -148,11 +148,11 @@ impl IncomingStakingTransactionData {
                     return Err(TransactionError::InvalidValue);
                 }
 
-                // Check proof of knowledge.
-                verify_proof_of_knowledge(voting_key, proof_of_knowledge)?;
+                // Check that the signature is correct. Cheap, so it goes before the pairing.
+                verify_transaction_signature(transaction, proof)?;
 
-                // Check that the signature is correct.
-                verify_transaction_signature(transaction, proof)?
+                // Check proof of knowledge.
+                verify_proof_of_knowledge(voting_key, proof_of_knowledge)?
             }
             IncomingStakingTransactionData::UpdateValidator {
                 new_signing_key,
@@ -172,6 +172,9 @@ impl IncomingStakingTransactionData {
                     return Err(TransactionError::InvalidData);
                 }
 
+                // Check that the signature is correct. Cheap, so it goes before the pairing.
+                verify_transaction_signature(transaction, proof)?;
+
                 // Check proof of knowledge, if necessary.
                 match (new_voting_key, new_proof_of_knowledge) {
                     (Some(key), Some(pok)) => verify_proof_of_knowledge(key, pok)?,
@@ -179,9 +182,6 @@ impl IncomingStakingTransactionData {
                     (None, Some(_)) => return Err(TransactionError::InvalidData),
                     (None, None) => {} // no key change, nothing to verify
                 }
-
-                // Check that the signature is correct.
-                verify_transaction_signature(transaction, proof)?
             }
             IncomingStakingTransactionData::DeactivateValidator { proof, .. } => {
                 // Check that the signature is correct.
