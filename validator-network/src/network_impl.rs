@@ -74,6 +74,8 @@ where
     pull: Arc<Mutex<Option<Shared<BoxFuture<'static, ()>>>>>,
     /// Whether the tasks receiving records from peers and answering pulls run.
     receiving: Arc<AtomicBool>,
+    /// Minimum time between two re-signings of our record past a copy of it.
+    resign_cooldown: Duration,
     /// Whether the task announcing our record to joining validator peers runs.
     announcing_on_join: Arc<AtomicBool>,
 }
@@ -88,6 +90,10 @@ where
     pub const PULL_TIMEOUT: Duration = Duration::from_secs(2);
     /// How many connected validator peers one pull asks.
     pub const MAX_PULL_PEERS: usize = 3;
+    /// Minimum time between two re-signings of our record past a copy of it. Copies keep coming
+    /// while another instance runs with our signing key; this keeps the two from re-signing past
+    /// each other without pause.
+    pub const RESIGN_COOLDOWN: Duration = Duration::from_secs(2 * 60);
 
     pub fn new(network: Arc<N>) -> Self {
         Self::new_with_fallback(network, Arc::new(|_| future::ready(None).boxed()))
@@ -106,7 +112,14 @@ where
             pull: Arc::new(Mutex::new(None)),
             receiving: Arc::new(AtomicBool::new(false)),
             announcing_on_join: Arc::new(AtomicBool::new(false)),
+            resign_cooldown: Self::RESIGN_COOLDOWN,
         }
+    }
+
+    /// Overrides the minimum time between two re-signings of our record.
+    pub fn with_resign_cooldown(mut self, cooldown: Duration) -> Self {
+        self.resign_cooldown = cooldown;
+        self
     }
 
     /// For use in closures, so that no reference to `self` needs to be kept around.
@@ -123,6 +136,7 @@ where
             pull: Arc::clone(&self.pull),
             receiving: Arc::clone(&self.receiving),
             announcing_on_join: Arc::clone(&self.announcing_on_join),
+            resign_cooldown: self.resign_cooldown,
         }
     }
 
@@ -2188,5 +2202,75 @@ mod tests {
             .unwrap();
         let after = our_record_via(&reader, us_peer_id, &ours.address).await;
         assert_eq!(after.record, before.record);
+    }
+
+    #[test(tokio::test)]
+    async fn re_signing_past_copies_of_our_record_is_rate_limited() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let peer = hub.new_network();
+        peer.dial_mock(&us);
+        let mut inbox = inbox(&peer);
+        let us_peer_id = us.get_local_peer_id();
+        let ours = TestValidator::new(0);
+        let cooldown = Duration::from_millis(200);
+        let network = ValNet::new(Arc::clone(&us)).with_resign_cooldown(cooldown);
+        network.set_validators(&active_set(&[&ours]));
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        let (first, _) = next_announcement(&mut inbox)
+            .await
+            .expect("no announcement");
+
+        // The first copy is re-signed past right away.
+        let copy = first.record.record.timestamp + 1000;
+        announce(
+            &peer,
+            us_peer_id,
+            ours.announcement(peer.get_local_peer_id(), copy),
+        )
+        .await;
+        wait_for_superseded_at(&network, copy).await;
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        let (second, _) = next_announcement(&mut inbox)
+            .await
+            .expect("no re-announcement");
+        assert!(second.record.record.timestamp > copy);
+
+        // A second copy within the cooldown is reported but not re-signed past.
+        let copy = second.record.record.timestamp + 1000;
+        announce(
+            &peer,
+            us_peer_id,
+            ours.announcement(peer.get_local_peer_id(), copy),
+        )
+        .await;
+        wait_for_superseded_at(&network, copy).await;
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        let (unchanged, _) = next_announcement(&mut inbox)
+            .await
+            .expect("no announcement");
+        assert_eq!(unchanged.record.record, second.record.record);
+        assert_eq!(network.own_record_superseded_at(), Some(copy));
+
+        // Once the cooldown passed, it is.
+        nimiq_time::sleep(cooldown + Duration::from_millis(100)).await;
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        let (third, _) = next_announcement(&mut inbox)
+            .await
+            .expect("no re-announcement");
+        assert!(third.record.record.timestamp > copy);
+        assert_eq!(network.own_record_superseded_at(), None);
     }
 }
