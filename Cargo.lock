@@ -4062,14 +4062,21 @@ dependencies = [
 name = "nimiq-dht"
 version = "2.2.0"
 dependencies = [
+ "nimiq-blockchain",
  "nimiq-blockchain-interface",
  "nimiq-blockchain-proxy",
+ "nimiq-database",
  "nimiq-keys",
+ "nimiq-light-blockchain",
  "nimiq-log",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
+ "nimiq-primitives",
  "nimiq-serde",
+ "nimiq-test-log",
+ "nimiq-test-utils",
  "nimiq-utils",
+ "parking_lot",
  "time",
  "tracing",
 ]

@@ -32,3 +32,12 @@ nimiq-network-libp2p = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true }
 
+[dev-dependencies]
+parking_lot = "0.12"
+
+nimiq-blockchain = { workspace = true }
+nimiq-database = { workspace = true }
+nimiq-light-blockchain = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["networks"] }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
