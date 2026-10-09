@@ -3,7 +3,7 @@ use std::{env, str::FromStr, sync::Arc, time::Duration};
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
-use nimiq_bls::KeyPair as BlsKeyPair;
+use nimiq_bls::{CompressedSignature, KeyPair as BlsKeyPair};
 use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
@@ -15,7 +15,9 @@ use nimiq_mempool::{
     config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority, verify::VerifyErr,
 };
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
-use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_primitives::{
+    coin::Coin, networks::NetworkId, policy::Policy, transaction::TransactionError,
+};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -24,7 +26,10 @@ use nimiq_test_utils::{
     test_rng,
     test_transaction::{generate_accounts, generate_transactions, TestAccount, TestTransaction},
 };
-use nimiq_transaction::{ExecutedTransaction, SignatureProof, Transaction};
+use nimiq_transaction::{
+    account::staking_contract::IncomingStakingTransactionData, ExecutedTransaction, SignatureProof,
+    Transaction,
+};
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::{spawn_blocking, time::OffsetTime};
 use nimiq_vrf::VrfSeed;
@@ -2784,7 +2789,8 @@ async fn local_submission_bypasses_gossip_queue() {
     assert_eq!(mempool.num_transactions(), 3);
 }
 
-/// A syntactically valid signature proof that does not belong to the transaction it is put on.
+/// Bytes that do not deserialize as a signature proof. Put on a transaction that must be refused
+/// before its proof is read, so that reading it would show up as `InvalidSerialization`.
 const WRONG_PROOF: &str = "0222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0003fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30b";
 
 /// Genesis with one validator, one recipient and one sender, funded only if `sender_balance` is nonzero.
@@ -3007,4 +3013,361 @@ async fn update_validator_for_unknown_validator_is_refused_before_verification()
         NetworkId::UnitAlbatross,
     );
     assert_eq!(mempool.add_transaction(tx, None).await, Ok(()));
+}
+
+/// A validator gets one pending voting-key rotation at a time: a second one is refused before its
+/// proof of knowledge or signature is verified, and admitted once the first has been mined.
+#[test(tokio::test)]
+async fn second_voting_key_update_for_a_validator_waits_for_the_first() {
+    let mut rng = test_rng(true);
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            Arc::new(OffsetTime::new()),
+        )
+        .unwrap(),
+    ));
+    let mempool = Mempool::new(blockchain, MempoolConfig::default());
+    let validity_start_height = 1 + Policy::genesis_block_number();
+    let cold_key = ed25519_key_pair(VALIDATOR_COLD_SECRET_KEY);
+    let senders: Vec<SchnorrKeyPair> = (0..3).map(|_| SchnorrKeyPair::generate(&mut rng)).collect();
+    let voting_keys: Vec<BlsKeyPair> = (0..2).map(|_| BlsKeyPair::generate(&mut rng)).collect();
+    // Zero-fee update of the genesis validator from an unfunded sender, as in the finding.
+    let update = |sender: &SchnorrKeyPair, voting_key: Option<&BlsKeyPair>, reward_address| {
+        TransactionBuilder::new_update_validator(
+            sender,
+            &cold_key,
+            None,
+            voting_key,
+            reward_address,
+            None,
+            Coin::ZERO,
+            validity_start_height,
+            NetworkId::UnitAlbatross,
+        )
+    };
+
+    let first = update(&senders[0], Some(&voting_keys[0]), None);
+    assert_eq!(mempool.add_transaction(first.clone(), None).await, Ok(()));
+
+    // Refused while the first is pending, before the (wrong) signature is looked at. An update
+    // that leaves the voting key alone is not affected.
+    let second = update(&senders[1], Some(&voting_keys[1]), None);
+    let mut probe = second.clone();
+    probe.proof = hex::decode(WRONG_PROOF).unwrap();
+    assert_eq!(
+        mempool.add_transaction(probe, None).await,
+        Err(VerifyErr::VotingKeyUpdatePending)
+    );
+    let reward_update = update(&senders[2], None, Some(Address::default()));
+    assert_eq!(mempool.add_transaction(reward_update, None).await, Ok(()));
+
+    // Once the first rotation is mined, the next one is admitted.
+    let block = create_dummy_micro_block(Some(vec![first]));
+    mempool.update(&[(block.hash(), block)], [].as_ref());
+    assert_eq!(mempool.add_transaction(second, None).await, Ok(()));
+    assert_eq!(mempool.num_transactions(), 2);
+}
+
+/// Gives `tx` a well-formed proof of knowledge that belongs to `other`, then signs the cold proof
+/// with `cold` claiming `cold_public` and the outer proof with `sender`, as a builder would.
+fn with_wrong_proof_of_knowledge(
+    mut tx: Transaction,
+    other: &BlsKeyPair,
+    cold_public: SchnorrPublicKey,
+    cold: &SchnorrKeyPair,
+    sender: &SchnorrKeyPair,
+) -> Transaction {
+    let mut data = IncomingStakingTransactionData::parse(&tx).unwrap();
+    let proof_of_knowledge: CompressedSignature = other.sign(&other.public_key).compress();
+    match &mut data {
+        IncomingStakingTransactionData::CreateValidator {
+            proof_of_knowledge: pok,
+            ..
+        } => *pok = proof_of_knowledge,
+        IncomingStakingTransactionData::UpdateValidator {
+            new_proof_of_knowledge,
+            ..
+        } => *new_proof_of_knowledge = Some(proof_of_knowledge),
+        _ => unreachable!(),
+    }
+    data.set_signature(SignatureProof::default());
+    tx.recipient_data = data.serialize_to_vec();
+    data.set_signature(SignatureProof::from_ed25519(
+        cold_public,
+        cold.sign(&tx.serialize_content()),
+    ));
+    tx.recipient_data = data.serialize_to_vec();
+    tx.proof = SignatureProof::from_ed25519(sender.public, sender.sign(&tx.serialize_content()))
+        .serialize_to_vec();
+    tx
+}
+
+fn unit_genesis_mempool() -> Mempool {
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            Arc::new(OffsetTime::new()),
+        )
+        .unwrap(),
+    ));
+    Mempool::new(blockchain, MempoolConfig::default())
+}
+
+/// After a proof of knowledge fails behind the validator's cold signature, the cold key gets no
+/// further pairing in the same block: the next rotation is refused before verification and
+/// admitted once the head moves. Updates without a voting key are not affected.
+#[test(tokio::test)]
+async fn failed_proof_of_knowledge_holds_the_cold_key_for_the_block() {
+    let mut rng = test_rng(true);
+    let mempool = unit_genesis_mempool();
+    let validity_start_height = 1 + Policy::genesis_block_number();
+    let cold = ed25519_key_pair(VALIDATOR_COLD_SECRET_KEY);
+    let voting_key = BlsKeyPair::generate(&mut rng);
+    let other = BlsKeyPair::generate(&mut rng);
+    let senders: Vec<SchnorrKeyPair> = (0..4).map(|_| SchnorrKeyPair::generate(&mut rng)).collect();
+    let rotation = |sender: &SchnorrKeyPair| {
+        TransactionBuilder::new_update_validator(
+            sender,
+            &cold,
+            None,
+            Some(&voting_key),
+            None,
+            None,
+            Coin::ZERO,
+            validity_start_height,
+            NetworkId::UnitAlbatross,
+        )
+    };
+
+    // The pairing runs and fails: `InvalidData` is the proof-of-knowledge error.
+    let failed = with_wrong_proof_of_knowledge(
+        rotation(&senders[0]),
+        &other,
+        cold.public,
+        &cold,
+        &senders[0],
+    );
+    assert_eq!(
+        mempool.add_transaction(failed, None).await,
+        Err(VerifyErr::InvalidTransaction(TransactionError::InvalidData))
+    );
+
+    // The next one is refused before the pairing, before the (wrong) signature is looked at, and
+    // so is the validator's own correct rotation.
+    let mut probe = with_wrong_proof_of_knowledge(
+        rotation(&senders[1]),
+        &other,
+        cold.public,
+        &cold,
+        &senders[1],
+    );
+    probe.proof = hex::decode(WRONG_PROOF).unwrap();
+    assert_eq!(
+        mempool.add_transaction(probe, None).await,
+        Err(VerifyErr::ProofOfKnowledgeLimitReached)
+    );
+    assert_eq!(
+        mempool.add_transaction(rotation(&senders[2]), None).await,
+        Err(VerifyErr::ProofOfKnowledgeLimitReached)
+    );
+
+    // An update that leaves the voting key alone needs no pairing and goes through.
+    let reward_update = TransactionBuilder::new_update_validator(
+        &senders[3],
+        &cold,
+        None,
+        None,
+        Some(Address::default()),
+        None,
+        Coin::ZERO,
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    );
+    assert_eq!(mempool.add_transaction(reward_update, None).await, Ok(()));
+
+    // Once the head moves, the key gets its next pairing.
+    let block = create_dummy_micro_block(None);
+    mempool.update(&[(block.hash(), block)], [].as_ref());
+    assert_eq!(
+        mempool.add_transaction(rotation(&senders[2]), None).await,
+        Ok(())
+    );
+    assert_eq!(mempool.num_transactions(), 2);
+}
+
+/// A failed proof of knowledge only counts against the cold key when the cold signature is the
+/// validator's own: a stranger's copy fails on the signature, costs no pairing, and leaves the
+/// validator's next rotation admitted.
+#[test(tokio::test)]
+async fn forged_cold_signature_does_not_hold_the_validator() {
+    let mut rng = test_rng(true);
+    let mempool = unit_genesis_mempool();
+    let validity_start_height = 1 + Policy::genesis_block_number();
+    let cold = ed25519_key_pair(VALIDATOR_COLD_SECRET_KEY);
+    let stranger = SchnorrKeyPair::generate(&mut rng);
+    let voting_key = BlsKeyPair::generate(&mut rng);
+    let other = BlsKeyPair::generate(&mut rng);
+    let senders: Vec<SchnorrKeyPair> = (0..2).map(|_| SchnorrKeyPair::generate(&mut rng)).collect();
+    let rotation = |sender: &SchnorrKeyPair| {
+        TransactionBuilder::new_update_validator(
+            sender,
+            &cold,
+            None,
+            Some(&voting_key),
+            None,
+            None,
+            Coin::ZERO,
+            validity_start_height,
+            NetworkId::UnitAlbatross,
+        )
+    };
+
+    let forged = with_wrong_proof_of_knowledge(
+        rotation(&senders[0]),
+        &other,
+        cold.public,
+        &stranger,
+        &senders[0],
+    );
+    assert_eq!(
+        mempool.add_transaction(forged, None).await,
+        Err(VerifyErr::InvalidTransaction(
+            TransactionError::InvalidProof
+        ))
+    );
+    assert_eq!(
+        mempool.add_transaction(rotation(&senders[1]), None).await,
+        Ok(())
+    );
+}
+
+/// The sender proof is outside the transaction hash and the cold signature. A copy of a
+/// validator's rotation with the sender proof replaced fails on the sender signature, costs no
+/// pairing, and leaves the validator's own copy admitted.
+#[test(tokio::test)]
+async fn replaced_sender_proof_does_not_hold_the_validator() {
+    let mut rng = test_rng(true);
+    let mempool = unit_genesis_mempool();
+    let validity_start_height = 1 + Policy::genesis_block_number();
+    let rotation = TransactionBuilder::new_update_validator(
+        &SchnorrKeyPair::generate(&mut rng),
+        &ed25519_key_pair(VALIDATOR_COLD_SECRET_KEY),
+        None,
+        Some(&BlsKeyPair::generate(&mut rng)),
+        None,
+        None,
+        Coin::ZERO,
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    );
+
+    let stranger = SchnorrKeyPair::generate(&mut rng);
+    let mut copy = rotation.clone();
+    copy.proof =
+        SignatureProof::from_ed25519(stranger.public, stranger.sign(&copy.serialize_content()))
+            .serialize_to_vec();
+    let (copy_hash, hash): (Blake2bHash, Blake2bHash) = (copy.hash(), rotation.hash());
+    assert_eq!(copy_hash, hash);
+    assert_eq!(
+        mempool.add_transaction(copy, None).await,
+        Err(VerifyErr::InvalidTransaction(
+            TransactionError::InvalidProof
+        ))
+    );
+    assert_eq!(mempool.add_transaction(rotation, None).await, Ok(()));
+}
+
+/// After a proof of knowledge fails behind the deposit holder's own signature, that sender gets no
+/// further pairing in the same block, not even for a correct `CreateValidator`; a stranger signing
+/// as the holder fails on the signature and does not put the holder on hold.
+#[test(tokio::test)]
+async fn failed_proof_of_knowledge_holds_the_deposit_holder_for_the_block() {
+    let mut rng = test_rng(true);
+    let mempool = unit_genesis_mempool();
+    let validity_start_height = 1 + Policy::genesis_block_number();
+    let sender = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let stranger = SchnorrKeyPair::generate(&mut rng);
+    let voting_key = BlsKeyPair::generate(&mut rng);
+    let other = BlsKeyPair::generate(&mut rng);
+    let colds: Vec<SchnorrKeyPair> = (0..5).map(|_| SchnorrKeyPair::generate(&mut rng)).collect();
+    let create = |cold: &SchnorrKeyPair| {
+        TransactionBuilder::new_create_validator(
+            &sender,
+            cold,
+            sender.public,
+            &voting_key,
+            Address::default(),
+            None,
+            Coin::ZERO,
+            validity_start_height,
+            NetworkId::UnitAlbatross,
+        )
+        .unwrap()
+    };
+
+    // Signed as the holder by a stranger: refused on the sender signature, before the pairing,
+    // and the holder's own transaction is still admitted afterwards.
+    let forged = with_wrong_proof_of_knowledge(
+        create(&colds[0]),
+        &other,
+        colds[0].public,
+        &colds[0],
+        &stranger,
+    );
+    assert_eq!(
+        mempool.add_transaction(forged, None).await,
+        Err(VerifyErr::InvalidTransaction(
+            TransactionError::InvalidProof
+        ))
+    );
+    assert_eq!(
+        mempool.add_transaction(create(&colds[1]), None).await,
+        Ok(())
+    );
+
+    // The holder's own wrong proof: the pairing runs and fails, and the sender is on hold for the
+    // rest of the block.
+    let failed = with_wrong_proof_of_knowledge(
+        create(&colds[2]),
+        &other,
+        colds[2].public,
+        &colds[2],
+        &sender,
+    );
+    assert_eq!(
+        mempool.add_transaction(failed, None).await,
+        Err(VerifyErr::InvalidTransaction(TransactionError::InvalidData))
+    );
+    let mut probe = with_wrong_proof_of_knowledge(
+        create(&colds[3]),
+        &other,
+        colds[3].public,
+        &colds[3],
+        &sender,
+    );
+    probe.proof = hex::decode(WRONG_PROOF).unwrap();
+    assert_eq!(
+        mempool.add_transaction(probe, None).await,
+        Err(VerifyErr::ProofOfKnowledgeLimitReached)
+    );
+    assert_eq!(
+        mempool.add_transaction(create(&colds[4]), None).await,
+        Err(VerifyErr::ProofOfKnowledgeLimitReached)
+    );
+
+    // Once the head moves, the next one is admitted.
+    let block = create_dummy_micro_block(None);
+    mempool.update(&[(block.hash(), block)], [].as_ref());
+    assert_eq!(
+        mempool.add_transaction(create(&colds[4]), None).await,
+        Ok(())
+    );
+    assert_eq!(mempool.num_transactions(), 2);
 }

@@ -8,11 +8,21 @@ use nimiq_primitives::{
     networks::NetworkId,
     transaction::TransactionError,
 };
-use nimiq_transaction::{account::staking_contract::IncomingStakingTransactionData, Transaction};
+use nimiq_transaction::{
+    account::{
+        staking_contract::{verify_transaction_signature, IncomingStakingTransactionData},
+        AccountTransactionVerification,
+    },
+    Transaction,
+};
 use parking_lot::RwLock;
 use thiserror::Error;
 
-use crate::{filter::MempoolFilter, mempool_state::MempoolState, mempool_transactions::TxPriority};
+use crate::{
+    filter::MempoolFilter,
+    mempool_state::{proof_of_knowledge_key, MempoolState},
+    mempool_transactions::TxPriority,
+};
 
 /// Error codes for the transaction verification
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -38,6 +48,10 @@ pub enum VerifyErr {
     SmallOrderKey,
     #[error("Transaction targets a validator that does not exist")]
     UnknownValidator,
+    #[error("Validator already has a voting key update pending")]
+    VotingKeyUpdatePending,
+    #[error("A proof of knowledge from this key already failed in the current block")]
+    ProofOfKnowledgeLimitReached,
 }
 
 /// Verifies a transaction and adds it to the mempool.
@@ -80,7 +94,15 @@ pub(crate) fn verify_tx(
     }
 
     // 2. Verify transaction signature (and other stuff) using the cached protocol version.
-    transaction.verify_mut(network_id, protocol_version)?;
+    if let Err(err) = transaction.verify_mut(network_id, protocol_version) {
+        remember_failed_proof_of_knowledge(
+            &transaction,
+            protocol_version,
+            &blockchain,
+            mempool_state,
+        );
+        return Err(err.into());
+    }
 
     // 3. Add transaction to the mempool. The chain may have moved meanwhile, so the chain checks
     //    run again and put() repeats the balance checks under the write lock.
@@ -137,4 +159,38 @@ fn check_validator_exists(
         return Err(VerifyErr::UnknownValidator);
     }
     Ok(())
+}
+
+/// A transaction carrying a proof of knowledge that failed behind valid signatures was sent by
+/// the key holder and usually cost a pairing: remember it so that the key gets one per block.
+fn remember_failed_proof_of_knowledge(
+    transaction: &Transaction,
+    protocol_version: u16,
+    blockchain: &RwLock<Blockchain>,
+    mempool_state: &RwLock<MempoolState>,
+) {
+    let Some(key) = proof_of_knowledge_key(transaction) else {
+        return;
+    };
+    // Checked here rather than inferred from the error, so that nobody can fill the cache for a
+    // key they do not hold. The sender proof is outside the hash and the cold signature, so a
+    // copy of a rotation with it replaced must not count against the validator either.
+    if AccountType::verify_outgoing_transaction(transaction, protocol_version).is_err() {
+        return;
+    }
+    let signed_by_key_holder = match IncomingStakingTransactionData::parse(transaction) {
+        Ok(IncomingStakingTransactionData::CreateValidator { .. }) => true,
+        Ok(IncomingStakingTransactionData::UpdateValidator { proof, .. }) => {
+            verify_transaction_signature(transaction, &proof).is_ok()
+        }
+        _ => false,
+    };
+    if !signed_by_key_holder {
+        return;
+    }
+    let block_number = blockchain.read().block_number();
+    mempool_state
+        .write()
+        .failed_proofs_of_knowledge
+        .insert(key, block_number);
 }

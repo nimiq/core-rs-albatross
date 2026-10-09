@@ -354,6 +354,9 @@ impl Mempool {
         let blockchain = self.blockchain.read();
         let mut mempool_state = self.state.write();
 
+        // The head moved, so the failed proofs of knowledge of the previous head are forgotten.
+        mempool_state.failed_proofs_of_knowledge.clear();
+
         // First remove the transactions that are no longer valid due to age.
         self.prune_expired_transactions(&blockchain, &mut mempool_state);
 

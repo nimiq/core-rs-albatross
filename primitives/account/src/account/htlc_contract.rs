@@ -53,13 +53,13 @@ impl HashedTimeLockedContract {
             } => {
                 // Check that the contract has not expired yet.
                 if self.timeout < block_state.time {
-                    warn!("HTLC has expired: {} < {}", self.timeout, block_state.time);
+                    debug!("HTLC has expired: {} < {}", self.timeout, block_state.time);
                     return Err(AccountError::InvalidForSender);
                 }
 
                 // Check that the provided hash_root is correct.
                 if hash_root != self.hash_root {
-                    warn!("HTLC hash mismatch");
+                    debug!("HTLC hash mismatch");
                     return Err(AccountError::InvalidForSender);
                 }
 
@@ -110,7 +110,7 @@ impl HashedTimeLockedContract {
             } => {
                 // Check that the contract has expired.
                 if self.timeout >= block_state.time {
-                    warn!(
+                    debug!(
                         "HTLC has not yet expired: {} >= {}",
                         self.timeout, block_state.time
                     );

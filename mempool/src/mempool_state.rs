@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use nimiq_account::ReservedBalance;
 use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{account::staking_contract::IncomingStakingTransactionData, Transaction};
 
 #[cfg(feature = "metrics")]
 use crate::mempool_metrics::MempoolMetrics;
@@ -33,6 +34,14 @@ pub(crate) struct MempoolState {
     // verification cache only vouches for a block transaction whose version matches this.
     pub(crate) verified_version: u16,
 
+    // The pending voting-key rotation per validator. Its proof of knowledge is the most expensive
+    // thing the mempool verifies, so a validator gets one in flight at a time.
+    pub(crate) pending_voting_key_updates: HashMap<Address, Blake2bHash>,
+
+    // The keys whose transaction carrying a proof of knowledge failed behind valid signatures, by
+    // block number. Only the key holder can sign such a failure, so the key gets one per block.
+    pub(crate) failed_proofs_of_knowledge: HashMap<Address, u32>,
+
     #[cfg(feature = "metrics")]
     pub(crate) metrics: Arc<MempoolMetrics>,
 }
@@ -50,6 +59,8 @@ impl MempoolState {
             state_by_sender: HashMap::new(),
             tx_per_sender_limit,
             verified_version,
+            pending_voting_key_updates: HashMap::new(),
+            failed_proofs_of_knowledge: HashMap::new(),
             #[cfg(feature = "metrics")]
             metrics: Default::default(),
         }
@@ -84,6 +95,18 @@ impl MempoolState {
             && sender_state.txns.len() >= self.tx_per_sender_limit
         {
             return Err(VerifyErr::SenderLimitReached);
+        }
+
+        if let Some(validator) = voting_key_update_target(tx)
+            && self.has_pending_voting_key_update(&validator)
+        {
+            return Err(VerifyErr::VotingKeyUpdatePending);
+        }
+
+        if let Some(key) = proof_of_knowledge_key(tx)
+            && self.failed_proofs_of_knowledge.get(&key) == Some(&blockchain.block_number())
+        {
+            return Err(VerifyErr::ProofOfKnowledgeLimitReached);
         }
 
         let sender_account = blockchain
@@ -126,6 +149,14 @@ impl MempoolState {
             return Err(VerifyErr::SenderLimitReached);
         }
 
+        // Reject a second voting-key rotation for a validator while one is pending.
+        let voting_key_update = voting_key_update_target(&tx);
+        if let Some(validator) = &voting_key_update
+            && self.has_pending_voting_key_update(validator)
+        {
+            return Err(VerifyErr::VotingKeyUpdatePending);
+        }
+
         // Reserve the balance necessary for this transaction on the sender account.
         let sender_account = blockchain
             .get_account_if_complete(&tx.sender)
@@ -152,6 +183,10 @@ impl MempoolState {
             self.control_transactions.insert(tx, priority);
         } else {
             self.regular_transactions.insert(tx, priority);
+        }
+
+        if let Some(validator) = voting_key_update {
+            self.pending_voting_key_updates.insert(validator, tx_hash);
         }
 
         // After inserting the new txn, check if we need to remove txns
@@ -182,6 +217,12 @@ impl MempoolState {
         // The transaction has left the mempool, whichever way this function returns below.
         #[cfg(feature = "metrics")]
         self.metrics.note_evicted(reason);
+
+        if let Some(validator) = voting_key_update_target(&tx)
+            && self.pending_voting_key_updates.get(&validator) == Some(tx_hash)
+        {
+            self.pending_voting_key_updates.remove(&validator);
+        }
 
         let sender_state = match self.state_by_sender.get_mut(&tx.sender) {
             Some(state) => state,
@@ -225,6 +266,15 @@ impl MempoolState {
         Some(tx)
     }
 
+    /// A sender whose account is unknown has its transactions dropped without `remove` (see
+    /// there and `Mempool::recompute_sender_balances`), so an entry only counts while its
+    /// transaction is still in the pool.
+    fn has_pending_voting_key_update(&self, validator: &Address) -> bool {
+        self.pending_voting_key_updates
+            .get(validator)
+            .is_some_and(|hash| self.contains(hash))
+    }
+
     /// Retrieves all expired transaction hashes from both the `regular_transactions` and `control_transactions` vectors
     pub fn get_expired_txns(&mut self, block_number: u32) -> Vec<Blake2bHash> {
         let mut expired_txns = self.control_transactions.get_expired_txns(block_number);
@@ -253,6 +303,38 @@ pub(crate) struct SenderPendingState {
 
     // Transaction hashes for this sender.
     pub(crate) txns: HashSet<Blake2bHash>,
+}
+
+/// The validator whose voting key `tx` rotates, if it is such an `UpdateValidator`.
+fn voting_key_update_target(tx: &Transaction) -> Option<Address> {
+    if tx.recipient_type != AccountType::Staking {
+        return None;
+    }
+    match IncomingStakingTransactionData::parse(tx) {
+        Ok(IncomingStakingTransactionData::UpdateValidator {
+            new_voting_key: Some(_),
+            proof,
+            ..
+        }) => Some(proof.compute_signer()),
+        _ => None,
+    }
+}
+
+/// The account a proof of knowledge is charged to: the sender of a `CreateValidator`, or the
+/// validator whose voting key an `UpdateValidator` rotates.
+pub(crate) fn proof_of_knowledge_key(tx: &Transaction) -> Option<Address> {
+    if tx.recipient_type != AccountType::Staking {
+        return None;
+    }
+    match IncomingStakingTransactionData::parse(tx) {
+        Ok(IncomingStakingTransactionData::CreateValidator { .. }) => Some(tx.sender.clone()),
+        Ok(IncomingStakingTransactionData::UpdateValidator {
+            new_voting_key: Some(_),
+            proof,
+            ..
+        }) => Some(proof.compute_signer()),
+        _ => None,
+    }
 }
 
 #[cfg(all(test, feature = "metrics"))]
