@@ -6,6 +6,7 @@ use std::{
 };
 
 use futures::stream::BoxStream;
+use nimiq_keys::Address;
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable};
 use thiserror::Error;
@@ -112,6 +113,17 @@ pub trait Network: Send + Sync + Unpin + 'static {
         services: Services,
         min_peers: usize,
     ) -> impl Future<Output = Result<Vec<Self::PeerId>, Self::Error>> + Send;
+
+    /// The peer IDs known to belong to `validator_address`, newest verified claim first.
+    ///
+    /// These come from the validator claims carried by gossiped peer contacts. Only claims this
+    /// node verified against the staking contract are reported. A claim is ranked and aged by the
+    /// timestamp of the contact it was verified in. A newer claim from the same peer that has not
+    /// been verified yet neither extends nor re-ranks it. A newer contact that claims another
+    /// address, or none, ends it, and so does a newer claim to the same address that this node
+    /// conclusively rejects, whether on arrival or when re-checking it later. Our own peer ID is
+    /// never among them. The peers are not necessarily connected.
+    fn get_validator_peer_ids(&self, validator_address: &Address) -> Vec<Self::PeerId>;
 
     /// Installs or removes the signer that advertises our own validator claim to other peers.
     ///
