@@ -8,7 +8,7 @@ use hyper_util::{
     client::legacy::{connect::HttpConnector, Client},
     rt::TokioExecutor,
 };
-use log::error;
+use log::{error, warn};
 use nimiq_keys::Address;
 use nimiq_network_libp2p::PeerId;
 use serde::Deserialize;
@@ -36,6 +36,12 @@ impl DhtFallback {
     pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
     fn new_inner(url: Url) -> io::Result<DhtFallback> {
+        // The list is not signed, so over plain HTTP anyone on the path can point validators at
+        // peers of their choosing.
+        if url.scheme() != "https" {
+            warn!(%url, "The DHT fallback URL does not use HTTPS, so its contents can be tampered with on the way");
+        }
+
         // rustls can only determine the process-level `CryptoProvider` on its own if exactly one
         // provider is enabled in the dependency graph, which we don't control. Select ours
         // explicitly instead of relying on that.
@@ -66,6 +72,12 @@ impl DhtFallback {
     }
 
     async fn resolve_inner(&self, validator_address: Address) -> Result<Option<PeerId>, String> {
+        nimiq_time::timeout(Self::REQUEST_TIMEOUT, self.resolve_with(validator_address))
+            .await
+            .map_err(|_| format!("timed out after {:?}", Self::REQUEST_TIMEOUT))?
+    }
+
+    async fn resolve_with(&self, validator_address: Address) -> Result<Option<PeerId>, String> {
         let response = self
             .client
             .get(self.uri.clone())
