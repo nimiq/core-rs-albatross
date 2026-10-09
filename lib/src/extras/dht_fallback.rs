@@ -1,4 +1,4 @@
-use std::{io, sync::Arc};
+use std::{io, sync::Arc, time::Duration};
 
 use http::Uri;
 use http_body_util::{BodyExt, Empty, Limited};
@@ -31,6 +31,10 @@ pub struct DhtFallback {
 }
 
 impl DhtFallback {
+    /// How long fetching the fallback list may take. A resolution waits for it before it gives
+    /// up on the validator, so it must not hang on an unresponsive server.
+    pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
     fn new_inner(url: Url) -> io::Result<DhtFallback> {
         // rustls can only determine the process-level `CryptoProvider` on its own if exactly one
         // provider is enabled in the dependency graph, which we don't control. Select ours
@@ -104,9 +108,49 @@ impl DhtFallback {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use url::Url;
 
     use super::DhtFallback;
+
+    #[tokio::test(start_paused = true)]
+    async fn resolving_gives_up_on_a_server_that_does_not_answer() {
+        // A server that accepts connections, but never answers.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        // This test only runs natively, where `nimiq_utils::spawn` would not add anything.
+        #[allow(clippy::disallowed_methods)]
+        tokio::spawn(async move {
+            let mut connections = Vec::new();
+            loop {
+                let (socket, _) = listener.accept().await.unwrap();
+                connections.push(socket);
+            }
+        });
+        let fallback =
+            DhtFallback::new(Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap()).unwrap();
+
+        let started = tokio::time::Instant::now();
+        let resolved = nimiq_time::timeout(
+            Duration::from_secs(60),
+            fallback.resolve(
+                "NQ36 U0BH 0BHM J0EH UAE5 FMV6 D2EY 8TBP 50M3"
+                    .parse()
+                    .unwrap(),
+            ),
+        )
+        .await
+        .expect("resolving never gave up");
+
+        assert_eq!(resolved, None);
+        let waited = started.elapsed();
+        assert!(
+            waited >= DhtFallback::REQUEST_TIMEOUT,
+            "gave up after {waited:?}"
+        );
+        assert!(waited < Duration::from_secs(60), "gave up after {waited:?}");
+    }
 
     #[tokio::test]
     async fn resolve() {
