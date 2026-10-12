@@ -96,6 +96,7 @@ mod tests {
     use nimiq_hash::HashOutput;
     use nimiq_keys::{Address, KeyPair, PrivateKey};
     use nimiq_primitives::policy::Policy;
+    use nimiq_test_log::test;
 
     use super::*;
 
