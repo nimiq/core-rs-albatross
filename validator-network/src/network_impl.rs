@@ -2383,4 +2383,63 @@ mod tests {
             assert!(responder.pulls() > 0, "a peer was never asked");
         }
     }
+
+    #[test(tokio::test)]
+    async fn a_copy_of_our_record_received_before_we_set_our_key_is_neither_bound_nor_relayed() {
+        let mut hub = MockHub::default();
+        let us = Arc::new(hub.new_network());
+        let reader = hub.new_network();
+        let previous_node = hub.new_network();
+        reader.dial_mock(&us);
+        let us_peer_id = us.get_local_peer_id();
+        let (x, ours) = (TestValidator::new(1), TestValidator::new(0));
+        // A record of our previous incarnation, which peers still hold and return on pulls.
+        let stale = now_ms() + 1000;
+        let _responder = Responder::validator(
+            &mut hub,
+            &us,
+            vec![ours.record(previous_node.get_local_peer_id(), stale)],
+        );
+
+        // We know who we are before our record exists.
+        let network = ValNet::new(Arc::clone(&us));
+        network.set_validator_id(Some(Y));
+        network.set_validators(&active_set(&[&x, &ours]));
+
+        // Resolving `x` pulls the copy before our key is set.
+        network.get_peer_id(X);
+        wait_for_resolution(&network, &x.address).await;
+        let shared = reader
+            .request(RecordsRequest::<MockPeerId>::default(), us_peer_id)
+            .await
+            .unwrap();
+        assert!(
+            shared
+                .iter()
+                .all(|record| record.record.validator_address != ours.address),
+            "a copy of our record is relayed"
+        );
+        assert_ne!(
+            network.get_peer_id(Y),
+            Some(previous_node.get_local_peer_id())
+        );
+
+        // Our record is signed past the copy and is the only one shared for our address.
+        network
+            .set_public_key(&ours.address, &ours.key)
+            .await
+            .unwrap();
+        let shared: Vec<_> = reader
+            .request(RecordsRequest::<MockPeerId>::default(), us_peer_id)
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|record| record.record.validator_address == ours.address)
+            .map(|record| (record.record.peer_id, record.record.timestamp))
+            .collect();
+        assert_eq!(shared.len(), 1, "{shared:?}");
+        assert_eq!(shared[0].0, us_peer_id);
+        assert!(shared[0].1 > stale, "{shared:?}");
+        assert_eq!(network.own_record_superseded_at(), None);
+    }
 }
