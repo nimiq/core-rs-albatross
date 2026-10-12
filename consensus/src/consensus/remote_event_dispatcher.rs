@@ -42,34 +42,35 @@ impl<N: Network> Handle<N, Arc<RwLock<RemoteEventDispatcherState<N>>>>
         peer_id: N::PeerId,
         state: &Arc<RwLock<RemoteEventDispatcherState<N>>>,
     ) -> Result<(), SubscribeToAddressesError> {
+        // Requests are handled concurrently, so the limits are checked under the same lock that is
+        // used to update the state. Otherwise concurrent requests could all pass the checks.
+        let mut state = state.write();
+
         match self.operation {
             AddressSubscriptionOperation::Subscribe => {
-                if let Some(peer_addresses) = state.read().subscribed_peers.get(&peer_id) {
-                    // We need to check if this peer already has too many addresses subscribed to us
-                    if peer_addresses.len() > MAX_SUBSCRIBED_PEERS_ADDRESSES {
-                        return Err(TooManyAddresses);
-                    }
-                } else {
-                    // If this is a new peer, we need to check if we can attend it
-                    if state.read().number_of_peers() > MAX_SUBSCRIBED_PEERS {
-                        return Err(TooManyPeers);
-                    }
+                // If this is a new peer, we need to check if we can attend it
+                if !state.contains_peer(&peer_id) && state.number_of_peers() >= MAX_SUBSCRIBED_PEERS
+                {
+                    return Err(TooManyPeers);
                 }
 
-                state
-                    .write()
-                    .add_addresses(&peer_id, self.addresses.clone());
+                // We need to check if this peer would end up with too many addresses subscribed to us
+                if state.number_of_addresses_after_subscribe(&peer_id, &self.addresses)
+                    > MAX_SUBSCRIBED_PEERS_ADDRESSES
+                {
+                    return Err(TooManyAddresses);
+                }
+
+                state.add_addresses(&peer_id, self.addresses.clone());
             }
 
             AddressSubscriptionOperation::Unsubscribe => {
                 // If we don't know this peer, we don't do anything
-                if !state.read().contains_peer(&peer_id) {
+                if !state.contains_peer(&peer_id) {
                     return Err(InvalidOperation);
                 }
 
-                state
-                    .write()
-                    .remove_addresses(&peer_id, self.addresses.clone());
+                state.remove_addresses(&peer_id, self.addresses.clone());
             }
         }
         Ok(())
@@ -105,6 +106,22 @@ impl<N: Network> RemoteEventDispatcherState<N> {
         self.subscribed_peers.len()
     }
 
+    /// Returns the number of addresses a peer would be subscribed to after subscribing to the given addresses.
+    /// Addresses the peer is already subscribed to, as well as duplicates, are only counted once.
+    fn number_of_addresses_after_subscribe(
+        &self,
+        peer_id: &N::PeerId,
+        addresses: &[Address],
+    ) -> usize {
+        let subscribed = self.subscribed_peers.get(peer_id);
+        let new_addresses: HashSet<&Address> = addresses
+            .iter()
+            .filter(|address| subscribed.is_none_or(|subscribed| !subscribed.contains(*address)))
+            .collect();
+
+        subscribed.map_or(0, HashSet::len) + new_addresses.len()
+    }
+
     /// Adds a new address for an specific peer.
     pub fn add_addresses(&mut self, peer_id: &N::PeerId, addresses: Vec<Address>) {
         // If we already knew this peer, then we just update its interesting addresses
@@ -133,9 +150,7 @@ impl<N: Network> RemoteEventDispatcherState<N> {
         if let Some(peer_addresses) = self.subscribed_peers.get(peer_id) {
             // Obtain the addresses that are interested to this peer and remove the peer from those addresses.
             peer_addresses.iter().for_each(|address| {
-                if let Some(peers) = self.subscriptions.get_mut(address) {
-                    peers.remove(peer_id);
-                }
+                Self::remove_subscription(&mut self.subscriptions, address, peer_id);
             });
         }
         // Finally remove the peer
@@ -147,9 +162,7 @@ impl<N: Network> RemoteEventDispatcherState<N> {
         if let Some(peer_addresses) = self.subscribed_peers.get_mut(peer_id) {
             addresses.iter().for_each(|address| {
                 peer_addresses.remove(address);
-                if let Some(peers) = self.subscriptions.get_mut(address) {
-                    peers.remove(peer_id);
-                }
+                Self::remove_subscription(&mut self.subscriptions, address, peer_id);
             });
 
             if peer_addresses.is_empty() {
@@ -162,6 +175,22 @@ impl<N: Network> RemoteEventDispatcherState<N> {
     /// Obtains the peers that are currently subscribed to us.
     pub fn get_peers(&self, address: &Address) -> Option<HashSet<N::PeerId>> {
         self.subscriptions.get(address).cloned()
+    }
+
+    /// Removes a peer from the peers that are interested in an address.
+    /// The address is dropped once no peer is interested in it anymore, otherwise `subscriptions`
+    /// would keep an entry for every address that was ever subscribed to.
+    fn remove_subscription(
+        subscriptions: &mut HashMap<Address, HashSet<N::PeerId>>,
+        address: &Address,
+        peer_id: &N::PeerId,
+    ) {
+        if let Some(peers) = subscriptions.get_mut(address) {
+            peers.remove(peer_id);
+            if peers.is_empty() {
+                subscriptions.remove(address);
+            }
+        }
     }
 }
 
@@ -352,5 +381,191 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
         }
 
         Poll::Pending
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashSet, sync::Arc};
+
+    use nimiq_keys::Address;
+    use nimiq_network_interface::request::Handle;
+    use nimiq_network_mock::{MockNetwork, MockPeerId};
+    use parking_lot::RwLock;
+
+    use super::{RemoteEventDispatcherState, MAX_SUBSCRIBED_PEERS, MAX_SUBSCRIBED_PEERS_ADDRESSES};
+    use crate::{
+        messages::{AddressSubscriptionOperation, RequestSubscribeToAddress},
+        SubscribeToAddressesError::{self, *},
+    };
+
+    type State = Arc<RwLock<RemoteEventDispatcherState<MockNetwork>>>;
+
+    fn new_state() -> State {
+        Arc::new(RwLock::new(RemoteEventDispatcherState::new()))
+    }
+
+    fn address(i: usize) -> Address {
+        let mut bytes = [0u8; 20];
+        bytes[..8].copy_from_slice(&(i as u64).to_le_bytes());
+        Address::from(bytes)
+    }
+
+    fn addresses(range: std::ops::Range<usize>) -> Vec<Address> {
+        range.map(address).collect()
+    }
+
+    fn subscribe(
+        state: &State,
+        peer: u64,
+        addresses: Vec<Address>,
+    ) -> Result<(), SubscribeToAddressesError> {
+        RequestSubscribeToAddress {
+            operation: AddressSubscriptionOperation::Subscribe,
+            addresses,
+        }
+        .handle(MockPeerId(peer), state)
+    }
+
+    fn unsubscribe(
+        state: &State,
+        peer: u64,
+        addresses: Vec<Address>,
+    ) -> Result<(), SubscribeToAddressesError> {
+        RequestSubscribeToAddress {
+            operation: AddressSubscriptionOperation::Unsubscribe,
+            addresses,
+        }
+        .handle(MockPeerId(peer), state)
+    }
+
+    #[test]
+    fn unsubscribe_drops_addresses_without_peers() {
+        let state = new_state();
+        assert_eq!(subscribe(&state, 1, addresses(0..2)), Ok(()));
+        assert_eq!(subscribe(&state, 2, addresses(1..3)), Ok(()));
+
+        // Address 1 is still subscribed to by peer 2, address 0 isn't subscribed to anymore.
+        assert_eq!(unsubscribe(&state, 1, addresses(0..2)), Ok(()));
+        {
+            let state = state.read();
+            assert!(!state.contains_peer(&MockPeerId(1)));
+            assert_eq!(state.get_peers(&address(0)), None);
+            assert_eq!(
+                state.get_peers(&address(1)),
+                Some(HashSet::from([MockPeerId(2)]))
+            );
+            assert_eq!(state.subscriptions.len(), 2);
+        }
+
+        assert_eq!(unsubscribe(&state, 2, addresses(1..3)), Ok(()));
+        let state = state.read();
+        assert!(state.subscribed_peers.is_empty());
+        assert!(state.subscriptions.is_empty());
+    }
+
+    #[test]
+    fn remove_peer_drops_addresses_without_peers() {
+        let state = new_state();
+        assert_eq!(subscribe(&state, 1, addresses(0..2)), Ok(()));
+        assert_eq!(subscribe(&state, 2, addresses(1..3)), Ok(()));
+
+        // Address 1 is still subscribed to by peer 2, address 0 isn't subscribed to anymore.
+        state.write().remove_peer(&MockPeerId(1));
+        {
+            let state = state.read();
+            assert!(!state.contains_peer(&MockPeerId(1)));
+            assert_eq!(state.get_peers(&address(0)), None);
+            assert_eq!(
+                state.get_peers(&address(1)),
+                Some(HashSet::from([MockPeerId(2)]))
+            );
+            assert_eq!(state.subscriptions.len(), 2);
+        }
+
+        state.write().remove_peer(&MockPeerId(2));
+        let state = state.read();
+        assert!(state.subscribed_peers.is_empty());
+        assert!(state.subscriptions.is_empty());
+    }
+
+    #[test]
+    fn subscription_churn_does_not_grow_state() {
+        let state = new_state();
+
+        // Subscribing to fresh addresses and unsubscribing again (or disconnecting) must not leave anything behind.
+        for round in 0..10 {
+            let start = round * 2 * MAX_SUBSCRIBED_PEERS_ADDRESSES;
+            let unsubscribed = addresses(start..start + MAX_SUBSCRIBED_PEERS_ADDRESSES);
+            let disconnected = addresses(
+                start + MAX_SUBSCRIBED_PEERS_ADDRESSES..start + 2 * MAX_SUBSCRIBED_PEERS_ADDRESSES,
+            );
+
+            assert_eq!(subscribe(&state, 1, unsubscribed.clone()), Ok(()));
+            assert_eq!(unsubscribe(&state, 1, unsubscribed), Ok(()));
+
+            assert_eq!(subscribe(&state, 2, disconnected), Ok(()));
+            state.write().remove_peer(&MockPeerId(2));
+        }
+
+        let state = state.read();
+        assert!(state.subscribed_peers.is_empty());
+        assert!(state.subscriptions.is_empty());
+    }
+
+    #[test]
+    fn subscribe_enforces_address_limit() {
+        let state = new_state();
+
+        // A single request can't exceed the limit.
+        assert_eq!(
+            subscribe(&state, 1, addresses(0..MAX_SUBSCRIBED_PEERS_ADDRESSES + 1)),
+            Err(TooManyAddresses)
+        );
+        assert!(!state.read().contains_peer(&MockPeerId(1)));
+        assert!(state.read().subscriptions.is_empty());
+
+        // Addresses that are already subscribed to, as well as duplicates, only count once.
+        assert_eq!(
+            subscribe(&state, 1, addresses(0..MAX_SUBSCRIBED_PEERS_ADDRESSES - 1)),
+            Ok(())
+        );
+        let mut request = addresses(0..MAX_SUBSCRIBED_PEERS_ADDRESSES);
+        request.push(address(MAX_SUBSCRIBED_PEERS_ADDRESSES - 1));
+        assert_eq!(subscribe(&state, 1, request), Ok(()));
+
+        // Further addresses are rejected once the peer has reached the limit.
+        assert_eq!(
+            subscribe(&state, 1, vec![address(MAX_SUBSCRIBED_PEERS_ADDRESSES)]),
+            Err(TooManyAddresses)
+        );
+        let state = state.read();
+        assert_eq!(
+            state.subscribed_peers[&MockPeerId(1)].len(),
+            MAX_SUBSCRIBED_PEERS_ADDRESSES
+        );
+        assert_eq!(state.subscriptions.len(), MAX_SUBSCRIBED_PEERS_ADDRESSES);
+    }
+
+    #[test]
+    fn subscribe_enforces_peer_limit() {
+        let state = new_state();
+        let max_peers = MAX_SUBSCRIBED_PEERS as u64;
+
+        for peer in 0..max_peers {
+            assert_eq!(subscribe(&state, peer, vec![address(0)]), Ok(()));
+        }
+        assert_eq!(
+            subscribe(&state, max_peers, vec![address(0)]),
+            Err(TooManyPeers)
+        );
+        assert_eq!(state.read().number_of_peers(), MAX_SUBSCRIBED_PEERS);
+
+        // Peers that are already subscribed can still subscribe to more addresses.
+        assert_eq!(subscribe(&state, 0, vec![address(1)]), Ok(()));
+
+        // Once a peer is fully unsubscribed, a new peer can take its place.
+        assert_eq!(unsubscribe(&state, 0, addresses(0..2)), Ok(()));
+        assert_eq!(subscribe(&state, max_peers, vec![address(0)]), Ok(()));
     }
 }
