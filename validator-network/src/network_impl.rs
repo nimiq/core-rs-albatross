@@ -324,17 +324,25 @@ where
             }
         };
 
-        // A copy of our own record never binds us elsewhere. One under another peer ID at least
-        // as new as ours means a previous incarnation of ours signed later than we do now. It is
-        // reported, and the validator re-signs past it through `set_public_key` (see
-        // `own_record`). A copy under our own peer ID already points at us; peers return our
-        // current record on every pull.
+        // A copy of our own record is never bound nor relayed. Before we have a record, our
+        // address is known from our validator ID. A copy under another peer ID at least as new
+        // as our record, or any such copy before we have one, means a previous incarnation of
+        // ours signed later than we do now. It is reported, and `set_public_key` signs past it
+        // (see `own_record`). A copy under our own peer ID already points at us; peers return
+        // our current record on every pull.
         let own_record = self.own_record.read().clone();
-        if let Some(own_record) = own_record
-            && own_record.record.validator_address == record.record.validator_address
-        {
-            if record.record.peer_id != own_record.record.peer_id
-                && record.record.timestamp >= own_record.record.timestamp
+        let own_address = own_record
+            .as_ref()
+            .map(|record| record.record.validator_address.clone())
+            .or_else(|| {
+                let validator_id = (*self.own_validator_id.read())?;
+                Self::get_validator(validators.as_ref(), validator_id)
+                    .map(|validator| validator.address.clone())
+            });
+        if own_address.as_ref() == Some(&record.record.validator_address) {
+            let own_timestamp = own_record.map(|record| record.record.timestamp);
+            if record.record.peer_id != self.network.get_local_peer_id()
+                && own_timestamp.is_none_or(|own| record.record.timestamp >= own)
             {
                 log::info!(
                     peer_id = %record.record.peer_id,
