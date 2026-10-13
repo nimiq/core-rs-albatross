@@ -20,10 +20,9 @@ pub fn initialize() {
                     .with_env(),
             )
             .init();
-
-        // Run tests with the TEST_POLICY profile
-        let policy_config = TEST_POLICY;
-
-        let _ = Policy::get_or_init(policy_config);
     });
+
+    // Run tests with the TEST_POLICY profile. Outside of `call_once`, so that a conflicting
+    // policy fails every test with the same message instead of poisoning `INITIALIZE`.
+    let _ = Policy::get_or_init(TEST_POLICY);
 }

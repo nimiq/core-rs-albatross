@@ -14,8 +14,16 @@ pub mod upgrades;
 /// Global policy
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
 
+/// The thread (under libtest: the test) whose read installed the default policy.
+static LAZY_DEFAULT_BY: OnceCell<String> = OnceCell::new();
+
+fn lazy_default() -> Policy {
+    let _ = LAZY_DEFAULT_BY.set(std::thread::current().name().unwrap_or("?").to_owned());
+    Policy::default()
+}
+
 /// Policy constants
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "ts-types", cfg_eval::cfg_eval, wasm_bindgen)]
 pub struct Policy {
     /// Length of a batch including the macro block
@@ -209,9 +217,22 @@ impl Policy {
         self.blocks_per_batch * self.batches_per_epoch as u32
     }
 
+    /// Installs `policy` as the process-wide policy unless one is installed already, and returns
+    /// the installed one. The policy can only be installed once per process, so in debug builds
+    /// a second, different policy is an error rather than a silent no-op.
     #[inline]
     pub fn get_or_init(policy: Policy) -> Policy {
-        *GLOBAL_POLICY.get_or_init(|| policy)
+        let installed = *GLOBAL_POLICY.get_or_init(|| policy);
+        debug_assert_eq!(
+            installed,
+            policy,
+            "a different policy is already installed for this process{}",
+            LAZY_DEFAULT_BY
+                .get()
+                .map(|by| format!(" (the default policy, first read by `{by}`)"))
+                .unwrap_or_default()
+        );
+        installed
     }
 
     /// Returns the default policy parameters for the given network.
@@ -240,7 +261,7 @@ impl Policy {
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TRANSACTION_VALIDITY_WINDOW))]
     pub fn transaction_validity_window() -> u32 {
-        let policy = GLOBAL_POLICY.get_or_init(Self::default);
+        let policy = GLOBAL_POLICY.get_or_init(lazy_default);
         assert!(policy.batches_per_epoch as u32 >= policy.transaction_validity_window);
         policy.transaction_validity_window
     }
@@ -249,24 +270,24 @@ impl Policy {
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TRANSACTION_VALIDITY_WINDOW_BLOCKS))]
     pub fn transaction_validity_window_blocks() -> u32 {
-        let policy = GLOBAL_POLICY.get_or_init(Self::default);
+        let policy = GLOBAL_POLICY.get_or_init(lazy_default);
         assert!(policy.batches_per_epoch as u32 >= policy.transaction_validity_window);
         policy.transaction_validity_window
-            * GLOBAL_POLICY.get_or_init(Self::default).blocks_per_batch
+            * GLOBAL_POLICY.get_or_init(lazy_default).blocks_per_batch
     }
 
     /// How many batches constitute an epoch
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BATCHES_PER_EPOCH))]
     pub fn batches_per_epoch() -> u16 {
-        GLOBAL_POLICY.get_or_init(Self::default).batches_per_epoch
+        GLOBAL_POLICY.get_or_init(lazy_default).batches_per_epoch
     }
 
     /// Length of a batch including the macro block
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BLOCKS_PER_BATCH))]
     pub fn blocks_per_batch() -> u32 {
-        GLOBAL_POLICY.get_or_init(Self::default).blocks_per_batch
+        GLOBAL_POLICY.get_or_init(lazy_default).blocks_per_batch
     }
 
     /// Length of an epoch including the election block
@@ -274,7 +295,7 @@ impl Policy {
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BLOCKS_PER_EPOCH))]
     pub fn blocks_per_epoch() -> u32 {
         GLOBAL_POLICY
-            .get_or_init(Self::default)
+            .get_or_init(lazy_default)
             .get_blocks_per_epoch()
     }
 
@@ -282,9 +303,7 @@ impl Policy {
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = GENESIS_BLOCK_NUMBER))]
     pub fn genesis_block_number() -> u32 {
-        GLOBAL_POLICY
-            .get_or_init(Self::default)
-            .genesis_block_number
+        GLOBAL_POLICY.get_or_init(lazy_default).genesis_block_number
     }
 
     /// Maximum supported protocol version
@@ -292,7 +311,7 @@ impl Policy {
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MAX_SUPPORTED_VERSION))]
     pub fn max_supported_version() -> u16 {
         GLOBAL_POLICY
-            .get_or_init(Self::default)
+            .get_or_init(lazy_default)
             .max_supported_version
     }
 
@@ -301,7 +320,7 @@ impl Policy {
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = STATE_CHUNKS_MAX_SIZE))]
     pub fn state_chunks_max_size() -> u32 {
         GLOBAL_POLICY
-            .get_or_init(Policy::default)
+            .get_or_init(lazy_default)
             .state_chunks_max_size
     }
 

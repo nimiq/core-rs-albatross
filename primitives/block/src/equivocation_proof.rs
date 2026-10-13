@@ -627,6 +627,7 @@ mod test {
         TendermintStep, TendermintVote,
     };
     use nimiq_serde::{Deserialize, Serialize};
+    use nimiq_test_log::test;
     use nimiq_vrf::VrfSeed;
 
     use crate::{

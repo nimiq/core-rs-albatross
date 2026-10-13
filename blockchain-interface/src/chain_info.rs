@@ -200,6 +200,7 @@ mod tests {
     use nimiq_block::{BlockError, MicroBlock, MicroBody, MicroHeader};
     use nimiq_keys::Address;
     use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
+    use nimiq_test_log::test;
     use nimiq_transaction::ExecutedTransaction;
 
     use super::*;
