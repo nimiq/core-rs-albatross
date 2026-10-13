@@ -6,6 +6,7 @@ use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, transaction::TransactionError,
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
+use nimiq_test_log::test;
 use nimiq_transaction::{
     account::{
         vesting_contract::{CreationTransactionData, MAX_TIME_VALUE},

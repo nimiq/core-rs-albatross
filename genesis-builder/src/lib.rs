@@ -691,6 +691,7 @@ impl GenesisBuilder {
 #[cfg(test)]
 mod tests {
     use nimiq_bls::KeyPair as BlsKeyPair;
+    use nimiq_test_log::test;
     use nimiq_utils::key_rng::SecureGenerate;
 
     use super::*;
