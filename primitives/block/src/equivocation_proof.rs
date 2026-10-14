@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, hash::Hasher, io, mem, ops::Range};
 
-use nimiq_bls::{AggregatePublicKey, AggregateSignature};
+use nimiq_bls::{AggregatePublicKey, AggregateSignature, CompressedSignature};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash as _, HashOutput, SerializeContent};
 use nimiq_keys::{
@@ -38,6 +38,15 @@ fn get_validator<'a>(
     validators
         .get_validator_by_address(address)
         .ok_or(EquivocationProofError::InvalidValidatorAddress)
+}
+
+fn uncompress_signature(
+    signature: &CompressedSignature,
+) -> Result<AggregateSignature, EquivocationProofError> {
+    signature
+        .uncompress()
+        .map(AggregateSignature)
+        .map_err(|_| EquivocationProofError::InvalidJustification)
 }
 
 impl EquivocationProof {
@@ -460,10 +469,11 @@ pub struct DoubleVoteProof {
     proposal_hash1: Option<Blake2sHash>,
     /// Hash of proposal number 2.
     proposal_hash2: Option<Blake2sHash>,
-    /// Aggregate signature for proposal 1.
-    signature1: AggregateSignature,
-    /// Aggregate signature for proposal 2.
-    signature2: AggregateSignature,
+    /// Aggregate signature for proposal 1. Kept compressed so that deserializing
+    /// a proof stays cheap, it is only decompressed during verification.
+    signature1: CompressedSignature,
+    /// Aggregate signature for proposal 2. See `signature1`.
+    signature2: CompressedSignature,
     /// Signers for proposal 1.
     #[serialize_size(bitset_max_elem = Policy::SLOTS as usize)]
     signers1: BitSet,
@@ -493,8 +503,8 @@ impl DoubleVoteProof {
             validator_address,
             proposal_hash1,
             proposal_hash2,
-            signature1,
-            signature2,
+            signature1: signature1.0.compress(),
+            signature2: signature2.0.compress(),
             signers1,
             signers2,
         }
@@ -564,6 +574,10 @@ impl DoubleVoteProof {
             return Err(EquivocationProofError::NoOverlap);
         }
 
+        // Only decompress the signatures once the cheap checks have passed.
+        let signature1 = uncompress_signature(&self.signature1)?;
+        let signature2 = uncompress_signature(&self.signature2)?;
+
         let verify =
             |proposal_hash, signers: &[u16], signature| -> Result<(), EquivocationProofError> {
                 // Calculate the message that was actually signed by the validators.
@@ -590,16 +604,8 @@ impl DoubleVoteProof {
                 Ok(())
             };
 
-        verify(
-            self.proposal_hash1.clone(),
-            &checked_signers1,
-            &self.signature1,
-        )?;
-        verify(
-            self.proposal_hash2.clone(),
-            &checked_signers2,
-            &self.signature2,
-        )?;
+        verify(self.proposal_hash1.clone(), &checked_signers1, &signature1)?;
+        verify(self.proposal_hash2.clone(), &checked_signers2, &signature2)?;
         Ok(())
     }
 }
@@ -618,15 +624,15 @@ impl SerializeContent for DoubleVoteProof {
 
 #[cfg(test)]
 mod test {
-    use nimiq_bls::{AggregateSignature, SecretKey};
+    use nimiq_bls::{AggregateSignature, CompressedSignature, SecretKey};
     use nimiq_collections::BitSet;
     use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
     use nimiq_keys::{Address, KeyPair, PrivateKey};
     use nimiq_primitives::{
-        networks::NetworkId, policy::Policy, TendermintIdentifier, TendermintProposal,
-        TendermintStep, TendermintVote,
+        networks::NetworkId, policy::Policy, slots_allocation::Validators, TendermintIdentifier,
+        TendermintProposal, TendermintStep, TendermintVote,
     };
-    use nimiq_serde::{Deserialize, Serialize};
+    use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize, SerializedSize};
     use nimiq_test_log::test;
     use nimiq_vrf::VrfSeed;
 
@@ -1033,7 +1039,7 @@ mod test {
 
     #[test]
     fn double_vote_proof_sort_key() {
-        let key = SecretKey::deserialize_from_vec(&hex::decode("f82ec9bb46d94c6bd6272d55e08fa5bfb911257136d205d7ee41c4f8fd839cf7a38e156c23d03c10597a4faa52a28a638756cdd83355db3eaafe37c5a94cc5c062f6de73890a6387175e579ef0083e3fe516dc61c2fab73e2183ea58a0b700").unwrap()).unwrap();
+        let key = bls_key();
 
         let signers: BitSet = [0].into_iter().collect();
 
@@ -1215,5 +1221,73 @@ mod test {
         different.sort_by_key(|p1| p1.sort_key());
         different.dedup_by(|p1, p2| p1.sort_key() == p2.sort_key());
         assert_eq!(different.len(), num_different);
+    }
+
+    fn bls_key() -> SecretKey {
+        SecretKey::deserialize_from_vec(&hex::decode("f82ec9bb46d94c6bd6272d55e08fa5bfb911257136d205d7ee41c4f8fd839cf7a38e156c23d03c10597a4faa52a28a638756cdd83355db3eaafe37c5a94cc5c062f6de73890a6387175e579ef0083e3fe516dc61c2fab73e2183ea58a0b700").unwrap()).unwrap()
+    }
+
+    fn double_vote_proof() -> DoubleVoteProof {
+        let key = bls_key();
+        let id = TendermintIdentifier {
+            network: NetworkId::UnitAlbatross,
+            block_number: 1,
+            round_number: 2,
+            step: TendermintStep::PreVote,
+        };
+        let signature1 = AggregateSignature::from_signatures(&[key.sign(&TendermintVote {
+            proposal_hash: None,
+            id: id.clone(),
+        })]);
+        let signature2 = AggregateSignature::from_signatures(&[key.sign(&TendermintVote {
+            proposal_hash: Some(Blake2sHash::default()),
+            id: id.clone(),
+        })]);
+        let signers: BitSet = [0, 5].into_iter().collect();
+        DoubleVoteProof::new(
+            id,
+            Address::burn_address(),
+            None,
+            signature1,
+            signers.clone(),
+            Some(Blake2sHash::default()),
+            signature2,
+            signers,
+        )
+    }
+
+    /// Storing the signatures compressed must not change the wire format.
+    #[test]
+    fn double_vote_proof_serialization_is_unchanged() {
+        // Captured before `DoubleVoteProof` stored its signatures compressed.
+        const EXPECTED: &str = "020000000000000000000000000000000000000000070102030001000000000000000000000000000000000000000000000000000000000000000093e47df00fcb827d884447a156cb8322849852549be03f6fd8c280fc514e7e32607c1a14e4794219896b65cef2048d87db5c172a18596f6df839e3d075b1d0bb99dd1f7ea339c95ca2b381025c90c09d590f8aa966764dec16d0f15c37bc00485ae09ef67a10aa590e3cc75cf512086e7accf7d76d88010ae7139b4d9c9c479875556e6a77687ee7ce268e2798fa260481ab54944b036d80fb54991a3f6004ff6c7b5a64afe4934ede372f514589d49c593fb73e70cee368a0e36e8e918101210121";
+
+        let proof: EquivocationProof = double_vote_proof().into();
+        let bytes = proof.serialize_to_vec();
+        assert_eq!(hex::encode(&bytes), EXPECTED);
+        assert_eq!(DoubleVoteProof::MAX_SIZE, 448);
+
+        let decoded = EquivocationProof::deserialize_from_vec(&bytes).unwrap();
+        assert_eq!(decoded, proof);
+        assert_eq!(decoded.serialize_to_vec(), bytes);
+    }
+
+    /// Deserializing a double vote proof must not decompress its signatures.
+    /// An invalid signature is only detected when the proof is verified.
+    #[test]
+    fn double_vote_proof_signatures_are_decompressed_lazily() {
+        let mut proof = double_vote_proof();
+        // Not the encoding of a valid curve point.
+        proof.signature1 = CompressedSignature {
+            signature: [0xff; CompressedSignature::SIZE],
+        };
+        assert!(proof.signature1.uncompress().is_err());
+
+        let decoded = DoubleVoteProof::deserialize_from_vec(&proof.serialize_to_vec()).unwrap();
+
+        assert_eq!(
+            decoded.verify_excluding_address_and_network(&Validators::new(vec![]), 0..1),
+            Err(crate::EquivocationProofError::InvalidJustification),
+        );
     }
 }
