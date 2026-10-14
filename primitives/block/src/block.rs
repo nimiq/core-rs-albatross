@@ -660,7 +660,7 @@ impl fmt::Display for Block {
 }
 
 /// Struct representing the body of a block.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializedMaxSize)]
 pub enum BlockBody {
     Micro(MicroBody),
     Macro(MacroBody),

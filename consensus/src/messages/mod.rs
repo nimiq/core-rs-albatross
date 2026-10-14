@@ -133,7 +133,7 @@ impl From<BlockHeaderMessage> for Block {
 }
 
 /// Message containing the body of a block, paired with the hash of its header message.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, SerializedMaxSize)]
 pub struct BlockBodyMessage {
     /// Hash of the corresponding [`BlockHeaderMessage`].
     ///
@@ -169,6 +169,8 @@ impl Topic for BlockBodyTopic {
     const NAME: &'static str = "block-body";
     const VALIDATE: bool = true;
     const MAX_MESSAGES: u32 = BlockHeaderTopic::MAX_MESSAGES;
+    // Valid block bodies are bounded far below the gossipsub message size limit.
+    const MAX_MESSAGE_SIZE: usize = BlockBodyMessage::MAX_SIZE;
 }
 
 /*
@@ -705,4 +707,26 @@ impl Topic for AddressSubscriptionTopic {
     const NAME: &'static str = "address-subscription";
     const VALIDATE: bool = false;
     const MAX_MESSAGES: u32 = 10_000;
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_hash::Blake2bHash;
+    use nimiq_network_interface::network::{Topic, MIN_SUPPORTED_MSG_SIZE};
+    use nimiq_primitives::policy::Policy;
+    use nimiq_test_log::test;
+
+    use super::BlockBodyTopic;
+
+    #[test]
+    fn block_body_topic_max_message_size() {
+        // A message carrying a valid micro body must fit.
+        const {
+            assert!(
+                BlockBodyTopic::MAX_MESSAGE_SIZE >= Blake2bHash::SIZE + Policy::MAX_SIZE_MICRO_BODY
+            )
+        };
+        // The limit must be tighter than the one gossipsub enforces.
+        const { assert!(BlockBodyTopic::MAX_MESSAGE_SIZE < MIN_SUPPORTED_MSG_SIZE) };
+    }
 }

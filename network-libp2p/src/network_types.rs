@@ -59,6 +59,7 @@ pub(crate) enum NetworkAction {
             >,
         >,
         rate_limit_config: RateLimitConfig,
+        max_message_size: usize,
     },
     Unsubscribe {
         topic_name: String,
@@ -225,6 +226,7 @@ pub(crate) struct GossipsubTopicInfo {
     pub(crate) output: mpsc::Sender<(gossipsub::Message, gossipsub::MessageId, PeerId)>,
     pub(crate) validate: bool,
     pub(crate) rate_limit_config: RateLimitConfig,
+    pub(crate) max_message_size: usize,
 }
 
 #[derive(Default)]

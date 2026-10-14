@@ -416,6 +416,7 @@ impl Network {
                 validate: <T as Topic>::VALIDATE,
                 output: tx,
                 rate_limit_config: RateLimitConfig::from_topic::<T>(),
+                max_message_size: <T as Topic>::MAX_MESSAGE_SIZE,
             })
             .await?;
 

@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, num::NonZeroU8, sync::Arc, time::Duration};
 
-use futures::{Stream, StreamExt};
+use futures::{stream::BoxStream, Stream, StreamExt};
 use instant::SystemTime;
 use libp2p::{
     gossipsub,
@@ -660,26 +660,39 @@ fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin 
     spawn(async move { while stream.next().await.is_some() {} });
 }
 
-#[test(tokio::test)]
-async fn test_gossipsub() {
-    let mut net = TestNetwork::new();
-
+/// Sets up a Gossipsub mesh for topic `T`. Returns two of its peers and the first peer's
+/// subscription.
+async fn gossipsub_mesh<T: Topic + Sync>(
+    net: &mut TestNetwork,
+) -> (
+    Network,
+    Network,
+    BoxStream<'static, (T::Item, <Network as NetworkInterface>::PubsubId)>,
+) {
     let net1 = net.spawn().await;
     let net2 = net.spawn().await;
 
     // Our Gossipsub configuration requires a minimum of 6 peers for the mesh network
     for _ in 0..5i32 {
         let net_n = net.spawn().await;
-        let stream_n = net_n.subscribe::<TestTopic>().await.unwrap();
+        let stream_n = net_n.subscribe::<T>().await.unwrap();
         consume_stream(stream_n);
     }
 
-    let test_message = TestRecord { x: 42 };
-
-    let mut messages = net1.subscribe::<TestTopic>().await.unwrap();
-    consume_stream(net2.subscribe::<TestTopic>().await.unwrap());
+    let messages = net1.subscribe::<T>().await.unwrap();
+    consume_stream(net2.subscribe::<T>().await.unwrap());
 
     sleep(Duration::from_secs(10)).await;
+
+    (net1, net2, messages)
+}
+
+#[test(tokio::test)]
+async fn test_gossipsub() {
+    let mut net = TestNetwork::new();
+    let (net1, net2, mut messages) = gossipsub_mesh::<TestTopic>(&mut net).await;
+
+    let test_message = TestRecord { x: 42 };
 
     net2.publish::<TestTopic>(test_message.clone())
         .await
@@ -701,4 +714,36 @@ async fn test_gossipsub() {
         net2.publish::<TestTopic>(msg.clone()).await.unwrap();
     }
     net1.network_info().await.unwrap();
+}
+
+pub struct SizeLimitedTopic;
+
+impl Topic for SizeLimitedTopic {
+    type Item = Vec<u8>;
+
+    const BUFFER_SIZE: usize = 8;
+    const NAME: &'static str = "test-size-limited";
+    const VALIDATE: bool = true;
+    const MAX_MESSAGES: u32 = 1000;
+    const MAX_MESSAGE_SIZE: usize = 64;
+}
+
+#[test(tokio::test)]
+async fn test_gossipsub_drops_oversized_messages() {
+    let mut net = TestNetwork::new();
+    let (_net1, net2, mut messages) = gossipsub_mesh::<SizeLimitedTopic>(&mut net).await;
+
+    // The first message exceeds the topic's maximum message size, the second one doesn't.
+    let oversized = vec![1u8; 1000];
+    let small = vec![2u8; 10];
+    net2.publish::<SizeLimitedTopic>(oversized).await.unwrap();
+    net2.publish::<SizeLimitedTopic>(small.clone())
+        .await
+        .unwrap();
+
+    let (received_message, _) = timeout(Duration::from_secs(30), messages.next())
+        .await
+        .expect("No Gossipsub message received")
+        .unwrap();
+    assert_eq!(received_message, small);
 }

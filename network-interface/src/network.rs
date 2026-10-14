@@ -40,6 +40,9 @@ pub trait Topic {
     const VALIDATE: bool;
     const MAX_MESSAGES: u32;
     const TIME_WINDOW: Duration = DEFAULT_GOSSIPSUB_RATE_LIMIT_TIME_WINDOW;
+    /// Maximum size in bytes of a serialized message on this topic. Larger messages are
+    /// dropped before they are deserialized.
+    const MAX_MESSAGE_SIZE: usize = MIN_SUPPORTED_MSG_SIZE;
 }
 
 /// Network implementations have to at least support messages of this size.

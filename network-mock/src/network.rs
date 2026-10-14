@@ -355,6 +355,13 @@ impl MockNetwork {
             async move {
                 if is_connected.load(Ordering::SeqCst) {
                     match r {
+                        Ok((data, _)) if data.len() > T::MAX_MESSAGE_SIZE => {
+                            log::debug!(
+                                "Dropped item because it exceeds the maximum message size: {} > {}",
+                                data.len(),
+                                T::MAX_MESSAGE_SIZE,
+                            )
+                        }
                         Ok((data, peer_id)) => match T::Item::deserialize_from_vec(&data) {
                             Ok(item) => return Some((item, peer_id)),
                             Err(e) => {

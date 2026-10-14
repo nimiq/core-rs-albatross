@@ -907,6 +907,26 @@ fn handle_gossipsub_event(event: gossipsub::Event, event_info: EventInfo) {
                 return;
             }
 
+            if message.data.len() > topic_info.max_message_size {
+                debug!(
+                    %topic,
+                    peer_id = %propagation_source,
+                    message_size = message.data.len(),
+                    max_message_size = topic_info.max_message_size,
+                    "Dropping gossipsub message - message too large",
+                );
+                event_info
+                    .swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .report_message_validation_result(
+                        &message_id,
+                        &propagation_source,
+                        gossipsub::MessageAcceptance::Ignore,
+                    );
+                return;
+            }
+
             if !topic_info.validate
                 && !event_info
                     .swarm
@@ -1225,6 +1245,7 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
             validate,
             output,
             rate_limit_config,
+            max_message_size,
         } => {
             let topic = gossipsub::IdentTopic::new(topic_name.clone());
 
@@ -1239,6 +1260,7 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                             output: tx,
                             validate,
                             rate_limit_config,
+                            max_message_size,
                         },
                     );
 
