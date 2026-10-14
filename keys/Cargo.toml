@@ -25,7 +25,7 @@ workspace = true
 [dependencies]
 curve25519-dalek = { version = "5.0.0", features = ["digest"] }
 data-encoding = "2.11"
-ed25519-zebra = "4.2"
+ed25519-zebra = "5.0"
 hex = "0.4"
 itertools = "0.15"
 p256 = "0.13"
