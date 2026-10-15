@@ -1,5 +1,7 @@
 use nimiq_keys::Address;
-use nimiq_transaction::account::oracle_contract::CreationTransactionData as OracleCreationData;
+use nimiq_transaction::account::{
+    htlc_contract::HashType, oracle_contract::CreationTransactionData as OracleCreationData,
+};
 use thiserror::Error;
 
 use crate::recipient::Recipient;
@@ -13,6 +15,8 @@ pub enum OracleRecipientBuilderError {
     NoHashCount,
     #[error("The hash count must be greater than zero.")]
     InvalidHashCount,
+    #[error("The hash algorithm is missing.")]
+    NoHashAlgorithm,
 }
 
 /// An `OracleRecipientBuilder` can be used to create new oracle contracts.
@@ -21,6 +25,7 @@ pub enum OracleRecipientBuilderError {
 pub struct OracleRecipientBuilder {
     owner: Option<Address>,
     hash_count: Option<u16>,
+    hash_algorithm: Option<HashType>,
 }
 
 impl OracleRecipientBuilder {
@@ -48,6 +53,12 @@ impl OracleRecipientBuilder {
         self
     }
 
+    /// Sets the `hash_algorithm` of every value the oracle contract will store.
+    pub fn with_hash_algorithm(&mut self, hash_algorithm: HashType) -> &mut Self {
+        self.hash_algorithm = Some(hash_algorithm);
+        self
+    }
+
     /// Generates the oracle contract recipient.
     pub fn generate(self) -> Result<Recipient, OracleRecipientBuilderError> {
         let hash_count = self
@@ -62,6 +73,9 @@ impl OracleRecipientBuilder {
             data: OracleCreationData {
                 owner: self.owner.ok_or(OracleRecipientBuilderError::NoOwner)?,
                 hash_count,
+                hash_algorithm: self
+                    .hash_algorithm
+                    .ok_or(OracleRecipientBuilderError::NoHashAlgorithm)?,
             },
         })
     }

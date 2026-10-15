@@ -38,6 +38,7 @@ fn create_test_chain_config(chain_id: u32) -> ChainConfig {
         block_time: std::time::Duration::from_secs(60),
         validation_program: ValidationProgram::empty(),
         max_proof_depth: 64,
+        source_contract: vec![0x5C; 20],
     }
 }
 
@@ -434,6 +435,7 @@ fn test_chain_specific_address_validation() {
         block_time: std::time::Duration::from_secs(60),
         validation_program: nimiq_transaction::bridge_contract::ValidationProgram::empty(),
         max_proof_depth: 64,
+        source_contract: vec![0x5C; 20],
     };
 
     let nimiq_recipient = RecipientData {
@@ -452,6 +454,7 @@ fn test_chain_specific_address_validation() {
         block_time: std::time::Duration::from_secs(12),
         validation_program: nimiq_transaction::bridge_contract::ValidationProgram::empty(),
         max_proof_depth: 64,
+        source_contract: vec![0x5C; 20],
     };
 
     let ethereum_recipient = RecipientData {
@@ -470,6 +473,7 @@ fn test_chain_specific_address_validation() {
         block_time: std::time::Duration::from_secs(600),
         validation_program: nimiq_transaction::bridge_contract::ValidationProgram::empty(),
         max_proof_depth: 64,
+        source_contract: vec![0x5C; 20],
     };
 
     let bitcoin_recipient = RecipientData {
@@ -489,6 +493,7 @@ fn test_chain_specific_address_validation() {
         block_time: std::time::Duration::from_secs(30),
         validation_program: nimiq_transaction::bridge_contract::ValidationProgram::empty(),
         max_proof_depth: 64,
+        source_contract: vec![0x5C; 20],
     };
 
     let custom_recipient = RecipientData {

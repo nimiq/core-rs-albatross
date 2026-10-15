@@ -21,7 +21,7 @@ use nimiq_primitives::{
 };
 use nimiq_serde::Serialize as NimiqSerialize;
 use nimiq_transaction::{
-    account::htlc_contract::AnyHash,
+    account::htlc_contract::{AnyHash, HashType},
     historic_transaction::{
         HistoricTransaction, HistoricTransactionData, JailEvent, PenalizeEvent, RewardEvent,
     },
@@ -130,6 +130,17 @@ pub enum HashAlgorithm {
     Sha256 = 3,
     Sha512 = 4,
     Keccak256 = 5,
+}
+
+impl From<HashAlgorithm> for HashType {
+    fn from(algorithm: HashAlgorithm) -> Self {
+        match algorithm {
+            HashAlgorithm::Blake2b => HashType::Blake2b,
+            HashAlgorithm::Sha256 => HashType::Sha256,
+            HashAlgorithm::Sha512 => HashType::Sha512,
+            HashAlgorithm::Keccak256 => HashType::Keccak256,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -873,6 +884,8 @@ pub enum AccountAdditionalFields {
         owner: Address,
         /// The number of hashes that can be stored in this contract.
         hash_count: u16,
+        /// The hash algorithm of every hash the contract stores.
+        hash_algorithm: HashType,
         /// The hashes currently stored in the contract.
         hashes: Vec<AnyHash>,
     },
@@ -933,6 +946,7 @@ impl Account {
                 account_additional_fields: AccountAdditionalFields::Oracle {
                     owner: oracle.owner,
                     hash_count: oracle.hash_count,
+                    hash_algorithm: oracle.hash_algorithm,
                     hashes: oracle.hashes,
                 },
             },

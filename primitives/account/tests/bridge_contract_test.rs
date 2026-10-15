@@ -16,6 +16,7 @@ fn test_bridge_account_type() {
         block_time: std::time::Duration::from_secs(60),
         validation_program: nimiq_transaction::bridge_contract::ValidationProgram::empty(),
         max_proof_depth: 64,
+        source_contract: vec![0x5C; 20],
     };
 
     let bridge_contract = BridgeContract {
@@ -54,6 +55,7 @@ fn test_bridge_account_serialization() {
         block_time: std::time::Duration::from_secs(60),
         validation_program: nimiq_transaction::bridge_contract::ValidationProgram::empty(),
         max_proof_depth: 64,
+        source_contract: vec![0x5C; 20],
     };
 
     let bridge_contract = BridgeContract {

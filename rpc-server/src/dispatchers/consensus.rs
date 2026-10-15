@@ -18,7 +18,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     account::{
         bridge_contract::{AnyMerkleProof, OutgoingTransaction},
-        htlc_contract::{AnyHash, PreImage},
+        htlc_contract::{AnyHash, HashType, PreImage},
     },
     SignatureProof, Transaction,
 };
@@ -108,6 +108,7 @@ impl ConsensusDispatcher {
         };
 
         verify_bridge_release(
+            bridge_address,
             &bridge,
             oracle.as_ref(),
             nonce,
@@ -141,11 +142,14 @@ fn parse_burn_proof(
     .map_err(|error| Error::InvalidArgument(format!("Burn Transaction Data: {error}")))
 }
 
-/// Checks a release that `target` signs and receives against the bridge, its oracle and the last
-/// `nonce` released to `target`. The checks mirror `BridgeContract::commit_outgoing_transaction`.
+/// Checks a release that `target` signs and receives against the bridge at `bridge_address`, its
+/// oracle and the last `nonce` released to `target`. The checks mirror
+/// `BridgeContract::commit_outgoing_transaction`.
 ///
 /// Returns the reason why the release would fail.
+#[allow(clippy::too_many_arguments)]
 fn verify_bridge_release(
+    bridge_address: &Address,
     bridge: &BridgeContract,
     oracle: Option<&OracleContract>,
     nonce: u64,
@@ -176,12 +180,9 @@ fn verify_bridge_release(
             burn.amount
         ));
     }
-    if burn.target_chain_id != bridge.source_chain_id {
-        return Err(format!(
-            "the burn transaction is for chain {}, but the bridge serves chain {}",
-            burn.target_chain_id, bridge.source_chain_id
-        ));
-    }
+    bridge
+        .verify_burn_record(bridge_address, &burn)
+        .map_err(|error| error.to_string())?;
     if Some(burn.target_nonce) != nonce.checked_add(1) {
         return Err(format!(
             "the burn transaction has nonce {}, but the last nonce released to {target} is {nonce}",
@@ -1479,6 +1480,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         wallet: Address,
         owner: Address,
         hash_count: u16,
+        hash_algorithm: HashType,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -1487,6 +1489,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             &self.get_wallet_keypair(&wallet)?,
             owner,
             hash_count,
+            hash_algorithm,
             value,
             fee,
             self.validity_start_height(validity_start_height),
@@ -1501,6 +1504,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         wallet: Address,
         owner: Address,
         hash_count: u16,
+        hash_algorithm: HashType,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -1510,6 +1514,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 wallet,
                 owner,
                 hash_count,
+                hash_algorithm,
                 value,
                 fee,
                 validity_start_height,
@@ -1792,7 +1797,7 @@ mod tests {
             AddressFormat, AnyMerkleProof, ChainConfig, Endianness, OutgoingTransaction,
             ValidationOp, ValidationProgram,
         },
-        htlc_contract::{AnyHash, AnyHash32},
+        htlc_contract::{AnyHash, AnyHash32, HashType},
     };
     use nimiq_utils::merkle::{MerklePath, MerkleProof};
 
@@ -1800,6 +1805,12 @@ mod tests {
 
     const CHAIN_ID: u32 = 1;
     const AMOUNT: u64 = 500;
+    /// The contract on the source chain whose records the bridge releases.
+    const SOURCE_CONTRACT: [u8; 20] = [0x5Cu8; 20];
+
+    fn bridge_address() -> Address {
+        Address::from([0x0Bu8; 20])
+    }
 
     fn target() -> Address {
         Address::from([0xAAu8; 20])
@@ -1811,8 +1822,14 @@ mod tests {
         ))
     }
 
+    /// The record-tree leaf of a burn record, `blake2b(blake2b(record))`.
+    fn record_leaf(record: &[u8]) -> AnyHash {
+        blake2b(blake2b(record).as_bytes())
+    }
+
     /// Reads `[0..20]` target address, `[20..28]` amount, `[28..36]` nonce,
-    /// `[36..40]` burn block height and `[40..44]` target chain ID.
+    /// `[36..40]` burn block height, `[40..44]` target chain ID, `[44..64]` source contract and
+    /// `[64..84]` bridge address.
     fn bridge(balance: u64) -> BridgeContract {
         let load = |offset, op, name: &str| {
             [
@@ -1843,6 +1860,8 @@ mod tests {
                 ValidationOp::LoadU32(Endianness::LittleEndian),
                 "target_chain_id",
             ),
+            load(44, ValidationOp::LoadAddress, "source_contract"),
+            load(64, ValidationOp::LoadAddress, "bridge_address"),
         ]
         .concat();
 
@@ -1859,17 +1878,24 @@ mod tests {
                 block_time: std::time::Duration::from_secs(60),
                 validation_program: ValidationProgram::new(operations),
                 max_proof_depth: 64,
+                source_contract: SOURCE_CONTRACT.to_vec(),
             },
             transaction_count: 0,
         }
     }
 
     fn burn_data(nonce: u64) -> Vec<u8> {
+        record(nonce, CHAIN_ID, SOURCE_CONTRACT, &bridge_address())
+    }
+
+    fn record(nonce: u64, chain_id: u32, source: [u8; 20], bridge: &Address) -> Vec<u8> {
         let mut data = target().as_bytes().to_vec();
         data.extend_from_slice(&AMOUNT.to_le_bytes());
         data.extend_from_slice(&nonce.to_le_bytes());
         data.extend_from_slice(&42u32.to_le_bytes());
-        data.extend_from_slice(&CHAIN_ID.to_le_bytes());
+        data.extend_from_slice(&chain_id.to_le_bytes());
+        data.extend_from_slice(&source);
+        data.extend_from_slice(bridge.as_bytes());
         data
     }
 
@@ -1904,12 +1930,13 @@ mod tests {
         let hash_count = 4;
         let mut hashes = vec![blake2b(&[]).zero_of_same_type(); hash_count];
         for (index, burn) in burns.iter().enumerate() {
-            hashes[index] = hashes[index].digest(&blake2b(burn));
+            hashes[index] = hashes[index].digest(&record_leaf(burn));
         }
         OracleContract {
             owner: Address::from([0x01u8; 20]),
             balance: Coin::from_u64_unchecked(1_000),
             hash_count: hash_count as u16,
+            hash_algorithm: HashType::Blake2b,
             hashes,
             latest_index: Some(burns.len() as u64 - 1),
         }
@@ -1934,6 +1961,7 @@ mod tests {
         burn_proof: &OutgoingTransaction,
     ) -> Result<(), String> {
         verify_bridge_release(
+            &bridge_address(),
             bridge,
             oracle,
             nonce,
@@ -1980,6 +2008,7 @@ mod tests {
         );
         rejects(
             verify_bridge_release(
+                &bridge_address(),
                 &bridge(10_000),
                 Some(&oracle),
                 0,
@@ -2057,6 +2086,54 @@ mod tests {
         rejects(
             verify(&bridge(AMOUNT - 1), Some(&oracle), 0, AMOUNT, &proof),
             "only holds",
+        );
+    }
+
+    /// The record checks mirror consensus: a record from another contract, from another chain, or
+    /// naming another Nimiq bridge is refused even though the oracle commits to it.
+    #[test]
+    fn rejects_records_this_bridge_may_not_release() {
+        for (record, reason) in [
+            (
+                record(1, CHAIN_ID, [0x5Du8; 20], &bridge_address()),
+                "not from the source contract",
+            ),
+            (
+                record(1, CHAIN_ID + 1, SOURCE_CONTRACT, &bridge_address()),
+                "but the bridge serves chain",
+            ),
+            (
+                record(1, CHAIN_ID, SOURCE_CONTRACT, &Address::from([0x0Cu8; 20])),
+                "may be released only by bridge",
+            ),
+        ] {
+            let oracle = oracle(std::slice::from_ref(&record));
+            rejects(
+                verify(
+                    &bridge(10_000),
+                    Some(&oracle),
+                    0,
+                    AMOUNT,
+                    &burn_proof(record, 0),
+                ),
+                reason,
+            );
+        }
+
+        // A record naming this bridge is refused when checked against another one.
+        let oracle = oracle(&[burn_data(1)]);
+        rejects(
+            verify_bridge_release(
+                &Address::from([0x0Cu8; 20]),
+                &bridge(10_000),
+                Some(&oracle),
+                0,
+                &target(),
+                Coin::from_u64_unchecked(AMOUNT),
+                Coin::ZERO,
+                &burn_proof(burn_data(1), 0),
+            ),
+            "may be released only by bridge",
         );
     }
 

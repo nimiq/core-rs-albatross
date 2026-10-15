@@ -4,7 +4,8 @@ use nimiq_account::{
 };
 use nimiq_database::traits::{Database, WriteTransaction};
 use nimiq_hash::{
-    Blake2bHash, Blake2bHasher, Hasher, Keccak256Hash, Keccak256Hasher, Sha256Hash, Sha256Hasher,
+    Blake2bHash, Blake2bHasher, HashOutput, Hasher, Keccak256Hash, Keccak256Hasher, Sha256Hash,
+    Sha256Hasher,
 };
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
@@ -19,7 +20,7 @@ use nimiq_test_utils::accounts_revert::TestCommitRevert;
 use nimiq_transaction::{
     account::{
         bridge_contract::OutgoingBridgeTransactionData,
-        htlc_contract::{AnyHash, AnyHash32},
+        htlc_contract::{AnyHash, AnyHash32, HashType},
     },
     bridge_contract::{
         AddressFormat, AnyMerkleProof, ChainConfig, Endianness, OutgoingTransaction, ValidationOp,
@@ -36,6 +37,8 @@ use nimiq_utils::{key_rng::SecureGenerate, merkle::MerklePath};
 const SOURCE_CHAIN_ID: u32 = 1;
 const RELEASE_AMOUNT: u64 = 500;
 const BURN_BLOCK_HEIGHT: u32 = 42;
+/// The contract on the source chain whose records the bridge releases.
+const SOURCE_CONTRACT: [u8; 20] = [0x5Cu8; 20];
 const BRIDGE_DEPOSIT: u64 = 10_000;
 
 /// The key of `nimiq_target()`. Only the target can sign its releases.
@@ -70,6 +73,12 @@ fn standard_program() -> ValidationProgram {
         ValidationOp::PushConst(40),
         ValidationOp::LoadU32(Endianness::LittleEndian),
         ValidationOp::Store("target_chain_id".to_string()),
+        ValidationOp::PushConst(44),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("source_contract".to_string()),
+        ValidationOp::PushConst(64),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("bridge_address".to_string()),
     ])
 }
 
@@ -82,16 +91,19 @@ fn chain_config_with_hash(hash_function: AnyHash) -> ChainConfig {
         block_time: std::time::Duration::from_secs(60),
         validation_program: standard_program(),
         max_proof_depth: 64,
+        source_contract: SOURCE_CONTRACT.to_vec(),
     }
 }
 
 fn make_burn_data(target: &Address, amount: u64, nonce: u64, chain_id: u32) -> Vec<u8> {
-    let mut d = Vec::with_capacity(44);
+    let mut d = Vec::with_capacity(84);
     d.extend_from_slice(target.as_bytes());
     d.extend_from_slice(&amount.to_le_bytes());
     d.extend_from_slice(&nonce.to_le_bytes());
     d.extend_from_slice(&BURN_BLOCK_HEIGHT.to_le_bytes());
     d.extend_from_slice(&chain_id.to_le_bytes());
+    d.extend_from_slice(&SOURCE_CONTRACT);
+    d.extend_from_slice(bridge_addr().as_bytes());
     d
 }
 
@@ -317,7 +329,9 @@ fn env_with_attested_burn(
     bridge: BridgeContract,
     accounts: &[(Address, Account)],
 ) -> TestCommitRevert {
-    let leaf = AnyHash::from(Blake2bHasher::default().digest(burn_data));
+    let leaf = AnyHash::from(
+        Blake2bHasher::default().digest(Blake2bHasher::default().digest(burn_data).as_bytes()),
+    );
     let zero = leaf.zero_of_same_type();
     let mut hashes = vec![zero.clone(); 10];
     hashes[0] = zero.digest(&leaf);
@@ -325,6 +339,7 @@ fn env_with_attested_burn(
         owner: Address::from([0x01u8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count: 10,
+        hash_algorithm: HashType::Blake2b,
         hashes,
         latest_index: Some(0),
     };
@@ -472,10 +487,15 @@ enum HashKind {
     Keccak256,
 }
 
-fn leaf_for(kind: HashKind, data: &[u8]) -> AnyHash {
+/// The record-tree leaf of `record` for the chosen hash type, `H(H(record))`.
+fn leaf_for(kind: HashKind, record: &[u8]) -> AnyHash {
     match kind {
-        HashKind::Sha256 => AnyHash::from(Sha256Hasher::default().digest(data)),
-        HashKind::Keccak256 => AnyHash::from(Keccak256Hasher::default().digest(data)),
+        HashKind::Sha256 => AnyHash::from(
+            Sha256Hasher::default().digest(Sha256Hasher::default().digest(record).as_bytes()),
+        ),
+        HashKind::Keccak256 => AnyHash::from(
+            Keccak256Hasher::default().digest(Keccak256Hasher::default().digest(record).as_bytes()),
+        ),
     }
 }
 
@@ -515,6 +535,7 @@ fn run_outgoing_success_for(kind: HashKind) {
         owner: Address::from([0x01u8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count: 10,
+        hash_algorithm: HashType::from_any_hash(&leaf),
         hashes,
         latest_index: Some(0),
     };
@@ -579,6 +600,7 @@ fn bridge_outgoing_rejects_mismatched_proof_variant() {
         owner: Address::from([0x01u8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count: 10,
+        hash_algorithm: HashType::from_any_hash(&leaf),
         hashes,
         latest_index: Some(0),
     };

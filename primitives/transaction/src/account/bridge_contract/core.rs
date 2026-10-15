@@ -152,6 +152,11 @@ pub struct ChainConfig {
     /// The proof's oracle-slot levels do not count: they grow as the oracle rotates, so that
     /// proofs never expire, and only the size of a transaction bounds them.
     pub max_proof_depth: u32,
+    /// The only contract on the source chain whose records the bridge releases, in the chain's
+    /// address format. The relayer commits records from any contract that forwards data, so a
+    /// release is valid only if the record's `source_contract`, as the validation program
+    /// extracts it, equals this byte for byte.
+    pub source_contract: Vec<u8>,
 }
 
 /// Represents a verified state hash from the Nimiq Oracle Contract.
@@ -560,6 +565,25 @@ impl OutgoingTransaction {
             .ok_or(BridgeError::InvalidRecipientData)?;
         let target_chain_id = chain_id_value.as_u32()?;
 
+        let source_contract = result
+            .extracted_values
+            .get("source_contract")
+            .ok_or(BridgeError::InvalidRecipientData)?
+            .as_bytes()?;
+
+        let bridge_address_bytes = result
+            .extracted_values
+            .get("bridge_address")
+            .ok_or(BridgeError::InvalidRecipientData)?
+            .as_bytes()?;
+        if bridge_address_bytes.len() != 20 {
+            return Err(BridgeError::InvalidAddress(format!(
+                "Bridge address must be 20 bytes, got {}",
+                bridge_address_bytes.len()
+            )));
+        }
+        let bridge_address = Address::from(bridge_address_bytes.as_slice());
+
         // Compute transaction ID
         let transaction_id = self.transaction_id(&chain_config.hash_function)?;
 
@@ -570,6 +594,8 @@ impl OutgoingTransaction {
             target_nonce,
             burn_block_height,
             target_chain_id,
+            source_contract,
+            bridge_address,
         )
     }
 
@@ -607,11 +633,13 @@ impl OutgoingTransaction {
         Ok(hash)
     }
 
-    /// Extracts the hash of the burn transaction data using the specified hash algorithm.
+    /// Returns the record-tree leaf of the burn record, `H(H(record))` with the chain's hash
+    /// function `H`.
     ///
-    /// Computes the hash of the raw burn transaction bytes using the chain's
-    /// native hash function (Blake2b, Keccak256, SHA256, etc.).
-    ///
+    /// Hashing twice keeps leaves apart from inner nodes: an inner node hashes 64 bytes, while a
+    /// leaf's outer hash always takes 32. With a single hash, anyone could forward a 64-byte record
+    /// whose second half is the hash of a forged record, and the forged record would then prove
+    /// through it as if it were a leaf of the tree.
     pub fn extract_burn_transaction_hash(
         &self,
         hash_function: &AnyHash,
@@ -620,25 +648,22 @@ impl OutgoingTransaction {
             return Err(BridgeError::InvalidDataLength);
         }
 
-        let hash = match hash_function {
-            AnyHash::Blake2b(_) => {
-                let h = Blake2bHasher::default().digest(&self.burn_transaction_data);
-                AnyHash::Blake2b(AnyHash32::from(h.as_bytes()))
-            }
-            AnyHash::Sha256(_) => {
-                let h = Sha256Hasher::default().digest(&self.burn_transaction_data);
-                AnyHash::Sha256(AnyHash32::from(h.as_bytes()))
-            }
-            AnyHash::Keccak256(_) => {
-                let h = Keccak256Hasher::default().digest(&self.burn_transaction_data);
-                AnyHash::Keccak256(AnyHash32::from(h.as_bytes()))
-            }
+        fn digest_twice<H: Hasher>(data: &[u8]) -> AnyHash32 {
+            let inner = H::default().digest(data);
+            AnyHash32::from(H::default().digest(inner.as_bytes()).as_bytes())
+        }
+
+        let data = &self.burn_transaction_data;
+        let leaf = match hash_function {
+            AnyHash::Blake2b(_) => AnyHash::Blake2b(digest_twice::<Blake2bHasher>(data)),
+            AnyHash::Sha256(_) => AnyHash::Sha256(digest_twice::<Sha256Hasher>(data)),
+            AnyHash::Keccak256(_) => AnyHash::Keccak256(digest_twice::<Keccak256Hasher>(data)),
             AnyHash::Sha512(_) => {
                 return Err(BridgeError::UnsupportedHashFunction);
             }
         };
 
-        Ok(hash)
+        Ok(leaf)
     }
 
     /// Computes the Merkle root given a leaf hash.
@@ -1451,10 +1476,16 @@ pub struct ParsedBurnData {
     pub burn_block_height: u32,
     /// Chain ID of the source (burn) blockchain; must match BridgeContract.source_chain_id
     pub target_chain_id: u32,
+    /// The contract on the source chain the record comes from; must match
+    /// `ChainConfig.source_contract`
+    pub source_contract: Vec<u8>,
+    /// The Nimiq bridge the burn may be released from; must be the bridge executing the release
+    pub bridge_address: Address,
 }
 
 impl ParsedBurnData {
     /// Creates new parsed burn data with validation
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         transaction_id: AnyHash,
         amount: Coin,
@@ -1462,6 +1493,8 @@ impl ParsedBurnData {
         target_nonce: u64,
         burn_block_height: u32,
         target_chain_id: u32,
+        source_contract: Vec<u8>,
+        bridge_address: Address,
     ) -> Result<Self, BridgeError> {
         if amount == Coin::ZERO {
             return Err(BridgeError::InvalidAmount);
@@ -1484,6 +1517,8 @@ impl ParsedBurnData {
             target_nonce,
             burn_block_height,
             target_chain_id,
+            source_contract,
+            bridge_address,
         })
     }
 

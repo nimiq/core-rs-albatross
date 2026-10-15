@@ -9,7 +9,7 @@ use nimiq_test_log::test;
 use nimiq_transaction::{
     account::{
         bridge_contract::{AnyMerkleProof, OutgoingBridgeTransactionData, OutgoingTransaction},
-        htlc_contract::{AnyHash, AnyHash32},
+        htlc_contract::{AnyHash, AnyHash32, HashType},
         oracle_contract::IncomingOracleTransactionData,
     },
     SignatureProof, Transaction, TransactionFlags,
@@ -224,6 +224,7 @@ fn it_rejects_oracle_creation_with_zero_hash_count() {
         &owner,
         Address::from(&owner),
         0,
+        HashType::Blake2b,
         Coin::from_u64_unchecked(1_000),
         Coin::ZERO,
         1,
