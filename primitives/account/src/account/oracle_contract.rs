@@ -3,13 +3,13 @@ use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::{account::AccountError, coin::Coin, transaction::TransactionError};
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_transaction::account::htlc_contract::AnyHash;
+use nimiq_transaction::account::htlc_contract::{AnyHash, HashType};
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::account::oracle_contract::{
     CreationTransactionData, IncomingOracleTransactionData,
 };
 #[cfg(feature = "interaction-traits")]
-use nimiq_transaction::{inherent::Inherent, HashType, SignatureProof, Transaction};
+use nimiq_transaction::{inherent::Inherent, SignatureProof, Transaction};
 
 use crate::{convert_receipt, AccountReceipt};
 #[cfg(feature = "interaction-traits")]
@@ -36,6 +36,10 @@ pub struct OracleContract {
 
     /// The number of hashes that can be stored. This is set at creation and determines the required deposit.
     pub hash_count: u16,
+
+    /// The hash algorithm of every stored value, fixed at creation. Updates in any other
+    /// algorithm are rejected, so the algorithm is known before the first write.
+    pub hash_algorithm: HashType,
 
     /// Ring buffer storage for hashes.
     /// Before the first write, this is empty. After that, it has exactly `hash_count` elements.
@@ -86,32 +90,11 @@ impl OracleContract {
         Ok(())
     }
 
-    /// Gets the hash type from any hash in the contract, if any.
-    /// Returns None if the contract has no hashes yet.
-    fn get_hash_type(&self) -> Option<HashType> {
-        self.hashes.first().map(HashType::from_any_hash)
-    }
-
-    /// Validates that all hashes in the provided vector are of the same type,
-    /// and that they match the contract's hash type (if the contract already has hashes).
+    /// Validates that all hashes in the provided vector use the contract's hash algorithm.
     fn validate_hash_types(&self, new_hashes: &[AnyHash]) -> Result<(), AccountError> {
-        if new_hashes.is_empty() {
-            return Ok(());
-        }
-
-        // Determine the expected hash type
-        let expected_type = if let Some(contract_type) = self.get_hash_type() {
-            // Contract already has hashes, use that type
-            contract_type
-        } else {
-            // Contract is empty, use the type of the first new hash
-            HashType::from_any_hash(&new_hashes[0])
-        };
-
-        // Validate all new hashes match the expected type
         if new_hashes
             .iter()
-            .all(|hash| HashType::from_any_hash(hash) == expected_type)
+            .all(|hash| HashType::from_any_hash(hash) == self.hash_algorithm)
         {
             Ok(())
         } else {
@@ -151,6 +134,7 @@ impl AccountTransactionInteraction for OracleContract {
             balance: initial_balance + deposit,
             owner: data.owner,
             hash_count: data.hash_count,
+            hash_algorithm: data.hash_algorithm,
             hashes: Vec::with_capacity(data.hash_count as usize),
             latest_index: None,
         }))
@@ -217,11 +201,10 @@ impl AccountTransactionInteraction for OracleContract {
                         return Ok(None);
                     }
 
-                    // First write: establish fixed-size ring buffer of zero hashes, of the
-                    // same type as the written hashes.
+                    // First write: establish fixed-size ring buffer of zero hashes.
                     if self.latest_index.is_none() {
                         self.hashes
-                            .resize(self.hash_count as usize, hashes[0].zero_of_same_type());
+                            .resize(self.hash_count as usize, self.hash_algorithm.zero());
                     }
 
                     let start_index = self.latest_index.map(|i| i + 1).unwrap_or(0);
@@ -355,11 +338,7 @@ impl AccountTransactionInteraction for OracleContract {
                             .saturating_sub(start_index)
                             .min(num_hashes);
                         if num_without_eviction > 0 {
-                            let zero_hash = self
-                                .hashes
-                                .first()
-                                .map(|h| h.zero_of_same_type())
-                                .unwrap_or_default();
+                            let zero_hash = self.hash_algorithm.zero();
                             for offset in 0..num_without_eviction {
                                 let pos = (start_index + offset) % self.hash_count as u64;
                                 self.hashes[pos as usize] = zero_hash.clone();
@@ -538,6 +517,7 @@ impl AccountPruningInteraction for OracleContract {
 struct PrunedOracleContract {
     pub owner: Address,
     pub hash_count: u16,
+    pub hash_algorithm: HashType,
     pub hashes: Vec<AnyHash>,
     pub latest_index: Option<u64>,
 }
@@ -547,6 +527,7 @@ impl From<OracleContract> for PrunedOracleContract {
         PrunedOracleContract {
             owner: contract.owner,
             hash_count: contract.hash_count,
+            hash_algorithm: contract.hash_algorithm,
             hashes: contract.hashes,
             latest_index: contract.latest_index,
         }
@@ -559,6 +540,7 @@ impl From<PrunedOracleContract> for OracleContract {
             balance: Coin::ZERO,
             owner: receipt.owner,
             hash_count: receipt.hash_count,
+            hash_algorithm: receipt.hash_algorithm,
             hashes: receipt.hashes,
             latest_index: receipt.latest_index,
         }

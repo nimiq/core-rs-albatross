@@ -47,6 +47,7 @@ pub struct PlainOracleContract {
     balance: u64,
     owner: String,
     hash_count: u16,
+    hash_algorithm: String,
     hashes: Vec<String>,
 }
 
@@ -155,6 +156,13 @@ impl From<&nimiq_account::Account> for PlainAccount {
                 balance: acc.balance.into(),
                 owner: acc.owner.to_user_friendly_address(),
                 hash_count: acc.hash_count,
+                hash_algorithm: match acc.hash_algorithm {
+                    nimiq_transaction::account::htlc_contract::HashType::Blake2b => "blake2b",
+                    nimiq_transaction::account::htlc_contract::HashType::Sha256 => "sha256",
+                    nimiq_transaction::account::htlc_contract::HashType::Sha512 => "sha512",
+                    nimiq_transaction::account::htlc_contract::HashType::Keccak256 => "keccak256",
+                }
+                .to_string(),
                 hashes: acc
                     .hashes
                     .iter()

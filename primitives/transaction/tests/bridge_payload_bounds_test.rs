@@ -13,18 +13,15 @@
 //! discrepancy, and fail loudly if `MAX_TX_SENDER_DATA_SIZE` is ever raised past 10,000 — at which
 //! point the unenforced cap would stop being harmless.
 
+mod amoy;
+
+use amoy::{amoy_chain_config, AMOY_SOURCE_CONTRACT};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
-    account::{
-        bridge_contract::OutgoingBridgeTransactionData,
-        htlc_contract::{AnyHash, AnyHash32},
-    },
-    bridge_contract::{
-        AddressFormat, AnyMerkleProof, BridgeError, ChainConfig, Endianness, OutgoingTransaction,
-        ValidationOp, ValidationProgram,
-    },
+    account::bridge_contract::OutgoingBridgeTransactionData,
+    bridge_contract::{AnyMerkleProof, BridgeError, OutgoingTransaction},
     SignatureProof, Transaction,
 };
 use nimiq_utils::merkle::MerklePath;
@@ -50,15 +47,25 @@ fn burn_proof(payload_len: usize, proof: AnyMerkleProof) -> OutgoingTransaction 
     }
 }
 
-/// A well-formed burn record for `chain_config`'s program, padded with filler to `total_len`.
-/// The program reads only the first 44 bytes, so the filler is what an attacker would inflate.
+/// The length of an Amoy burn record, the bytes the Amoy program reads.
+const AMOY_RECORD_LEN: usize = 156;
+
+/// A well-formed Amoy burn record of 500 luna, padded with filler to `total_len`. The program
+/// reads only the first 156 bytes, so the filler is what an attacker would inflate.
 fn padded_burn_record(total_len: usize) -> Vec<u8> {
+    fn word(value: u128) -> [u8; 32] {
+        let mut word = [0u8; 32];
+        word[16..].copy_from_slice(&value.to_be_bytes());
+        word
+    }
     let mut payload = Vec::with_capacity(total_len);
+    payload.extend_from_slice(&AMOY_SOURCE_CONTRACT); // source_contract
     payload.extend_from_slice(&[0xAAu8; 20]); // target_address
-    payload.extend_from_slice(&500u64.to_le_bytes()); // amount
-    payload.extend_from_slice(&1u64.to_le_bytes()); // target_nonce
-    payload.extend_from_slice(&42u32.to_le_bytes()); // burn_block_height
-    payload.extend_from_slice(&1u32.to_le_bytes()); // target_chain_id
+    payload.extend_from_slice(&word(1)); // target_nonce
+    payload.extend_from_slice(&word(500 * 10_000_000_000_000)); // amount, in wNIM units
+    payload.extend_from_slice(&word(80_002)); // target_chain_id
+    payload.extend_from_slice(&[0x0Bu8; 20]); // bridge_address
+    assert_eq!(payload.len(), AMOY_RECORD_LEN);
     assert!(total_len >= payload.len());
     payload.resize(total_len, 0xAB);
     payload
@@ -115,36 +122,6 @@ fn survives_the_wire(tx: &Transaction) -> bool {
 /// (128..=16_383 bytes) as the maximum payload, so the figure applies there too.
 fn envelope_overhead(proof: AnyMerkleProof) -> usize {
     sender_data(1024, proof).len() - 1024
-}
-
-fn chain_config() -> ChainConfig {
-    ChainConfig {
-        chain_id: 1,
-        hash_function: AnyHash::Blake2b(AnyHash32::default()),
-        address_format: AddressFormat::Nimiq,
-        endianness: Endianness::LittleEndian,
-        block_time: std::time::Duration::from_secs(60),
-        // Reads target_address [0..20], amount [20..28], nonce [28..36],
-        // burn_block_height [36..40], target_chain_id [40..44].
-        validation_program: ValidationProgram::new(vec![
-            ValidationOp::PushConst(0),
-            ValidationOp::LoadAddress,
-            ValidationOp::Store("target_address".to_string()),
-            ValidationOp::PushConst(20),
-            ValidationOp::LoadU64(Endianness::LittleEndian),
-            ValidationOp::Store("amount".to_string()),
-            ValidationOp::PushConst(28),
-            ValidationOp::LoadU64(Endianness::LittleEndian),
-            ValidationOp::Store("target_nonce".to_string()),
-            ValidationOp::PushConst(36),
-            ValidationOp::LoadU32(Endianness::LittleEndian),
-            ValidationOp::Store("burn_block_height".to_string()),
-            ValidationOp::PushConst(40),
-            ValidationOp::LoadU32(Endianness::LittleEndian),
-            ValidationOp::Store("target_chain_id".to_string()),
-        ]),
-        max_proof_depth: 64,
-    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -286,10 +263,10 @@ fn documented_10kb_burn_payload_cap_is_unreachable_from_the_wire() {
 /// most `MAX_TX_SENDER_DATA_SIZE` bytes.
 #[test]
 fn max_size_burn_payload_parses_without_panicking() {
-    let config = chain_config();
+    let config = amoy_chain_config();
     let max_payload = Policy::MAX_TX_SENDER_DATA_SIZE - envelope_overhead(empty_path());
 
-    // A valid 44-byte record padded out to the ceiling with filler.
+    // A valid 156-byte record padded out to the ceiling with filler.
     let outgoing = OutgoingTransaction {
         burn_transaction_data: padded_burn_record(max_payload),
         merkle_proof: empty_path(),
@@ -302,13 +279,13 @@ fn max_size_burn_payload_parses_without_panicking() {
         .expect("a ceiling-sized payload must parse");
     assert_eq!(parsed.amount, Coin::from_u64_unchecked(500));
     assert_eq!(parsed.target_nonce, 1);
-    assert_eq!(parsed.target_chain_id, 1);
+    assert_eq!(parsed.target_chain_id, 80_002);
 
     // The trailing filler is never read: the program indexes fixed offsets, so the extracted
-    // values are identical to those from a minimal 44-byte payload. Payload size buys an attacker
+    // values are identical to those from a minimal 156-byte payload. Payload size buys an attacker
     // nothing beyond one hash of at most `MAX_TX_SENDER_DATA_SIZE` bytes.
     let minimal = OutgoingTransaction {
-        burn_transaction_data: padded_burn_record(44),
+        burn_transaction_data: padded_burn_record(AMOY_RECORD_LEN),
         merkle_proof: empty_path(),
         oracle_state_index: 0,
     };
@@ -317,13 +294,15 @@ fn max_size_burn_payload_parses_without_panicking() {
     assert_eq!(parsed.target_address, minimal_parsed.target_address);
     assert_eq!(parsed.target_nonce, minimal_parsed.target_nonce);
     assert_eq!(parsed.target_chain_id, minimal_parsed.target_chain_id);
+    assert_eq!(parsed.source_contract, minimal_parsed.source_contract);
+    assert_eq!(parsed.bridge_address, minimal_parsed.bridge_address);
 }
 
 /// The other half of the unreachable `validate()`: empty payloads. The risk rationale rests on
 /// these being caught downstream, so pin that they are — on the path consensus actually takes.
 #[test]
 fn empty_burn_payload_is_rejected_on_the_release_path() {
-    let config = chain_config();
+    let config = amoy_chain_config();
     let empty = burn_proof(0, empty_path());
 
     assert!(matches!(

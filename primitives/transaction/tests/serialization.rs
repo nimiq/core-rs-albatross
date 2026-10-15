@@ -156,3 +156,49 @@ fn it_cannot_deserialize_merkle_proofs_exceeding_max_size() {
 
     assert!(deserialized.is_err());
 }
+
+/// A `HashType` is encoded exactly like the `algorithm` of an `AnyHash`, by name in JSON and by
+/// code otherwise, so tooling needs one table of algorithms rather than two.
+#[test]
+fn hash_types_serialize_like_the_algorithm_of_an_any_hash() {
+    use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64, HashType};
+
+    for hash in [
+        AnyHash::Blake2b(AnyHash32::default()),
+        AnyHash::Sha256(AnyHash32::default()),
+        AnyHash::Sha512(AnyHash64::default()),
+        AnyHash::Keccak256(AnyHash32::default()),
+    ] {
+        let hash_type = HashType::from_any_hash(&hash);
+
+        let binary = hash_type.serialize_to_vec();
+        assert_eq!(binary, hash.serialize_to_vec()[..1]);
+        assert_eq!(HashType::deserialize_all(&binary).unwrap(), hash_type);
+
+        let json = serde_json::to_value(hash_type).unwrap();
+        assert_eq!(json, serde_json::to_value(&hash).unwrap()["algorithm"]);
+        assert_eq!(serde_json::from_value::<HashType>(json).unwrap(), hash_type);
+    }
+
+    assert!(HashType::deserialize_all(&[0]).is_err());
+    assert!(HashType::deserialize_all(&[2]).is_err());
+    assert!(serde_json::from_str::<HashType>("\"argon2d\"").is_err());
+}
+
+/// The oracle creation data: owner, hash count, then the hash algorithm's code.
+#[test]
+fn oracle_creation_data_carries_the_hash_algorithm() {
+    use nimiq_transaction::account::{
+        htlc_contract::HashType, oracle_contract::CreationTransactionData,
+    };
+
+    let data = CreationTransactionData {
+        owner: Address::from([0x01; 20]),
+        hash_count: 1000,
+        hash_algorithm: HashType::Blake2b,
+    };
+    assert_eq!(
+        hex::encode(data.serialize_to_vec()),
+        "0101010101010101010101010101010101010101e80701"
+    );
+}

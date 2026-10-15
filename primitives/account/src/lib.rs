@@ -14,7 +14,7 @@ pub use crate::interaction_traits::*;
 pub use crate::{
     account::{
         basic_account::BasicAccount,
-        bridge_contract::{BridgeContract, BurnProofError},
+        bridge_contract::{BridgeContract, BurnProofError, BurnRecordError},
         htlc_contract::HashedTimeLockedContract,
         oracle_contract::OracleContract,
         staking_contract::*,

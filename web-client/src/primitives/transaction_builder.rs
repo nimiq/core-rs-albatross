@@ -5,7 +5,7 @@ use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_serde::Deserialize;
 use nimiq_transaction::account::{
     bridge_contract::{AnyMerkleProof, ChainConfig, OutgoingTransaction},
-    htlc_contract::{AnyHash, AnyHash32, AnyHash64},
+    htlc_contract::{AnyHash, AnyHash32, AnyHash64, HashType},
 };
 use nimiq_transaction_builder::{Recipient, Sender};
 use wasm_bindgen::prelude::*;
@@ -560,23 +560,28 @@ impl TransactionBuilder {
 
     /// Creates a new oracle contract owned by `owner` that stores up to `hash_count` hashes, and
     /// transfers `value` amount of luna (NIM's smallest unit) from the sender to it as its deposit.
+    /// Every hash it stores uses `hash_algorithm`, one of `blake2b`, `sha256`, `sha512` or
+    /// `keccak256`, which cannot be changed later.
     ///
     /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
     ///
-    /// Throws when `hash_count` is zero, the numbers given for value and fee do not fit within a u64
-    /// or the networkId is unknown.
+    /// Throws when `hash_count` is zero, the hash algorithm is unknown, the numbers given for value
+    /// and fee do not fit within a u64 or the networkId is unknown.
     #[wasm_bindgen(js_name = newCreateOracle)]
     pub fn new_create_oracle(
         sender: &Address,
         owner: &Address,
         hash_count: u16,
+        hash_algorithm: &str,
         value: u64,
         fee: Option<u64>,
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_oracle_builder(owner.native_cloned());
-        recipient.with_hash_count(hash_count);
+        recipient
+            .with_hash_count(hash_count)
+            .with_hash_algorithm(parse_hash_algorithm(hash_algorithm)?);
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
@@ -811,6 +816,20 @@ impl TransactionBuilder {
 }
 
 /// Parses a hex-encoded hash of the given algorithm.
+fn parse_hash_algorithm(hash_algorithm: &str) -> Result<HashType, JsError> {
+    Ok(match hash_algorithm {
+        "blake2b" => HashType::Blake2b,
+        "sha256" => HashType::Sha256,
+        "sha512" => HashType::Sha512,
+        "keccak256" => HashType::Keccak256,
+        _ => {
+            return Err(JsError::new(&format!(
+                "Unknown hash algorithm: {hash_algorithm}"
+            )))
+        }
+    })
+}
+
 fn parse_hash(hash_algorithm: &str, hash: &str) -> Result<AnyHash, JsError> {
     Ok(match hash_algorithm {
         "blake2b" => AnyHash::Blake2b(AnyHash32::from_str(hash)?),
