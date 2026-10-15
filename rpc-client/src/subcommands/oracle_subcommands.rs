@@ -21,7 +21,7 @@ pub enum OracleCommand {
         contract_address: Address,
     },
 
-    /// Returns the 0-based earliest index still retained in the ring buffer.
+    /// Returns the 0-based earliest index whose slot still holds the entry written at it.
     GetEarliestIndex {
         /// The oracle contract address.
         contract_address: Address,
@@ -33,14 +33,14 @@ pub enum OracleCommand {
         contract_address: Address,
     },
 
-    /// Returns the latest hash-chain head.
+    /// Returns the current value of the slot written at the latest index.
     GetLatestData {
         /// The oracle contract address.
         contract_address: Address,
     },
 
-    /// Returns the data for a given 0-based index.
-    /// Index must be in [earliest_index, latest_index] (inclusive).
+    /// Returns the current value of the slot that a given 0-based index was written to.
+    /// Index must be in [0, latest_index] (inclusive).
     GetEntry {
         /// The oracle contract address.
         contract_address: Address,
