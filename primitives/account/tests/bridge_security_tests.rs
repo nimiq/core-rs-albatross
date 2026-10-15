@@ -1,11 +1,17 @@
 use nimiq_account::{
-    Account, BlockLogger, BlockState, BridgeContract, OperationReceipt, OracleContract, Receipts,
-    RevertInfo,
+    Account, AccountsError, BlockLogger, BlockState, BridgeContract, OperationReceipt,
+    OracleContract, Receipts, RevertInfo,
 };
 use nimiq_database::traits::{Database, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    coin::Coin,
+    networks::NetworkId,
+    policy::Policy,
+    transaction::TransactionError,
+};
 use nimiq_serde::Serialize;
 use nimiq_test_log::test;
 use nimiq_test_utils::accounts_revert::TestCommitRevert;
@@ -294,14 +300,30 @@ fn test_nonce_revert_opens_replay_attack() {
     revert_block(&test, &[tx2.clone()], receipts2, &block_state);
 
     // Step 4: attempt to replay nonce=1.
-    // Expected (correct): OperationReceipt::Err — nonce=1 was already processed.
+    // Expected (correct): the block is invalid — nonce=1 was already processed.
     // Actual (buggy):     OperationReceipt::Ok  — nonce was wiped, replay succeeds.
-    let receipts_replay = commit_block(&test, &[tx1.clone()], &block_state);
+    let env = test.env();
+    let mut raw = env.write_transaction();
+    let mut txn: nimiq_trie::WriteTransactionProxy = (&mut raw).into();
+    let replay = test.commit(
+        &mut txn,
+        std::slice::from_ref(&tx1),
+        &[],
+        &block_state,
+        &mut BlockLogger::empty(),
+    );
 
     assert!(
-        matches!(receipts_replay.transactions[0], OperationReceipt::Err(_, _)),
+        matches!(
+            replay,
+            Err(AccountsError::InvalidTransaction(
+                AccountError::InvalidTransaction(TransactionError::InvalidData),
+                _
+            ))
+        ),
         "REPLAY ATTACK CONFIRMED: nonce=1 was accepted again after reverting nonce=2. \
-         The nonce revert logic removes the entry instead of restoring it to the previous value."
+         The nonce revert logic removes the entry instead of restoring it to the previous value. \
+         Got {replay:?}"
     );
 }
 

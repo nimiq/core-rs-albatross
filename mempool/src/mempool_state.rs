@@ -6,7 +6,10 @@ use nimiq_account::ReservedBalance;
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountType;
+use nimiq_primitives::{
+    account::{AccountError, AccountType},
+    trie::error::MerkleRadixTrieError,
+};
 use nimiq_transaction::Transaction;
 
 #[cfg(feature = "metrics")]
@@ -89,11 +92,15 @@ impl MempoolState {
 
         if let Some(sender_state) = self.state_by_sender.get_mut(&tx.sender) {
             let reserved_balance = &mut sender_state.reserved_balance;
-            blockchain.reserve_balance(&sender_account, &tx, reserved_balance)?;
+            blockchain
+                .reserve_balance(&sender_account, &tx, reserved_balance)
+                .map_err(reserve_error)?;
             sender_state.txns.insert(tx.hash());
         } else {
             let mut reserved_balance = ReservedBalance::new(tx.sender.clone());
-            blockchain.reserve_balance(&sender_account, &tx, &mut reserved_balance)?;
+            blockchain
+                .reserve_balance(&sender_account, &tx, &mut reserved_balance)
+                .map_err(reserve_error)?;
 
             let sender_state = SenderPendingState {
                 reserved_balance,
@@ -178,6 +185,16 @@ impl MempoolState {
         let mut expired_txns = self.control_transactions.get_expired_txns(block_number);
         expired_txns.append(&mut self.regular_transactions.get_expired_txns(block_number));
         expired_txns
+    }
+}
+
+/// Why the mempool refuses a transaction it cannot reserve. The sender's account is synced, but the
+/// transaction may also depend on state that is not yet, if the node is still syncing its accounts
+/// tree; like a transaction from a sender that is not synced, it cannot be checked.
+fn reserve_error(error: AccountError) -> VerifyErr {
+    match error {
+        AccountError::ChunkError(MerkleRadixTrieError::IncompleteTrie) => VerifyErr::NoConsensus,
+        error => VerifyErr::InvalidAccount(error),
     }
 }
 
