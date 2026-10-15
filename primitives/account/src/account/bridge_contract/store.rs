@@ -69,11 +69,6 @@ impl<'write, 'store, 'tree, 'txn, 'txni, 'env>
     pub fn remove_nonce(&mut self, address: &Address) {
         self.0.remove(&BridgeContractStore::nonce_key(address))
     }
-
-    /// Get access to the underlying data store for reading other accounts
-    pub fn data_store(&self) -> &DataStoreWrite<'store, 'tree, 'txn, 'txni, 'env> {
-        self.0
-    }
 }
 
 #[cfg(feature = "interaction-traits")]

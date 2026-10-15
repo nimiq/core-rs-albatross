@@ -59,6 +59,17 @@ pub struct DataStoreRead<'store, 'tree, 'txn, 'env> {
     txn: &'txn MdbxReadTransaction<'env>,
 }
 
+impl DataStoreRead<'_, '_, '_, '_> {
+    /// Get a value from the global accounts tree (not scoped to this data store's prefix).
+    /// This is useful when a contract needs to query other accounts.
+    pub fn get_global<T: Deserialize>(&self, key: &KeyNibbles) -> Option<T> {
+        self.store
+            .tree
+            .get(self.txn, key)
+            .expect("Tree must be complete")
+    }
+}
+
 impl DataStoreReadOps for DataStoreRead<'_, '_, '_, '_> {
     fn get<T: Deserialize>(&self, key: &KeyNibbles) -> Option<T> {
         self.store.get(self.txn, key)
@@ -130,7 +141,8 @@ mod tests {
         mdbx::MdbxDatabase,
         traits::{Database, WriteTransaction},
     };
-    use nimiq_primitives::policy::Policy;
+    use nimiq_keys::Address;
+    use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
 
     use crate::{
         accounts::AccountsTrieTable, data_store::DataStore, data_store_ops::DataStoreReadOps,
@@ -172,5 +184,28 @@ mod tests {
 
         assert_eq!(read.get::<i32>(&key_1), None);
         assert_eq!(read.get(&key_2), Some(6969));
+    }
+
+    #[test]
+    fn data_store_read_gets_global_values() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let tree = AccountsTrie::new(&env, AccountsTrieTable);
+        let staking = DataStore::new(&tree, &Policy::STAKING_CONTRACT_ADDRESS);
+        let other = DataStore::new(&tree, &Address::from([0x42u8; Address::SIZE]));
+
+        let key: KeyNibbles = "290d7f3".parse().unwrap();
+        let mut txn = env.write_transaction();
+        let mut trie_txn = (&mut txn).into();
+        staking.write(&mut trie_txn).put(&key, 1337);
+        txn.commit();
+
+        let txn = env.read_transaction();
+        let read = other.read(&txn);
+
+        // A read is scoped to its own prefix, but a global read sees the whole tree.
+        let global_key = &KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS) + &key;
+        assert_eq!(read.get::<i32>(&key), None);
+        assert_eq!(read.get_global(&global_key), Some(1337));
+        assert_eq!(read.get_global(&key), None::<i32>);
     }
 }

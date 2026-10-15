@@ -1,6 +1,5 @@
 use nimiq_account::{
-    Account, AccountTransactionInteraction, AccountsError, BasicAccount, BlockLogger, BlockState,
-    BridgeContract, ReservedBalance,
+    Account, AccountsError, BasicAccount, BlockLogger, BlockState, BridgeContract,
 };
 use nimiq_database::traits::Database;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
@@ -10,6 +9,7 @@ use nimiq_primitives::{
     coin::Coin,
     networks::NetworkId,
     policy::Policy,
+    transaction::TransactionError,
 };
 use nimiq_serde::Serialize;
 use nimiq_test_utils::accounts_revert::TestCommitRevert;
@@ -539,7 +539,7 @@ fn test_recipient_data_size_validation() {
 
 /// A failed outgoing bridge transaction with a fee charges nobody. The fee of a release comes out
 /// of the burned amount, which a failed release does not release, and the bridge never pays for a
-/// failure. So the transaction cannot pay for its failure and is invalid: committing it fails, and
+/// failure. So a failing release is invalid: committing it fails with the reason it fails, and
 /// neither the bridge, nor the signer of the burn proof, nor a key planted in `transaction.proof`
 /// is debited.
 #[test]
@@ -634,7 +634,7 @@ fn failed_outgoing_tx_with_fee_is_invalid_and_charges_nobody() {
         matches!(
             result,
             Err(AccountsError::InvalidTransaction(
-                AccountError::InvalidForSender,
+                AccountError::InvalidTransaction(TransactionError::InvalidData),
                 _
             ))
         ),
@@ -654,102 +654,4 @@ fn failed_outgoing_tx_with_fee_is_invalid_and_charges_nobody() {
         accounts.get_complete(&victim_address, None).balance(),
         initial_victim_balance,
     );
-}
-
-/// An outgoing bridge burn-release reserves `value + fee` against the bridge balance, like any
-/// sender: both come out of the bridge when the release is committed.
-#[test]
-fn reserve_balance_includes_fee_for_bridge() {
-    let signer = KeyPair::generate_default_csprng();
-    let signer_address = Address::from(&signer.public);
-    let bridge_address = Address::from([3u8; 20]);
-    let recipient_address = Address::from([4u8; 20]);
-    let source_chain_id = 1;
-
-    let bridge_contract = BridgeContract {
-        owner: signer_address.clone(),
-        oracle_address: Address::from([2u8; 20]),
-        balance: Coin::from_u64_unchecked(1000),
-        source_chain_id,
-        chain_config: create_test_chain_config(source_chain_id),
-        transaction_count: 0,
-    };
-
-    let accounts = TestCommitRevert::with_initial_state(&[(
-        bridge_address.clone(),
-        Account::Bridge(bridge_contract.clone()),
-    )]);
-
-    // Outgoing bridge transaction with value = 100 and a non-zero fee = 10.
-    let outgoing_tx = OutgoingTransaction {
-        burn_transaction_data: vec![0u8; 32],
-        merkle_proof: AnyMerkleProof::Blake2b(MerkleProof::<Blake2bHash>::new(&[], &[])),
-        oracle_state_index: 0,
-    };
-    let mut bridge_data = OutgoingBridgeTransactionData {
-        burn_proof: outgoing_tx,
-        proof: SignatureProof::default(),
-    };
-
-    let value = Coin::from_u64_unchecked(100);
-    let fee = Coin::from_u64_unchecked(10);
-
-    let mut transaction = Transaction::new_extended(
-        bridge_address.clone(),
-        AccountType::Bridge,
-        bridge_data.serialize_to_vec(),
-        recipient_address,
-        AccountType::Basic,
-        vec![],
-        value,
-        fee,
-        1,
-        NetworkId::UnitAlbatross,
-    );
-    let signer_proof =
-        SignatureProof::from_ed25519(signer.public, signer.sign(&transaction.serialize_content()));
-    bridge_data.set_signature(signer_proof);
-    transaction.sender_data = bridge_data.serialize_to_vec();
-
-    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
-    let mut db_txn = accounts.env().write_transaction();
-    let data_store = accounts.data_store(&bridge_address);
-    let mut reserved_balance = ReservedBalance::new(bridge_address.clone());
-
-    bridge_contract
-        .reserve_balance(
-            &transaction,
-            &mut reserved_balance,
-            &block_state,
-            data_store.read(&mut db_txn),
-        )
-        .expect("reserve_balance should succeed");
-    assert_eq!(reserved_balance.balance(), value + fee);
-
-    // The bridge holds 1000, so beside the 110 already reserved a release of 890 plus a fee of 10
-    // no longer fits, even though its value alone would.
-    let mut second = transaction.clone();
-    second.value = Coin::from_u64_unchecked(890);
-    assert_eq!(
-        bridge_contract.reserve_balance(
-            &second,
-            &mut reserved_balance,
-            &block_state,
-            data_store.read(&mut db_txn),
-        ),
-        Err(AccountError::InsufficientFunds {
-            needed: Coin::from_u64_unchecked(1010),
-            balance: Coin::from_u64_unchecked(1000),
-        }),
-    );
-    assert_eq!(reserved_balance.balance(), value + fee);
-
-    bridge_contract
-        .release_balance(
-            &transaction,
-            &mut reserved_balance,
-            data_store.read(&mut db_txn),
-        )
-        .expect("release_balance should succeed");
-    assert_eq!(reserved_balance.balance(), Coin::ZERO);
 }

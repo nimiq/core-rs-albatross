@@ -8,7 +8,7 @@ use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::{mdbx::MdbxReadTransaction as DBTransaction, traits::WriteTransaction};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{account::AccountType, policy::Policy};
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, inherent::Inherent, ExecutedTransaction, Transaction,
 };
@@ -172,6 +172,16 @@ impl BlockProducer {
         }
     }
 
+    /// Puts bridge releases ahead of all other transactions, keeping the order within both groups.
+    ///
+    /// A release that fails makes its block invalid, so it must not land behind a transaction that
+    /// invalidates it: an oracle update overwriting the slot its proof ends in, or the deletion of
+    /// the oracle. The mempool admits a release only if it succeeds against the head block, so it
+    /// does not depend on anything else in the block, and the release can safely go first.
+    fn order_transactions(transactions: &mut [Transaction]) {
+        transactions.sort_by_key(|transaction| transaction.sender_type != AccountType::Bridge);
+    }
+
     /// Creates the next micro block.
     pub fn next_micro_block(
         &self,
@@ -212,9 +222,9 @@ impl BlockProducer {
         // during the batch when it happened or until the end of the reporting window, but not after
         // that.
         mut equivocation_proofs: Vec<EquivocationProof>,
-        // The transactions to be included in the block body. Transactions that turn out to be
-        // unappliable in this block are dropped from it, see
-        // `exercise_transactions_dropping_unappliable()`.
+        // The transactions to be included in the block body. Bridge releases are moved ahead of
+        // the others, see `order_transactions()`. Transactions that turn out to be unappliable in
+        // this block are dropped from it, see `exercise_transactions_dropping_unappliable()`.
         mut transactions: Vec<Transaction>,
         // Extra data for this block.
         extra_data: Vec<u8>,
@@ -271,6 +281,7 @@ impl BlockProducer {
         let version = blockchain.state().current_version();
 
         // Update the state and calculate the state root.
+        Self::order_transactions(&mut transactions);
         let block_state = BlockState::new(block_number, timestamp, version);
         let (state_root, diff_root, executed_txns) =
             Self::exercise_transactions_dropping_unappliable(

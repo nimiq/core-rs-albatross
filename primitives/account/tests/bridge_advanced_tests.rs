@@ -1,6 +1,6 @@
 use nimiq_account::{
-    Account, AccountTransactionInteraction, BasicAccount, BlockLogger, BlockState, BridgeContract,
-    OperationReceipt, Receipts, ReservedBalance, TransactionLog,
+    Account, AccountTransactionInteraction, AccountsError, BasicAccount, BlockLogger, BlockState,
+    BridgeContract, OperationReceipt, Receipts, ReservedBalance, TransactionLog,
 };
 use nimiq_database::traits::{Database, WriteTransaction};
 use nimiq_hash::{
@@ -13,6 +13,7 @@ use nimiq_primitives::{
     coin::Coin,
     networks::NetworkId,
     policy::Policy,
+    transaction::TransactionError,
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
@@ -118,6 +119,21 @@ fn commit_block(test: &TestCommitRevert, txs: &[Transaction], bs: &BlockState) -
     r
 }
 
+/// Commits `txs` in a block that a failing release makes invalid, and returns why the release
+/// fails. A release is never committed as failed, so the bridge is never debited for one.
+fn rejected_block(test: &TestCommitRevert, txs: &[Transaction], bs: &BlockState) -> AccountError {
+    let env = test.env();
+    let mut raw = env.write_transaction();
+    let mut txn: nimiq_trie::WriteTransactionProxy = (&mut raw).into();
+    match test.commit(&mut txn, txs, &[], bs, &mut BlockLogger::empty()) {
+        Err(AccountsError::InvalidTransaction(error, tx)) => {
+            assert_eq!(tx.sender_type, AccountType::Bridge);
+            error
+        }
+        other => panic!("a block containing a failing release must be invalid, got {other:?}"),
+    }
+}
+
 /// The proof of a single-leaf tree whose root was written once, to a slot used for the first time:
 /// its only node is the slot's previous value, the zero hash, on the left.
 fn first_write_proof() -> AnyMerkleProof {
@@ -186,27 +202,18 @@ fn make_outgoing_tx_with_fee(
 // reserve_balance / release_balance
 // =====================================================================
 
-/// A target-signed outgoing tx is accepted by `reserve_balance`, and
-/// `release_balance` returns the reserved amount.
+/// A target-signed outgoing tx is accepted by `reserve_balance`, which reserves the burned amount
+/// against the bridge and against the target, and `release_balance` returns both.
 #[test]
 fn bridge_reserve_and_release_balance() {
     let owner = KeyPair::generate_default_csprng();
-    let bridge = BridgeContract {
-        owner: Address::from(&owner.public),
-        oracle_address: oracle_addr(),
-        balance: Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
-        source_chain_id: SOURCE_CHAIN_ID,
-        chain_config: chain_config_with_hash(AnyHash::Blake2b(AnyHash32::default())),
-        transaction_count: 0,
-    };
-
-    let test =
-        TestCommitRevert::with_initial_state(&[(bridge_addr(), Account::Bridge(bridge.clone()))]);
+    let bridge = blake2b_bridge(&owner);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_attested_burn(&burn_data, bridge.clone(), &[]);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
-    let mut db_txn = test.env().write_transaction();
+    let db_txn = test.env().read_transaction();
     let data_store = test.data_store(&bridge_addr());
 
-    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let tx = make_outgoing_tx_full(
         RELEASE_AMOUNT,
         burn_data,
@@ -218,41 +225,36 @@ fn bridge_reserve_and_release_balance() {
     let mut reserved = ReservedBalance::new(bridge_addr());
 
     // Reserve succeeds with the target's signature.
-    let res = bridge.reserve_balance(&tx, &mut reserved, &bs, data_store.read(&mut db_txn));
+    let res = bridge.reserve_balance(&tx, &mut reserved, &bs, data_store.read(&db_txn));
     assert!(res.is_ok(), "target-signed reserve must succeed: {res:?}");
     assert_eq!(reserved.balance(), Coin::from_u64_unchecked(RELEASE_AMOUNT));
+    assert_eq!(
+        reserved.balance_for(&nimiq_target()),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT)
+    );
 
     // Release returns the reserved amount.
-    let rel = bridge.release_balance(&tx, &mut reserved, data_store.read(&mut db_txn));
+    let rel = bridge.release_balance(&tx, &mut reserved, data_store.read(&db_txn));
     assert!(rel.is_ok());
     assert_eq!(reserved.balance(), Coin::ZERO);
+    assert_eq!(reserved.balance_for(&nimiq_target()), Coin::ZERO);
 }
 
 /// `reserve_balance` accepts an outgoing tx whose burn-proof signature is NOT
 /// the bridge owner. A release is authorized by its Merkle burn-proof and the
-/// target's signature, both verified at commit, so mempool admission must
-/// accept the same transactions block execution accepts. (An owner-signature
-/// check here used to diverge the mempool from consensus.)
+/// target's signature, so mempool admission must accept the same transactions
+/// block execution accepts. (An owner-signature check here used to diverge the
+/// mempool from consensus.)
 #[test]
 fn bridge_reserve_balance_accepts_non_owner() {
     let owner = KeyPair::generate_default_csprng();
-
-    let bridge = BridgeContract {
-        owner: Address::from(&owner.public),
-        oracle_address: oracle_addr(),
-        balance: Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
-        source_chain_id: SOURCE_CHAIN_ID,
-        chain_config: chain_config_with_hash(AnyHash::Blake2b(AnyHash32::default())),
-        transaction_count: 0,
-    };
-
-    let test =
-        TestCommitRevert::with_initial_state(&[(bridge_addr(), Account::Bridge(bridge.clone()))]);
+    let bridge = blake2b_bridge(&owner);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_attested_burn(&burn_data, bridge.clone(), &[]);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
-    let mut db_txn = test.env().write_transaction();
+    let db_txn = test.env().read_transaction();
     let data_store = test.data_store(&bridge_addr());
 
-    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let tx = make_outgoing_tx_full(
         RELEASE_AMOUNT,
         burn_data,
@@ -262,7 +264,7 @@ fn bridge_reserve_balance_accepts_non_owner() {
     );
 
     let mut reserved = ReservedBalance::new(bridge_addr());
-    let res = bridge.reserve_balance(&tx, &mut reserved, &bs, data_store.read(&mut db_txn));
+    let res = bridge.reserve_balance(&tx, &mut reserved, &bs, data_store.read(&db_txn));
     assert!(
         res.is_ok(),
         "reserve_balance must accept a non-owner burn-proof signature: {res:?}"
@@ -276,21 +278,15 @@ fn bridge_reserve_balance_rejects_insufficient_funds() {
     let owner = KeyPair::generate_default_csprng();
     let small_balance = 100u64; // less than RELEASE_AMOUNT (500)
     let bridge = BridgeContract {
-        owner: Address::from(&owner.public),
-        oracle_address: oracle_addr(),
         balance: Coin::from_u64_unchecked(small_balance),
-        source_chain_id: SOURCE_CHAIN_ID,
-        chain_config: chain_config_with_hash(AnyHash::Blake2b(AnyHash32::default())),
-        transaction_count: 0,
+        ..blake2b_bridge(&owner)
     };
-
-    let test =
-        TestCommitRevert::with_initial_state(&[(bridge_addr(), Account::Bridge(bridge.clone()))]);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_attested_burn(&burn_data, bridge.clone(), &[]);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
-    let mut db_txn = test.env().write_transaction();
+    let db_txn = test.env().read_transaction();
     let data_store = test.data_store(&bridge_addr());
 
-    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let tx = make_outgoing_tx_full(
         RELEASE_AMOUNT,
         burn_data,
@@ -300,11 +296,16 @@ fn bridge_reserve_balance_rejects_insufficient_funds() {
     );
 
     let mut reserved = ReservedBalance::new(bridge_addr());
-    let res = bridge.reserve_balance(&tx, &mut reserved, &bs, data_store.read(&mut db_txn));
-    assert!(
-        matches!(res, Err(AccountError::InsufficientFunds { .. })),
-        "reserve must fail with InsufficientFunds, got {res:?}"
+    let res = bridge.reserve_balance(&tx, &mut reserved, &bs, data_store.read(&db_txn));
+    assert_eq!(
+        res,
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(RELEASE_AMOUNT),
+            balance: Coin::from_u64_unchecked(small_balance),
+        }),
     );
+    assert_eq!(reserved.balance(), Coin::ZERO);
+    assert_eq!(reserved.balance_for(&nimiq_target()), Coin::ZERO);
 }
 
 // =====================================================================
@@ -391,10 +392,10 @@ fn a_release_signed_by_anyone_but_the_target_is_rejected() {
             Err(AccountError::InvalidSignature),
             "a release signed by {who} must be rejected",
         );
-        let receipts = commit_block(&test, &[tx], &bs);
-        assert!(
-            matches!(receipts.transactions[0], OperationReceipt::Err(_, _)),
-            "a release signed by {who} must not apply: {receipts:?}",
+        assert_eq!(
+            rejected_block(&test, &[tx], &bs),
+            AccountError::InvalidSignature,
+            "a release signed by {who} must not apply",
         );
     }
     assert_eq!(
@@ -635,9 +636,9 @@ fn bridge_outgoing_rejects_mismatched_proof_variant() {
         0,
         &target_key(),
     );
-    let receipts = commit_block(&test, &[tx], &bs);
-    assert!(
-        matches!(receipts.transactions[0], OperationReceipt::Err(_, _)),
+    assert_eq!(
+        rejected_block(&test, &[tx], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidProof),
         "mismatched proof variant must be rejected"
     );
 }
