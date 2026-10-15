@@ -5,6 +5,7 @@ use instant::SystemTime;
 use libp2p::{
     gossipsub,
     identity::Keypair,
+    kad,
     multiaddr::{multiaddr, Multiaddr},
     PeerId,
 };
@@ -51,6 +52,12 @@ fn network_config(address: Multiaddr) -> Config {
         .build()
         .expect("Invalid Gossipsub config");
 
+    // Match the production DHT settings that the tests rely on: inbound records
+    // go through our verifier and newest-wins check instead of being stored
+    // unconditionally, and lookups gather a quorum of three answers.
+    let mut kademlia = kad::Config::default();
+    kademlia.set_record_filtering(kad::StoreInserts::FilterBoth);
+
     Config {
         keypair,
         peer_contact,
@@ -66,7 +73,7 @@ fn network_config(address: Multiaddr) -> Config {
             keep_alive: false,
             only_secure_ws_connections: false,
         },
-        kademlia: Default::default(),
+        kademlia,
         gossipsub,
         memory_transport: true,
         required_services: Services::all(),
@@ -78,7 +85,7 @@ fn network_config(address: Multiaddr) -> Config {
         peer_count_per_subnet_max: 20,
         only_secure_ws_connections: false,
         allow_loopback_addresses: true,
-        dht_quorum: NonZeroU8::new(1).unwrap(),
+        dht_quorum: NonZeroU8::new(3).unwrap(),
         network_buffer_size: 1024,
     }
 }
@@ -203,10 +210,7 @@ impl Verifier {
 }
 
 impl dht::Verifier for Verifier {
-    fn verify(
-        &self,
-        record: &libp2p::kad::Record,
-    ) -> Result<dht::DhtRecord, dht::DhtVerifierError> {
+    fn verify(&self, record: &kad::Record) -> Result<dht::DhtRecord, dht::DhtVerifierError> {
         // Peek the tag to know what kind of record this is.
         let Some(tag) = TaggedSigned::<ValidatorRecord<PeerId>, KeyPair>::peek_tag(&record.value)
         else {
@@ -248,10 +252,7 @@ impl dht::Verifier for Verifier {
 struct RejectingVerifier;
 
 impl dht::Verifier for RejectingVerifier {
-    fn verify(
-        &self,
-        _record: &libp2p::kad::Record,
-    ) -> Result<dht::DhtRecord, dht::DhtVerifierError> {
+    fn verify(&self, _record: &kad::Record) -> Result<dht::DhtRecord, dht::DhtVerifierError> {
         Err(dht::DhtVerifierError::InvalidSignature)
     }
 }
@@ -524,6 +525,73 @@ async fn dht_put_and_get() {
         .unwrap();
 
     assert_eq!(fetched_record, Some(put_record));
+}
+
+/// A validator that restarts with a fresh network key keeps its address and
+/// signing key but publishes under a new `PeerId`. Peers must resolve the
+/// address to the newest signed record, and a stale record that shows up
+/// afterwards must not win the address back.
+#[test(tokio::test)]
+#[cfg(feature = "kad")]
+async fn dht_newest_record_wins_across_peer_id_change() {
+    // We have a quorum of 3 for getting DHT records, so we need at least 3 peers
+    let (networks, keys) = create_network_with_n_peers(3).await;
+    let net1 = &networks[0];
+    let net2 = &networks[1];
+    let net3 = &networks[2];
+
+    // FIXME: Add delay while networks share their addresses
+    sleep(Duration::from_secs(10)).await;
+
+    // The validator's signing key and address stay the same throughout.
+    let mut rng = test_rng(false);
+    let keypair = KeyPair::generate(&mut rng);
+    let key: Address = (&keypair.public).into();
+    assert!(keys.write().insert(key.clone(), keypair.public).is_none());
+
+    // The validator first runs on net1.
+    let old_record = ValidatorRecord {
+        peer_id: net1.get_local_peer_id(),
+        validator_address: key.clone(),
+        timestamp: 0x42u64,
+    };
+    net1.dht_put(&key, &old_record, &keypair).await.unwrap();
+
+    let fetched_record = net2
+        .dht_get::<_, ValidatorRecord<PeerId>, KeyPair>(&key)
+        .await
+        .unwrap();
+    assert_eq!(fetched_record, Some(old_record));
+
+    // It restarts with a new network key, so it is now net3, and publishes a
+    // newer record for the same address signed with the same signing key.
+    let new_record = ValidatorRecord {
+        peer_id: net3.get_local_peer_id(),
+        validator_address: key.clone(),
+        timestamp: 0x43u64,
+    };
+    net3.dht_put(&key, &new_record, &keypair).await.unwrap();
+
+    let fetched_record = net2
+        .dht_get::<_, ValidatorRecord<PeerId>, KeyPair>(&key)
+        .await
+        .unwrap();
+    assert_eq!(fetched_record, Some(new_record.clone()));
+
+    // A stale record published afterwards, e.g. by a peer that still holds the
+    // old copy, must not replace the newer one.
+    let stale_record = ValidatorRecord {
+        peer_id: net1.get_local_peer_id(),
+        validator_address: key.clone(),
+        timestamp: 0x41u64,
+    };
+    net1.dht_put(&key, &stale_record, &keypair).await.unwrap();
+
+    let fetched_record = net2
+        .dht_get::<_, ValidatorRecord<PeerId>, KeyPair>(&key)
+        .await
+        .unwrap();
+    assert_eq!(fetched_record, Some(new_record));
 }
 
 #[test(tokio::test)]
