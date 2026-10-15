@@ -147,9 +147,10 @@ pub struct ChainConfig {
     /// Validation program for burn transactions
     /// Defines how to parse and validate burn transactions from the source chain
     pub validation_program: ValidationProgram,
-    /// Maximum allowed Merkle proof depth (number of sibling nodes).
-    /// Bounds the work required to verify a proof and prevents DoS via
-    /// artificially deep proofs. A depth of 64 covers trees with 2^64 leaves.
+    /// Maximum depth of the record tree in a burn proof (number of sibling nodes).
+    /// Prevents DoS via artificially deep trees. A depth of 64 covers trees with 2^64 leaves.
+    /// The proof's oracle-slot levels do not count: they grow as the oracle rotates, so that
+    /// proofs never expire, and only the size of a transaction bounds them.
     pub max_proof_depth: u32,
 }
 

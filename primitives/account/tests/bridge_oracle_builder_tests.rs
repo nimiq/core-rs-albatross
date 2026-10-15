@@ -6,7 +6,7 @@ use nimiq_account::{
     Account, BasicAccount, BlockLogger, BlockState, BridgeContract, OperationReceipt,
     OracleContract,
 };
-use nimiq_hash::{Blake2bHasher, HashOutput, Hasher};
+use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
 use nimiq_keys::{Address, KeyPair};
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::upgrades};
 use nimiq_test_log::test;
@@ -259,7 +259,7 @@ fn built_bridge_transactions_are_accepted() {
     );
 
     // Each oracle state commits to a single-leaf tree holding one burn transaction. The oracle
-    // chains the second state onto the first.
+    // writes each into a slot of its own, folded onto the slot's zero hash.
     let burns = [
         burn_data(&target, released, 1),
         burn_data(&target, released, 2),
@@ -285,7 +285,10 @@ fn built_bridge_transactions_are_accepted() {
                 bridge_address.clone(),
                 OutgoingTransaction::new(
                     burn,
-                    AnyMerkleProof::Blake2bPath(MerklePath::empty()),
+                    AnyMerkleProof::Blake2bPath(MerklePath::from_sibling_hashes(
+                        vec![Blake2bHash::default()],
+                        vec![true],
+                    )),
                     index as u64,
                 )
                 .unwrap(),
