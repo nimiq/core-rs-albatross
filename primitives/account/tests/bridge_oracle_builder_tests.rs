@@ -12,7 +12,7 @@ use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::upgrades};
 use nimiq_test_log::test;
 use nimiq_test_utils::accounts_revert::TestCommitRevert;
 use nimiq_transaction::{
-    account::htlc_contract::{AnyHash, AnyHash32},
+    account::htlc_contract::{AnyHash, AnyHash32, HashType},
     bridge_contract::{
         AddressFormat, AnyMerkleProof, ChainConfig, Endianness, OutgoingTransaction, ValidationOp,
         ValidationProgram,
@@ -27,6 +27,8 @@ const PROTOCOL_VERSION: u16 = upgrades::v3::BRIDGE_ORACLE_CONTRACTS;
 
 const SOURCE_CHAIN_ID: u32 = 1;
 const BURN_BLOCK_HEIGHT: u32 = 42;
+/// The contract on the source chain whose records the bridge releases.
+const SOURCE_CONTRACT: [u8; 20] = [0x5Cu8; 20];
 
 fn coin(value: u64) -> Coin {
     Coin::from_u64_unchecked(value)
@@ -42,6 +44,11 @@ fn blake2b(data: &[u8]) -> AnyHash {
     AnyHash::Blake2b(AnyHash32::from(
         Blake2bHasher::default().digest(data).as_bytes(),
     ))
+}
+
+/// The record-tree leaf of a burn record, `blake2b(blake2b(record))`.
+fn record_leaf(record: &[u8]) -> AnyHash {
+    blake2b(blake2b(record).as_bytes())
 }
 
 /// Verifies `tx` and commits it on its own in a block, checking that the commit succeeds and
@@ -83,6 +90,7 @@ fn built_oracle_transactions_are_accepted() {
         &payer,
         Address::from(&owner),
         4,
+        HashType::Blake2b,
         deposit,
         fee,
         1,
@@ -167,7 +175,8 @@ fn built_oracle_transactions_are_accepted() {
 
 /// Reads all fields from the burn data:
 /// `[0..20]` target address, `[20..28]` amount, `[28..36]` nonce,
-/// `[36..40]` burn block height, `[40..44]` target chain ID.
+/// `[36..40]` burn block height, `[40..44]` target chain ID,
+/// `[44..64]` source contract, `[64..84]` bridge address.
 fn chain_config() -> ChainConfig {
     ChainConfig {
         chain_id: SOURCE_CHAIN_ID,
@@ -191,18 +200,28 @@ fn chain_config() -> ChainConfig {
             ValidationOp::PushConst(40),
             ValidationOp::LoadU32(Endianness::LittleEndian),
             ValidationOp::Store("target_chain_id".to_string()),
+            ValidationOp::PushConst(44),
+            ValidationOp::LoadAddress,
+            ValidationOp::Store("source_contract".to_string()),
+            ValidationOp::PushConst(64),
+            ValidationOp::LoadAddress,
+            ValidationOp::Store("bridge_address".to_string()),
         ]),
         max_proof_depth: 64,
+        source_contract: SOURCE_CONTRACT.to_vec(),
     }
 }
 
-fn burn_data(target: &Address, amount: u64, nonce: u64) -> Vec<u8> {
-    let mut data = Vec::with_capacity(44);
+/// A burn record from `SOURCE_CONTRACT`, releasable by the bridge at `bridge`.
+fn burn_data(bridge: &Address, target: &Address, amount: u64, nonce: u64) -> Vec<u8> {
+    let mut data = Vec::with_capacity(84);
     data.extend_from_slice(target.as_bytes());
     data.extend_from_slice(&amount.to_le_bytes());
     data.extend_from_slice(&nonce.to_le_bytes());
     data.extend_from_slice(&BURN_BLOCK_HEIGHT.to_le_bytes());
     data.extend_from_slice(&SOURCE_CHAIN_ID.to_le_bytes());
+    data.extend_from_slice(&SOURCE_CONTRACT);
+    data.extend_from_slice(bridge.as_bytes());
     data
 }
 
@@ -222,6 +241,7 @@ fn built_bridge_transactions_are_accepted() {
         owner: Address::from(&oracle_owner),
         balance: coin(1_000),
         hash_count: 4,
+        hash_algorithm: HashType::Blake2b,
         hashes: Vec::new(),
         latest_index: None,
     };
@@ -261,8 +281,8 @@ fn built_bridge_transactions_are_accepted() {
     // Each oracle state commits to a single-leaf tree holding one burn transaction. The oracle
     // writes each into a slot of its own, folded onto the slot's zero hash.
     let burns = [
-        burn_data(&target, released, 1),
-        burn_data(&target, released, 2),
+        burn_data(&bridge_address, &target, released, 1),
+        burn_data(&bridge_address, &target, released, 2),
     ];
     commit(
         &test,
@@ -270,7 +290,7 @@ fn built_bridge_transactions_are_accepted() {
             &depositor,
             &oracle_owner,
             oracle_address,
-            burns.iter().map(|burn| blake2b(burn)).collect(),
+            burns.iter().map(|burn| record_leaf(burn)).collect(),
             Coin::ZERO,
             1,
             NETWORK_ID,

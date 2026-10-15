@@ -3,7 +3,7 @@ use nimiq_consensus::consensus::consensus_proxy::ConsensusSyncStatus;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_transaction::account::htlc_contract::{AnyHash, PreImage};
+use nimiq_transaction::account::htlc_contract::{AnyHash, HashType, PreImage};
 
 use crate::types::{RPCResult, Transaction, ValidityStartHeight};
 
@@ -631,22 +631,28 @@ pub trait ConsensusInterface {
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
     /// Returns a serialized transaction creating a new oracle contract.
+    ///
+    /// `hash_algorithm` is the algorithm of every value the oracle will store: `blake2b`,
+    /// `sha256`, `sha512` or `keccak256`. It cannot be changed later.
     async fn create_new_oracle_transaction(
         &self,
         wallet: Address,
         owner: Address,
         hash_count: u16,
+        hash_algorithm: HashType,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error>;
 
-    /// Sends a transaction creating a new oracle contract to the network.
+    /// Sends a transaction creating a new oracle contract to the network. See
+    /// `create_new_oracle_transaction` for the parameters.
     async fn send_new_oracle_transaction(
         &self,
         wallet: Address,
         owner: Address,
         hash_count: u16,
+        hash_algorithm: HashType,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,

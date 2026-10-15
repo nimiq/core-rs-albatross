@@ -216,6 +216,9 @@ impl From<Keccak256Hash> for AnyHash {
 /// This enum provides a lightweight way to identify and compare hash algorithm
 /// types without carrying the actual hash data. It's used for validation and
 /// compatibility checks between contracts (e.g., bridge and oracle).
+///
+/// It is serialized like the `algorithm` of an [`AnyHash`]: as `blake2b`, `sha256`, `sha512` or
+/// `keccak256` in human-readable formats, and as the byte 1, 3, 4 or 5 otherwise.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum HashType {
     Blake2b,
@@ -225,6 +228,16 @@ pub enum HashType {
 }
 
 impl HashType {
+    /// Returns the zero hash of this type.
+    pub fn zero(&self) -> AnyHash {
+        match self {
+            HashType::Blake2b => AnyHash::Blake2b(AnyHash32::default()),
+            HashType::Sha256 => AnyHash::Sha256(AnyHash32::default()),
+            HashType::Sha512 => AnyHash::Sha512(AnyHash64::default()),
+            HashType::Keccak256 => AnyHash::Keccak256(AnyHash32::default()),
+        }
+    }
+
     /// Extracts the hash type from an AnyHash variant
     pub fn from_any_hash(hash: &AnyHash) -> Self {
         match hash {
@@ -681,7 +694,9 @@ mod serde_derive {
         ser::{Serialize, SerializeStruct, Serializer},
     };
 
-    use super::{AnyHash, AnyHash32, AnyHash64, PoWRegularTransfer, PoWSignatureProof, PreImage};
+    use super::{
+        AnyHash, AnyHash32, AnyHash64, HashType, PoWRegularTransfer, PoWSignatureProof, PreImage,
+    };
 
     const ANYHASH_FIELDS: &[&str] = &["algorithm", "hash"];
     const PREIMAGE_FIELDS: &[&str] = &["type", "pre_image"];
@@ -698,6 +713,61 @@ mod serde_derive {
     enum AnyHashField {
         Algorithm,
         Hash,
+    }
+
+    /// The name and the code of a hash algorithm, as the `algorithm` of an `AnyHash` uses them.
+    const HASH_TYPES: [(HashType, &str, u8); 4] = [
+        (HashType::Blake2b, "blake2b", 1),
+        (HashType::Sha256, "sha256", 3),
+        (HashType::Sha512, "sha512", 4),
+        (HashType::Keccak256, "keccak256", 5),
+    ];
+
+    impl Serialize for HashType {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let (_, name, code) = HASH_TYPES
+                .iter()
+                .find(|(hash_type, ..)| hash_type == self)
+                .expect("every hash type has a name and a code");
+            if serializer.is_human_readable() {
+                serializer.serialize_str(name)
+            } else {
+                serializer.serialize_u8(*code)
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for HashType {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            if deserializer.is_human_readable() {
+                let name: Cow<str> = Deserialize::deserialize(deserializer)?;
+                HASH_TYPES
+                    .iter()
+                    .find(|(_, known, _)| *known == name)
+                    .map(|(hash_type, ..)| *hash_type)
+                    .ok_or_else(|| {
+                        D::Error::invalid_value(serde::de::Unexpected::Str(&name), &"a hash type")
+                    })
+            } else {
+                let code: u8 = Deserialize::deserialize(deserializer)?;
+                HASH_TYPES
+                    .iter()
+                    .find(|(.., known)| *known == code)
+                    .map(|(hash_type, ..)| *hash_type)
+                    .ok_or_else(|| {
+                        D::Error::invalid_value(
+                            serde::de::Unexpected::Unsigned(code as u64),
+                            &"a hash type",
+                        )
+                    })
+            }
+        }
     }
 
     struct PreImageVisitor;

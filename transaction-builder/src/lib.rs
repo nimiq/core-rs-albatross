@@ -5,7 +5,7 @@ use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_transaction::{
     account::{
         bridge_contract::OutgoingTransaction,
-        htlc_contract::{AnyHash, PreImage},
+        htlc_contract::{AnyHash, HashType, PreImage},
     },
     SignatureProof, Transaction,
 };
@@ -1730,6 +1730,7 @@ impl TransactionBuilder {
     ///  - `key_pair`:              The key pair used to sign the transaction and pay the fee.
     ///  - `owner`:                 The owner of the oracle contract.
     ///  - `hash_count`:            The number of hashes that can be stored (ring buffer size).
+    ///  - `hash_algorithm`:        The hash algorithm of every value the oracle stores.
     ///  - `value`:                 Required deposit for the oracle contract.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
@@ -1743,13 +1744,16 @@ impl TransactionBuilder {
         key_pair: &KeyPair,
         owner: Address,
         hash_count: u16,
+        hash_algorithm: HashType,
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_oracle_builder(owner);
-        recipient.with_hash_count(hash_count);
+        recipient
+            .with_hash_count(hash_count)
+            .with_hash_algorithm(hash_algorithm);
 
         let mut builder = Self::new();
         builder

@@ -19,7 +19,7 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{accounts_revert::TestCommitRevert, test_rng};
 use nimiq_transaction::{
     account::{
-        htlc_contract::{AnyHash, AnyHash32},
+        htlc_contract::{AnyHash, AnyHash32, HashType},
         oracle_contract::{CreationTransactionData, IncomingOracleTransactionData},
     },
     SignatureProof, Transaction,
@@ -34,6 +34,7 @@ fn init_tree() -> (TestCommitRevert, OracleContract, KeyPair, KeyPair) {
         balance: 1000.try_into().unwrap(),
         owner: Address::from(&key_1.public),
         hash_count: 10,
+        hash_algorithm: HashType::Blake2b,
         hashes: Vec::new(),
         latest_index: None,
     };
@@ -187,6 +188,7 @@ fn it_can_create_contract_from_transaction() {
     let creation_data = CreationTransactionData {
         owner: Address::from(&key_1.public),
         hash_count: 5,
+        hash_algorithm: HashType::Keccak256,
     };
 
     let tx = Transaction::new_contract_creation(
@@ -230,6 +232,7 @@ fn it_can_create_contract_from_transaction() {
     assert_eq!(contract.balance, 1000.try_into().unwrap());
     assert_eq!(contract.owner, Address::from(&key_1.public));
     assert_eq!(contract.hash_count, 5);
+    assert_eq!(contract.hash_algorithm, HashType::Keccak256);
     assert_eq!(contract.hashes.len(), 0);
 }
 
@@ -243,6 +246,7 @@ fn it_rejects_contract_creation_with_zero_hash_count() {
     let creation_data = CreationTransactionData {
         owner: Address::from(&key_1.public),
         hash_count: 0, // Invalid
+        hash_algorithm: HashType::Blake2b,
     };
 
     let tx = Transaction::new_contract_creation(
@@ -571,6 +575,7 @@ fn oracle_rejects_any_update_exceeding_hash_count() {
         balance: Coin::from_u64_unchecked(1000),
         owner: Address::from(&key.public),
         hash_count: 3,
+        hash_algorithm: HashType::Blake2b,
         hashes: Vec::new(),
         latest_index: None,
     };
@@ -945,6 +950,7 @@ fn it_can_restore_from_pruned_receipt() {
     // Save contract state before pruning
     let original_owner = oracle_contract.owner.clone();
     let original_hash_count = oracle_contract.hash_count;
+    let original_hash_algorithm = oracle_contract.hash_algorithm;
     let original_hashes = oracle_contract.hashes.clone();
 
     let mut db_txn = accounts.env().write_transaction();
@@ -969,6 +975,7 @@ fn it_can_restore_from_pruned_receipt() {
     assert_eq!(restored.balance, Coin::ZERO);
     assert_eq!(restored.owner, original_owner);
     assert_eq!(restored.hash_count, original_hash_count);
+    assert_eq!(restored.hash_algorithm, original_hash_algorithm);
     assert_eq!(restored.hashes, original_hashes);
 }
 
@@ -1077,6 +1084,7 @@ fn it_allows_different_hash_types_in_different_contracts() {
         balance: 1000.try_into().unwrap(),
         owner: Address::from(&key_3.public),
         hash_count: 10,
+        hash_algorithm: HashType::Sha256,
         hashes: Vec::new(),
         latest_index: None,
     };
@@ -1144,9 +1152,9 @@ fn it_handles_empty_hash_update_with_existing_hashes() {
 
     let block_state = BlockState::new(1, 1, Policy::max_supported_version());
 
-    // First, add some Sha256 hashes to establish the contract's hash type
-    let sha256_hashes = vec![make_hash_sha256(1), make_hash_sha256(2)];
-    let tx1 = make_update_transaction(Address([1u8; 20]), &key_1, sha256_hashes.clone());
+    // First, add some hashes in the contract's algorithm, Blake2b
+    let blake2b_hashes = vec![make_hash_blake2b(1), make_hash_blake2b(2)];
+    let tx1 = make_update_transaction(Address([1u8; 20]), &key_1, blake2b_hashes.clone());
     let mut tx_logger1 = TransactionLog::empty();
     let result = accounts.test_commit_incoming_transaction(
         &mut oracle_contract,
@@ -1155,7 +1163,7 @@ fn it_handles_empty_hash_update_with_existing_hashes() {
         &mut tx_logger1,
         true,
     );
-    assert!(result.is_ok(), "Should accept Sha256 hashes");
+    assert!(result.is_ok(), "Should accept Blake2b hashes");
     assert_eq!(oracle_contract.get_hashes_chronological().len(), 2);
     assert_eq!(oracle_contract.latest_index, Some(1));
 
@@ -1181,11 +1189,9 @@ fn it_handles_empty_hash_update_with_existing_hashes() {
     assert_eq!(oracle_contract.hashes, hashes_before);
     assert_eq!(oracle_contract.latest_index, latest_index_before);
 
-    // Verify the contract still uses Sha256 type by checking the hash type
-    // The zero hash type should be determined from existing hashes (Sha256)
-    // This is tested implicitly - if we add more hashes, they should match Sha256
-    let new_sha256_hashes = vec![make_hash_sha256(3)];
-    let tx3 = make_update_transaction(Address([1u8; 20]), &key_1, new_sha256_hashes.clone());
+    // The contract still accepts its own algorithm after the empty update
+    let new_blake2b_hashes = vec![make_hash_blake2b(3)];
+    let tx3 = make_update_transaction(Address([1u8; 20]), &key_1, new_blake2b_hashes.clone());
     let mut tx_logger3 = TransactionLog::empty();
     let result = accounts.test_commit_incoming_transaction(
         &mut oracle_contract,
@@ -1196,14 +1202,14 @@ fn it_handles_empty_hash_update_with_existing_hashes() {
     );
     assert!(
         result.is_ok(),
-        "Should still accept Sha256 hashes after empty update"
+        "Should still accept Blake2b hashes after empty update"
     );
     assert_eq!(oracle_contract.get_hashes_chronological().len(), 3);
     assert_eq!(oracle_contract.latest_index, Some(2));
 
-    // Try to add Blake2b - should fail (type mismatch)
-    let blake2b_hashes = vec![make_hash_blake2b(4)];
-    let tx4 = make_update_transaction(Address([1u8; 20]), &key_1, blake2b_hashes);
+    // Try to add Sha256 - should fail (type mismatch)
+    let sha256_hashes = vec![make_hash_sha256(4)];
+    let tx4 = make_update_transaction(Address([1u8; 20]), &key_1, sha256_hashes);
     let mut tx_logger4 = TransactionLog::empty();
     let result = accounts.test_commit_incoming_transaction(
         &mut oracle_contract,
@@ -1217,7 +1223,60 @@ fn it_handles_empty_hash_update_with_existing_hashes() {
         Err(AccountError::InvalidTransaction(
             TransactionError::InvalidData
         )),
-        "Should reject Blake2b hashes when contract uses Sha256"
+        "Should reject Sha256 hashes when contract uses Blake2b"
+    );
+}
+
+/// The algorithm is fixed at creation, so the first update cannot choose another one. Before,
+/// an empty contract took the algorithm of whatever was written to it first, and a bridge created
+/// against it had nothing to check its own hash function against.
+#[test]
+fn it_rejects_a_first_update_in_another_algorithm() {
+    let (accounts, mut oracle_contract, key_1, _key_2) = init_tree();
+    assert_eq!(oracle_contract.hash_algorithm, HashType::Blake2b);
+    assert_eq!(oracle_contract.latest_index, None);
+
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
+
+    for hashes in [
+        vec![make_hash_sha256(1)],
+        vec![make_hash_sha512(1)],
+        vec![make_hash_keccak256(1)],
+        // One foreign hash spoils the whole update.
+        vec![make_hash_blake2b(1), make_hash_keccak256(2)],
+    ] {
+        let tx = make_update_transaction(Address([1u8; 20]), &key_1, hashes);
+        let result = accounts.test_commit_incoming_transaction(
+            &mut oracle_contract,
+            &tx,
+            &block_state,
+            &mut TransactionLog::empty(),
+            true,
+        );
+        assert_eq!(
+            result,
+            Err(AccountError::InvalidTransaction(
+                TransactionError::InvalidData
+            )),
+        );
+        assert!(oracle_contract.hashes.is_empty());
+        assert_eq!(oracle_contract.latest_index, None);
+    }
+
+    // The first write in the declared algorithm builds the ring from that algorithm's zero hash.
+    let tx = make_update_transaction(Address([1u8; 20]), &key_1, vec![make_hash_blake2b(1)]);
+    accounts
+        .test_commit_incoming_transaction(
+            &mut oracle_contract,
+            &tx,
+            &block_state,
+            &mut TransactionLog::empty(),
+            true,
+        )
+        .unwrap();
+    assert_eq!(
+        oracle_contract.hashes,
+        expected_ring(10, &[make_hash_blake2b(1)])
     );
 }
 

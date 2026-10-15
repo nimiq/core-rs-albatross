@@ -117,7 +117,7 @@ mod tests {
     use nimiq_account::OracleContract;
     use nimiq_keys::Address;
     use nimiq_primitives::coin::Coin;
-    use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32};
+    use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, HashType};
 
     use super::{earliest_index, entry, latest_index};
     use crate::error::Error;
@@ -128,6 +128,7 @@ mod tests {
             owner: Address([0u8; 20]),
             balance: Coin::ZERO,
             hash_count: 4,
+            hash_algorithm: HashType::Blake2b,
             hashes: Vec::new(),
             latest_index: None,
         };
@@ -154,6 +155,7 @@ mod tests {
             owner: Address([0u8; 20]),
             balance: Coin::ZERO,
             hash_count: 4,
+            hash_algorithm: HashType::Blake2b,
             hashes: vec![slot(4), slot(5), slot(2), slot(3)],
             latest_index: Some(5),
         };

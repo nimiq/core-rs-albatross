@@ -31,7 +31,7 @@ use nimiq_test_utils::accounts_revert::TestCommitRevert;
 use nimiq_transaction::{
     account::{
         bridge_contract::OutgoingBridgeTransactionData,
-        htlc_contract::{AnyHash, AnyHash32},
+        htlc_contract::{AnyHash, AnyHash32, HashType},
         oracle_contract::IncomingOracleTransactionData,
     },
     bridge_contract::{
@@ -46,6 +46,8 @@ const HASH_COUNT: u16 = 4;
 const SOURCE_CHAIN_ID: u32 = 1;
 const RELEASE_AMOUNT: u64 = 500;
 const BRIDGE_DEPOSIT: u64 = 10_000;
+/// The contract on the source chain whose records the bridge releases.
+const SOURCE_CONTRACT: [u8; 20] = [0x5Cu8; 20];
 
 fn oracle_addr() -> Address {
     Address::from([0x0Eu8; 20])
@@ -76,7 +78,8 @@ fn zero() -> AnyHash {
 }
 
 /// Reads `[0..20]` target address, `[20..28]` amount, `[28..36]` nonce, `[36..40]` burn block
-/// height and `[40..44]` target chain ID, all little-endian.
+/// height and `[40..44]` target chain ID, all little-endian, then `[44..64]` source contract and
+/// `[64..84]` bridge address.
 fn bridge(max_proof_depth: u32) -> BridgeContract {
     let load = |offset, op, name: &str| {
         [
@@ -107,6 +110,8 @@ fn bridge(max_proof_depth: u32) -> BridgeContract {
             ValidationOp::LoadU32(Endianness::LittleEndian),
             "target_chain_id",
         ),
+        load(44, ValidationOp::LoadAddress, "source_contract"),
+        load(64, ValidationOp::LoadAddress, "bridge_address"),
     ]
     .concat();
 
@@ -123,6 +128,7 @@ fn bridge(max_proof_depth: u32) -> BridgeContract {
             block_time: std::time::Duration::from_secs(60),
             validation_program: ValidationProgram::new(program),
             max_proof_depth,
+            source_contract: SOURCE_CONTRACT.to_vec(),
         },
         transaction_count: 0,
     }
@@ -134,6 +140,8 @@ fn burn_record(nonce: u64) -> Vec<u8> {
     record.extend_from_slice(&nonce.to_le_bytes());
     record.extend_from_slice(&42u32.to_le_bytes());
     record.extend_from_slice(&SOURCE_CHAIN_ID.to_le_bytes());
+    record.extend_from_slice(&SOURCE_CONTRACT);
+    record.extend_from_slice(bridge_addr().as_bytes());
     record
 }
 
@@ -211,6 +219,7 @@ impl Ring {
             owner: Address::from(&oracle_owner().public),
             balance: Coin::from_u64_unchecked(1_000),
             hash_count: HASH_COUNT,
+            hash_algorithm: HashType::Blake2b,
             hashes: Vec::new(),
             latest_index: None,
         };
