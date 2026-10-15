@@ -1,6 +1,6 @@
 use nimiq_database::mdbx::MdbxReadTransaction;
 use nimiq_keys::Address;
-use nimiq_primitives::key_nibbles::KeyNibbles;
+use nimiq_primitives::{key_nibbles::KeyNibbles, trie::error::IncompleteTrie};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_trie::{trie::TrieNodeIter, WriteTransactionProxy};
 
@@ -24,9 +24,17 @@ impl<'tree> DataStore<'tree> {
     }
 
     pub fn get<T: Deserialize>(&self, txn: &MdbxReadTransaction, key: &KeyNibbles) -> Option<T> {
-        self.tree
-            .get(txn, &(&self.prefix + key))
-            .expect("Tree must be complete")
+        self.try_get(txn, key).expect("Tree must be complete")
+    }
+
+    /// Like `get`, but fails instead of panicking if `key` lies in the part of the tree that is not
+    /// synced yet.
+    pub fn try_get<T: Deserialize>(
+        &self,
+        txn: &MdbxReadTransaction,
+        key: &KeyNibbles,
+    ) -> Result<Option<T>, IncompleteTrie> {
+        self.tree.get(txn, &(&self.prefix + key))
     }
 
     pub fn put<T: Serialize>(&self, txn: &mut WriteTransactionProxy, key: &KeyNibbles, value: T) {
@@ -57,6 +65,27 @@ impl<'tree> DataStore<'tree> {
 pub struct DataStoreRead<'store, 'tree, 'txn, 'env> {
     store: &'store DataStore<'tree>,
     txn: &'txn MdbxReadTransaction<'env>,
+}
+
+/// A node reads state with an incomplete tree too, for example when its mempool checks a transaction
+/// while the node is still syncing. Reads beyond the sender's own account can then reach the part of
+/// the tree that is not synced yet, so these fail instead of panicking.
+impl DataStoreRead<'_, '_, '_, '_> {
+    /// Like `DataStoreReadOps::get`, but fails if `key` lies in the part of the tree that is not
+    /// synced yet.
+    pub fn try_get<T: Deserialize>(&self, key: &KeyNibbles) -> Result<Option<T>, IncompleteTrie> {
+        self.store.try_get(self.txn, key)
+    }
+
+    /// Get a value from the global accounts tree (not scoped to this data store's prefix), failing
+    /// if `key` lies in the part of the tree that is not synced yet. This is useful when a contract
+    /// needs to query other accounts.
+    pub fn try_get_global<T: Deserialize>(
+        &self,
+        key: &KeyNibbles,
+    ) -> Result<Option<T>, IncompleteTrie> {
+        self.store.tree.get(self.txn, key)
+    }
 }
 
 impl DataStoreReadOps for DataStoreRead<'_, '_, '_, '_> {
@@ -130,7 +159,8 @@ mod tests {
         mdbx::MdbxDatabase,
         traits::{Database, WriteTransaction},
     };
-    use nimiq_primitives::policy::Policy;
+    use nimiq_keys::Address;
+    use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy, trie::error::IncompleteTrie};
 
     use crate::{
         accounts::AccountsTrieTable, data_store::DataStore, data_store_ops::DataStoreReadOps,
@@ -172,5 +202,39 @@ mod tests {
 
         assert_eq!(read.get::<i32>(&key_1), None);
         assert_eq!(read.get(&key_2), Some(6969));
+    }
+
+    #[test]
+    fn data_store_read_gets_global_values() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let tree = AccountsTrie::new(&env, AccountsTrieTable);
+        let staking = DataStore::new(&tree, &Policy::STAKING_CONTRACT_ADDRESS);
+        let other = DataStore::new(&tree, &Address::from([0x42u8; Address::SIZE]));
+
+        let key: KeyNibbles = "290d7f3".parse().unwrap();
+        let mut txn = env.write_transaction();
+        let mut trie_txn = (&mut txn).into();
+        staking.write(&mut trie_txn).put(&key, 1337);
+        txn.commit();
+
+        let txn = env.read_transaction();
+        let read = other.read(&txn);
+
+        // A read is scoped to its own prefix, but a global read sees the whole tree.
+        let global_key = &KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS) + &key;
+        assert_eq!(read.get::<i32>(&key), None);
+        assert_eq!(read.try_get::<i32>(&key), Ok(None));
+        assert_eq!(read.try_get_global(&global_key), Ok(Some(1337)));
+        assert_eq!(read.try_get_global(&key), Ok(None::<i32>));
+        drop(txn);
+
+        // On a tree that is not synced, both fail instead of panicking.
+        let mut txn = env.write_transaction();
+        tree.reinitialize_as_incomplete(&mut (&mut txn).into());
+        txn.commit();
+        let txn = env.read_transaction();
+        let read = staking.read(&txn);
+        assert_eq!(read.try_get::<i32>(&key), Err(IncompleteTrie));
+        assert_eq!(read.try_get_global::<i32>(&global_key), Err(IncompleteTrie));
     }
 }
