@@ -1,39 +1,45 @@
 //! Golden tests for the Polygon Amoy `ChainConfig`.
 //!
 //! A bridge is created with its `ChainConfig` serialized into an opaque hex blob. The validation
-//! program embedded in that blob is what turns an EVM `TokensBurned` event into the amount,
-//! address and nonce that consensus pays out against, and consensus cannot tell a correct program
-//! from a subtly wrong one: a mis-scaled constant there mis-pays real money in a way no other
-//! check catches.
+//! program embedded in that blob is what turns a record forwarded through the EVM oracle into the
+//! source, amount, address, nonce and bridge that consensus pays out against, and consensus cannot
+//! tell a correct program from a subtly wrong one: a mis-scaled constant there mis-pays real money
+//! in a way no other check catches.
 //!
 //! These tests pin the blob byte-for-byte, decode every field, and assert the exact values the
-//! program extracts from realistic burn payloads, so a change to either the blob or the encoding
-//! fails here instead of on-chain.
+//! program extracts from realistic records, so a change to either the blob or the encoding fails
+//! here instead of on-chain.
 
 mod amoy;
 
-use amoy::{amoy_chain_config, POLYGON_AMOY_CHAIN_CONFIG};
+use amoy::{amoy_chain_config, AMOY_SOURCE_CONTRACT, POLYGON_AMOY_CHAIN_CONFIG};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
     account::htlc_contract::{AnyHash, AnyHash32},
     bridge_contract::{
-        AddressFormat, AnyMerkleProof, BridgeError, ChainConfig, Endianness, OutgoingTransaction,
-        StackValue, ValidationOp, ValidationProgram,
+        AddressFormat, AnyMerkleProof, BridgeError, ChainConfig, CreationTransactionData,
+        Endianness, OutgoingTransaction, StackValue, ValidationOp, ValidationProgram,
     },
 };
 use nimiq_utils::merkle::MerklePath;
 
 const AMOY_CHAIN_ID: u32 = 80002;
 
-/// Layout of the burn payload a relayer derives from a `TokensBurned` event: the indexed target
-/// followed by the three non-indexed words, 116 bytes, tightly packed and with no header.
-const TARGET_OFFSET: u64 = 0; // 20 raw address bytes
-const NONCE_OFFSET: u64 = 20; // 32-byte big-endian word
-const AMOUNT_OFFSET: u64 = 52; // 32-byte big-endian word
-const CHAIN_ID_OFFSET: u64 = 84; // 32-byte big-endian word, `block.chainid` at burn time
-const BURN_PAYLOAD_LEN: usize = 116;
+/// Layout of the record a relayer commits for a burn: the forwarding contract the EVM oracle tags
+/// the data with, then the `PolygonBridge`'s burn data, 156 bytes, tightly packed and with no
+/// header.
+const SOURCE_OFFSET: u64 = 0; // 20 raw address bytes, the forwarding contract
+const TARGET_OFFSET: u64 = 20; // 20 raw address bytes
+const NONCE_OFFSET: u64 = 40; // 32-byte big-endian word
+const AMOUNT_OFFSET: u64 = 72; // 32-byte big-endian word
+const CHAIN_ID_OFFSET: u64 = 104; // 32-byte big-endian word, `block.chainid` at burn time
+const BRIDGE_OFFSET: u64 = 136; // 20 raw address bytes, the Nimiq bridge that may release it
+const BURN_PAYLOAD_LEN: usize = 156;
+
+/// The Nimiq bridge the records below name.
+const NIMIQ_BRIDGE: [u8; 20] = [0x0B; 20];
 
 /// wNIM carries 18 decimals and NIM has 5 (luna), so one luna is 10^13 wei.
 const WEI_PER_LUNA: u64 = 10_000_000_000_000;
@@ -48,8 +54,8 @@ fn evm_word(value: u128) -> [u8; 32] {
     word
 }
 
-/// Builds the 116-byte burn payload for a `TokensBurned(to, nimiq_nonce, amount, chain_id)` event
-/// emitted on Amoy.
+/// Builds the 156-byte record of a burn on Amoy, forwarded by the `PolygonBridge` and naming
+/// `NIMIQ_BRIDGE`.
 fn burn_payload(target: [u8; 20], nimiq_nonce: u128, amount_wei: u128) -> Vec<u8> {
     burn_payload_on(AMOY_CHAIN_ID as u128, target, nimiq_nonce, amount_wei)
 }
@@ -61,11 +67,32 @@ fn burn_payload_on(
     nimiq_nonce: u128,
     amount_wei: u128,
 ) -> Vec<u8> {
+    record(
+        AMOY_SOURCE_CONTRACT,
+        chain_id,
+        target,
+        nimiq_nonce,
+        amount_wei,
+        NIMIQ_BRIDGE,
+    )
+}
+
+/// The record `source ++ target ++ nonce ++ amount ++ chain_id ++ nimiq_bridge`.
+fn record(
+    source: [u8; 20],
+    chain_id: u128,
+    target: [u8; 20],
+    nimiq_nonce: u128,
+    amount_wei: u128,
+    nimiq_bridge: [u8; 20],
+) -> Vec<u8> {
     let mut payload = Vec::with_capacity(BURN_PAYLOAD_LEN);
+    payload.extend_from_slice(&source);
     payload.extend_from_slice(&target);
     payload.extend_from_slice(&evm_word(nimiq_nonce));
     payload.extend_from_slice(&evm_word(amount_wei));
     payload.extend_from_slice(&evm_word(chain_id));
+    payload.extend_from_slice(&nimiq_bridge);
     assert_eq!(payload.len(), BURN_PAYLOAD_LEN);
     payload
 }
@@ -74,17 +101,22 @@ fn burn_payload_on(
 /// changed opcode shows up as a diff rather than as a silently-accepted new program.
 fn expected_amoy_program() -> ValidationProgram {
     ValidationProgram::new(vec![
-        // amount: the 32-byte word at offset 52, divided down to luna at full 256-bit width
+        // source_contract: the forwarding contract at offset 0, which consensus requires to be
+        // the bridge's `source_contract`.
+        ValidationOp::PushConst(SOURCE_OFFSET),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("source_contract".to_string()),
+        // amount: the 32-byte word at offset 72, divided down to luna at full 256-bit width
         // before narrowing. Reading it with `LoadEvmU64` and dividing afterwards would require
         // the *wei* figure to fit a u64, capping a burn at about 18.44 NIM.
         ValidationOp::PushConst(AMOUNT_OFFSET),
         ValidationOp::LoadEvmU64Scaled(WEI_PER_LUNA),
         ValidationOp::Store("amount".to_string()),
-        // target_address: the 20 raw bytes at offset 0.
+        // target_address: the 20 raw bytes at offset 20.
         ValidationOp::PushConst(TARGET_OFFSET),
         ValidationOp::LoadAddress,
         ValidationOp::Store("target_address".to_string()),
-        // target_nonce: the 32-byte word at offset 20.
+        // target_nonce: the 32-byte word at offset 40.
         ValidationOp::PushConst(NONCE_OFFSET),
         ValidationOp::LoadEvmU64,
         ValidationOp::Store("target_nonce".to_string()),
@@ -95,23 +127,29 @@ fn expected_amoy_program() -> ValidationProgram {
         ValidationOp::PushConst(u32::MAX as u64),
         ValidationOp::And,
         ValidationOp::Store("burn_block_height".to_string()),
-        // target_chain_id: the `block.chainid` word at offset 84, so the bridge's
+        // target_chain_id: the `block.chainid` word at offset 104, so the bridge's
         // source_chain_id check rejects burns from other chains.
         ValidationOp::PushConst(CHAIN_ID_OFFSET),
         ValidationOp::LoadEvmU64,
         ValidationOp::Store("target_chain_id".to_string()),
+        // bridge_address: the 20 raw bytes at offset 136, which consensus requires to be the
+        // bridge executing the release.
+        ValidationOp::PushConst(BRIDGE_OFFSET),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("bridge_address".to_string()),
     ])
 }
 
 fn expected_amoy_chain_config() -> ChainConfig {
     ChainConfig {
         chain_id: AMOY_CHAIN_ID,
-        hash_function: AnyHash::Keccak256(AnyHash32::from([0u8; 32])),
+        hash_function: AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
         address_format: AddressFormat::Ethereum,
         endianness: Endianness::BigEndian,
         block_time: std::time::Duration::from_secs(2),
         validation_program: expected_amoy_program(),
         max_proof_depth: 32,
+        source_contract: AMOY_SOURCE_CONTRACT.to_vec(),
     }
 }
 
@@ -120,7 +158,7 @@ fn expected_amoy_chain_config() -> ChainConfig {
 fn outgoing_tx(burn_payload: Vec<u8>) -> OutgoingTransaction {
     OutgoingTransaction {
         burn_transaction_data: burn_payload,
-        merkle_proof: AnyMerkleProof::Keccak256Path(MerklePath::empty()),
+        merkle_proof: AnyMerkleProof::Blake2bPath(MerklePath::empty()),
         oracle_state_index: 0,
     }
 }
@@ -147,8 +185,8 @@ fn amoy_chain_config_decodes_to_the_expected_fields() {
     assert_eq!(config.chain_id, AMOY_CHAIN_ID, "chain id must be Amoy");
     assert_eq!(
         config.hash_function,
-        AnyHash::Keccak256(AnyHash32::from([0u8; 32])),
-        "Amoy proofs are Keccak256; the hash bytes are an unused algorithm marker"
+        AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
+        "Amoy proofs are Blake2b; the hash bytes are an unused algorithm marker"
     );
     assert_eq!(config.address_format, AddressFormat::Ethereum);
     assert_eq!(
@@ -163,14 +201,32 @@ fn amoy_chain_config_decodes_to_the_expected_fields() {
     );
     assert_eq!(
         config.validation_program.operations.len(),
-        17,
-        "the Amoy program is 17 opcodes"
+        23,
+        "the Amoy program is 23 opcodes"
     );
     assert_eq!(
         config.validation_program,
         expected_amoy_program(),
         "opcode sequence drifted from the reviewed program"
     );
+    assert_eq!(
+        config.source_contract,
+        AMOY_SOURCE_CONTRACT.to_vec(),
+        "releases are bound to the PolygonBridge"
+    );
+}
+
+/// A bridge can be created with the shipped config: it passes every creation check, the
+/// source-contract one included.
+#[test]
+fn amoy_chain_config_passes_the_creation_checks() {
+    let data = CreationTransactionData {
+        owner: Address::from([0x01; 20]),
+        oracle_address: Address::from([0x0E; 20]),
+        source_chain_id: AMOY_CHAIN_ID,
+        chain_config: amoy_chain_config(),
+    };
+    assert!(data.verify().is_ok());
 }
 
 /// The program must be extraction-only. `Assert` and `PushExpected*` need an `IncomingTransaction`
@@ -212,6 +268,22 @@ fn amoy_chain_config_reserializes_to_the_pinned_blob() {
         hex::encode(amoy_chain_config().serialize_to_vec()),
         POLYGON_AMOY_CHAIN_CONFIG
     );
+}
+
+/// The `source_contract` is the blob's last field: its length byte and then the address. A
+/// deployment for another `PolygonBridge` address therefore produces the pinned blob with only the
+/// last 20 bytes replaced, which is how the tooling derives it.
+#[test]
+fn amoy_source_contract_is_the_last_20_bytes_of_the_blob() {
+    let pinned = hex::decode(POLYGON_AMOY_CHAIN_CONFIG).unwrap();
+    let (prefix, address) = pinned.split_at(pinned.len() - 20);
+    assert_eq!(address, AMOY_SOURCE_CONTRACT);
+    assert_eq!(prefix.last(), Some(&20), "the address's length prefix");
+
+    let deployed = [0x4Fu8; 20];
+    let mut config = expected_amoy_chain_config();
+    config.source_contract = deployed.to_vec();
+    assert_eq!(config.serialize_to_vec(), [prefix, &deployed].concat());
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -289,6 +361,16 @@ fn amoy_program_extracts_expected_values_from_burn_events() {
             StackValue::U64(AMOY_CHAIN_ID as u64),
             "{description}: wrong chain id"
         );
+        assert_eq!(
+            extract(&config, &payload, "source_contract"),
+            StackValue::Bytes(AMOY_SOURCE_CONTRACT.to_vec()),
+            "{description}: wrong source contract"
+        );
+        assert_eq!(
+            extract(&config, &payload, "bridge_address"),
+            StackValue::Bytes(NIMIQ_BRIDGE.to_vec()),
+            "{description}: wrong bridge address"
+        );
 
         // The same values, seen through the struct consensus actually pays out against.
         let parsed = outgoing_tx(payload).parse_burn_data(&config).unwrap();
@@ -310,6 +392,42 @@ fn amoy_program_extracts_expected_values_from_burn_events() {
             parsed.target_chain_id, AMOY_CHAIN_ID,
             "{description}: parse_burn_data chain id"
         );
+        assert_eq!(
+            parsed.source_contract,
+            AMOY_SOURCE_CONTRACT.to_vec(),
+            "{description}: parse_burn_data source contract"
+        );
+        assert_eq!(
+            parsed.bridge_address,
+            Address::from(NIMIQ_BRIDGE),
+            "{description}: parse_burn_data bridge address"
+        );
+    }
+}
+
+/// The source and the Nimiq bridge are read from the record, not assumed, so the bridge's checks
+/// against its `source_contract` and its own address can actually fail: a burn-shaped record
+/// forwarded by another contract, or naming another Nimiq bridge, parses to exactly that.
+#[test]
+fn amoy_program_reads_the_source_and_the_bridge_from_the_record() {
+    let config = amoy_chain_config();
+
+    for (source, nimiq_bridge) in [
+        ([0x01u8; 20], NIMIQ_BRIDGE),
+        (AMOY_SOURCE_CONTRACT, [0x0Cu8; 20]),
+        ([0xFFu8; 20], [0x00u8; 20]),
+    ] {
+        let payload = record(
+            source,
+            AMOY_CHAIN_ID as u128,
+            [0x11; 20],
+            1,
+            1_000_000_000_000_000_000,
+            nimiq_bridge,
+        );
+        let parsed = outgoing_tx(payload).parse_burn_data(&config).unwrap();
+        assert_eq!(parsed.source_contract, source.to_vec());
+        assert_eq!(parsed.bridge_address, Address::from(nimiq_bridge));
     }
 }
 
@@ -461,14 +579,14 @@ fn amoy_program_rejects_nonces_above_the_u64_word_ceiling() {
     ));
 }
 
-/// The program indexes fixed offsets into a 116-byte payload. A short payload must produce a typed
+/// The program indexes fixed offsets into a 156-byte record. A short record must produce a typed
 /// error, never an out-of-bounds read.
 #[test]
-fn amoy_program_rejects_payloads_shorter_than_the_event_layout() {
+fn amoy_program_rejects_payloads_shorter_than_the_record_layout() {
     let config = amoy_chain_config();
     let full = burn_payload([0x77; 20], 1, 1_000_000_000_000_000_000);
 
-    for len in [0, 1, 20, 52, 83, 84, 115] {
+    for len in [0, 1, 19, 20, 40, 72, 103, 104, 135, 136, 155] {
         assert!(
             matches!(
                 config.validation_program.extract_only(&full[..len]),

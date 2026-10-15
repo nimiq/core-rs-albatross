@@ -441,6 +441,10 @@ pub enum TransactionCommand {
         /// The number of hashes that can be stored (ring buffer size).
         hash_count: u16,
 
+        /// The hashing algorithm of every hash the oracle stores. It cannot be changed later.
+        #[clap(value_enum)]
+        hash_algorithm: HashAlgorithm,
+
         #[clap(flatten)]
         tx_commons: TxCommonWithValue,
     },
@@ -1099,6 +1103,7 @@ impl HandleSubcommand for TransactionCommand {
                 sender_wallet,
                 owner,
                 hash_count,
+                hash_algorithm,
                 tx_commons,
             } => {
                 if tx_commons.common_tx_fields.dry {
@@ -1108,6 +1113,7 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             owner,
                             hash_count,
+                            hash_algorithm.into(),
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
                             tx_commons.common_tx_fields.validity_start_height,
@@ -1121,6 +1127,7 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             owner,
                             hash_count,
+                            hash_algorithm.into(),
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
                             tx_commons.common_tx_fields.validity_start_height,

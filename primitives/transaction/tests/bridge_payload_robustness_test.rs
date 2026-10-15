@@ -11,7 +11,7 @@ mod amoy;
 
 use std::{sync::mpsc, thread, time::Duration};
 
-use amoy::amoy_chain_config;
+use amoy::{amoy_chain_config, AMOY_SOURCE_CONTRACT};
 use nimiq_primitives::coin::Coin;
 use nimiq_test_utils::test_rng;
 use nimiq_transaction::{
@@ -28,11 +28,13 @@ use rand::RngExt;
 /// around it, as pinned by the payload-bounds tests.
 const MAX_PAYLOAD_LEN: usize = 4_897;
 
-/// Bytes the little-endian program below reads: 20 address + 8 amount + 8 nonce + 4 + 4.
-const LE_LAYOUT_LEN: usize = 44;
+/// Bytes the little-endian program below reads: 20 address + 8 amount + 8 nonce + 4 + 4, then
+/// 20 source contract + 20 bridge address.
+const LE_LAYOUT_LEN: usize = 84;
 
-/// Bytes the Amoy program reads: 20 address + 32-byte nonce, amount and chain-id words.
-const AMOY_LAYOUT_LEN: usize = 116;
+/// Bytes the Amoy program reads: 20 source + 20 target address, the 32-byte nonce, amount and
+/// chain-id words, and the 20-byte Nimiq bridge.
+const AMOY_LAYOUT_LEN: usize = 156;
 
 /// How long any one sweep may take before it counts as hung. Generous, so a slow CI machine
 /// passes; the failure mode being guarded against is infinite.
@@ -42,7 +44,8 @@ const RANDOM_PAYLOADS_PER_PROGRAM: usize = 1_000;
 const RANDOM_PROGRAMS: usize = 3_000;
 
 /// Little-endian fixed-offset program: target_address [0..20], amount [20..28],
-/// target_nonce [28..36], burn_block_height [36..40], target_chain_id [40..44].
+/// target_nonce [28..36], burn_block_height [36..40], target_chain_id [40..44],
+/// source_contract [44..64], bridge_address [64..84].
 fn le_program() -> ValidationProgram {
     ValidationProgram::new(vec![
         ValidationOp::PushConst(0),
@@ -60,6 +63,12 @@ fn le_program() -> ValidationProgram {
         ValidationOp::PushConst(40),
         ValidationOp::LoadU32(Endianness::LittleEndian),
         ValidationOp::Store("target_chain_id".to_string()),
+        ValidationOp::PushConst(44),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("source_contract".to_string()),
+        ValidationOp::PushConst(64),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("bridge_address".to_string()),
     ])
 }
 
@@ -72,6 +81,7 @@ fn config_with(program: ValidationProgram) -> ChainConfig {
         block_time: Duration::from_secs(60),
         validation_program: program,
         max_proof_depth: 64,
+        source_contract: vec![0x5C; 20],
     }
 }
 
@@ -79,7 +89,7 @@ fn le_config() -> ChainConfig {
     config_with(le_program())
 }
 
-/// A well-formed 44-byte record for `le_program`.
+/// A well-formed 84-byte record for `le_program`.
 fn le_payload() -> Vec<u8> {
     let mut payload = Vec::with_capacity(LE_LAYOUT_LEN);
     payload.extend_from_slice(&[0xAAu8; 20]);
@@ -87,11 +97,13 @@ fn le_payload() -> Vec<u8> {
     payload.extend_from_slice(&1u64.to_le_bytes());
     payload.extend_from_slice(&42u32.to_le_bytes());
     payload.extend_from_slice(&1u32.to_le_bytes());
+    payload.extend_from_slice(&[0x5Cu8; 20]);
+    payload.extend_from_slice(&[0x0Bu8; 20]);
     payload
 }
 
-/// A well-formed 116-byte `TokensBurned` record for the Amoy program: one NIM, nonce 1, burnt on
-/// Amoy itself.
+/// A well-formed 156-byte record of a burn for the Amoy program: forwarded by the
+/// `PolygonBridge`, one NIM, nonce 1, burnt on Amoy itself.
 fn amoy_payload() -> Vec<u8> {
     fn word(value: u128) -> [u8; 32] {
         let mut word = [0u8; 32];
@@ -99,10 +111,12 @@ fn amoy_payload() -> Vec<u8> {
         word
     }
     let mut payload = Vec::with_capacity(AMOY_LAYOUT_LEN);
+    payload.extend_from_slice(&AMOY_SOURCE_CONTRACT);
     payload.extend_from_slice(&[0x77u8; 20]);
     payload.extend_from_slice(&word(1));
     payload.extend_from_slice(&word(1_000_000_000_000_000_000));
     payload.extend_from_slice(&word(80_002));
+    payload.extend_from_slice(&[0x0Bu8; 20]);
     payload
 }
 
@@ -195,6 +209,14 @@ fn assert_truncation_sweep(config: &ChainConfig, full: &[u8], layout_len: usize,
         assert_eq!(
             parsed.target_nonce, reference.target_nonce,
             "{name}: filler changed the nonce"
+        );
+        assert_eq!(
+            parsed.source_contract, reference.source_contract,
+            "{name}: filler changed the source contract"
+        );
+        assert_eq!(
+            parsed.bridge_address, reference.bridge_address,
+            "{name}: filler changed the bridge address"
         );
     }
 }
@@ -332,29 +354,35 @@ fn random_payloads_against_real_programs_never_panic_and_only_fail_with_typed_er
 // Random programs against random payloads
 // ---------------------------------------------------------------------------------------------
 
-/// Names a random program stores under: the five the release path looks up, plus a scratch name
+/// Names a random program stores under: the seven the release path looks up, plus a scratch name
 /// and an empty one.
-const NAMES: [&str; 7] = [
+const NAMES: [&str; 9] = [
     "amount",
     "target_address",
     "target_nonce",
     "burn_block_height",
     "target_chain_id",
+    "source_contract",
+    "bridge_address",
     "scratch",
     "",
 ];
 
 /// Constants that sit on the boundaries the VM cares about: layout offsets, the payload ceiling,
 /// and the top of the integer ranges.
-const EDGE_CONSTANTS: [u64; 13] = [
+const EDGE_CONSTANTS: [u64; 17] = [
     0,
     1,
     19,
     20,
+    40,
     44,
-    52,
+    64,
+    72,
     84,
-    116,
+    104,
+    136,
+    156,
     MAX_PAYLOAD_LEN as u64,
     u32::MAX as u64,
     u64::MAX - 1,

@@ -1,7 +1,9 @@
 use nimiq_keys::Address;
 use nimiq_serde::{Deserialize, Serialize};
 
-use super::core::{ChainConfig, OutgoingTransaction};
+use super::core::{
+    transaction_validation::validate_address_format, ChainConfig, OutgoingTransaction,
+};
 use crate::{account::htlc_contract::AnyHash, SignatureProof, Transaction, TransactionError};
 
 /// Data used to create bridge contracts.
@@ -36,6 +38,16 @@ impl CreationTransactionData {
         // Verify chain config matches the source_chain_id
         if self.chain_config.chain_id != self.source_chain_id {
             warn!("Chain config chain_id does not match source_chain_id");
+            return Err(TransactionError::InvalidData);
+        }
+        // Releases require the record's source to equal `source_contract`, so a bridge without
+        // one could accept deposits but never release them. No contract has the zero address,
+        // which is also what an unconfigured address usually holds.
+        let source_contract = &self.chain_config.source_contract;
+        if validate_address_format(source_contract, &self.chain_config).is_err()
+            || source_contract.iter().all(|byte| *byte == 0)
+        {
+            warn!("Invalid creation data: source_contract must be set to an address of the source chain");
             return Err(TransactionError::InvalidData);
         }
         // The release path (extract_burn_transaction_hash and AnyMerkleProof)

@@ -12,7 +12,7 @@ use nimiq_test_utils::accounts_revert::TestCommitRevert;
 use nimiq_transaction::{
     account::{
         bridge_contract::OutgoingBridgeTransactionData,
-        htlc_contract::{AnyHash, AnyHash32},
+        htlc_contract::{AnyHash, AnyHash32, HashType},
     },
     bridge_contract::{
         AddressFormat, AnyMerkleProof, ChainConfig, CreationTransactionData, Endianness,
@@ -29,6 +29,8 @@ use nimiq_utils::{key_rng::SecureGenerate, merkle::MerklePath};
 const SOURCE_CHAIN_ID: u32 = 1;
 const RELEASE_AMOUNT: u64 = 100;
 const BURN_BLOCK_HEIGHT: u32 = 42;
+/// The contract on the source chain whose records the bridge releases.
+const SOURCE_CONTRACT: [u8; 20] = [0x5Cu8; 20];
 
 /// The key of `target_address()`. Only the target can sign its releases.
 fn target_key() -> KeyPair {
@@ -49,6 +51,8 @@ fn target_address_bytes() -> [u8; 20] {
 ///   [28..36] target_nonce (u64 LE)
 ///   [36..40] burn_block_height (u32 LE)
 ///   [40..44] target_chain_id (u32 LE)
+///   [44..64] source_contract
+///   [64..84] bridge_address
 fn standard_validation_program() -> ValidationProgram {
     ValidationProgram::new(vec![
         ValidationOp::PushConst(0),
@@ -66,6 +70,12 @@ fn standard_validation_program() -> ValidationProgram {
         ValidationOp::PushConst(40),
         ValidationOp::LoadU32(Endianness::LittleEndian),
         ValidationOp::Store("target_chain_id".to_string()),
+        ValidationOp::PushConst(44),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("source_contract".to_string()),
+        ValidationOp::PushConst(64),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("bridge_address".to_string()),
     ])
 }
 
@@ -78,17 +88,21 @@ fn make_chain_config(program: ValidationProgram) -> ChainConfig {
         block_time: std::time::Duration::from_secs(60),
         validation_program: program,
         max_proof_depth: 64,
+        source_contract: SOURCE_CONTRACT.to_vec(),
     }
 }
 
-/// Encode burn_data for a given nonce.
+/// Encode burn_data for a given nonce, from `SOURCE_CONTRACT` and releasable by the bridge at
+/// `0x0B..`.
 fn make_burn_data(nonce: u64) -> Vec<u8> {
-    let mut data = Vec::with_capacity(44);
+    let mut data = Vec::with_capacity(84);
     data.extend_from_slice(&target_address_bytes());
     data.extend_from_slice(&RELEASE_AMOUNT.to_le_bytes());
     data.extend_from_slice(&nonce.to_le_bytes());
     data.extend_from_slice(&BURN_BLOCK_HEIGHT.to_le_bytes());
     data.extend_from_slice(&SOURCE_CHAIN_ID.to_le_bytes());
+    data.extend_from_slice(&SOURCE_CONTRACT);
+    data.extend_from_slice(&[0x0Bu8; 20]);
     data
 }
 
@@ -107,8 +121,9 @@ fn make_oracle_for_two_txs() -> (OracleContract, AnyHash, AnyHash) {
     let burn_data_1 = make_burn_data(1);
     let burn_data_2 = make_burn_data(2);
 
-    let leaf_hash_1 = blake2b_hash(&burn_data_1);
-    let leaf_hash_2 = blake2b_hash(&burn_data_2);
+    // Record-tree leaves hash the record twice.
+    let leaf_hash_1 = blake2b_hash(blake2b_hash(&burn_data_1).as_bytes());
+    let leaf_hash_2 = blake2b_hash(blake2b_hash(&burn_data_2).as_bytes());
 
     let zero_hash = leaf_hash_1.zero_of_same_type();
     let oracle_hash_0 = zero_hash.digest(&leaf_hash_1);
@@ -123,6 +138,7 @@ fn make_oracle_for_two_txs() -> (OracleContract, AnyHash, AnyHash) {
         owner: Address::from([0x0Eu8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count,
+        hash_algorithm: HashType::Blake2b,
         hashes,
         latest_index: Some(1),
     };
@@ -334,6 +350,12 @@ fn test_assert_in_validation_program_permanently_locks_funds() {
         ValidationOp::PushConst(40),
         ValidationOp::LoadU32(Endianness::LittleEndian),
         ValidationOp::Store("target_chain_id".to_string()),
+        ValidationOp::PushConst(44),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("source_contract".to_string()),
+        ValidationOp::PushConst(64),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("bridge_address".to_string()),
         // "Sanity check" assertion that looks harmless but breaks extraction-only mode.
         ValidationOp::PushConst(1), // push true
         ValidationOp::Assert,       // assert top of stack is non-zero

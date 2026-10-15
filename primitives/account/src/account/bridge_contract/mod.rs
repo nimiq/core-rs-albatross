@@ -4,7 +4,7 @@ use nimiq_primitives::{account::AccountError, coin::Coin, transaction::Transacti
 use nimiq_primitives::{account::AccountType, key_nibbles::KeyNibbles};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::account::bridge_contract::{
-    AnyMerkleProof, BridgeError, ChainConfig, OutgoingTransaction,
+    AnyMerkleProof, BridgeError, ChainConfig, OutgoingTransaction, ParsedBurnData,
 };
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::account::bridge_contract::{
@@ -144,6 +144,55 @@ impl BridgeContract {
 
         Ok(())
     }
+
+    /// Checks that `burn`, a record parsed by the validation program, may be released by this
+    /// bridge, which lives at `bridge_address`.
+    ///
+    /// The relayer commits records from any contract that forwards data, so a record must come
+    /// from the bridge's `source_contract` on its source chain. A burn names the one Nimiq bridge
+    /// that may release it, so a second bridge with the same source contract, which starts with
+    /// empty nonce counters, cannot release every historical burn again.
+    pub fn verify_burn_record(
+        &self,
+        bridge_address: &Address,
+        burn: &ParsedBurnData,
+    ) -> Result<(), BurnRecordError> {
+        if burn.source_contract != self.chain_config.source_contract {
+            return Err(BurnRecordError::WrongSource {
+                source_contract: hex::encode(&burn.source_contract),
+                expected: hex::encode(&self.chain_config.source_contract),
+            });
+        }
+        if burn.target_chain_id != self.source_chain_id {
+            return Err(BurnRecordError::WrongChain {
+                chain_id: burn.target_chain_id,
+                expected: self.source_chain_id,
+            });
+        }
+        if &burn.bridge_address != bridge_address {
+            return Err(BurnRecordError::WrongBridge {
+                bridge: burn.bridge_address.clone(),
+                expected: bridge_address.clone(),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Why a burn record may not be released by a bridge.
+#[derive(Clone, Debug, Error)]
+pub enum BurnRecordError {
+    #[error(
+        "the record comes from contract {source_contract}, not from the source contract {expected}"
+    )]
+    WrongSource {
+        source_contract: String,
+        expected: String,
+    },
+    #[error("the burn is for chain {chain_id}, but the bridge serves chain {expected}")]
+    WrongChain { chain_id: u32, expected: u32 },
+    #[error("the burn may be released only by bridge {bridge}, not by {expected}")]
+    WrongBridge { bridge: Address, expected: Address },
 }
 
 /// Why a burn proof does not prove its record against the bridge's oracle.
@@ -228,18 +277,8 @@ fn validate_oracle_hash_compatibility(
         }
     };
 
-    // If oracle has no hashes yet, any hash function is acceptable
-    if oracle.hashes.is_empty() {
-        log::info!(
-            %oracle_address,
-            hash_function=HashType::from_any_hash(&chain_config.hash_function).name(),
-            "Oracle is empty, bridge hash function will be accepted",
-        );
-        return Ok(());
-    }
-
-    // Get the oracle's hash type from its first hash
-    let oracle_hash_type = HashType::from_any_hash(&oracle.hashes[0]);
+    // The oracle fixes its algorithm at creation, so this holds even before its first update.
+    let oracle_hash_type = oracle.hash_algorithm;
     let bridge_hash_type = HashType::from_any_hash(&chain_config.hash_function);
 
     // Validate hash types match
@@ -432,18 +471,12 @@ impl AccountTransactionInteraction for BridgeContract {
             ));
         }
 
-        // Verify the target chain ID matches this bridge's source chain ID
-        // (burn happened on source chain, releasing on Nimiq)
-        if parsed_burn.target_chain_id != self.source_chain_id {
-            log::warn!(
-                expected = self.source_chain_id,
-                obtained = parsed_burn.target_chain_id,
-                "Chain ID mismatch"
-            );
-            return Err(AccountError::InvalidTransaction(
-                TransactionError::InvalidData,
-            ));
-        }
+        // The record must come from the source contract on the source chain and name this bridge
+        self.verify_burn_record(&transaction.sender, &parsed_burn)
+            .map_err(|error| {
+                log::warn!(%error, "Burn record not releasable by this bridge");
+                AccountError::InvalidTransaction(TransactionError::InvalidData)
+            })?;
 
         // Check nonce for replay protection
         let mut store = BridgeContractStoreWrite::new(&mut data_store);

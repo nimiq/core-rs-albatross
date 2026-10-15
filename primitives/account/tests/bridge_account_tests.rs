@@ -18,7 +18,7 @@ use nimiq_test_utils::accounts_revert::TestCommitRevert;
 use nimiq_transaction::{
     account::{
         bridge_contract::OutgoingBridgeTransactionData,
-        htlc_contract::{AnyHash, AnyHash32},
+        htlc_contract::{AnyHash, AnyHash32, HashType},
         oracle_contract::{
             CreationTransactionData as OracleCreationData, IncomingOracleTransactionData,
         },
@@ -39,6 +39,8 @@ const SOURCE_CHAIN_ID: u32 = 1;
 const RELEASE_AMOUNT: u64 = 500;
 const BURN_BLOCK_HEIGHT: u32 = 42;
 const BRIDGE_DEPOSIT: u64 = 10_000;
+/// The contract on the source chain whose records the bridge releases.
+const SOURCE_CONTRACT: [u8; 20] = [0x5Cu8; 20];
 
 /// The key of `nimiq_target()`. Only the target can sign its releases.
 fn target_key() -> KeyPair {
@@ -66,12 +68,14 @@ fn chain_config() -> ChainConfig {
         block_time: std::time::Duration::from_secs(60),
         validation_program: standard_program(),
         max_proof_depth: 64,
+        source_contract: SOURCE_CONTRACT.to_vec(),
     }
 }
 
 /// ValidationProgram that reads all required fields from burn_data:
 ///   [0..20]  target_address  [20..28] amount  [28..36] nonce
 ///   [36..40] burn_block_height  [40..44] target_chain_id
+///   [44..64] source_contract  [64..84] bridge_address
 fn standard_program() -> ValidationProgram {
     ValidationProgram::new(vec![
         ValidationOp::PushConst(0),
@@ -89,22 +93,36 @@ fn standard_program() -> ValidationProgram {
         ValidationOp::PushConst(40),
         ValidationOp::LoadU32(Endianness::LittleEndian),
         ValidationOp::Store("target_chain_id".to_string()),
+        ValidationOp::PushConst(44),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("source_contract".to_string()),
+        ValidationOp::PushConst(64),
+        ValidationOp::LoadAddress,
+        ValidationOp::Store("bridge_address".to_string()),
     ])
 }
 
+/// A burn record from `SOURCE_CONTRACT`, releasable by the bridge at `bridge_addr()`.
 fn make_burn_data(target: &Address, amount: u64, nonce: u64, chain_id: u32) -> Vec<u8> {
-    let mut d = Vec::with_capacity(44);
+    let mut d = Vec::with_capacity(84);
     d.extend_from_slice(target.as_bytes());
     d.extend_from_slice(&amount.to_le_bytes());
     d.extend_from_slice(&nonce.to_le_bytes());
     d.extend_from_slice(&BURN_BLOCK_HEIGHT.to_le_bytes());
     d.extend_from_slice(&chain_id.to_le_bytes());
+    d.extend_from_slice(&SOURCE_CONTRACT);
+    d.extend_from_slice(bridge_addr().as_bytes());
     d
 }
 
 fn blake2b(data: &[u8]) -> AnyHash {
     let h = Blake2bHasher::default().digest(data);
     AnyHash::Blake2b(AnyHash32::from(<[u8; 32]>::try_from(h.as_bytes()).unwrap()))
+}
+
+/// The record-tree leaf of a burn record, `blake2b(blake2b(record))`.
+fn record_leaf(record: &[u8]) -> AnyHash {
+    blake2b(blake2b(record).as_bytes())
 }
 
 /// A Blake2b Merkle path from `(sibling, sibling_is_left)` nodes, leaf first.
@@ -128,7 +146,7 @@ fn first_write_path() -> MerklePath<Blake2bHash> {
 /// Build an oracle whose first state-hash is derived from `burn_data`.
 /// oracle.hashes[0] = zero.digest(Blake2b(burn_data))
 fn make_single_state_oracle(burn_data: &[u8]) -> OracleContract {
-    let leaf = blake2b(burn_data);
+    let leaf = record_leaf(burn_data);
     let zero = leaf.zero_of_same_type();
     let hash_0 = zero.digest(&leaf);
     let hash_count: u16 = 10;
@@ -138,6 +156,7 @@ fn make_single_state_oracle(burn_data: &[u8]) -> OracleContract {
         owner: Address::from([0x01u8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count,
+        hash_algorithm: HashType::Blake2b,
         hashes,
         latest_index: Some(0),
     }
@@ -405,6 +424,7 @@ fn bridge_create_rejects_hash_type_mismatch_with_oracle() {
         owner: Address::from([0x01u8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count,
+        hash_algorithm: HashType::Keccak256,
         hashes,
         latest_index: Some(0),
     };
@@ -440,51 +460,73 @@ fn bridge_create_rejects_hash_type_mismatch_with_oracle() {
     assert!(result.is_err(), "creation must fail when hash types differ");
 }
 
-/// Oracle exists but has no hashes yet → any hash type accepted.
+/// An oracle that has never been written still has an algorithm, declared at its creation, and a
+/// bridge whose hash function differs is rejected. Before, an empty oracle accepted any bridge and
+/// took the algorithm of its first update, so a first update in another algorithm left the bridge
+/// unable to release anything, permanently, since a bridge's oracle cannot be changed.
 #[test]
-fn bridge_create_accepts_empty_oracle_any_hash_type() {
+fn bridge_create_checks_the_declared_algorithm_of_an_empty_oracle() {
     let owner = KeyPair::generate_default_csprng();
 
-    // Oracle with no hashes yet
-    let oracle = OracleContract {
-        owner: Address::from([0x01u8; 20]),
-        balance: Coin::from_u64_unchecked(1_000),
-        hash_count: 5,
-        hashes: Vec::new(),
-        latest_index: None,
-    };
+    for hash_algorithm in [
+        HashType::Blake2b,
+        HashType::Sha256,
+        HashType::Sha512,
+        HashType::Keccak256,
+    ] {
+        let oracle = OracleContract {
+            owner: Address::from([0x01u8; 20]),
+            balance: Coin::from_u64_unchecked(1_000),
+            hash_count: 5,
+            hash_algorithm,
+            hashes: Vec::new(),
+            latest_index: None,
+        };
 
-    let test = TestCommitRevert::with_initial_state(&[(oracle_addr(), Account::Oracle(oracle))]);
+        let test =
+            TestCommitRevert::with_initial_state(&[(oracle_addr(), Account::Oracle(oracle))]);
 
-    let creation_data = BridgeCreationData {
-        owner: Address::from(&owner.public),
-        oracle_address: oracle_addr(),
-        source_chain_id: SOURCE_CHAIN_ID,
-        chain_config: chain_config(),
-    };
-    let tx = Transaction::new_contract_creation(
-        Address::from(&owner.public),
-        AccountType::Basic,
-        vec![],
-        AccountType::Bridge,
-        creation_data.serialize_to_vec(),
-        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
-        Coin::ZERO,
-        1,
-        NetworkId::UnitAlbatross,
-    );
+        let creation_data = BridgeCreationData {
+            owner: Address::from(&owner.public),
+            oracle_address: oracle_addr(),
+            source_chain_id: SOURCE_CHAIN_ID,
+            chain_config: chain_config(), // Blake2b
+        };
+        let tx = Transaction::new_contract_creation(
+            Address::from(&owner.public),
+            AccountType::Basic,
+            vec![],
+            AccountType::Bridge,
+            creation_data.serialize_to_vec(),
+            Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+            Coin::ZERO,
+            1,
+            NetworkId::UnitAlbatross,
+        );
 
-    let result = test.test_create_new_contract::<BridgeContract>(
-        &tx,
-        Coin::ZERO,
-        &BlockState::new(1, 1, Policy::max_supported_version()),
-        &mut TransactionLog::empty(),
-        false,
-    );
-    assert!(
-        result.is_ok(),
-        "creation must succeed when oracle has no hashes yet"
-    );
+        let result = test.test_create_new_contract::<BridgeContract>(
+            &tx,
+            Coin::ZERO,
+            &BlockState::new(1, 1, Policy::max_supported_version()),
+            &mut TransactionLog::empty(),
+            false,
+        );
+        if hash_algorithm == HashType::Blake2b {
+            assert!(
+                result.is_ok(),
+                "an empty Blake2b oracle must accept a Blake2b bridge, got {result:?}"
+            );
+        } else {
+            assert_eq!(
+                result.err(),
+                Some(AccountError::InvalidTransaction(
+                    TransactionError::InvalidData
+                )),
+                "an empty {} oracle must reject a Blake2b bridge",
+                hash_algorithm.name()
+            );
+        }
+    }
 }
 
 // =====================================================================
@@ -901,7 +943,7 @@ fn bridge_outgoing_succeeds_with_wrapped_oracle_index() {
     let owner = KeyPair::generate_default_csprng();
 
     let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
-    let leaf = blake2b(&burn_data);
+    let leaf = record_leaf(&burn_data);
     let zero = leaf.zero_of_same_type();
     // Each write folds into its slot: hashes[i mod 2] = H(hashes[i mod 2] || state_i). state_2 is
     // the burn's leaf; state_0/state_1 are arbitrary.
@@ -913,6 +955,7 @@ fn bridge_outgoing_succeeds_with_wrapped_oracle_index() {
         owner: Address::from([0x01u8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count: 2,
+        hash_algorithm: HashType::Blake2b,
         hashes: vec![entry_2, entry_1],
         latest_index: Some(2),
     };
@@ -1164,6 +1207,7 @@ fn oracle_revert_new_contract_removes_deposit() {
     let creation_data = OracleCreationData {
         owner: Address::from(&owner.public),
         hash_count: 5,
+        hash_algorithm: HashType::Blake2b,
     };
     let tx = Transaction::new_contract_creation(
         Address::from(&owner.public),
@@ -1200,6 +1244,7 @@ fn make_oracle_with_owner(owner: &KeyPair) -> OracleContract {
         owner: Address::from(&owner.public),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count: 10,
+        hash_algorithm: HashType::Blake2b,
         hashes: Vec::new(),
         latest_index: None,
     }
@@ -1519,6 +1564,7 @@ fn make_empty_oracle(owner: &KeyPair, hash_count: u16) -> OracleContract {
         owner: Address::from(&owner.public),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count,
+        hash_algorithm: HashType::Blake2b,
         hashes: Vec::new(),
         latest_index: None,
     }
@@ -1640,7 +1686,7 @@ fn release_submitted_before_the_root_lands_is_rejected_and_then_succeeds_on_retr
 
     // Block 2: the relayer publishes the burn tree's root.
     let bs = BlockState::new(2, 2, Policy::max_supported_version());
-    let update = make_oracle_update_tx(&oracle_owner, vec![blake2b(&burn_data)]);
+    let update = make_oracle_update_tx(&oracle_owner, vec![record_leaf(&burn_data)]);
     let receipts = commit_block(&test, &[update], &bs);
     assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
 
@@ -1674,7 +1720,8 @@ fn a_release_whose_oracle_slot_was_overwritten_succeeds_with_one_more_node() {
 
     // The burn's leaf, and the tree as it looked when the burn was first attested (alone) and
     // after another burn joined it.
-    let leaf = Blake2bHasher::default().digest(&burn_data);
+    let leaf =
+        Blake2bHasher::default().digest(Blake2bHasher::default().digest(&burn_data).as_bytes());
     let sibling = Blake2bHasher::default().digest(b"a later burn");
     let newest_tree_path =
         MerklePath::<Blake2bHash>::from_sibling_hashes(vec![sibling.clone()], vec![false]);
@@ -1692,6 +1739,7 @@ fn a_release_whose_oracle_slot_was_overwritten_succeeds_with_one_more_node() {
         owner: Address::from([0x01u8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count: 2,
+        hash_algorithm: HashType::Blake2b,
         hashes: vec![entry_2, entry_1], // ring positions 0 and 1 hold indices 2 and 1
         latest_index: Some(2),
     };
@@ -2102,7 +2150,7 @@ fn make_multi_root_oracle(burns: &[&[u8]]) -> OracleContract {
     assert!(!burns.is_empty());
     let hash_count: u16 = 10;
     assert!(burns.len() <= hash_count as usize);
-    let leaves: Vec<AnyHash> = burns.iter().map(|burn| blake2b(burn)).collect();
+    let leaves: Vec<AnyHash> = burns.iter().map(|burn| record_leaf(burn)).collect();
     let zero = leaves[0].zero_of_same_type();
 
     let mut hashes = vec![zero; hash_count as usize];
@@ -2114,6 +2162,7 @@ fn make_multi_root_oracle(burns: &[&[u8]]) -> OracleContract {
         owner: Address::from([0x01u8; 20]),
         balance: Coin::from_u64_unchecked(1_000),
         hash_count,
+        hash_algorithm: HashType::Blake2b,
         hashes,
         latest_index: Some(leaves.len() as u64 - 1),
     }

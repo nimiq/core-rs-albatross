@@ -445,6 +445,7 @@ fn test_chain_config_with_validation_program() {
         block_time: std::time::Duration::from_secs(12),
         validation_program,
         max_proof_depth: 64,
+        source_contract: vec![0x5C; 20],
     };
 
     // Verify the validation program is stored correctly

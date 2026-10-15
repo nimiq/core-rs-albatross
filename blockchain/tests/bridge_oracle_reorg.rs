@@ -23,7 +23,7 @@ use nimiq_test_utils::{block_production::TemporaryBlockProducer, blockchain::REW
 use nimiq_transaction::{
     account::{
         bridge_contract::OutgoingBridgeTransactionData,
-        htlc_contract::{AnyHash, AnyHash32},
+        htlc_contract::{AnyHash, AnyHash32, HashType},
         oracle_contract::IncomingOracleTransactionData,
     },
     bridge_contract::{
@@ -41,6 +41,8 @@ const BRIDGE_DEPOSIT: u64 = 10_000;
 const LOCK_AMOUNT: u64 = 1_000;
 const RELEASE_AMOUNT: u64 = 500;
 const BURN_BLOCK_HEIGHT: u32 = 42;
+/// The contract on the source chain whose records the bridge releases.
+const SOURCE_CONTRACT: [u8; 20] = [0x5Cu8; 20];
 
 /// The oracle owner. Fixed rather than generated so every run builds the same transactions.
 const ORACLE_OWNER_KEY: &str = "9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0";
@@ -66,7 +68,8 @@ fn funds_address() -> Address {
 }
 
 /// Little-endian fixed-offset program: target_address [0..20], amount [20..28],
-/// target_nonce [28..36], burn_block_height [36..40], target_chain_id [40..44].
+/// target_nonce [28..36], burn_block_height [36..40], target_chain_id [40..44],
+/// source_contract [44..64], bridge_address [64..84].
 fn chain_config() -> ChainConfig {
     ChainConfig {
         chain_id: SOURCE_CHAIN_ID,
@@ -90,18 +93,28 @@ fn chain_config() -> ChainConfig {
             ValidationOp::PushConst(40),
             ValidationOp::LoadU32(Endianness::LittleEndian),
             ValidationOp::Store("target_chain_id".to_string()),
+            ValidationOp::PushConst(44),
+            ValidationOp::LoadAddress,
+            ValidationOp::Store("source_contract".to_string()),
+            ValidationOp::PushConst(64),
+            ValidationOp::LoadAddress,
+            ValidationOp::Store("bridge_address".to_string()),
         ]),
         max_proof_depth: 64,
+        source_contract: SOURCE_CONTRACT.to_vec(),
     }
 }
 
-fn burn_data(target: &Address, amount: u64, nonce: u64) -> Vec<u8> {
-    let mut data = Vec::with_capacity(44);
+/// A burn record from `SOURCE_CONTRACT`, releasable by the bridge at `bridge`.
+fn burn_data(bridge: &Address, target: &Address, amount: u64, nonce: u64) -> Vec<u8> {
+    let mut data = Vec::with_capacity(84);
     data.extend_from_slice(target.as_bytes());
     data.extend_from_slice(&amount.to_le_bytes());
     data.extend_from_slice(&nonce.to_le_bytes());
     data.extend_from_slice(&BURN_BLOCK_HEIGHT.to_le_bytes());
     data.extend_from_slice(&SOURCE_CHAIN_ID.to_le_bytes());
+    data.extend_from_slice(&SOURCE_CONTRACT);
+    data.extend_from_slice(bridge.as_bytes());
     data
 }
 
@@ -110,6 +123,11 @@ fn blake2b(data: &[u8]) -> AnyHash {
     AnyHash::Blake2b(AnyHash32::from(
         <[u8; 32]>::try_from(hash.as_bytes()).unwrap(),
     ))
+}
+
+/// The record-tree leaf of a burn record, `blake2b(blake2b(record))`.
+fn record_leaf(record: &[u8]) -> AnyHash {
+    blake2b(blake2b(record).as_bytes())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -121,6 +139,7 @@ fn create_oracle_tx(owner: &KeyPair, hash_count: u16, validity_start_height: u32
         &funds(),
         Address::from(&owner.public),
         hash_count,
+        HashType::Blake2b,
         Coin::from_u64_unchecked(ORACLE_DEPOSIT),
         Coin::ZERO,
         validity_start_height,
@@ -455,7 +474,7 @@ fn a_reorg_that_drops_a_release_restores_the_bridge_and_its_nonce_ledger() {
     let oracle = create_oracle.recipient.clone();
     let create_bridge = create_bridge_tx(&owner, &oracle, w.validity_start_height);
     let bridge = create_bridge.recipient.clone();
-    let burn = burn_data(&target, RELEASE_AMOUNT, 1);
+    let burn = burn_data(&bridge, &target, RELEASE_AMOUNT, 1);
 
     // Common prefix: the contracts exist and the relayer has published the burn's root.
     w.common_block(vec![create_oracle]);
@@ -463,7 +482,7 @@ fn a_reorg_that_drops_a_release_restores_the_bridge_and_its_nonce_ledger() {
     w.common_block(vec![oracle_update_tx(
         &oracle,
         &owner,
-        vec![blake2b(&burn)],
+        vec![record_leaf(&burn)],
         w.validity_start_height,
     )]);
     let bridge_before = account_bytes(&w.main, &bridge);
@@ -654,7 +673,7 @@ fn a_reorg_across_a_wrap_moves_a_release_between_its_short_and_extended_proof() 
     let oracle = create_oracle.recipient.clone();
     let create_bridge = create_bridge_tx(&owner, &oracle, w.validity_start_height);
     let bridge = create_bridge.recipient.clone();
-    let burn = burn_data(&target, RELEASE_AMOUNT, 1);
+    let burn = burn_data(&bridge, &target, RELEASE_AMOUNT, 1);
     let update =
         |hashes: Vec<AnyHash>| oracle_update_tx(&oracle, &owner, hashes, w.validity_start_height);
     let release = |proof: OutgoingTransaction| {
@@ -671,7 +690,7 @@ fn a_reorg_across_a_wrap_moves_a_release_between_its_short_and_extended_proof() 
     // Common prefix: the contracts exist and the burn's root was written at index 0, slot 0.
     w.common_block(vec![create_oracle]);
     w.common_block(vec![create_bridge]);
-    w.common_block(vec![update(vec![blake2b(&burn)])]);
+    w.common_block(vec![update(vec![record_leaf(&burn)])]);
     let bridge_before = account_bytes(&w.main, &bridge);
     let oracle_before = account_bytes(&w.main, &oracle);
 

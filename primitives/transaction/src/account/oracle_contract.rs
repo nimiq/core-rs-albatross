@@ -3,7 +3,10 @@ use nimiq_primitives::{account::AccountType, policy::upgrades};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 
 use crate::{
-    account::{htlc_contract::AnyHash, AccountTransactionVerification},
+    account::{
+        htlc_contract::{AnyHash, HashType},
+        AccountTransactionVerification,
+    },
     SignatureProof, Transaction, TransactionError, TransactionFlags,
 };
 
@@ -94,12 +97,15 @@ impl AccountTransactionVerification for OracleContractVerifier {
 /// Data used to create oracle contracts.
 ///
 /// Used in [`Transaction::recipient_data`].
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CreationTransactionData {
     /// The owner of the contract, the only address that can interact with it.
     pub owner: Address,
     /// The number of hashes that can be stored. This determines the required deposit.
     pub hash_count: u16,
+    /// The hash algorithm of every value the contract stores. It is fixed at creation so that
+    /// a contract relying on the oracle, such as a bridge, can check it before the first update.
+    pub hash_algorithm: HashType,
 }
 
 impl CreationTransactionData {

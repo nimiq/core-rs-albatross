@@ -9,7 +9,7 @@ use nimiq_primitives::{
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     account::{
-        htlc_contract::{AnyHash, AnyHash32, AnyHash64},
+        htlc_contract::{AnyHash, AnyHash32, AnyHash64, HashType},
         oracle_contract::{
             CreationTransactionData as OracleCreationData, IncomingOracleTransactionData,
         },
@@ -41,6 +41,7 @@ fn oracle_creation_is_version_gated() {
     let data = OracleCreationData {
         owner: Address::from(&key_pair().public),
         hash_count: 5,
+        hash_algorithm: HashType::Blake2b,
     };
 
     let tx = Transaction::new_contract_creation(
@@ -108,6 +109,7 @@ fn bridge_creation_is_version_gated() {
             block_time: std::time::Duration::from_secs(60),
             validation_program: ValidationProgram::empty(),
             max_proof_depth: 64,
+            source_contract: vec![0x5C; 20],
         },
     };
 
@@ -152,6 +154,7 @@ fn bridge_creation_rejects_unsupported_hash_function() {
                 block_time: std::time::Duration::from_secs(60),
                 validation_program: ValidationProgram::empty(),
                 max_proof_depth: 64,
+                source_contract: vec![0x5C; 20],
             },
         };
         Transaction::new_contract_creation(
@@ -208,6 +211,7 @@ fn bridge_creation_rejects_a_program_that_divides_by_zero() {
                 block_time: std::time::Duration::from_secs(60),
                 validation_program: program,
                 max_proof_depth: 64,
+                source_contract: vec![0x5C; 20],
             },
         };
         Transaction::new_contract_creation(
@@ -499,6 +503,7 @@ fn bridge_creation_rejects_a_zero_or_inconsistent_source_chain_id() {
                 block_time: std::time::Duration::from_secs(60),
                 validation_program: ValidationProgram::empty(),
                 max_proof_depth: 64,
+                source_contract: vec![0x5C; 20],
             },
         };
         Transaction::new_contract_creation(
@@ -535,4 +540,80 @@ fn bridge_creation_rejects_a_zero_or_inconsistent_source_chain_id() {
     assert_eq!(verify(make_tx(1, 1)), Ok(()));
     assert_eq!(verify(make_tx(80002, 80002)), Ok(()));
     assert_eq!(verify(make_tx(u32::MAX, u32::MAX)), Ok(()));
+}
+
+/// A release requires the record's source to equal `source_contract`, so a bridge created without
+/// a usable one would take deposits it can never pay out. Creation refuses an empty address, one
+/// that is not an address of the chain's format, and the zero address, which no contract has and
+/// which unconfigured tooling tends to hold.
+#[test]
+fn bridge_creation_requires_a_source_contract() {
+    let make_tx = |address_format: AddressFormat, source_contract: Vec<u8>| {
+        let data = BridgeCreationData {
+            owner: Address::from(&key_pair().public),
+            oracle_address: Address::from([4u8; 20]),
+            source_chain_id: 1,
+            chain_config: ChainConfig {
+                chain_id: 1,
+                hash_function: AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
+                address_format,
+                endianness: Endianness::LittleEndian,
+                block_time: std::time::Duration::from_secs(60),
+                validation_program: ValidationProgram::empty(),
+                max_proof_depth: 64,
+                source_contract,
+            },
+        };
+        Transaction::new_contract_creation(
+            Address::from([1u8; 20]),
+            AccountType::Basic,
+            vec![],
+            AccountType::Bridge,
+            data.serialize_to_vec(),
+            1000.try_into().unwrap(),
+            0.try_into().unwrap(),
+            1,
+            NetworkId::UnitAlbatross,
+        )
+    };
+    let verify = |tx| AccountType::verify_incoming_transaction(&tx, ACTIVATION);
+
+    for (address_format, source_contract) in [
+        (AddressFormat::Ethereum, vec![]),
+        (AddressFormat::Ethereum, vec![0x00; 20]),
+        (AddressFormat::Ethereum, vec![0x5C; 19]),
+        (AddressFormat::Ethereum, vec![0x5C; 32]),
+        (AddressFormat::Nimiq, vec![0x5C; 21]),
+        (AddressFormat::Bitcoin, vec![0x5C; 19]),
+        (AddressFormat::Bitcoin, vec![0x00; 32]),
+        (AddressFormat::Custom("other".to_string()), vec![]),
+        (AddressFormat::Custom("other".to_string()), vec![0x5C; 65]),
+    ] {
+        assert_eq!(
+            verify(make_tx(address_format.clone(), source_contract.clone())),
+            Err(TransactionError::InvalidData),
+            "{address_format:?} with source contract {}",
+            hex::encode(&source_contract),
+        );
+    }
+
+    // An address of the chain's format is accepted, so the rejections above are about the
+    // source contract and not about the rest of the creation data.
+    for (address_format, source_contract) in [
+        (AddressFormat::Ethereum, vec![0x5C; 20]),
+        (
+            AddressFormat::Ethereum,
+            [vec![0x00; 19], vec![0x01]].concat(),
+        ),
+        (AddressFormat::Nimiq, vec![0x5C; 20]),
+        (AddressFormat::Bitcoin, vec![0x5C; 32]),
+        (AddressFormat::Custom("other".to_string()), vec![0x5C; 1]),
+    ] {
+        assert_eq!(
+            verify(make_tx(address_format.clone(), source_contract.clone())),
+            Ok(()),
+            "{address_format:?} with source contract {}",
+            hex::encode(&source_contract),
+        );
+    }
 }
