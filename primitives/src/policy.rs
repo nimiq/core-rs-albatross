@@ -15,7 +15,7 @@ pub mod upgrades;
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
 
 /// Policy constants
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "ts-types", cfg_eval::cfg_eval, wasm_bindgen)]
 pub struct Policy {
     /// Length of a batch including the macro block
@@ -209,9 +209,17 @@ impl Policy {
         self.blocks_per_batch * self.batches_per_epoch as u32
     }
 
+    /// Installs `policy` as the process-wide policy unless one is installed already, and returns
+    /// the installed one. The policy can only be installed once per process, so in debug builds
+    /// a second, different policy is an error rather than a silent no-op.
     #[inline]
     pub fn get_or_init(policy: Policy) -> Policy {
-        *GLOBAL_POLICY.get_or_init(|| policy)
+        let installed = *GLOBAL_POLICY.get_or_init(|| policy);
+        debug_assert_eq!(
+            installed, policy,
+            "a different policy is already installed for this process"
+        );
+        installed
     }
 
     /// Returns the default policy parameters for the given network.

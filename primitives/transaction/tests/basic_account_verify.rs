@@ -3,6 +3,7 @@ mod common;
 use common::for_each_protocol_version;
 use nimiq_keys::{Address, ES256PublicKey, ES256Signature, PublicKey, Signature};
 use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
+use nimiq_test_log::test;
 use nimiq_transaction::{account::AccountTransactionVerification, SignatureProof, Transaction};
 
 #[test]

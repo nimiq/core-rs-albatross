@@ -436,6 +436,7 @@ mod test {
         policy::{upgrades, Policy},
         slots_allocation::{Validator, Validators},
     };
+    use nimiq_test_log::test;
 
     use super::{MacroBlock, MacroHeader};
 

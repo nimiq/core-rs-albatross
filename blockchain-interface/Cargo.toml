@@ -40,3 +40,4 @@ nimiq-vrf = { workspace = true }
 
 [dev-dependencies]
 nimiq-keys = { workspace = true }
+nimiq-test-log = { workspace = true }

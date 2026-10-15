@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use nimiq_block::{BlockInclusionProof, MacroBlock, MacroHeader};
 use nimiq_hash::Hash;
 use nimiq_primitives::policy::Policy;
+use nimiq_test_log::test;
 
 #[test]
 fn test_interlink_hops_to_block() {

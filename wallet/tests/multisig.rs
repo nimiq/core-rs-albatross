@@ -6,6 +6,7 @@ use nimiq_keys::{
     Address, KeyPair, PrivateKey,
 };
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_test_log::test;
 use nimiq_wallet::MultiSigAccount;
 
 static PRIVATE_KEYS: &[&str] = &[

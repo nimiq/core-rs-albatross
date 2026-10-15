@@ -5,6 +5,7 @@ use nimiq_hash::{sha512::Sha512Hasher, Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
+use nimiq_test_log::test;
 use nimiq_transaction::{
     account::{
         htlc_contract::{

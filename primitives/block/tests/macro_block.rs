@@ -1,6 +1,7 @@
 use nimiq_block::{MacroBlock, MacroHeader};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::Policy;
+use nimiq_test_log::test;
 
 #[test]
 fn test_next_interlink() {
