@@ -13,6 +13,8 @@ use nimiq_transaction::account::bridge_contract::{
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::{inherent::Inherent, HashType, Transaction};
 #[cfg(feature = "interaction-traits")]
+use store::BridgeContractStore;
+#[cfg(feature = "interaction-traits")]
 pub use store::BridgeContractStoreWrite;
 pub use store::BridgeNonce;
 use store::{BridgeContractStoreRead, BridgeContractStoreReadOps};
@@ -210,38 +212,179 @@ pub enum BurnProofError {
     SlotMismatch(u64),
 }
 
+/// The state a release is checked against: the bridge's own nonce store, and the global accounts
+/// tree for the oracle.
+#[cfg(feature = "interaction-traits")]
+trait ReleaseState {
+    /// The last nonce released to `target`, or 0 if none was.
+    fn last_nonce(&self, target: &Address) -> u64;
+
+    /// The account at `address`, if there is one.
+    fn account(&self, address: &Address) -> Option<Account>;
+}
+
+#[cfg(feature = "interaction-traits")]
+impl ReleaseState for DataStoreRead<'_, '_, '_, '_> {
+    fn last_nonce(&self, target: &Address) -> u64 {
+        BridgeContractStoreRead::new(self)
+            .get_nonce(target)
+            .map_or(0, |nonce| nonce.nonce)
+    }
+
+    fn account(&self, address: &Address) -> Option<Account> {
+        self.get_global(&KeyNibbles::from(address))
+    }
+}
+
+#[cfg(feature = "interaction-traits")]
+impl ReleaseState for DataStoreWrite<'_, '_, '_, '_, '_> {
+    fn last_nonce(&self, target: &Address) -> u64 {
+        self.get::<BridgeNonce>(&BridgeContractStore::nonce_key(target))
+            .map_or(0, |nonce| nonce.nonce)
+    }
+
+    fn account(&self, address: &Address) -> Option<Account> {
+        self.get_global(&KeyNibbles::from(address))
+    }
+}
+
 #[cfg(feature = "interaction-traits")]
 impl BridgeContract {
-    fn can_change_balance(
+    /// Runs the validation program on the record that `release` carries.
+    fn parse_burn(
+        &self,
+        release: &OutgoingBridgeTransactionData,
+    ) -> Result<ParsedBurnData, AccountError> {
+        release
+            .burn_proof
+            .parse_burn_data(&self.chain_config)
+            .map_err(|error| {
+                log::debug!(?error, "Failed to parse burn data");
+                AccountError::InvalidTransaction(TransactionError::InvalidData)
+            })
+    }
+
+    /// Parses `transaction` as a release and checks it against the current state, signature
+    /// included. Returns the burn it pays out.
+    fn verify_release(
         &self,
         transaction: &Transaction,
-        new_balance: Coin,
-        is_reserve: bool,
-    ) -> Result<(), AccountError> {
-        // Outgoing bridge transactions are burn-releases, authorized by the Merkle burn-proof
-        // and the burn target's signature verified in `commit_outgoing_transaction`, so we
-        // deliberately do NOT require the owner's signature here. Requiring it made
-        // `reserve_balance` (mempool admission) reject the very transactions that `commit`
-        // accepts, diverging the mempool from consensus and breaking permissionless
-        // submission. Balance availability is still enforced by `reserve_balance` itself.
+        state: &impl ReleaseState,
+    ) -> Result<ParsedBurnData, AccountError> {
+        let release = OutgoingBridgeTransactionData::parse(transaction)
+            .map_err(AccountError::InvalidTransaction)?;
+        release
+            .verify(transaction)
+            .map_err(AccountError::InvalidTransaction)?;
+        self.check_release(transaction, &release, state)
+    }
 
-        // If withdrawing, must withdraw the full balance (contract deletion)
-        if new_balance < self.balance {
-            // For reserve_balance, we allow reserving any amount up to the full balance
-            if is_reserve {
-                return Ok(());
-            }
-            // For actual withdrawal, only allow full withdrawal (balance goes to zero)
-            if new_balance != Coin::ZERO {
-                return Err(AccountError::InvalidForSender);
-            }
-            // Check that the transaction value equals the current balance
-            if transaction.value != self.balance {
-                return Err(AccountError::InvalidForSender);
-            }
+    /// Checks `transaction`, a release carrying `release`, against the current state and returns
+    /// the burn it pays out. These are all of the bridge's checks on a release except that the
+    /// signature is valid, which does not depend on the state: `Transaction::verify` checks it
+    /// before the mempool admits a transaction and before a block is applied.
+    fn check_release(
+        &self,
+        transaction: &Transaction,
+        release: &OutgoingBridgeTransactionData,
+        state: &impl ReleaseState,
+    ) -> Result<ParsedBurnData, AccountError> {
+        let burn = self.parse_burn(release)?;
+
+        // Only the target can release its burn, since the release consumes the target's nonce.
+        // Anyone can still submit a release that the target signed.
+        if !release.proof.is_signed_by(&burn.target_address) {
+            log::debug!(
+                signer = %release.proof.compute_signer(),
+                target = %burn.target_address,
+                "Release is not signed by the burn target",
+            );
+            return Err(AccountError::InvalidSignature);
         }
 
-        Ok(())
+        // The fee is taken from the burned amount: the target receives `value` and the block
+        // reward receives `fee`, so together they must add up to exactly the burned amount.
+        if transaction.value.checked_add(transaction.fee) != Some(burn.amount) {
+            log::debug!(
+                tx_value = %transaction.value,
+                tx_fee = %transaction.fee,
+                parsed_value = %burn.amount,
+                "Transaction value and fee do not add up to the burned amount"
+            );
+            return Err(AccountError::InvalidTransaction(
+                TransactionError::InvalidValue,
+            ));
+        }
+
+        // Verify the transaction recipient matches the burn proof target address
+        if transaction.recipient != burn.target_address {
+            log::debug!(
+                tx_recipient = %transaction.recipient,
+                parsed_recipient = %burn.target_address,
+                "Transaction recipient mismatch",
+            );
+            return Err(AccountError::InvalidTransaction(
+                TransactionError::InvalidData,
+            ));
+        }
+
+        // The record must come from the source contract on the source chain and name this bridge
+        self.verify_burn_record(&transaction.sender, &burn)
+            .map_err(|error| {
+                log::debug!(%error, "Burn record not releasable by this bridge");
+                AccountError::InvalidTransaction(TransactionError::InvalidData)
+            })?;
+
+        // Check nonce for replay protection
+        let last_nonce = state.last_nonce(&burn.target_address);
+        if last_nonce.checked_add(1) != Some(burn.target_nonce) {
+            log::debug!(
+                parsed_nonce = burn.target_nonce,
+                last_nonce,
+                "Invalid nonce: expected sequential nonce"
+            );
+            return Err(AccountError::InvalidTransaction(
+                TransactionError::InvalidData,
+            ));
+        }
+
+        let oracle = match state.account(&self.oracle_address) {
+            Some(Account::Oracle(oracle)) => oracle,
+            _ => {
+                log::debug!(
+                    oracle_address = %self.oracle_address,
+                    "Oracle contract not found or invalid",
+                );
+                return Err(AccountError::InvalidForSender);
+            }
+        };
+
+        // The proof must end in the current value of the oracle slot that the relayer's root was
+        // written to.
+        self.verify_burn_proof(&oracle, &release.burn_proof)
+            .map_err(|error| {
+                log::debug!(%error, "Invalid burn proof");
+                match error {
+                    BurnProofError::UnwrittenIndex(_) | BurnProofError::InvalidRecord(_) => {
+                        AccountError::InvalidTransaction(TransactionError::InvalidData)
+                    }
+                    BurnProofError::NotAMerklePath
+                    | BurnProofError::TooDeep { .. }
+                    | BurnProofError::SlotMismatch(_) => {
+                        AccountError::InvalidTransaction(TransactionError::InvalidProof)
+                    }
+                }
+            })?;
+
+        // The bridge pays out the whole burned amount, `value + fee`
+        if self.balance < burn.amount {
+            return Err(AccountError::InsufficientFunds {
+                needed: burn.amount,
+                balance: self.balance,
+            });
+        }
+
+        Ok(burn)
     }
 }
 
@@ -413,130 +556,13 @@ impl AccountTransactionInteraction for BridgeContract {
         mut data_store: DataStoreWrite,
         tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        // Parse the outgoing bridge transaction data from sender_data
-        let outgoing_data = OutgoingBridgeTransactionData::parse(transaction)
-            .map_err(AccountError::InvalidTransaction)?;
-
-        // Verify the transaction signature
-        outgoing_data
-            .verify(transaction)
-            .map_err(AccountError::InvalidTransaction)?;
-
-        // Parse burn data using the validation program
-        let parsed_burn = outgoing_data
-            .burn_proof
-            .parse_burn_data(&self.chain_config)
-            .map_err(|error| {
-                log::warn!(?error, "Failed to parse burn data");
-                AccountError::InvalidTransaction(TransactionError::InvalidData)
-            })?;
-
-        // Only the target can release its burn, since the release consumes the target's nonce.
-        // Anyone can still submit a release that the target signed.
-        if !outgoing_data
-            .proof
-            .is_signed_by(&parsed_burn.target_address)
-        {
-            log::warn!(
-                signer = %outgoing_data.proof.compute_signer(),
-                target = %parsed_burn.target_address,
-                "Release is not signed by the burn target",
-            );
-            return Err(AccountError::InvalidSignature);
-        }
-
-        // The fee is taken from the burned amount: the target receives `value` and the block
-        // reward receives `fee`, so together they must add up to exactly the burned amount.
-        if transaction.value.checked_add(transaction.fee) != Some(parsed_burn.amount) {
-            log::warn!(
-                tx_value = %transaction.value,
-                tx_fee = %transaction.fee,
-                parsed_value = %parsed_burn.amount,
-                "Transaction value and fee do not add up to the burned amount"
-            );
-            return Err(AccountError::InvalidTransaction(
-                TransactionError::InvalidValue,
-            ));
-        }
-
-        // Verify the transaction recipient matches the burn proof target address
-        if transaction.recipient != parsed_burn.target_address {
-            log::warn!(
-                tx_recipient = %transaction.recipient,
-                parsed_recipient = %parsed_burn.target_address,
-                "Transaction recipient mismatch",
-            );
-            return Err(AccountError::InvalidTransaction(
-                TransactionError::InvalidData,
-            ));
-        }
-
-        // The record must come from the source contract on the source chain and name this bridge
-        self.verify_burn_record(&transaction.sender, &parsed_burn)
-            .map_err(|error| {
-                log::warn!(%error, "Burn record not releasable by this bridge");
-                AccountError::InvalidTransaction(TransactionError::InvalidData)
-            })?;
-
-        // Check nonce for replay protection
-        let mut store = BridgeContractStoreWrite::new(&mut data_store);
-        let highest_nonce = store
-            .get_nonce(&parsed_burn.target_address)
-            .map(|n| n.nonce)
-            .unwrap_or(0);
-
-        if parsed_burn.target_nonce != highest_nonce + 1 {
-            log::warn!(
-                parsed_nonce = parsed_burn.target_nonce,
-                expected_nonce = highest_nonce + 1,
-                "Invalid nonce: expected sequential nonce"
-            );
-            return Err(AccountError::InvalidTransaction(
-                TransactionError::InvalidData,
-            ));
-        }
-
-        // Query the oracle contract from the global accounts tree.
-        let oracle_key = KeyNibbles::from(&self.oracle_address);
-        let oracle_account: Option<Account> = store.data_store().get_global(&oracle_key);
-
-        let oracle = match oracle_account {
-            Some(Account::Oracle(oracle)) => oracle,
-            _ => {
-                log::warn!(
-                    oracle_address = %self.oracle_address,
-                    "Oracle contract not found or invalid",
-                );
-                return Err(AccountError::InvalidForSender);
-            }
-        };
-
-        // The proof must end in the current value of the oracle slot that the relayer's root was
-        // written to.
-        self.verify_burn_proof(&oracle, &outgoing_data.burn_proof)
-            .map_err(|error| {
-                log::warn!(%error, "Invalid burn proof");
-                match error {
-                    BurnProofError::UnwrittenIndex(_) | BurnProofError::InvalidRecord(_) => {
-                        AccountError::InvalidTransaction(TransactionError::InvalidData)
-                    }
-                    BurnProofError::NotAMerklePath
-                    | BurnProofError::TooDeep { .. }
-                    | BurnProofError::SlotMismatch(_) => {
-                        AccountError::InvalidTransaction(TransactionError::InvalidProof)
-                    }
-                }
-            })?;
+        let parsed_burn = self.verify_release(transaction, &data_store)?;
 
         // Decrement bridge balance by the whole burned amount, `value + fee`
-        self.balance = self.balance.checked_sub(parsed_burn.amount).ok_or(
-            AccountError::InsufficientFunds {
-                needed: parsed_burn.amount,
-                balance: self.balance,
-            },
-        )?;
+        self.balance = self.balance.safe_sub(parsed_burn.amount)?;
 
         // Update processed nonces in the accounts tree
+        let mut store = BridgeContractStoreWrite::new(&mut data_store);
         store.put_nonce(
             &parsed_burn.target_address,
             BridgeNonce {
@@ -614,17 +640,19 @@ impl AccountTransactionInteraction for BridgeContract {
         &mut self,
         transaction: &Transaction,
         _block_state: &BlockState,
-        _data_store: DataStoreWrite,
+        data_store: DataStoreWrite,
         _tx_logger: &mut TransactionLog,
     ) -> Result<Option<AccountReceipt>, AccountError> {
-        // The fee is paid out of a successful release, and the bridge never pays for a failed one.
-        // A failed release with a fee therefore cannot pay for its failure, so it is invalid: the
-        // block containing it is invalid, rather than the fee being credited without anybody
-        // paying it.
-        if !transaction.fee.is_zero() {
-            return Err(AccountError::InvalidForSender);
-        }
-        Ok(None)
+        // A release succeeds or is invalid, never failed. A failed transaction pays its fee from
+        // the sender, but the bridge never pays for a failed release and nobody else does either:
+        // otherwise a target could drain the bridge through the fees of releases it signs to fail,
+        // and failing releases without a fee would fill blocks for free. So a block containing a
+        // failing release is invalid. The error is the reason the release fails; if the bridge's
+        // checks pass, the recipient refused it.
+        Err(self
+            .verify_release(transaction, &data_store)
+            .err()
+            .unwrap_or(AccountError::InvalidForRecipient))
     }
 
     fn revert_failed_transaction(
@@ -635,7 +663,7 @@ impl AccountTransactionInteraction for BridgeContract {
         _data_store: DataStoreWrite,
         _tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
-        // Do nothing: only a failed release without a fee is ever committed.
+        // Do nothing: a failed release is never committed.
         Ok(())
     }
 
@@ -644,17 +672,24 @@ impl AccountTransactionInteraction for BridgeContract {
         transaction: &Transaction,
         reserved_balance: &mut ReservedBalance,
         _block_state: &BlockState,
-        _data_store: DataStoreRead,
+        data_store: DataStoreRead,
     ) -> Result<(), AccountError> {
-        // Both the released `value` and the `fee` come out of the bridge balance.
-        let needed = reserved_balance
-            .balance()
-            .checked_add(transaction.total_value())
-            .ok_or(AccountError::InvalidCoinValue)?;
-        let new_balance = self.balance.safe_sub(needed)?;
-        self.can_change_balance(transaction, new_balance, true)?;
+        // A failing release makes its block invalid, so the mempool admits a release only if it
+        // succeeds against the current state. The mempool calls this again for every pending
+        // release after each block, which evicts a release once its nonce is used or its oracle
+        // slot is overwritten. The signature was verified when the release entered the mempool.
+        let release = OutgoingBridgeTransactionData::parse(transaction)
+            .map_err(AccountError::InvalidTransaction)?;
+        let burn = self.check_release(transaction, &release, &data_store)?;
 
-        reserved_balance.reserve(self.balance, transaction.total_value())
+        // A target can only release its next nonce, so the mempool holds one release per target:
+        // the target's bucket fits the amount of one burn, as a staker's fits its retired balance.
+        reserved_balance.reserve_for(&burn.target_address, burn.amount, burn.amount)?;
+
+        // All pending releases together cannot take more than the bridge holds.
+        reserved_balance
+            .reserve(self.balance, burn.amount)
+            .inspect_err(|_| reserved_balance.release_for(&burn.target_address, burn.amount))
     }
 
     fn release_balance(
@@ -663,7 +698,13 @@ impl AccountTransactionInteraction for BridgeContract {
         reserved_balance: &mut ReservedBalance,
         _data_store: DataStoreRead,
     ) -> Result<(), AccountError> {
-        reserved_balance.release(transaction.total_value());
+        // `reserve_balance` parsed this release, and the bridge's program never changes.
+        let release = OutgoingBridgeTransactionData::parse(transaction)
+            .map_err(AccountError::InvalidTransaction)?;
+        let burn = self.parse_burn(&release)?;
+
+        reserved_balance.release_for(&burn.target_address, burn.amount);
+        reserved_balance.release(burn.amount);
         Ok(())
     }
 }

@@ -13,274 +13,25 @@
 use nimiq_account::{Account, BridgeContract, OracleContract};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
-use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
-use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::{account::AccountType, coin::Coin, policy::upgrades};
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::Address;
+use nimiq_primitives::policy::upgrades;
+use nimiq_serde::Serialize;
 use nimiq_test_log::test;
-use nimiq_test_utils::{block_production::TemporaryBlockProducer, blockchain::REWARD_KEY};
-use nimiq_transaction::{
-    account::{
-        bridge_contract::OutgoingBridgeTransactionData,
-        htlc_contract::{AnyHash, AnyHash32, HashType},
-        oracle_contract::IncomingOracleTransactionData,
+use nimiq_test_utils::{
+    block_production::TemporaryBlockProducer,
+    bridge::{
+        blake2b, burn_data, burn_proof, create_bridge_tx, create_oracle_tx, funds_address, key,
+        lock_tx, oracle_update_tx, record_leaf, release_tx, BRIDGE_DEPOSIT, ORACLE_DEPOSIT,
+        ORACLE_OWNER_KEY, TARGET_KEY,
     },
-    bridge_contract::{
-        AddressFormat, AnyMerkleProof, ChainConfig, Endianness, OutgoingTransaction, ValidationOp,
-        ValidationProgram,
-    },
-    SignatureProof, Transaction,
 };
-use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_utils::merkle::MerklePath;
+use nimiq_transaction::{
+    account::htlc_contract::AnyHash, bridge_contract::OutgoingTransaction, Transaction,
+};
 
-const SOURCE_CHAIN_ID: u32 = 1;
-const ORACLE_DEPOSIT: u64 = 1_000;
-const BRIDGE_DEPOSIT: u64 = 10_000;
 const LOCK_AMOUNT: u64 = 1_000;
 const RELEASE_AMOUNT: u64 = 500;
-const BURN_BLOCK_HEIGHT: u32 = 42;
-/// The contract on the source chain whose records the bridge releases.
-const SOURCE_CONTRACT: [u8; 20] = [0x5Cu8; 20];
-
-/// The oracle owner. Fixed rather than generated so every run builds the same transactions.
-const ORACLE_OWNER_KEY: &str = "9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0";
-/// The burn target, which signs its release. The fee comes out of the burned amount, so the key
-/// needs no funds.
-const TARGET_KEY: &str = "0f0e0d0c0b0a09080706050403020100ffeeddccbbaa99887766554433221100";
-
-// ---------------------------------------------------------------------------------------------
-// Keys, config, payloads
-// ---------------------------------------------------------------------------------------------
-
-fn key(hex_key: &str) -> KeyPair {
-    KeyPair::from(PrivateKey::deserialize_from_vec(&hex::decode(hex_key).unwrap()).unwrap())
-}
-
-/// The genesis account that funds everything: contract deposits, locks and the relayer's updates.
-fn funds() -> KeyPair {
-    key(REWARD_KEY)
-}
-
-fn funds_address() -> Address {
-    Address::from(&funds().public)
-}
-
-/// Little-endian fixed-offset program: target_address [0..20], amount [20..28],
-/// target_nonce [28..36], burn_block_height [36..40], target_chain_id [40..44],
-/// source_contract [44..64], bridge_address [64..84].
-fn chain_config() -> ChainConfig {
-    ChainConfig {
-        chain_id: SOURCE_CHAIN_ID,
-        hash_function: AnyHash::Blake2b(AnyHash32::default()),
-        address_format: AddressFormat::Nimiq,
-        endianness: Endianness::LittleEndian,
-        block_time: std::time::Duration::from_secs(60),
-        validation_program: ValidationProgram::new(vec![
-            ValidationOp::PushConst(0),
-            ValidationOp::LoadAddress,
-            ValidationOp::Store("target_address".to_string()),
-            ValidationOp::PushConst(20),
-            ValidationOp::LoadU64(Endianness::LittleEndian),
-            ValidationOp::Store("amount".to_string()),
-            ValidationOp::PushConst(28),
-            ValidationOp::LoadU64(Endianness::LittleEndian),
-            ValidationOp::Store("target_nonce".to_string()),
-            ValidationOp::PushConst(36),
-            ValidationOp::LoadU32(Endianness::LittleEndian),
-            ValidationOp::Store("burn_block_height".to_string()),
-            ValidationOp::PushConst(40),
-            ValidationOp::LoadU32(Endianness::LittleEndian),
-            ValidationOp::Store("target_chain_id".to_string()),
-            ValidationOp::PushConst(44),
-            ValidationOp::LoadAddress,
-            ValidationOp::Store("source_contract".to_string()),
-            ValidationOp::PushConst(64),
-            ValidationOp::LoadAddress,
-            ValidationOp::Store("bridge_address".to_string()),
-        ]),
-        max_proof_depth: 64,
-        source_contract: SOURCE_CONTRACT.to_vec(),
-    }
-}
-
-/// A burn record from `SOURCE_CONTRACT`, releasable by the bridge at `bridge`.
-fn burn_data(bridge: &Address, target: &Address, amount: u64, nonce: u64) -> Vec<u8> {
-    let mut data = Vec::with_capacity(84);
-    data.extend_from_slice(target.as_bytes());
-    data.extend_from_slice(&amount.to_le_bytes());
-    data.extend_from_slice(&nonce.to_le_bytes());
-    data.extend_from_slice(&BURN_BLOCK_HEIGHT.to_le_bytes());
-    data.extend_from_slice(&SOURCE_CHAIN_ID.to_le_bytes());
-    data.extend_from_slice(&SOURCE_CONTRACT);
-    data.extend_from_slice(bridge.as_bytes());
-    data
-}
-
-fn blake2b(data: &[u8]) -> AnyHash {
-    let hash = Blake2bHasher::default().digest(data);
-    AnyHash::Blake2b(AnyHash32::from(
-        <[u8; 32]>::try_from(hash.as_bytes()).unwrap(),
-    ))
-}
-
-/// The record-tree leaf of a burn record, `blake2b(blake2b(record))`.
-fn record_leaf(record: &[u8]) -> AnyHash {
-    blake2b(blake2b(record).as_bytes())
-}
-
-// ---------------------------------------------------------------------------------------------
-// Transactions
-// ---------------------------------------------------------------------------------------------
-
-fn create_oracle_tx(owner: &KeyPair, hash_count: u16, validity_start_height: u32) -> Transaction {
-    TransactionBuilder::new_create_oracle(
-        &funds(),
-        Address::from(&owner.public),
-        hash_count,
-        HashType::Blake2b,
-        Coin::from_u64_unchecked(ORACLE_DEPOSIT),
-        Coin::ZERO,
-        validity_start_height,
-        NetworkId::UnitAlbatross,
-    )
-    .expect("a valid oracle creation")
-}
-
-fn create_bridge_tx(owner: &KeyPair, oracle: &Address, validity_start_height: u32) -> Transaction {
-    TransactionBuilder::new_create_bridge(
-        &funds(),
-        Address::from(&owner.public),
-        oracle.clone(),
-        SOURCE_CHAIN_ID,
-        chain_config(),
-        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
-        Coin::ZERO,
-        validity_start_height,
-        NetworkId::UnitAlbatross,
-    )
-    .expect("a valid bridge creation")
-}
-
-/// An oracle `Update` as the relayer submits it: the relayer's own account is the sender and pays
-/// the fee, the owner authorizes the hashes with a signature carried inside the data. (A
-/// self-addressed oracle→oracle transaction, which the account-layer tests use, is refused by
-/// `Transaction::verify` at the block level: sender and recipient may not coincide.)
-fn oracle_update_tx(
-    oracle: &Address,
-    owner: &KeyPair,
-    hashes: Vec<AnyHash>,
-    validity_start_height: u32,
-) -> Transaction {
-    let relayer = funds();
-    let data = IncomingOracleTransactionData::Update {
-        hashes,
-        proof: SignatureProof::default(),
-    };
-    let mut tx = Transaction::new_signaling(
-        Address::from(&relayer.public),
-        AccountType::Basic,
-        oracle.clone(),
-        AccountType::Oracle,
-        Coin::ZERO,
-        data.serialize_to_vec(),
-        validity_start_height,
-        NetworkId::UnitAlbatross,
-    );
-    let owner_proof =
-        SignatureProof::from_ed25519(owner.public, owner.sign(&tx.serialize_content()));
-    tx.recipient_data =
-        IncomingOracleTransactionData::set_signature_on_data(&tx.recipient_data, owner_proof)
-            .expect("the owner's signature fits the data");
-    tx.proof = SignatureProof::from_ed25519(relayer.public, relayer.sign(&tx.serialize_content()))
-        .serialize_to_vec();
-    tx
-}
-
-/// A user locking NIM into the bridge: a plain transfer whose recipient is the bridge contract.
-fn lock_tx(bridge: &Address, amount: u64, validity_start_height: u32) -> Transaction {
-    let sender = funds();
-    let mut tx = Transaction::new_extended(
-        Address::from(&sender.public),
-        AccountType::Basic,
-        vec![],
-        bridge.clone(),
-        AccountType::Bridge,
-        vec![],
-        Coin::from_u64_unchecked(amount),
-        Coin::ZERO,
-        validity_start_height,
-        NetworkId::UnitAlbatross,
-    );
-    tx.proof = SignatureProof::from_ed25519(sender.public, sender.sign(&tx.serialize_content()))
-        .serialize_to_vec();
-    tx
-}
-
-/// A Blake2b Merkle path from `(sibling, sibling_is_left)` nodes, leaf first.
-fn blake2b_path(nodes: &[(AnyHash, bool)]) -> MerklePath<Blake2bHash> {
-    let (siblings, left) = nodes
-        .iter()
-        .map(|(hash, left)| {
-            let bytes = <[u8; 32]>::try_from(hash.as_bytes()).unwrap();
-            (Blake2bHash::from(bytes), *left)
-        })
-        .unzip();
-    MerklePath::from_sibling_hashes(siblings, left)
-}
-
-/// The proof of a burn whose single-leaf tree root was written to an oracle slot for the first
-/// time, extended by the values written to that slot since: the slot's zero hash on the left, then
-/// one right sibling per rotation.
-fn burn_proof(
-    burn: Vec<u8>,
-    oracle_state_index: u64,
-    rotations: &[AnyHash],
-) -> OutgoingTransaction {
-    let zero = AnyHash::Blake2b(AnyHash32::default());
-    let nodes: Vec<(AnyHash, bool)> = std::iter::once((zero, true))
-        .chain(rotations.iter().map(|value| (value.clone(), false)))
-        .collect();
-    OutgoingTransaction {
-        burn_transaction_data: burn,
-        merkle_proof: AnyMerkleProof::Blake2bPath(blake2b_path(&nodes)),
-        oracle_state_index,
-    }
-}
-
-/// A release carrying `burn_proof`, signed by `signer`.
-fn release_tx(
-    bridge: &Address,
-    target: &Address,
-    amount: u64,
-    burn_proof: OutgoingTransaction,
-    signer: &KeyPair,
-    validity_start_height: u32,
-) -> Transaction {
-    let mut bridge_data = OutgoingBridgeTransactionData {
-        burn_proof,
-        proof: SignatureProof::default(),
-    };
-    let mut tx = Transaction::new_extended(
-        bridge.clone(),
-        AccountType::Bridge,
-        bridge_data.serialize_to_vec(),
-        target.clone(),
-        AccountType::Basic,
-        vec![],
-        Coin::from_u64_unchecked(amount),
-        Coin::ZERO,
-        validity_start_height,
-        NetworkId::UnitAlbatross,
-    );
-    bridge_data.set_signature(SignatureProof::from_ed25519(
-        signer.public,
-        signer.sign(&tx.serialize_content()),
-    ));
-    tx.sender_data = bridge_data.serialize_to_vec();
-    tx
-}
 
 // ---------------------------------------------------------------------------------------------
 // Nodes
@@ -461,8 +212,7 @@ impl World {
 /// byte for byte (balance and `transaction_count`), the payout must vanish, the lock must be
 /// refunded — and the nonce ledger must be empty again, which is proved by the *same* release,
 /// nonce 1 and all, succeeding on the canonical chain afterwards. Had the entry survived, that
-/// release would land as a failed transaction and the four nodes' bridge bytes would diverge from
-/// the pre-reorg run.
+/// release would fail and make the canonical block invalid.
 #[test]
 fn a_reorg_that_drops_a_release_restores_the_bridge_and_its_nonce_ledger() {
     let w = World::new();

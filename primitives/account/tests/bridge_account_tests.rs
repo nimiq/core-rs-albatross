@@ -1,6 +1,6 @@
 use nimiq_account::{
-    Account, BasicAccount, BlockLogger, BlockState, BridgeContract, OperationReceipt,
-    OracleContract, Receipts, RevertInfo, TransactionLog,
+    Account, AccountsError, BasicAccount, BlockLogger, BlockState, BridgeContract,
+    OperationReceipt, OracleContract, Receipts, ReservedBalance, RevertInfo, TransactionLog,
 };
 use nimiq_database::traits::{Database, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
@@ -270,6 +270,22 @@ fn revert_block(test: &TestCommitRevert, txs: &[Transaction], r: Receipts, bs: &
     )
     .unwrap();
     raw.commit();
+}
+
+/// Commits `txs` in a block that a failing release makes invalid, and returns why the release
+/// fails. A release is never committed as failed, so the bridge is never debited for one.
+fn rejected_block(test: &TestCommitRevert, txs: &[Transaction], bs: &BlockState) -> AccountError {
+    match try_commit_block(test, txs, bs) {
+        Err(AccountsError::InvalidTransaction(error, tx)) => {
+            assert_eq!(
+                tx.sender_type,
+                AccountType::Bridge,
+                "the block must be invalid because of a release"
+            );
+            error
+        }
+        other => panic!("a block containing a failing release must be invalid, got {other:?}"),
+    }
 }
 
 // =====================================================================
@@ -803,11 +819,10 @@ fn bridge_outgoing_rejects_wrong_chain_id() {
         0,
         &target_key(),
     );
-    let receipts = commit_block(&test, &[tx], &bs);
-    assert!(matches!(
-        receipts.transactions[0],
-        OperationReceipt::Err(_, _)
-    ));
+    assert_eq!(
+        rejected_block(&test, &[tx], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidData),
+    );
 }
 
 /// Transaction recipient doesn't match burn data target address → rejected.
@@ -825,11 +840,10 @@ fn bridge_outgoing_rejects_wrong_recipient() {
         0,
         &target_key(),
     );
-    let receipts = commit_block(&test, &[tx], &bs);
-    assert!(matches!(
-        receipts.transactions[0],
-        OperationReceipt::Err(_, _)
-    ));
+    assert_eq!(
+        rejected_block(&test, &[tx], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidData),
+    );
 }
 
 /// Transaction value doesn't match burn data amount → rejected.
@@ -847,11 +861,10 @@ fn bridge_outgoing_rejects_wrong_value() {
         0,
         &target_key(),
     );
-    let receipts = commit_block(&test, &[tx], &bs);
-    assert!(matches!(
-        receipts.transactions[0],
-        OperationReceipt::Err(_, _)
-    ));
+    assert_eq!(
+        rejected_block(&test, &[tx], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidValue),
+    );
 }
 
 /// Nonce gap: nonce=2 submitted when no prior nonce exists (expected nonce=1) → rejected.
@@ -883,11 +896,10 @@ fn bridge_outgoing_rejects_nonce_gap() {
         0,
         &target_key(),
     );
-    let receipts = commit_block(&test, &[tx], &bs);
-    assert!(matches!(
-        receipts.transactions[0],
-        OperationReceipt::Err(_, _)
-    ));
+    assert_eq!(
+        rejected_block(&test, &[tx], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidData),
+    );
 }
 
 /// Same nonce submitted twice → second submission rejected.
@@ -907,8 +919,10 @@ fn bridge_outgoing_rejects_duplicate_nonce() {
     let r1 = commit_block(&test, &[tx.clone()], &bs);
     assert!(matches!(r1.transactions[0], OperationReceipt::Ok(_)));
     // Second identical submission must fail (nonce=1 already used)
-    let r2 = commit_block(&test, &[tx], &bs);
-    assert!(matches!(r2.transactions[0], OperationReceipt::Err(_, _)));
+    assert_eq!(
+        rejected_block(&test, &[tx], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidData),
+    );
 }
 
 /// Oracle state index out of bounds → rejected.
@@ -925,11 +939,10 @@ fn bridge_outgoing_rejects_oracle_index_out_of_bounds() {
         5,
         &target_key(),
     );
-    let receipts = commit_block(&test, &[tx], &bs);
-    assert!(matches!(
-        receipts.transactions[0],
-        OperationReceipt::Err(_, _)
-    ));
+    assert_eq!(
+        rejected_block(&test, &[tx], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidData),
+    );
 }
 
 /// Regression: once the oracle ring buffer wraps, valid global indices are
@@ -1018,11 +1031,10 @@ fn bridge_outgoing_rejects_wrong_merkle_proof() {
         0,
         &second_target_key(),
     );
-    let receipts = commit_block(&test, &[tx], &bs);
-    assert!(matches!(
-        receipts.transactions[0],
-        OperationReceipt::Err(_, _)
-    ));
+    assert_eq!(
+        rejected_block(&test, &[tx], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidProof),
+    );
 }
 
 /// Proof depth exceeds max_proof_depth → rejected.
@@ -1079,11 +1091,10 @@ fn bridge_outgoing_rejects_proof_depth_exceeded() {
     bd.set_signature(SignatureProof::from_ed25519(target.public, sig));
     tx.sender_data = bd.serialize_to_vec();
 
-    let receipts = commit_block(&test, &[tx], &bs);
-    assert!(matches!(
-        receipts.transactions[0],
-        OperationReceipt::Err(_, _)
-    ));
+    assert_eq!(
+        rejected_block(&test, &[tx], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidProof),
+    );
 }
 
 // =====================================================================
@@ -1668,11 +1679,10 @@ fn release_submitted_before_the_root_lands_is_rejected_and_then_succeeds_on_retr
         AccountError::InvalidTransaction(TransactionError::InvalidData)
     ));
 
-    let receipts = commit_block(&test, &[release()], &bs);
-    assert!(matches!(
-        receipts.transactions[0],
-        OperationReceipt::Err(_, _)
-    ));
+    assert_eq!(
+        rejected_block(&test, &[release()], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidData),
+    );
     assert_eq!(
         test.get_complete(&bridge_addr(), None).balance(),
         Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
@@ -1848,11 +1858,10 @@ fn releases_fail_closed_when_the_oracle_contract_is_gone_and_recover_when_it_ret
         ),
         "a missing oracle must fail closed, not verify against nothing",
     );
-    let receipts = commit_block(&test, &[release()], &bs);
-    assert!(matches!(
-        receipts.transactions[0],
-        OperationReceipt::Err(_, _)
-    ));
+    assert_eq!(
+        rejected_block(&test, &[release()], &bs),
+        AccountError::InvalidForSender,
+    );
     assert_eq!(
         test.get_complete(&bridge_addr(), None).balance(),
         Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
@@ -2255,9 +2264,9 @@ fn two_targets_may_release_the_same_nonce_in_one_block() {
     );
 }
 
-/// Two releases to the same target in one block are fine when their nonces are sequential, and the
-/// second is refused when it reuses the first's. The nonce store has to be updated within the
-/// block, not just between blocks, or a target's burns could be replayed inside a single block.
+/// Two releases to the same target in one block are fine when their nonces are sequential, and a
+/// block in which the second reuses the first's is invalid. The nonce store has to be updated within
+/// the block, not just between blocks, or a target's burns could be replayed inside a single block.
 #[test]
 fn two_releases_to_one_target_in_a_block_must_be_sequential() {
     let owner = KeyPair::generate_default_csprng();
@@ -2302,7 +2311,7 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
         Coin::from_u64_unchecked(BRIDGE_DEPOSIT - 2 * RELEASE_AMOUNT),
     );
 
-    // The same nonce twice: the second is refused inside the same block.
+    // The same nonce twice: the second fails inside the same block, so the block is invalid.
     let burn = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
     let test = env_with_multi_root_oracle(&[&burn, &burn], &owner);
     let txs = [
@@ -2324,16 +2333,23 @@ fn two_releases_to_one_target_in_a_block_must_be_sequential() {
             &target_key(),
         ),
     ];
-    let receipts = commit_block(&test, &txs, &bs);
-    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
-    assert!(
-        matches!(receipts.transactions[1], OperationReceipt::Err(_, _)),
-        "a repeated nonce must be refused within the block: {receipts:?}",
-    );
+    match try_commit_block(&test, &txs, &bs) {
+        Err(AccountsError::InvalidTransaction(error, tx)) => {
+            assert_eq!(
+                tx, txs[1],
+                "the repeated nonce must be refused within the block"
+            );
+            assert_eq!(
+                error,
+                AccountError::InvalidTransaction(TransactionError::InvalidData)
+            );
+        }
+        other => panic!("a block repeating a nonce must be invalid, got {other:?}"),
+    }
     assert_eq!(
         test.get_complete(&nimiq_target(), None).balance(),
-        Coin::from_u64_unchecked(RELEASE_AMOUNT),
-        "the target is credited once, not twice",
+        Coin::ZERO,
+        "the invalid block credits the target nothing",
     );
 }
 
@@ -2412,7 +2428,7 @@ fn try_commit_block(
     test: &TestCommitRevert,
     txs: &[Transaction],
     bs: &BlockState,
-) -> Result<Receipts, nimiq_account::AccountsError> {
+) -> Result<Receipts, AccountsError> {
     let env = test.env();
     let mut raw = env.write_transaction();
     let mut txn: nimiq_trie::WriteTransactionProxy = (&mut raw).into();
@@ -2421,8 +2437,8 @@ fn try_commit_block(
 
 /// A release can only ever pay out what the bridge still holds, not what it held to begin with. A
 /// first release drains most of the balance; a second one for more than the remainder is refused
-/// and pays out nothing at all — no partial payout. Since it carries a fee it cannot pay for its
-/// failure, so the block carrying it is invalid rather than the release landing as failed.
+/// and pays out nothing at all — no partial payout. Like any failing release, it makes the block
+/// carrying it invalid.
 #[test]
 fn a_release_beyond_the_remaining_balance_is_refused_without_partial_payout() {
     let owner = KeyPair::generate_default_csprng();
@@ -2502,14 +2518,12 @@ fn a_release_beyond_the_remaining_balance_is_refused_without_partial_payout() {
         1,
         &target_key(),
     );
-    assert!(
-        matches!(
-            try_commit_block(&test, &[overdraw], &bs),
-            Err(nimiq_account::AccountsError::InvalidTransaction(
-                AccountError::InvalidForSender,
-                _
-            ))
-        ),
+    assert_eq!(
+        rejected_block(&test, &[overdraw], &bs),
+        AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(RELEASE_AMOUNT),
+            balance: Coin::from_u64_unchecked(RELEASE_AMOUNT - 1),
+        },
         "the second release must not be committed",
     );
     assert_eq!(
@@ -2560,7 +2574,13 @@ fn a_bridge_holding_the_value_but_not_the_fee_refuses_the_release() {
             balance: Coin::from_u64_unchecked(RELEASE_AMOUNT - 1),
         },
     );
-    assert!(try_commit_block(&test, &[tx], &bs).is_err());
+    assert_eq!(
+        rejected_block(&test, &[tx], &bs),
+        AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(RELEASE_AMOUNT),
+            balance: Coin::from_u64_unchecked(RELEASE_AMOUNT - 1),
+        },
+    );
 
     assert_eq!(
         test.get_complete(&bridge_addr(), None).balance(),
@@ -2573,29 +2593,28 @@ fn a_bridge_holding_the_value_but_not_the_fee_refuses_the_release() {
     );
 }
 
-/// The bridge never pays for a failed release, and nobody else does either. A failed release with
-/// a fee therefore cannot pay for its failure, and the block carrying it is invalid: otherwise the
-/// fee would reach the block reward without leaving any account. A failed release without a fee
-/// still lands as failed, and costs nobody anything.
+/// A release succeeds or is invalid, never failed. A failed transaction pays its fee from the
+/// sender, but the bridge never pays for a failed release and nobody else does either. So the
+/// bridge's failure handler refuses every failing release, with or without a fee, and the block
+/// carrying one is invalid: the bridge is never debited for a failure.
 #[test]
-fn a_failed_release_with_a_fee_is_invalid_and_never_debits_the_bridge() {
+fn a_failing_release_is_invalid_and_never_debits_the_bridge() {
     let owner = KeyPair::generate_default_csprng();
     let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let bridge = bridge_with(&oracle_addr(), &owner);
     let test = TestCommitRevert::with_initial_state(&[
         (
             oracle_addr(),
             Account::Oracle(make_single_state_oracle(&burn_data)),
         ),
-        (
-            bridge_addr(),
-            Account::Bridge(bridge_with(&oracle_addr(), &owner)),
-        ),
+        (bridge_addr(), Account::Bridge(bridge.clone())),
     ]);
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
+    let unwritten_index = || AccountError::InvalidTransaction(TransactionError::InvalidData);
 
-    // Proven against an oracle state that does not exist, so the release fails.
-    let failing = |fee: u64| {
-        make_outgoing_tx_with_fee(
+    // Proven against an oracle index that was never written, so the release fails.
+    for fee in [10, 0] {
+        let failing = make_outgoing_tx_with_fee(
             &bridge_addr(),
             &nimiq_target(),
             RELEASE_AMOUNT - fee,
@@ -2603,35 +2622,65 @@ fn a_failed_release_with_a_fee_is_invalid_and_never_debits_the_bridge() {
             burn_data.clone(),
             1,
             &target_key(),
-        )
-    };
+        );
 
-    assert!(
-        matches!(
-            try_commit_block(&test, &[failing(10)], &bs),
-            Err(nimiq_account::AccountsError::InvalidTransaction(
-                AccountError::InvalidForSender,
-                _
-            ))
-        ),
-        "a failed release with a fee must not be committed",
+        // The failure handler reports why the release fails instead of charging anyone for it.
+        let mut failed = bridge.clone();
+        assert_eq!(
+            test.test_commit_failed_transaction(
+                &mut failed,
+                &failing,
+                &bs,
+                &mut TransactionLog::empty(),
+                false,
+            ),
+            Err(unwritten_index()),
+            "a failing release with fee {fee} must not be committed as failed",
+        );
+        assert_eq!(failed, bridge);
+
+        assert_eq!(
+            rejected_block(&test, &[failing], &bs),
+            unwritten_index(),
+            "a block carrying a failing release with fee {fee} must be invalid",
+        );
+        assert_eq!(
+            test.get_complete(&bridge_addr(), None).balance(),
+            Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+            "the bridge is never debited for a failure",
+        );
+    }
+
+    // A release the bridge accepts but its recipient refuses fails as well: the target is a basic
+    // account, not the vesting contract the release names.
+    let mut refused = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        burn_data,
+        0,
+        &target_key(),
+    );
+    let mut release = OutgoingBridgeTransactionData::parse(&refused).unwrap();
+    release.proof = SignatureProof::default();
+    refused.recipient_type = AccountType::Vesting;
+    refused.sender_data = release.serialize_to_vec();
+    release.set_signature(SignatureProof::from_ed25519(
+        target_key().public,
+        target_key().sign(&refused.serialize_content()),
+    ));
+    refused.sender_data = release.serialize_to_vec();
+    assert_eq!(
+        rejected_block(&test, &[refused], &bs),
+        AccountError::InvalidForRecipient,
     );
     assert_eq!(
         test.get_complete(&bridge_addr(), None).balance(),
         Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
     );
-
-    let receipts = test
-        .commit_and_test(&[failing(0)], &[], &bs, &mut BlockLogger::empty())
-        .expect("a failed release without a fee is committed as failed");
-    assert!(
-        matches!(receipts.transactions[0], OperationReceipt::Err(_, _)),
-        "{receipts:?}",
-    );
     assert_eq!(
-        test.get_complete(&bridge_addr(), None).balance(),
-        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
-        "the bridge is never debited for a failure",
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::ZERO
     );
 }
 
@@ -2718,5 +2767,434 @@ fn a_release_against_a_bridge_whose_program_wraps_the_program_counter_is_rejecte
     assert_eq!(
         bridge_after, bridge_before,
         "a refused release leaves the bridge untouched",
+    );
+}
+
+// =====================================================================
+// A release succeeds or is invalid: mempool admission and block order
+// =====================================================================
+// A failing release makes its block invalid, so the mempool admits a release only if it succeeds
+// against the current state, and holds one per target. The mempool re-runs `reserve_balance` for
+// every pending release after each block, so these checks are also what evicts a stale release.
+
+/// The bridge as it is in `test` now.
+fn current_bridge(test: &TestCommitRevert) -> Account {
+    test.get_complete(&bridge_addr(), None)
+}
+
+/// Reserves `tx` against the bridge as the mempool does, against the current state of `test`.
+fn reserve(
+    test: &TestCommitRevert,
+    tx: &Transaction,
+    reserved: &mut ReservedBalance,
+) -> Result<(), AccountError> {
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+    test.reserve_balance(&current_bridge(test), tx, reserved, &bs, None)
+}
+
+/// Releases what `reserve` reserved for `tx`, as the mempool does when the release leaves it.
+fn release(test: &TestCommitRevert, tx: &Transaction, reserved: &mut ReservedBalance) {
+    test.release_balance(&current_bridge(test), tx, reserved, None)
+        .expect("a reserved release can be released");
+}
+
+/// The mempool refuses a release for exactly the reason the block would refuse it, so it never
+/// admits one that would make the block invalid.
+#[test]
+fn the_mempool_admits_a_release_only_if_it_would_succeed() {
+    let owner = KeyPair::generate_default_csprng();
+    let burn = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_multi_root_oracle(&[&burn], &owner);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+    let release_of = |burn: Vec<u8>, index: u64, signer: &KeyPair| {
+        make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            burn,
+            index,
+            signer,
+        )
+    };
+
+    let invalid = [
+        (
+            "signed by someone else",
+            release_of(burn.clone(), 0, &second_target_key()),
+            AccountError::InvalidSignature,
+        ),
+        (
+            "with value and fee not adding up to the amount",
+            make_outgoing_tx_with_fee(
+                &bridge_addr(),
+                &nimiq_target(),
+                RELEASE_AMOUNT,
+                Coin::from_u64_unchecked(1),
+                burn.clone(),
+                0,
+                &target_key(),
+            ),
+            AccountError::InvalidTransaction(TransactionError::InvalidValue),
+        ),
+        (
+            "for another chain",
+            release_of(
+                make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID + 1),
+                0,
+                &target_key(),
+            ),
+            AccountError::InvalidTransaction(TransactionError::InvalidData),
+        ),
+        (
+            "skipping a nonce",
+            release_of(
+                make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID),
+                0,
+                &target_key(),
+            ),
+            AccountError::InvalidTransaction(TransactionError::InvalidData),
+        ),
+        (
+            "proven against an unwritten index",
+            release_of(burn.clone(), 1, &target_key()),
+            AccountError::InvalidTransaction(TransactionError::InvalidData),
+        ),
+        (
+            "proving a record the oracle never attested",
+            // A trailing byte the program does not read changes the leaf, but no parsed field.
+            release_of([&burn[..], &[0]].concat(), 0, &target_key()),
+            AccountError::InvalidTransaction(TransactionError::InvalidProof),
+        ),
+    ];
+    for (what, tx, expected) in invalid {
+        let mut reserved = ReservedBalance::new(bridge_addr());
+        assert_eq!(
+            reserve(&test, &tx, &mut reserved),
+            Err(expected),
+            "the mempool must refuse a release {what}",
+        );
+        assert_eq!(
+            reserve(&test, &tx, &mut reserved).unwrap_err(),
+            outgoing_error(&test, &bridge_with(&oracle_addr(), &owner), &tx, &bs),
+            "and for the reason the block would refuse it",
+        );
+        assert_eq!(reserved.balance(), Coin::ZERO);
+        assert_eq!(reserved.balance_for(&nimiq_target()), Coin::ZERO);
+    }
+
+    // A bridge that cannot pay the release out refuses it, too.
+    let short = BridgeContract {
+        balance: Coin::from_u64_unchecked(RELEASE_AMOUNT - 1),
+        ..bridge_with(&oracle_addr(), &owner)
+    };
+    let short_test = TestCommitRevert::with_initial_state(&[
+        (
+            oracle_addr(),
+            Account::Oracle(make_multi_root_oracle(&[&burn])),
+        ),
+        (bridge_addr(), Account::Bridge(short)),
+    ]);
+    assert_eq!(
+        reserve(
+            &short_test,
+            &release_of(burn.clone(), 0, &target_key()),
+            &mut ReservedBalance::new(bridge_addr())
+        ),
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(RELEASE_AMOUNT),
+            balance: Coin::from_u64_unchecked(RELEASE_AMOUNT - 1),
+        }),
+    );
+
+    // And so does a bridge whose oracle is gone.
+    let orphan = TestCommitRevert::with_initial_state(&[(
+        bridge_addr(),
+        Account::Bridge(bridge_with(&oracle_addr(), &owner)),
+    )]);
+    assert_eq!(
+        reserve(
+            &orphan,
+            &release_of(burn.clone(), 0, &target_key()),
+            &mut ReservedBalance::new(bridge_addr())
+        ),
+        Err(AccountError::InvalidForSender),
+    );
+
+    // The valid release is admitted.
+    let mut reserved = ReservedBalance::new(bridge_addr());
+    assert_eq!(
+        reserve(&test, &release_of(burn, 0, &target_key()), &mut reserved),
+        Ok(())
+    );
+    assert_eq!(reserved.balance(), Coin::from_u64_unchecked(RELEASE_AMOUNT));
+}
+
+/// A target can only release its next nonce, so the mempool holds one release per target. A second
+/// release for the same target is refused, even a different transaction for the same burn, while
+/// other targets are unaffected. Once the first leaves the mempool, the target's slot is free.
+#[test]
+fn the_mempool_holds_one_release_per_target() {
+    let owner = KeyPair::generate_default_csprng();
+    let first = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let other = make_burn_data(&second_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_multi_root_oracle(&[&first, &other], &owner);
+
+    let pending = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        first.clone(),
+        0,
+        &target_key(),
+    );
+    // The same burn again, with a fee: a different transaction that is valid on its own.
+    let variant = make_outgoing_tx_with_fee(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT - 10,
+        Coin::from_u64_unchecked(10),
+        first,
+        0,
+        &target_key(),
+    );
+    let other_target = make_outgoing_tx(
+        &bridge_addr(),
+        &second_target(),
+        RELEASE_AMOUNT,
+        other,
+        1,
+        &second_target_key(),
+    );
+
+    let mut reserved = ReservedBalance::new(bridge_addr());
+    assert_eq!(reserve(&test, &variant, &mut reserved), Ok(()));
+    assert_eq!(
+        reserve(&test, &pending, &mut ReservedBalance::new(bridge_addr())),
+        Ok(())
+    );
+
+    assert_eq!(
+        reserve(&test, &pending, &mut reserved),
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(2 * RELEASE_AMOUNT),
+            balance: Coin::from_u64_unchecked(RELEASE_AMOUNT),
+        }),
+        "a second release for the same target must be refused",
+    );
+    assert_eq!(
+        reserved.balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+        "the refused release reserves nothing",
+    );
+
+    assert_eq!(
+        reserve(&test, &other_target, &mut reserved),
+        Ok(()),
+        "another target's release is unaffected",
+    );
+    assert_eq!(
+        reserved.balance(),
+        Coin::from_u64_unchecked(2 * RELEASE_AMOUNT)
+    );
+
+    // The first release leaves the mempool, and the target may have one pending again.
+    release(&test, &variant, &mut reserved);
+    assert_eq!(reserved.balance_for(&nimiq_target()), Coin::ZERO);
+    assert_eq!(reserve(&test, &pending, &mut reserved), Ok(()));
+}
+
+/// Pending releases together cannot take more than the bridge holds, fee included: the fee comes
+/// out of the burned amount, so a release reserves the whole amount. A release that does not fit
+/// leaves no reservation behind, not even for its target.
+#[test]
+fn the_mempool_bounds_pending_releases_by_what_the_bridge_holds() {
+    const FEE: u64 = 10;
+    let owner = KeyPair::generate_default_csprng();
+    let first = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let second = make_burn_data(&second_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    // Enough for one release and a half.
+    let balance = RELEASE_AMOUNT + RELEASE_AMOUNT / 2;
+    let test = TestCommitRevert::with_initial_state(&[
+        (
+            oracle_addr(),
+            Account::Oracle(make_multi_root_oracle(&[&first, &second])),
+        ),
+        (
+            bridge_addr(),
+            Account::Bridge(BridgeContract {
+                balance: Coin::from_u64_unchecked(balance),
+                ..bridge_with(&oracle_addr(), &owner)
+            }),
+        ),
+    ]);
+
+    let mut reserved = ReservedBalance::new(bridge_addr());
+    let with_fee = make_outgoing_tx_with_fee(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT - FEE,
+        Coin::from_u64_unchecked(FEE),
+        first,
+        0,
+        &target_key(),
+    );
+    assert_eq!(reserve(&test, &with_fee, &mut reserved), Ok(()));
+    assert_eq!(reserved.balance(), Coin::from_u64_unchecked(RELEASE_AMOUNT));
+
+    let second = make_outgoing_tx(
+        &bridge_addr(),
+        &second_target(),
+        RELEASE_AMOUNT,
+        second,
+        1,
+        &second_target_key(),
+    );
+    assert_eq!(
+        reserve(&test, &second, &mut reserved),
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(2 * RELEASE_AMOUNT),
+            balance: Coin::from_u64_unchecked(balance),
+        }),
+    );
+    assert_eq!(reserved.balance(), Coin::from_u64_unchecked(RELEASE_AMOUNT));
+    assert_eq!(reserved.balance_for(&second_target()), Coin::ZERO);
+}
+
+/// The mempool rechecks every pending release after each block. A release whose nonce a block
+/// used, or whose oracle slot a block overwrote, no longer passes and is evicted.
+#[test]
+fn a_pending_release_is_refused_once_its_nonce_is_used_or_its_slot_overwritten() {
+    let owner = KeyPair::generate_default_csprng();
+    let burn = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let pending = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        burn.clone(),
+        0,
+        &target_key(),
+    );
+
+    // Another release of the same burn lands in a block and uses the nonce.
+    let test = env_with_multi_root_oracle(&[&burn], &owner);
+    assert_eq!(
+        reserve(&test, &pending, &mut ReservedBalance::new(bridge_addr())),
+        Ok(())
+    );
+    let variant = make_outgoing_tx_with_fee(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT - 10,
+        Coin::from_u64_unchecked(10),
+        burn.clone(),
+        0,
+        &target_key(),
+    );
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+    let receipts = commit_block(&test, &[variant], &bs);
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+    assert_eq!(
+        reserve(&test, &pending, &mut ReservedBalance::new(bridge_addr())),
+        Err(AccountError::InvalidTransaction(
+            TransactionError::InvalidData
+        )),
+        "a release whose nonce is used must be evicted",
+    );
+
+    // The relayer's updates wrap a one-slot oracle, overwriting the slot the proof ends in.
+    let test = TestCommitRevert::with_initial_state(&[
+        (oracle_addr(), Account::Oracle(make_empty_oracle(&owner, 1))),
+        (
+            bridge_addr(),
+            Account::Bridge(bridge_with(&oracle_addr(), &owner)),
+        ),
+    ]);
+    let update = make_oracle_update_tx(&owner, vec![record_leaf(&burn)]);
+    commit_block(&test, &[update], &bs);
+    assert_eq!(
+        reserve(&test, &pending, &mut ReservedBalance::new(bridge_addr())),
+        Ok(())
+    );
+    let overwrite = make_oracle_update_tx(&owner, vec![blake2b(b"a later root")]);
+    commit_block(
+        &test,
+        &[overwrite],
+        &BlockState::new(2, 2, Policy::max_supported_version()),
+    );
+    assert_eq!(
+        reserve(&test, &pending, &mut ReservedBalance::new(bridge_addr())),
+        Err(AccountError::InvalidTransaction(
+            TransactionError::InvalidProof
+        )),
+        "a release whose slot is overwritten must be evicted",
+    );
+}
+
+/// An oracle update that overwrites the slot a release's proof ends in invalidates the release
+/// only if it runs first. Placed before the update in the same block, the release stays valid;
+/// placed after it, the release fails and the block is invalid. The producer therefore puts
+/// releases first.
+#[test]
+fn a_release_placed_before_an_oracle_update_in_the_same_block_stays_valid() {
+    let owner = KeyPair::generate_default_csprng();
+    let burn = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let release = make_outgoing_tx(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        burn.clone(),
+        0,
+        &target_key(),
+    );
+    // A one-slot oracle attesting the burn, so the next update overwrites the release's slot.
+    let attested = || {
+        let test = TestCommitRevert::with_initial_state(&[
+            (oracle_addr(), Account::Oracle(make_empty_oracle(&owner, 1))),
+            (
+                bridge_addr(),
+                Account::Bridge(bridge_with(&oracle_addr(), &owner)),
+            ),
+        ]);
+        let update = make_oracle_update_tx(&owner, vec![record_leaf(&burn)]);
+        commit_block(
+            &test,
+            &[update],
+            &BlockState::new(1, 1, Policy::max_supported_version()),
+        );
+        test
+    };
+    let overwrite = make_oracle_update_tx(&owner, vec![blake2b(b"a later root")]);
+    let bs = BlockState::new(2, 2, Policy::max_supported_version());
+
+    let test = attested();
+    let receipts = test
+        .commit_and_test(
+            &[release.clone(), overwrite.clone()],
+            &[],
+            &bs,
+            &mut BlockLogger::empty(),
+        )
+        .expect("a release ahead of the update must commit");
+    assert!(
+        receipts
+            .transactions
+            .iter()
+            .all(|receipt| matches!(receipt, OperationReceipt::Ok(_))),
+        "{receipts:?}",
+    );
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(RELEASE_AMOUNT),
+    );
+
+    let test = attested();
+    assert_eq!(
+        rejected_block(&test, &[overwrite, release], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidProof),
+        "a release behind the update that overwrote its slot makes the block invalid",
+    );
+    assert_eq!(
+        test.get_complete(&bridge_addr(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
     );
 }

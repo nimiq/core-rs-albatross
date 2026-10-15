@@ -7,8 +7,8 @@
 //! source contract and names the bridge executing the release.
 
 use nimiq_account::{
-    Account, BlockLogger, BlockState, BridgeContract, OperationReceipt, OracleContract,
-    TransactionLog,
+    Account, AccountsError, BlockLogger, BlockState, BridgeContract, OperationReceipt,
+    OracleContract, TransactionLog,
 };
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
@@ -242,22 +242,20 @@ fn assert_released(oracle: &OracleContract, tx: &Transaction) {
 }
 
 /// The error the bridge sending `tx` rejects it with, against the fresh bridges of
-/// `accounts(oracle)`.
+/// `accounts(oracle)`. A failing release makes its block invalid, for the same reason.
 fn rejection(oracle: &OracleContract, tx: &Transaction) -> AccountError {
     // In a block first, so that a release that is paid out fails here rather than in the
     // harness's revert check below, which cannot revert a successful release.
-    if let Ok(receipts) = accounts(oracle).commit_and_test(
+    let block_error = match accounts(oracle).commit_and_test(
         std::slice::from_ref(tx),
         &[],
         &block_state(),
         &mut BlockLogger::empty(),
     ) {
-        assert!(
-            matches!(receipts.transactions[0], OperationReceipt::Err(..)),
-            "the release must be rejected, but it was paid out"
-        );
-    }
-    accounts(oracle)
+        Err(AccountsError::InvalidTransaction(error, _)) => error,
+        other => panic!("the release must make its block invalid, got {other:?}"),
+    };
+    let error = accounts(oracle)
         .test_commit_outgoing_transaction(
             &mut bridge(),
             tx,
@@ -265,7 +263,9 @@ fn rejection(oracle: &OracleContract, tx: &Transaction) -> AccountError {
             &mut TransactionLog::empty(),
             false,
         )
-        .expect_err("the release must be rejected")
+        .expect_err("the release must be rejected");
+    assert_eq!(block_error, error);
+    error
 }
 
 /// Review finding K1. A forwarded record of exactly 64 bytes hashes like an inner node. With
