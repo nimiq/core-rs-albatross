@@ -126,7 +126,8 @@ impl MacroBlock {
             return Err(BlockError::InvalidJustification);
         }
 
-        Ok(())
+        // Now that the justification authenticates the header, check the elected voting keys.
+        self.header.verify_voting_keys()
     }
 
     /// Creates a default block that has body and justification.
@@ -244,10 +245,11 @@ impl MacroHeader {
         if self.is_election() != self.validators.is_some() {
             return Err(BlockError::InvalidValidators);
         }
-        // Validate that all BLS voting keys can be decompressed and structural invariants hold.
+        // Only validate the structure of the validator set: this runs on unauthenticated headers,
+        // so the expensive voting key check is left to `verify_voting_keys`.
         if let Some(ref validators) = self.validators {
             validators
-                .validate_keys()
+                .validate_structure()
                 .map_err(|_| BlockError::InvalidValidators)?;
         }
         // The punished set may only reference in-range validator slots. An out-of-range bit
@@ -260,6 +262,17 @@ impl MacroHeader {
             .any(|slot| slot >= Policy::SLOTS as usize)
         {
             return Err(BlockError::InvalidPunishedSet);
+        }
+        Ok(())
+    }
+
+    /// Validates that all BLS voting keys of the elected validator set can be decompressed.
+    /// This is expensive, so it must only be called once the header is authenticated.
+    pub(crate) fn verify_voting_keys(&self) -> Result<(), BlockError> {
+        if let Some(ref validators) = self.validators {
+            validators
+                .validate_keys()
+                .map_err(|_| BlockError::InvalidValidators)?;
         }
         Ok(())
     }
@@ -538,14 +551,14 @@ mod test {
         assert!(overlapping.validate_keys().is_err());
     }
 
-    /// Verifies that invalid BLS voting keys are caught by verify() and
+    /// Verifies that invalid BLS voting keys are caught by verify_voting_keys() and
     /// voting_keys(), preventing the panic that would occur in hash_cached().
     ///
     /// Regression test for: untrusted peer announces an election macro block
     /// with an invalid BLS voting key. Before the fix, `hash_cached()` would
     /// panic via `voting_keys()` → `uncompress().unwrap()`.
     #[test]
-    fn invalid_bls_voting_key_rejected_by_verify() {
+    fn invalid_bls_voting_key_rejected_by_verify_voting_keys() {
         let invalid_compressed = BlsCompressedPublicKey {
             public_key: [0xFF; BlsCompressedPublicKey::SIZE],
         };
@@ -565,12 +578,17 @@ mod test {
         // voting_keys() returns an error instead of panicking.
         assert!(validators.voting_keys().is_err());
 
-        // MacroHeader::verify() rejects the block.
+        // MacroHeader::verify() only checks the structure, which is valid.
         let header = MacroHeader {
+            block_number: Policy::election_block_after(Policy::genesis_block_number()),
             validators: Some(validators),
             ..Default::default()
         };
-        assert!(header.verify().is_err());
+        assert!(header.verify().is_ok());
+        assert_eq!(
+            header.verify_voting_keys(),
+            Err(crate::BlockError::InvalidValidators)
+        );
     }
 
     /// Verifies that Validators::hash() does not panic when called with invalid

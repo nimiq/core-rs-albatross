@@ -161,8 +161,8 @@ impl<N: Network> BlockQueue<N> {
 
         let blockchain = self.blockchain.read();
 
-        // Validate header before hashing to reject malformed blocks (e.g. invalid BLS keys)
-        // that would panic during hash computation.
+        // Cheaply reject malformed headers (e.g. a structurally invalid validator set) before
+        // hashing or buffering them.
         let max_timestamp = blockchain.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
         if block
             .verify_header(blockchain.network_id(), block.is_skip(), max_timestamp)

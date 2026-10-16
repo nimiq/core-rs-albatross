@@ -50,6 +50,9 @@ impl Blockchain {
 
         read_txn.close();
 
+        // The hash binding authenticates the block, so the elected voting keys can be checked now.
+        block.verify_voting_keys()?;
+
         // Upgrade the blockchain lock
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
 

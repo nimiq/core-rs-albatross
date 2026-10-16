@@ -8,7 +8,7 @@ use nimiq_blockchain_interface::{
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_light_blockchain::LightBlockchain;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
@@ -16,7 +16,11 @@ use nimiq_test_utils::{
         fill_micro_blocks_with_txns, next_protocol_upgrade_block, produce_macro_blocks_with_txns,
     },
     blockchain_events_broadcast::{assert_events_eq_unordered, try_collect_events},
-    test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
+    test_custom_block::{
+        finalize_macro_block_proposal, invalid_voting_key, next_macro_block,
+        next_macro_block_proposal, next_micro_block, next_skip_block, replace_voting_keys,
+        BlockConfig,
+    },
 };
 use nimiq_vrf::VrfSeed;
 use parking_lot::RwLock;
@@ -861,4 +865,92 @@ fn rebranch_to_election_macro_updates_light_state() {
 
     assert_eq!(full_result, Ok(PushResult::Extended));
     assert_eq!(light_result, full_result);
+}
+
+/// Voting keys are not decompressed by intrinsic header verification, but only once the election
+/// block's justification is verified. They must still all be decompressed by the time the block
+/// is adopted: the web client's BLS key cache relies on it.
+#[test]
+fn it_decompresses_the_voting_keys_of_pushed_election_blocks() {
+    let source = TemporaryBlockProducer::new();
+    produce_macro_blocks_with_txns(
+        &source.producer,
+        &source.blockchain,
+        (Policy::batches_per_epoch() - 1) as usize,
+        1,
+        0,
+    );
+    fill_micro_blocks_with_txns(&source.producer, &source.blockchain, 1, 0);
+
+    let light_blockchain = Arc::new(RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross)));
+    push_source_chain_to_light(&source, &light_blockchain);
+
+    // Elect fresh voting keys that nothing has decompressed yet. The light chain doesn't check the
+    // elected validators against the staking contract, so the block is still valid for it.
+    let config = BlockConfig::default();
+    let mut proposal = next_macro_block_proposal(
+        &source.producer.signing_key,
+        &source.blockchain.read(),
+        &config,
+    );
+    let voting_keys = replace_voting_keys(proposal.header.validators.as_mut().unwrap());
+    let block_hash = proposal.hash_blake2s();
+    let election_block =
+        finalize_macro_block_proposal(&source.producer.voting_key, proposal, block_hash, &config);
+    assert!(voting_keys.iter().all(|key| !key.has_uncompressed()));
+
+    assert_eq!(
+        LightBlockchain::push(light_blockchain.upgradable_read(), election_block),
+        Ok(PushResult::Extended),
+    );
+    assert!(voting_keys.iter().all(|key| key.has_uncompressed()));
+}
+
+/// Builds the election block of the first epoch, letting `modify` change the elected validators
+/// before it is signed.
+fn election_block_with(modify: impl FnOnce(&mut Validators)) -> Block {
+    let source = TemporaryBlockProducer::new();
+    for _ in 0..Policy::blocks_per_epoch() - 1 {
+        source.next_block(vec![], false);
+    }
+
+    let config = BlockConfig::default();
+    let mut proposal = next_macro_block_proposal(
+        &source.producer.signing_key,
+        &source.blockchain.read(),
+        &config,
+    );
+    modify(proposal.header.validators.as_mut().unwrap());
+    let block_hash = proposal.hash_blake2s();
+    finalize_macro_block_proposal(&source.producer.voting_key, proposal, block_hash, &config)
+}
+
+/// The pico sync adopts election blocks without verifying a justification, so it must check the
+/// voting keys itself. The web client's BLS key cache relies on them being decompressed.
+#[test]
+fn it_decompresses_the_voting_keys_of_pico_election_blocks() {
+    let mut voting_keys = vec![];
+    let election_block =
+        election_block_with(|validators| voting_keys = replace_voting_keys(validators));
+    let light_blockchain = RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross));
+    assert!(voting_keys.iter().all(|key| !key.has_uncompressed()));
+
+    assert_eq!(
+        LightBlockchain::push_pico_election(light_blockchain.upgradable_read(), election_block),
+        Ok(PushResult::Extended),
+    );
+    assert!(voting_keys.iter().all(|key| key.has_uncompressed()));
+}
+
+#[test]
+fn it_rejects_pico_election_blocks_with_an_invalid_voting_key() {
+    let election_block = election_block_with(|validators| {
+        validators.validators[0].voting_key = invalid_voting_key();
+    });
+    let light_blockchain = RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross));
+
+    assert_eq!(
+        LightBlockchain::push_pico_election(light_blockchain.upgradable_read(), election_block),
+        Err(InvalidBlock(BlockError::InvalidValidators)),
+    );
 }

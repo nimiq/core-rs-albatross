@@ -210,7 +210,8 @@ impl<N: Network> BlockRequestComponent<N> {
 
                         // Verify the header before the chain is hashed below, to cheaply reject
                         // malformed blocks (wrong network/version, oversized extra data, or — for
-                        // election blocks — an invalid validator set) without buffering them.
+                        // election blocks — a structurally invalid validator set) without
+                        // buffering them.
                         // `max_timestamp` is `u64::MAX` because these are historical blocks
                         // requested by hash/height: the future-drift check is only meaningful for
                         // live blocks and is re-applied with the real clock at push time

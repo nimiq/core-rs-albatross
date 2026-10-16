@@ -109,6 +109,9 @@ impl Blockchain {
 
             // Verify that the equivocation proofs are valid.
             self.verify_equivocation_proofs(block, txn)?;
+        } else {
+            // Trusted blocks skip `verify_validators`, which checks the elected voting keys.
+            block.verify_voting_keys()?;
         }
 
         Ok(())
@@ -471,6 +474,12 @@ impl Blockchain {
         // Make sure the proposer is correct using the predecessor to determine slot ownership.
         if let Err(error) = block.verify_proposer(&proposer, predecessor.head.seed()) {
             debug!(%error, %block, "Tendermint - await_proposal: Invalid block header, VRF seed verification failed");
+            return Err(PushError::InvalidBlock(error));
+        }
+
+        // The proposal is signed by its proposer, so the elected voting keys can be checked now.
+        if let Err(error) = block.verify_voting_keys() {
+            debug!(%error, %block, "Tendermint - await_proposal: Invalid validator voting keys");
             return Err(PushError::InvalidBlock(error));
         }
 

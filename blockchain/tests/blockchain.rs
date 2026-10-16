@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use nimiq_block::{Block, BlockError};
+use nimiq_block::{Block, BlockError, MacroBlock};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -9,7 +9,10 @@ use nimiq_tendermint::ProposalMessage;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
-    test_custom_block::{finalize_macro_block, next_macro_block_proposal},
+    test_custom_block::{
+        finalize_macro_block, finalize_macro_block_proposal, invalid_voting_key,
+        next_macro_block_proposal, replace_voting_keys,
+    },
     versions::{assert_all_versions, bp},
 };
 
@@ -175,6 +178,65 @@ fn can_detect_invalid_punished_set() {
         temp_producer.push(block),
         Err(PushError::InvalidBlock(BlockError::InvalidValidators))
     );
+}
+
+/// Builds the next macro block proposal, which must be an election block.
+fn next_election_block_proposal(temp_producer: &TemporaryBlockProducer) -> MacroBlock {
+    let blockchain = temp_producer.blockchain.read();
+    assert!(Policy::is_election_block_at(blockchain.block_number() + 1));
+    next_macro_block_proposal(
+        &temp_producer.producer.signing_key,
+        &blockchain,
+        &Default::default(),
+    )
+}
+
+#[test]
+fn it_rejects_justified_election_blocks_with_an_invalid_voting_key() {
+    let temp_producer = TemporaryBlockProducer::new();
+    produce_blocks(&temp_producer, Policy::blocks_per_epoch() - 1);
+
+    let mut proposal = next_election_block_proposal(&temp_producer);
+    proposal.header.validators.as_mut().unwrap().validators[0].voting_key = invalid_voting_key();
+    let block_hash = proposal.hash_blake2s();
+    let block = finalize_macro_block_proposal(
+        &temp_producer.producer.voting_key,
+        proposal,
+        block_hash,
+        &Default::default(),
+    );
+
+    // An end-to-end guard: the full node also rejects this with the same error in the post-commit
+    // comparison against the staking contract's validators. The light chain has no such
+    // comparison, so the light-blockchain tests are what pin the voting key check itself.
+    assert_eq!(
+        temp_producer.push(block),
+        Err(PushError::InvalidBlock(BlockError::InvalidValidators))
+    );
+}
+
+#[test]
+fn it_does_not_decompress_voting_keys_of_unjustified_election_blocks() {
+    let temp_producer = TemporaryBlockProducer::new();
+    produce_blocks(&temp_producer, Policy::blocks_per_epoch() - 1);
+
+    // Swap in fresh voting keys after computing the signed hash, so the justification doesn't
+    // match the block anymore.
+    let mut proposal = next_election_block_proposal(&temp_producer);
+    let block_hash = proposal.hash_blake2s();
+    let voting_keys = replace_voting_keys(proposal.header.validators.as_mut().unwrap());
+    let block = finalize_macro_block_proposal(
+        &temp_producer.producer.voting_key,
+        proposal,
+        block_hash,
+        &Default::default(),
+    );
+
+    assert_eq!(
+        temp_producer.push(block),
+        Err(PushError::InvalidBlock(BlockError::InvalidJustification))
+    );
+    assert!(voting_keys.iter().all(|key| !key.has_uncompressed()));
 }
 
 #[test]

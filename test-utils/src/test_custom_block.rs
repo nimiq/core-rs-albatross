@@ -6,13 +6,17 @@ use nimiq_block::{
 };
 use nimiq_blockchain::{interface::HistoryInterface, Blockchain};
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
+use nimiq_bls::{
+    AggregateSignature, CompressedPublicKey, KeyPair as BlsKeyPair,
+    LazyPublicKey as LazyBlsPublicKey,
+};
 use nimiq_collections::BitSet;
 use nimiq_database::traits::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_keys::KeyPair as SchnorrKeyPair;
+use nimiq_keys::{KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_primitives::{
-    networks::NetworkId, policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote,
+    networks::NetworkId, policy::Policy, slots_allocation::Validators, TendermintIdentifier,
+    TendermintStep, TendermintVote,
 };
 use nimiq_tendermint::ProposalMessage;
 use nimiq_transaction::{
@@ -482,20 +486,51 @@ pub fn next_macro_block(
         blockchain.get_validators_for_epoch(Policy::epoch_at(blockchain.block_number() + 1), None);
     assert!(validators.is_ok());
 
+    finalize_macro_block_proposal(voting_key, macro_block_proposal, block_hash, config)
+}
+
+/// Finalizes a macro block proposal with a justification by `voting_key` over `block_hash`.
+pub fn finalize_macro_block_proposal(
+    voting_key: &BlsKeyPair,
+    proposal: MacroBlock,
+    block_hash: Blake2sHash,
+    config: &BlockConfig,
+) -> Block {
     Block::Macro(finalize_macro_block(
         voting_key,
         ProposalMessage {
             valid_round: None,
-            proposal: macro_block_proposal.header,
+            proposal: proposal.header,
             round: config.tendermint_round.unwrap_or(0),
         },
-        macro_block_proposal
-            .body
-            .or_else(|| Some(MacroBody::default()))
-            .unwrap(),
+        proposal.body.unwrap_or_default(),
         block_hash,
         config,
     ))
+}
+
+/// Replaces the voting keys of `validators` with fresh ones (that nothing has decompressed yet)
+/// and returns them.
+pub fn replace_voting_keys(validators: &mut Validators) -> Vec<LazyBlsPublicKey> {
+    validators
+        .validators
+        .iter_mut()
+        .map(|validator| {
+            validator.voting_key = BlsKeyPair::generate_default_csprng()
+                .public_key
+                .compress()
+                .into();
+            validator.voting_key.clone()
+        })
+        .collect()
+}
+
+/// Returns a voting key that can't be decompressed.
+pub fn invalid_voting_key() -> LazyBlsPublicKey {
+    CompressedPublicKey {
+        public_key: [0xFF; CompressedPublicKey::SIZE],
+    }
+    .into()
 }
 
 fn create_skip_block_proof(

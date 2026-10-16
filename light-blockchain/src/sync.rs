@@ -143,6 +143,10 @@ impl LightBlockchain {
         let max_timestamp = this.now().saturating_add(Policy::TIMESTAMP_MAX_DRIFT);
         block.verify(this.network_id, max_timestamp)?;
 
+        // The pico path has no justification check (and thus no `verify_validators`), so check
+        // the elected voting keys explicitly. The election block is trusted on first use.
+        block.verify_voting_keys()?;
+
         // The pico path never checks the VRF seed (it skips `verify_proposer`); an
         // undecodable seed would otherwise panic in `VrfSeed::entropy` at proposer selection.
         if block.unwrap_macro_ref().header.seed.try_entropy().is_none() {

@@ -382,7 +382,8 @@ impl Block {
 
     /// Verifies the header.
     /// Note that only header intrinsic verifications are performed and further checks
-    /// are needed when completely verifying a block header.
+    /// are needed when completely verifying a block header. Voting keys are not checked here, see
+    /// `verify_voting_keys`.
     pub fn verify_header(
         &self,
         network: NetworkId,
@@ -631,10 +632,20 @@ impl Block {
     }
 
     /// Verifies that the block is valid for the given validators.
+    /// For election blocks, this includes `verify_voting_keys` once the justification verifies.
     pub fn verify_validators(&self, validators: &Validators) -> Result<(), BlockError> {
         match self {
             Block::Micro(block) => block.verify_validators(validators),
             Block::Macro(block) => block.verify_validators(validators),
+        }
+    }
+
+    /// Verifies that the voting keys of the validators elected by this block can be decompressed.
+    /// This is expensive, so it must only be called once the block is authenticated.
+    pub fn verify_voting_keys(&self) -> Result<(), BlockError> {
+        match self {
+            Block::Micro(_) => Ok(()),
+            Block::Macro(block) => block.header.verify_voting_keys(),
         }
     }
 }

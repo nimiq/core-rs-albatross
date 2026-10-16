@@ -219,18 +219,13 @@ impl Validators {
         Ok(pks)
     }
 
-    /// Checks that all validator voting keys can be decompressed and that the
-    /// validator set structure is valid (correct number of slots, compatible with ZK circuit).
-    pub fn validate_keys(&self) -> Result<(), InvalidValidatorsError> {
+    /// Checks that the validator set structure is valid. Unlike `validate_keys`,
+    /// this doesn't decompress the voting keys, so it is cheap enough for untrusted sets.
+    pub fn validate_structure(&self) -> Result<(), InvalidValidatorsError> {
         let mut total_slots: u16 = 0;
         let mut seen_addresses = BTreeSet::new();
 
-        // Check that all keys can be decompressed and count total slots in one pass
         for validator in self.iter() {
-            validator
-                .voting_key
-                .uncompress()
-                .ok_or(InvalidValidatorsError)?;
             // Bands must be contiguous from 0 and non-empty. Gaps or overlaps would make
             // `get_band_from_slot` land on an uncovered slot and panic on light nodes. An
             // empty band (`end == start`) adds nothing to the total or the pre-v2
@@ -268,6 +263,24 @@ impl Validators {
         // Must be a multiple of PK_TREE_BREADTH for ZK circuit compatibility
         if !(total_slots as usize).is_multiple_of(PK_TREE_BREADTH) {
             return Err(InvalidValidatorsError);
+        }
+
+        Ok(())
+    }
+
+    /// Checks that the validator set structure is valid (see `validate_structure`) and that all
+    /// validator voting keys can be decompressed.
+    ///
+    /// Only call this on authenticated validator sets (e.g. after the block's justification has been verified),
+    /// never on untrusted input.
+    pub fn validate_keys(&self) -> Result<(), InvalidValidatorsError> {
+        self.validate_structure()?;
+
+        for validator in self.iter() {
+            validator
+                .voting_key
+                .uncompress()
+                .ok_or(InvalidValidatorsError)?;
         }
 
         Ok(())
@@ -450,11 +463,23 @@ mod tests {
     use super::*;
 
     fn validator(address: u8, slots: Range<u16>) -> Validator {
-        // The BLS generator is a valid, decompressable voting key, so `validate_keys`
-        // reaches the slot band check instead of failing on the key.
+        // The BLS generator is a valid, decompressable voting key, so `validate_keys` can only
+        // fail on the slot bands.
+        validator_with_key(
+            address,
+            BlsPublicKey::new(G2Projective::generator()).compress(),
+            slots,
+        )
+    }
+
+    fn validator_with_key(
+        address: u8,
+        voting_key: nimiq_bls::CompressedPublicKey,
+        slots: Range<u16>,
+    ) -> Validator {
         Validator::new(
             Address::from([address; 20]),
-            BlsPublicKey::new(G2Projective::generator()).compress(),
+            voting_key,
             SchnorrPublicKey::default(),
             slots,
         )
@@ -487,5 +512,32 @@ mod tests {
             validator(1, (Policy::SLOTS / 2)..Policy::SLOTS),
         ]);
         assert!(validators.validate_keys().is_err());
+    }
+
+    #[test]
+    fn validate_structure_does_not_check_voting_keys() {
+        let invalid_key = nimiq_bls::CompressedPublicKey {
+            public_key: [0xFF; nimiq_bls::CompressedPublicKey::SIZE],
+        };
+        let validators =
+            Validators::new(vec![validator_with_key(1, invalid_key, 0..Policy::SLOTS)]);
+
+        assert!(validators.validate_structure().is_ok());
+        assert!(validators.validate_keys().is_err());
+    }
+
+    #[test]
+    fn validate_keys_checks_structure_before_decompressing() {
+        use nimiq_keys::SecureGenerate;
+
+        // A fresh key, so no other test can have decompressed it. The gap is invalid: the first
+        // band must start at slot 0.
+        let fresh_key = nimiq_bls::KeyPair::generate_default_csprng()
+            .public_key
+            .compress();
+        let validators = Validators::new(vec![validator_with_key(1, fresh_key, 1..Policy::SLOTS)]);
+
+        assert!(validators.validate_keys().is_err());
+        assert!(!validators.validators[0].voting_key.has_uncompressed());
     }
 }

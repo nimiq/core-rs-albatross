@@ -3,10 +3,14 @@ use nimiq_block::{
     Block, BlockError, EquivocationProof, ForkProof, MacroBlock, MacroBody, MacroHeader,
     MicroBlock, MicroBody, MicroHeader, MicroJustification, MultiSignature, SkipBlockProof,
 };
-use nimiq_bls::{AggregateSignature, G2Projective, PublicKey as BlsPublicKey};
+use nimiq_bls::{
+    AggregateSignature, G2Projective, KeyPair as BlsKeyPair, PublicKey as BlsPublicKey,
+};
 use nimiq_collections::BitSet;
 use nimiq_hash::Hash;
-use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey, Ed25519Signature, KeyPair};
+use nimiq_keys::{
+    Address, Ed25519PublicKey as SchnorrPublicKey, Ed25519Signature, KeyPair, SecureGenerate,
+};
 use nimiq_primitives::{
     coin::Coin,
     networks::NetworkId,
@@ -908,4 +912,45 @@ fn it_preserves_the_hash_of_a_pre_commitment_version_macro_block() {
         block.hash().to_string(),
         "4aa3e0d454336e6dd28656318fd3290a62f91b5c66b4e5c5cc05646c9f58eb39",
     );
+}
+
+/// Intrinsic verification runs on unauthenticated blocks (e.g. every gossiped header), so it must
+/// not decompress the voting keys of an election block: that costs a G2 subgroup check per key and
+/// would let any peer burn seconds of CPU per crafted header.
+#[test]
+fn verify_does_not_decompress_election_voting_keys() {
+    // A fresh voting key, so no other test can have decompressed it.
+    let validators = Validators::new(vec![Validator::new(
+        Address::default(),
+        BlsKeyPair::generate_default_csprng().public_key.compress(),
+        SchnorrPublicKey::default(),
+        0..Policy::SLOTS,
+    )]);
+    let voting_key = validators.validators[0].voting_key.clone();
+
+    let macro_body = MacroBody {
+        transactions: vec![],
+    };
+    let block = Block::Macro(MacroBlock {
+        header: MacroHeader {
+            network: NetworkId::UnitAlbatross,
+            version: Policy::max_supported_version(),
+            block_number: Policy::election_block_after(Policy::genesis_block_number()),
+            validators: Some(validators),
+            body_root: macro_body.hash(),
+            ..Default::default()
+        },
+        justification: None,
+        body: Some(macro_body),
+    });
+
+    assert_eq!(
+        block.verify_header(NetworkId::UnitAlbatross, false, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross, TEST_MAX_TIMESTAMP),
+        Ok(())
+    );
+    assert!(!voting_key.has_uncompressed());
 }
