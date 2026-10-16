@@ -277,6 +277,9 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
             PushOpResult::HeadChunk(Ok(ChunksPushResult::Chunks(committed, _)), block_hash)
                 if committed > 0 =>
             {
+                // Chunk-only pushes emit no blockchain event, so try here: a trie that completes
+                // on a macro-block head would otherwise wait for a block that may never come.
+                self.try_complete_state_sync();
                 // If we accepted chunks for the head block without error, we emit an event.
                 // If there was an error, we do not know for sure whether or not a chunk was accepted.
                 Some(LiveSyncEvent::PushEvent(LiveSyncPushEvent::AcceptedChunks(

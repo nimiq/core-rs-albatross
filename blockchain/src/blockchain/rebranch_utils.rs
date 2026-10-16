@@ -193,6 +193,8 @@ impl Blockchain {
 
         for i in (0..target_chain.len()).rev() {
             let block = &mut target_chain[i];
+            // Reverting chunks above may have changed the missing range since the block was stored.
+            block.1.prev_missing_range = self.get_missing_accounts_range(Some(write_txn));
             // Collect logs for the upcoming push.
             let mut block_logger = BlockLogger::new_applied(
                 block.0.clone(),

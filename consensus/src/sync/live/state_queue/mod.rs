@@ -209,16 +209,29 @@ impl<N: Network> StateQueue<N> {
         let current_macro_height = Policy::last_macro_block(bc.block_number());
         let blockchain_rx = bc.notifier_as_stream();
         let accounts_complete = bc.accounts_complete();
+        // Diffs are needed while the trie is incomplete, and after that while a block of the
+        // current batch pushed into the incomplete trie can still be reverted by a rebranch.
+        let diffs_still_needed =
+            !accounts_complete || Self::batch_has_incomplete_pushes(&bc, current_macro_height);
         drop(bc);
 
-        // When initializing the state sync, we assume it to be complete if we have the full state.
-        // In this case, we only start the state sync, once the accounts tree is reinitialized or we reverted a chunk.
-        let start_key = if accounts_complete {
-            ChunkRequestState::Complete
-        } else {
+        // The queue starts complete only if the trie is complete and no block of the current batch
+        // was pushed into an incomplete trie; a trie reinitialization or chunk revert restarts it.
+        let start_key = if diffs_still_needed {
             ChunkRequestState::Reset
+        } else {
+            ChunkRequestState::Complete
         };
-        diff_queue.set_diff_needed(!accounts_complete);
+        if accounts_complete {
+            // The chunks are all there, whether or not diffs are still needed.
+            sync_tracker.store(100, Ordering::Release);
+            if diffs_still_needed {
+                info!(
+                    "Trie completed in this batch, keeping trie diffs until the next macro block."
+                );
+            }
+        }
+        diff_queue.set_diff_needed(diffs_still_needed);
 
         Self {
             config,
@@ -233,6 +246,34 @@ impl<N: Network> StateQueue<N> {
             start_key,
             blockchain_rx,
             peers_became_nonempty: None,
+        }
+    }
+
+    /// Whether a main-chain block above `macro_height` was pushed into an incomplete trie. Such a
+    /// block can still be reverted by a rebranch, which then needs the fork blocks' diffs.
+    fn batch_has_incomplete_pushes(blockchain: &Blockchain, macro_height: u32) -> bool {
+        let txn = blockchain.read_transaction();
+        let mut hash = blockchain.head_hash();
+        loop {
+            let chain_info = match blockchain.get_chain_info(&hash, false, Some(&txn)) {
+                Ok(chain_info) => chain_info,
+                Err(error) => {
+                    // Keep the diffs if the batch cannot be read; the gate only waits longer.
+                    log::warn!(
+                        "Failed to read chain info {} while checking for incomplete pushes: {}",
+                        hash,
+                        error
+                    );
+                    return true;
+                }
+            };
+            if chain_info.head.block_number() <= macro_height {
+                return false;
+            }
+            if chain_info.prev_missing_range.is_some() {
+                return true;
+            }
+            hash = chain_info.head.parent_hash().clone();
         }
     }
 
@@ -546,6 +587,37 @@ impl<N: Network> StateQueue<N> {
         }
     }
 
+    /// Marks the state sync complete once the trie is complete and no block above the last macro
+    /// block was pushed into it while incomplete: until then a rebranch can still revert chunks
+    /// and needs the fork blocks' diffs. Takes the blockchain read lock exactly once and returns
+    /// the trie completeness and head height it saw, so callers need no lock of their own.
+    fn try_complete_state_sync(&mut self) -> (bool, u32) {
+        let blockchain = self.blockchain.read();
+        let accounts_complete = blockchain.accounts_complete();
+        let block_number = blockchain.block_number();
+        if self.start_key.is_complete() {
+            // Already marked complete, nothing to do.
+            return (accounts_complete, block_number);
+        }
+        // Finished once the trie is complete and no block of this batch pushed into the
+        // incomplete trie can still be reverted by a rebranch.
+        let is_state_sync_finished = accounts_complete
+            && !Self::batch_has_incomplete_pushes(
+                &blockchain,
+                Policy::last_macro_block(block_number),
+            );
+        drop(blockchain);
+
+        if is_state_sync_finished {
+            info!("Finished state sync, trie complete.");
+            self.start_key = ChunkRequestState::Complete;
+            self.buffer.clear();
+            self.buffer_size = 0;
+            self.diff_queue.set_diff_needed(false);
+        }
+        (accounts_complete, block_number)
+    }
+
     pub fn num_buffered_chunks(&self) -> usize {
         self.buffer_size
     }
@@ -569,13 +641,13 @@ impl<N: Network> Stream for StateQueue<N> {
         while let Poll::Ready(Some(event)) = self.blockchain_rx.poll_next_unpin(cx) {
             match event {
                 BlockchainEvent::Extended(_) => {
-                    let (blockchain_state_complete, current_block_number) = {
-                        let blockchain_rg = self.blockchain.read();
-                        (
-                            blockchain_rg.accounts_complete(),
-                            blockchain_rg.block_number(),
-                        )
-                    };
+                    // Also yields the chain state this arm needs, under the same single lock.
+                    let (accounts_complete, current_block_number) = self.try_complete_state_sync();
+                    if accounts_complete {
+                        // The sync either just completed or keeps waiting for the next macro
+                        // block; nothing else to do.
+                        continue;
+                    }
                     // Check if we passed the last chunk.
                     let past_last_chunk =
                         if let ChunkRequestState::Paused(last_chunk_block) = self.start_key {
@@ -583,16 +655,7 @@ impl<N: Network> Stream for StateQueue<N> {
                         } else {
                             false
                         };
-                    if !self.start_key.is_complete() && blockchain_state_complete {
-                        // Mark state sync as complete after passing a macro block.
-                        info!("Finished state sync, trie complete.");
-                        self.start_key = ChunkRequestState::Complete;
-                        self.buffer.clear();
-                        self.buffer_size = 0;
-                        self.diff_queue.set_diff_needed(false);
-                    } else if (self.start_key.is_complete() || past_last_chunk)
-                        && !blockchain_state_complete
-                    {
+                    if self.start_key.is_complete() || past_last_chunk {
                         // Start state sync if the blockchain state was reinitialized after pushing a macro block.
                         // Also restart state sync if we were paused and passed the block number that contained the end key.
                         info!("Trie incomplete, starting state sync.");
@@ -607,11 +670,10 @@ impl<N: Network> Stream for StateQueue<N> {
                         self.diff_queue.set_diff_needed(true);
                     }
                 }
-                BlockchainEvent::Finalized(_) => {
-                    // Nothing to do for finalized batches since macro block pushes emit the `Extended` event as well.
-                }
-                BlockchainEvent::EpochFinalized(_) => {
-                    // Nothing to do for finalized batches since macro block pushes emit the `Extended` event as well.
+                BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => {
+                    // Macro block pushes emit `Extended` as well, but a rebranch onto a macro block
+                    // only emits `Rebranched` and this.
+                    self.try_complete_state_sync();
                 }
                 BlockchainEvent::HistoryAdopted(_) => {
                     // Nothing to do for adopted history
