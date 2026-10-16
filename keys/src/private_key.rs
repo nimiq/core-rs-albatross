@@ -63,9 +63,7 @@ impl PrivateKey {
 
 impl SecureGenerate for PrivateKey {
     fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
-        PrivateKey(ed25519_zebra::SigningKey::new(rand_core_compat::Rng010(
-            rng,
-        )))
+        PrivateKey(ed25519_zebra::SigningKey::new(rng))
     }
 }
 
