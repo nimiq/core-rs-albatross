@@ -1,7 +1,7 @@
 use std::{num::NonZeroU8, sync::Arc, time::Duration};
 
 use futures::{future::join_all, StreamExt};
-use instant::{Instant, SystemTime};
+use instant::SystemTime;
 use libp2p::{
     core::multiaddr::{multiaddr, Multiaddr},
     gossipsub,
@@ -28,11 +28,11 @@ mod helper;
 
 /// The max number of TestRequests per peer (used for regular tests only).
 const MAX_REQUEST_RESPONSE_TEST_REQUEST: u32 = 1000;
-/// The max number of TestRequests per peer. This is used exclusively for rate limiting testing.
-const MAX_REQUEST_RESPONSE_STRESS_TEST_REQUEST: u32 = 2;
-/// The range to restrict the responses to the requests on the testing of the network layer.
-/// This is used exclusively for rate limiting testing.
-const TEST_MAX_REQUEST_RESPONSE_STRESS_TEST_WINDOW: Duration = Duration::from_secs(100);
+/// The budget of `TestRequest4`, used by the reconnection test: two requests per burst.
+const RECONNECTION_TEST_BURST: u32 = 2;
+/// The refill window of `TestRequest4`, long enough that no request comes back during the
+/// reconnection test.
+const RECONNECTION_TEST_WINDOW: Duration = Duration::from_secs(100);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct TestRequest {
@@ -56,16 +56,40 @@ struct TestRequest4 {
 }
 impl RequestCommon for TestRequest4 {
     type Kind = RequestMarker;
-    const TYPE_ID: u16 = 42;
+    const TYPE_ID: u16 = 44;
     type Response = TestResponse4;
 
-    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_STRESS_TEST_REQUEST;
-    const TIME_WINDOW: Duration = TEST_MAX_REQUEST_RESPONSE_STRESS_TEST_WINDOW;
+    const MAX_REQUESTS: u32 = RECONNECTION_TEST_BURST;
+    const TIME_WINDOW: Duration = RECONNECTION_TEST_WINDOW;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct TestResponse4 {
     response: u32,
+}
+
+/// The budget of `TestRequest5`: two requests per burst, one back every `RATE_LIMIT_TEST_REFILL`.
+const RATE_LIMIT_TEST_BURST: u32 = 2;
+/// The time it takes to refill the whole budget of `TestRequest5`.
+const RATE_LIMIT_TEST_WINDOW: Duration = Duration::from_secs(6);
+/// How long one request takes to come back.
+const RATE_LIMIT_TEST_REFILL: Duration =
+    Duration::from_secs(RATE_LIMIT_TEST_WINDOW.as_secs() / RATE_LIMIT_TEST_BURST as u64);
+/// Margin added to every wait, so a slow test runner does not land on a refill boundary.
+const RATE_LIMIT_TEST_MARGIN: Duration = Duration::from_millis(500);
+
+/// Request type with a short rate limit window, used by the real-time rate limit tests.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+struct TestRequest5 {
+    request: u64,
+}
+impl RequestCommon for TestRequest5 {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 50;
+    type Response = TestResponse4;
+
+    const MAX_REQUESTS: u32 = RATE_LIMIT_TEST_BURST;
+    const TIME_WINDOW: Duration = RATE_LIMIT_TEST_WINDOW;
 }
 
 #[derive(Clone, Debug)]
@@ -500,129 +524,72 @@ async fn reconnect_successfully(net1: &Arc<Network>, addr1: Multiaddr, net2: &Ar
     helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
 }
 
-async fn send_n_request_to_succeed(net1: &Arc<Network>, net2: &Arc<Network>, n: u32) {
-    let test_request = TestRequest4 { request: 42 };
-    let test_response = TestResponse4 { response: 43 };
-    for i in 0..n {
-        assert!(net2.has_peer(net1.get_local_peer_id()));
-        assert!(net1.has_peer(net2.get_local_peer_id()));
-
-        log::info!(
-            "{:?} sends request {:?}",
-            net1.get_local_peer_id(),
-            test_request.clone(),
-        );
-
-        // Send the request and get future for the response.
-        let response = net2.request::<TestRequest4>(test_request.clone(), net1.get_local_peer_id());
-
-        log::info!("Succeed {:?}, {:?}", i, Instant::now());
-
-        // Check the received response.
-        let received_response = response.await;
-        log::info!(response = ?received_response, "Received response");
-
-        // Make sure that the request resolves as expected.
-        match received_response {
-            Ok(response) => {
-                assert_eq!(
-                    response, test_response,
-                    "First requests must return Ok Result"
-                );
+/// Answers every `R` request that `server` receives with `TestResponse4 { response: 43 }`.
+fn spawn_responder<R>(server: &Arc<Network>)
+where
+    R: Request<Response = TestResponse4>,
+{
+    let request_stream = server.receive_requests::<R>();
+    let server = Arc::clone(server);
+    spawn(
+        request_stream.for_each(move |(_request, request_id, _peer_id)| {
+            let server = Arc::clone(&server);
+            async move {
+                let _result = server
+                    .respond::<R>(request_id, TestResponse4 { response: 43 })
+                    .await;
             }
-            Err(e) => assert!(false, "Response received with error: {e:?}"),
-        };
+        }),
+    );
+}
+
+/// Sends `request` `n` times from `client` to `server` and expects every one to be answered.
+async fn send_n_request_to_succeed<R>(
+    server: &Arc<Network>,
+    client: &Arc<Network>,
+    request: R,
+    n: u32,
+) where
+    R: Request<Response = TestResponse4> + Clone,
+{
+    for i in 0..n {
+        assert!(client.has_peer(server.get_local_peer_id()));
+        assert!(server.has_peer(client.get_local_peer_id()));
+        log::info!(request = ?request, i, "Sending a request that must succeed");
+        let response = client
+            .request::<R>(request.clone(), server.get_local_peer_id())
+            .await;
+        log::info!(?response, "Received response");
+        assert_eq!(
+            response,
+            Ok(TestResponse4 { response: 43 }),
+            "request {i} must be answered",
+        );
     }
 }
 
-async fn send_n_request_to_fail(net1: &Arc<Network>, net2: &Arc<Network>, n: u32) {
+/// Sends `request` `n` times from `client` to `server` and expects every one to be refused
+/// because the client exceeded its rate limit.
+async fn send_n_request_to_fail<R>(server: &Arc<Network>, client: &Arc<Network>, request: R, n: u32)
+where
+    R: Request<Response = TestResponse4> + Clone,
+{
     for i in 0..n {
-        let test_request = TestRequest4 { request: 42 };
-        let net1 = Arc::clone(net1);
-        let net2 = Arc::clone(net2);
-        assert!(net2.has_peer(net1.get_local_peer_id()));
-        log::info!("Fail {:?}, {:?}", i, Instant::now());
-
-        log::debug!(
-            "{:?} sends request {:?}",
-            net1.get_local_peer_id(),
-            test_request.clone(),
-        );
-        let response = net2.request::<TestRequest4>(test_request.clone(), net1.get_local_peer_id());
-
-        // Check the received response.
-        let received_response = response.await;
-        log::info!(response = ?received_response, "Received response");
-
-        // Make sure the request timed out and did not return any other Error.
+        assert!(client.has_peer(server.get_local_peer_id()));
+        assert!(server.has_peer(client.get_local_peer_id()));
+        log::info!(request = ?request, i, "Sending a request that must be rate limited");
+        let response = client
+            .request::<R>(request.clone(), server.get_local_peer_id())
+            .await;
+        log::info!(?response, "Received response");
         assert_eq!(
-            received_response,
+            response,
             Err(RequestError::InboundRequest(
                 InboundRequestError::ExceedsRateLimit
             )),
-            "Subsequent requests must return Timeouts",
+            "request {i} must be rate limited",
         );
     }
-}
-
-#[test(tokio::test)]
-#[ignore]
-async fn it_can_limit_requests_rate() {
-    let (net1, net2) = TestNetwork::create_connected_networks().await;
-    let net1 = Arc::new(net1);
-    let net2 = Arc::new(net2);
-
-    let test_response = TestResponse4 { response: 43 };
-
-    // Subscribe for receiving requests.
-    let request_stream = net1.receive_requests::<TestRequest4>();
-    let network1 = Arc::clone(&net1);
-    let request_listener_future =
-        request_stream.for_each(move |(_request, request_id, _peer_id)| {
-            let test_response = test_response.clone();
-            let network1 = Arc::clone(&network1);
-            async move {
-                let _result = network1
-                    .respond::<TestRequest4>(request_id, test_response.clone())
-                    .await;
-            }
-        });
-
-    // Spawn the request listener future.
-    spawn(request_listener_future);
-
-    sleep(Duration::from_secs(1)).await;
-
-    tokio::time::pause();
-    log::error!("Clock stops at {:?}", Instant::now());
-
-    // The first head request is sent and this should be the only request that gets an Ok response.
-    // This sets the last reset of the rate limiting to block height 1 (current block height).
-    send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
-
-    tokio::time::advance(TestRequest4::TIME_WINDOW - Duration::from_secs(1)).await;
-    // Elapsed time 99 secs;
-
-    log::error!("Advanced time to {:?}", Instant::now());
-
-    // Rate limit was exceeded, and reset should only happen after 10 blocks from the first the first request sent.
-    send_n_request_to_fail(&net1, &net2, 5).await;
-
-    // Block height is is now 11, so a reset for the rate limiting should happen.
-    tokio::time::advance(Duration::from_secs(1)).await;
-    // Elapsed time 100 secs;
-
-    send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
-
-    // Rate limit was exceeded, from now on it should fail with a timeout.
-    send_n_request_to_fail(&net1, &net2, 5).await;
-
-    // Advance time to reset the counters once more.
-    tokio::time::advance(TestRequest4::TIME_WINDOW).await;
-    // Elapsed time 200 secs;
-
-    // Counters should be reset, new requests are allowed.
-    send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
 }
 
 #[test(tokio::test)]
@@ -655,14 +622,16 @@ async fn it_can_limit_requests_rate_after_reconnection() {
 
     sleep(Duration::from_secs(1)).await;
 
+    let request = TestRequest4 { request: 42 };
+
     // The first head requests are sent. These should be the only requests that get an Ok response.
-    send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
+    send_n_request_to_succeed(&net1, &net2, request.clone(), TestRequest4::MAX_REQUESTS).await;
 
     // Disconnects peer2.
     disconnect_successfully(&net1, &net2).await;
 
     // Make the first and second request from peer3.
-    send_n_request_to_succeed(&net1, &net3, TestRequest4::MAX_REQUESTS).await;
+    send_n_request_to_succeed(&net1, &net3, request.clone(), TestRequest4::MAX_REQUESTS).await;
 
     // Disconnects peer3.
     disconnect_successfully(&net1, &net3).await;
@@ -670,8 +639,8 @@ async fn it_can_limit_requests_rate_after_reconnection() {
     // Reconnect peer2.
     reconnect_successfully(&net1, addr1.clone(), &net2).await;
 
-    // Rate limit was exceeded for peer 2, from now on it should fail with a timeout.
-    send_n_request_to_fail(&net1, &net2, 1).await;
+    // Peer 2 spent its budget before leaving and nothing has refilled, so it is still rate limited.
+    send_n_request_to_fail(&net1, &net2, request.clone(), 1).await;
 
     // Disconnects peer2.
     disconnect_successfully(&net1, &net2).await;
@@ -679,76 +648,68 @@ async fn it_can_limit_requests_rate_after_reconnection() {
     // Reconnect peer3.
     reconnect_successfully(&net1, addr1, &net3).await;
 
-    // Rate limit was exceeded, from now on it should fail with a timeout.
-    send_n_request_to_fail(&net1, &net3, 1).await;
+    // Same for peer 3.
+    send_n_request_to_fail(&net1, &net3, request.clone(), 1).await;
 
     // Make the first and second request from peer4.
-    send_n_request_to_succeed(&net1, &net4, TestRequest4::MAX_REQUESTS).await;
+    send_n_request_to_succeed(&net1, &net4, request, TestRequest4::MAX_REQUESTS).await;
 }
 
+/// Requests beyond the burst are refused and come back one per refill interval.
 #[test(tokio::test)]
-#[ignore]
-async fn it_can_reset_requests_rate_with_reconnections() {
+async fn it_can_limit_requests_rate() {
+    let (net1, net2) = TestNetwork::create_connected_networks().await;
+    let net1 = Arc::new(net1);
+    let net2 = Arc::new(net2);
+    spawn_responder::<TestRequest5>(&net1);
+    sleep(Duration::from_secs(1)).await;
+
+    let request = TestRequest5 { request: 42 };
+
+    // The whole burst is served, the next requests find the bucket empty.
+    send_n_request_to_succeed(&net1, &net2, request.clone(), RATE_LIMIT_TEST_BURST).await;
+    send_n_request_to_fail(&net1, &net2, request.clone(), 2).await;
+
+    // One refill interval later exactly one request is served again.
+    sleep(RATE_LIMIT_TEST_REFILL + RATE_LIMIT_TEST_MARGIN).await;
+    send_n_request_to_succeed(&net1, &net2, request.clone(), 1).await;
+    send_n_request_to_fail(&net1, &net2, request.clone(), 1).await;
+
+    // A whole window later the bucket is full again.
+    sleep(RATE_LIMIT_TEST_WINDOW + RATE_LIMIT_TEST_MARGIN).await;
+    send_n_request_to_succeed(&net1, &net2, request.clone(), RATE_LIMIT_TEST_BURST).await;
+    send_n_request_to_fail(&net1, &net2, request, 1).await;
+}
+
+/// A peer's budget survives a reconnect and keeps refilling while the peer is away.
+#[test(tokio::test)]
+async fn it_keeps_refilling_while_a_peer_is_away() {
     let ((net1, addr1), (net2, _), (net3, _), _) = TestNetwork::create_4_connected_networks().await;
     let net1 = Arc::new(net1);
     let net2 = Arc::new(net2);
     let net3 = Arc::new(net3);
-
-    let test_response = TestResponse4 { response: 43 };
-
-    // Subscribe for receiving requests.
-    let request_stream = net1.receive_requests::<TestRequest4>();
-    let network1 = Arc::clone(&net1);
-    let request_listener_future =
-        request_stream.for_each(move |(_request, request_id, _peer_id)| {
-            let test_response = test_response.clone();
-            let network1 = Arc::clone(&network1);
-            async move {
-                let _result = network1
-                    .respond::<TestRequest4>(request_id, test_response.clone())
-                    .await;
-            }
-        });
-
-    // Spawn the request listener future.
-    spawn(request_listener_future);
-
+    spawn_responder::<TestRequest5>(&net1);
     sleep(Duration::from_secs(1)).await;
 
-    tokio::time::pause();
+    let request = TestRequest5 { request: 42 };
 
-    // The first head requests are sent. These should be the only requests that get an Ok response.
-    send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
-    // Disconnects peer 2.
+    // Peer 2 spends its whole budget and peer 3 half of it, then both leave.
+    send_n_request_to_succeed(&net1, &net2, request.clone(), RATE_LIMIT_TEST_BURST).await;
+    send_n_request_to_succeed(&net1, &net3, request.clone(), 1).await;
     disconnect_successfully(&net1, &net2).await;
-
-    tokio::time::advance(TestRequest4::TIME_WINDOW / 2).await;
-    // time passed 50 secs;
-
-    // Make the first and second request from peer 3.
-    // The expiration block of these rates should be the current time elapsed + time window (50+100=150 secs).
-    send_n_request_to_succeed(&net1, &net3, TestRequest4::MAX_REQUESTS).await;
-    // Disconnects peer 3.
     disconnect_successfully(&net1, &net3).await;
 
-    // Puts the total elapsed time to 149 secs, the counters for peer 2 are to be reset (expiration is 100).
-    tokio::time::advance(TestRequest4::TIME_WINDOW - Duration::from_secs(1)).await;
-    // time passed 149 secs;
-
-    // Reconnect peer 3 and ensure the requests fail, no reset should have happened yet.
+    // One refill interval later peer 2 has one request back and peer 3 is full again.
+    sleep(RATE_LIMIT_TEST_REFILL + RATE_LIMIT_TEST_MARGIN).await;
+    reconnect_successfully(&net1, addr1.clone(), &net2).await;
     reconnect_successfully(&net1, addr1.clone(), &net3).await;
-    send_n_request_to_fail(&net1, &net3, 1).await;
+    send_n_request_to_succeed(&net1, &net2, request.clone(), 1).await;
+    send_n_request_to_fail(&net1, &net2, request.clone(), 1).await;
+    send_n_request_to_succeed(&net1, &net3, request.clone(), RATE_LIMIT_TEST_BURST).await;
+    send_n_request_to_fail(&net1, &net3, request.clone(), 1).await;
 
-    // Reconnect peer 2 and ensure the requests succeed, the reset should happen.
-    reconnect_successfully(&net1, addr1, &net2).await;
-    send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
-
-    // Puts the total elapsed time to 150 secs, only resets counters for peer 3.
-    tokio::time::advance(Duration::from_secs(1)).await;
-    // time passed 150 secs;
-
-    send_n_request_to_succeed(&net1, &net3, TestRequest4::MAX_REQUESTS).await;
-
-    send_n_request_to_fail(&net1, &net3, 1).await;
-    send_n_request_to_fail(&net1, &net2, 1).await;
+    // Leaving and coming back right away does not reset anything.
+    disconnect_successfully(&net1, &net3).await;
+    reconnect_successfully(&net1, addr1, &net3).await;
+    send_n_request_to_fail(&net1, &net3, request, 1).await;
 }
