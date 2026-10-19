@@ -107,6 +107,9 @@ impl RequestCommon for SkipBlockUpdate {
     type Kind = MessageMarker;
     type Response = ();
     const TYPE_ID: u16 = 123;
+    /// A burst of 500 updates per peer, then one back every millisecond. Honest traffic is a few
+    /// updates per 500 ms per peer, so this is generous on purpose: the receiver drops updates
+    /// from peers that are not the validator they claim to be before doing any work on them.
     const MAX_REQUESTS: u32 = 500;
     const TIME_WINDOW: Duration = Duration::from_millis(500);
 }

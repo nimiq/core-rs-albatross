@@ -4,7 +4,8 @@ use futures::{stream::BoxStream, Future, StreamExt};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use thiserror::Error;
 
-/// The range to restrict the responses to the requests on the network layer.
+/// The default time it takes to refill the whole request budget of a peer, see
+/// [`RequestCommon::TIME_WINDOW`].
 pub const DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW: Duration = Duration::from_secs(10);
 
 use crate::network::Network;
@@ -134,7 +135,14 @@ pub trait RequestCommon:
     type Kind: RequestKind;
     const TYPE_ID: u16;
     type Response: Deserialize + Serialize + Send;
+    /// The maximum number of requests of this type a peer can send in a burst. Implementations
+    /// treat the budget as a token bucket that refills one request every
+    /// `TIME_WINDOW / MAX_REQUESTS`, so this is also the number of requests a peer can make per
+    /// [`TIME_WINDOW`](Self::TIME_WINDOW) on average. A request that finds the bucket empty is
+    /// answered with [`InboundRequestError::ExceedsRateLimit`]. Must be at least one.
     const MAX_REQUESTS: u32;
+    /// The time it takes to refill the whole budget of [`MAX_REQUESTS`](Self::MAX_REQUESTS).
+    /// Must be at least a nanosecond per request, so it cannot be zero.
     const TIME_WINDOW: Duration = DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW;
 
     /// Returns the type name of the given request type `T`.

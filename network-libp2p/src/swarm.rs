@@ -1,7 +1,6 @@
 use std::{collections::HashMap, num::NonZeroU8, sync::Arc, time::Duration};
 
 use futures::StreamExt;
-#[cfg(feature = "metrics")]
 use instant::Instant;
 #[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
 use libp2p::websocket_websys;
@@ -64,6 +63,8 @@ struct EventInfo<'a> {
     state: &'a mut TaskState,
     connected_peers: &'a RwLock<HashMap<PeerId, PeerInfo>>,
     rate_limiting: &'a mut RateLimits,
+    /// The time the event was taken off the swarm, read once per event.
+    now: Instant,
     #[cfg(feature = "kad")]
     dht_verifier: &'a dyn dht::Verifier,
     #[cfg(feature = "metrics")]
@@ -78,10 +79,7 @@ struct EventInfo<'a> {
 /// replication and caching pushes from a single peer stay well below it, while
 /// a malicious peer is capped to roughly one verification per second.
 #[cfg(feature = "kad")]
-const DHT_PUT_RATE_LIMIT: RateLimitConfig = RateLimitConfig {
-    max_requests: 64,
-    time_window: Duration::from_secs(60),
-};
+const DHT_PUT_RATE_LIMIT: RateLimitConfig = RateLimitConfig::new(64, Duration::from_secs(60));
 
 #[cfg(feature = "kad")]
 fn store_dht_record<K>(
@@ -199,6 +197,7 @@ pub(crate) async fn swarm_task(
                                 state: &mut task_state,
                                 connected_peers: &connected_peers,
                                 rate_limiting: &mut rate_limiting,
+                                now: Instant::now(),
                                 #[cfg(feature = "kad")]
                                 dht_verifier: &dht_verifier,
                                 #[cfg( feature = "metrics")] metrics: &metrics,
@@ -398,10 +397,11 @@ fn handle_event(event: SwarmEvent<behaviour::BehaviourEvent>, event_info: EventI
             if num_established == 0 {
                 event_info.connected_peers.write().remove(&peer_id);
                 event_info.swarm.behaviour_mut().remove_peer(peer_id);
-
-                // Removes or marks to remove the respective rate limits.
-                // Also cleans up the expired rate limits pending to delete.
-                event_info.rate_limiting.remove_rate_limits(peer_id);
+                // The peer's budget stays spent until it has refilled, whether it reconnects or
+                // not, see `TokenBuckets`. Only the buckets that are full again are dropped, for
+                // every rate limit, so the ones of peers that left do not wait for the next
+                // request of their kind.
+                event_info.rate_limiting.sweep(event_info.now);
 
                 let _ = event_info.events_tx.send(NetworkEvent::PeerLeft(peer_id));
             }
@@ -800,11 +800,12 @@ fn handle_dht_inbound_put(
         source,
         RateLimitId::DhtPutRecord,
         &DHT_PUT_RATE_LIMIT,
+        event_info.now,
     ) {
         debug!(
             %source,
-            max_requests = %DHT_PUT_RATE_LIMIT.max_requests,
-            time_window = ?DHT_PUT_RATE_LIMIT.time_window,
+            max_requests = %DHT_PUT_RATE_LIMIT.max_requests(),
+            time_window = ?DHT_PUT_RATE_LIMIT.time_window(),
             "Dropping DHT PutRecord - rate limit exceeded",
         );
         return;
@@ -896,12 +897,13 @@ fn handle_gossipsub_event(event: gossipsub::Event, event_info: EventInfo) {
                 propagation_source,
                 RateLimitId::Gossipsub(topic.clone()),
                 &topic_info.rate_limit_config,
+                event_info.now,
             ) {
                 debug!(
                     %topic,
                     peer_id = %propagation_source,
-                    max_requests = %topic_info.rate_limit_config.max_requests,
-                    time_window = ?topic_info.rate_limit_config.time_window,
+                    max_requests = %topic_info.rate_limit_config.max_requests(),
+                    time_window = ?topic_info.rate_limit_config.time_window(),
                     "Dropping gossipsub message - rate limit exceeded",
                 );
                 return;
@@ -1076,14 +1078,15 @@ fn handle_request_response_request(
             peer_id,
             RateLimitId::Request(type_id),
             rate_limit_config,
+            event_info.now,
         ) {
             debug!(
                 %type_id,
                 %request_id,
                 %peer_id,
                 %connection_id,
-                max_requests = %rate_limit_config.max_requests,
-                time_window = ?rate_limit_config.time_window,
+                max_requests = %rate_limit_config.max_requests(),
+                time_window = ?rate_limit_config.time_window(),
                 "Denied request - exceeded max requests rate",
             );
 
