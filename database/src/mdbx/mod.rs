@@ -45,6 +45,7 @@ mod tests {
     declare_table!(DupTestTable, "dup_test", String => dup(u32));
     declare_table!(U32DupTable, "u32_dup", u32 => dup(u32));
     declare_table!(U32Table, "u32_nodup", u32 => u32);
+    declare_table!(BytesDupTable, "bytes_dup", u32 => dup(Vec<u8>));
 
     #[test]
     fn it_can_save_basic_objects() {
@@ -323,5 +324,46 @@ mod tests {
             assert_eq!(cursor.next_no_duplicate(), Some((256, 2)));
         }
         tempdir.close().unwrap();
+    }
+
+    #[test]
+    fn max_dup_value_size_fits_on_4k_pages() {
+        let tempdir = tempdir().unwrap();
+        let path = tempdir.path().join("test");
+        std::fs::create_dir_all(&path).unwrap();
+
+        // The page size is fixed when the database is created, so create it with 4 KiB pages
+        // before opening it like any other database
+        {
+            let db = libmdbx::Database::<libmdbx::NoWriteMap>::open_with_options(
+                &path,
+                libmdbx::DatabaseOptions {
+                    page_size: Some(libmdbx::PageSize::Set(4096)),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(db.stat().unwrap().page_size(), 4096);
+        }
+
+        let db = MdbxDatabase::new(
+            &path,
+            DatabaseConfig {
+                max_tables: Some(1),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let table = BytesDupTable;
+        db.create_dup_table(&table);
+
+        let value = vec![0xab; MAX_DUP_VALUE_SIZE];
+        let mut txw = db.write_transaction();
+        txw.put(&table, &1, &value);
+        txw.commit();
+
+        let tx = db.read_transaction();
+        let mut cursor = tx.dup_cursor(&table);
+        assert_eq!(cursor.set_key(&1), Some(value));
     }
 }

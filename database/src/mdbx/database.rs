@@ -13,6 +13,15 @@ use crate::{
 const GIGABYTE: usize = 1024 * 1024 * 1024;
 const TERABYTE: usize = GIGABYTE * 1024;
 
+/// The largest value that can be stored in a dup table on every supported page size.
+///
+/// libmdbx stores the values of a dup table as keys of a nested tree, so their size is bounded by
+/// the maximum key size. That bound depends on the database page size, which defaults to the OS
+/// page size. This is the bound for 4 KiB pages, the smallest page size in use. Writing a larger
+/// value fails with `MDBX_BAD_VALSIZE`, which the cursor and transaction wrappers turn into a
+/// panic.
+pub const MAX_DUP_VALUE_SIZE: usize = 2022;
+
 /// Database config options.
 pub struct DatabaseConfig {
     /// The maximum number of tables that can be opened.

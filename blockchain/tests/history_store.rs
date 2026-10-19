@@ -3,28 +3,33 @@ use nimiq_block::{
 };
 use nimiq_blockchain::interface::HistoryInterface;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
-use nimiq_bls::AggregateSignature;
-use nimiq_database::traits::WriteTransaction;
+use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
+use nimiq_database::{mdbx::MAX_DUP_VALUE_SIZE, traits::WriteTransaction};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2sHash, HashOutput};
-use nimiq_keys::{KeyPair, PrivateKey};
+use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate, Signature};
 use nimiq_primitives::{
-    policy::Policy, TendermintIdentifier, TendermintProposal, TendermintStep, TendermintVote,
+    account::AccountType, coin::Coin, policy::Policy, TendermintIdentifier, TendermintProposal,
+    TendermintStep, TendermintVote,
 };
-use nimiq_serde::Deserialize;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     blockchain::{generate_transactions, produce_macro_blocks, validator_address},
     test_custom_block::{next_micro_block, BlockConfig},
+    test_rng,
 };
 use nimiq_transaction::{
+    account::staking_contract::IncomingStakingTransactionData,
     historic_transaction::{
         EquivocationEvent, HistoricTransaction, HistoricTransactionData, JailEvent, PenalizeEvent,
         RewardEvent,
     },
-    ExecutedTransaction, Transaction,
+    ExecutedTransaction, SignatureProof, Transaction,
 };
+use nimiq_transaction_builder::TransactionBuilder;
+use nimiq_utils::merkle::Blake2bMerklePath;
 
 fn key_pair_with_funds() -> KeyPair {
     let priv_key = PrivateKey::deserialize_from_vec(
@@ -436,4 +441,114 @@ fn it_pushes_macro_block_with_rewards() {
         );
         i += 1;
     }
+}
+
+/// Returns a merkle path of 31 nodes, the most a `SignatureProof` accepts. The node hashes are
+/// arbitrary, since the merkle path only determines the address that the proof signs for.
+fn max_size_merkle_path(seed: u8) -> Blake2bMerklePath {
+    let num_nodes: u8 = 31;
+    // Node count, the left/right bits as a vector of 4 bytes, then the vector of node hashes
+    let mut bytes = vec![num_nodes, 4, 0, 0, 0, 0, num_nodes];
+    for i in 0..num_nodes {
+        bytes.extend_from_slice(&[seed.wrapping_add(i); 32]);
+    }
+    let merkle_path = Blake2bMerklePath::deserialize_from_vec(&bytes).unwrap();
+    assert!(merkle_path.serialized_size() <= Policy::MAX_MERKLE_PATH_SIZE);
+    merkle_path
+}
+
+/// Creates a valid validator creation whose sender and validator address are both signed for
+/// through maximal merkle paths, which makes the transaction too large for a dup table value.
+/// Returns the transaction and its sender, which still needs to be funded.
+fn create_oversized_validator(validity_start_height: u32) -> (Transaction, Address) {
+    let mut rng = test_rng(true);
+    let sender_key_pair = KeyPair::generate(&mut rng);
+    let cold_key_pair = KeyPair::generate(&mut rng);
+    let signing_key_pair = KeyPair::generate(&mut rng);
+    let voting_key_pair = BlsKeyPair::generate(&mut rng);
+
+    let sender_merkle_path = max_size_merkle_path(0);
+    let sender = Address::from(sender_merkle_path.compute_root(&sender_key_pair.public));
+
+    let mut data = IncomingStakingTransactionData::CreateValidator {
+        signing_key: signing_key_pair.public,
+        voting_key: voting_key_pair.public_key.compress(),
+        reward_address: Address::from(&sender_key_pair),
+        signal_data: None,
+        proof_of_knowledge: voting_key_pair.sign(&voting_key_pair.public_key).compress(),
+        proof: SignatureProof::default(),
+    };
+    let mut tx = Transaction::new_extended(
+        sender.clone(),
+        AccountType::Basic,
+        vec![],
+        Policy::STAKING_CONTRACT_ADDRESS,
+        AccountType::Staking,
+        data.serialize_to_vec(),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+        Coin::from_u64_unchecked(100),
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    );
+
+    // The validator proof signs the transaction with an empty proof in the recipient data
+    data.set_signature(SignatureProof {
+        public_key: PublicKey::Ed25519(cold_key_pair.public),
+        merkle_path: max_size_merkle_path(100),
+        signature: Signature::Ed25519(cold_key_pair.sign(&tx.serialize_content())),
+        webauthn_fields: None,
+    });
+    tx.recipient_data = data.serialize_to_vec();
+
+    tx.proof = SignatureProof {
+        public_key: PublicKey::Ed25519(sender_key_pair.public),
+        merkle_path: sender_merkle_path,
+        signature: Signature::Ed25519(sender_key_pair.sign(&tx.serialize_content())),
+        webauthn_fields: None,
+    }
+    .serialize_to_vec();
+
+    tx.verify(NetworkId::UnitAlbatross, Policy::max_supported_version())
+        .expect("Transaction must be valid");
+    (tx, sender)
+}
+
+#[test]
+fn it_stores_and_reverts_oversized_transactions() {
+    let temp_producer1 = TemporaryBlockProducer::new();
+    let temp_producer2 = TemporaryBlockProducer::new();
+
+    let validity_start_height = temp_producer1.blockchain.read().block_number() + 1;
+    let (create_validator, sender) = create_oversized_validator(validity_start_height);
+    let funding = TransactionBuilder::new_basic(
+        &key_pair_with_funds(),
+        sender,
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 100),
+        Coin::from_u64_unchecked(100),
+        validity_start_height,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    let block = temp_producer1.next_block_with_txs(vec![], false, vec![funding]);
+    assert_eq!(temp_producer2.push(block), Ok(PushResult::Extended));
+    let hist_tx_pre = get_hist_tx(&temp_producer2);
+
+    // Both the block producer and a node following it store the oversized transaction
+    let block = temp_producer1.next_block_with_txs(vec![], false, vec![create_validator.clone()]);
+    assert_eq!(temp_producer2.push(block), Ok(PushResult::Extended));
+    for temp_producer in [&temp_producer1, &temp_producer2] {
+        let hist_tx = get_hist_tx(temp_producer)
+            .into_iter()
+            .find(|hist_tx| {
+                matches!(
+                    &hist_tx.data,
+                    HistoricTransactionData::Basic(tx) if tx.get_raw_transaction() == &create_validator
+                )
+            })
+            .expect("Oversized transaction must be in the history");
+        assert!(size_of::<u32>() + hist_tx.serialized_size() > MAX_DUP_VALUE_SIZE);
+    }
+
+    revert_block(&temp_producer2, &hist_tx_pre);
 }

@@ -72,8 +72,11 @@ impl HistoryStoreIndex {
 
         trace!("Check if history index needs to be rebuilt.");
         // Check if last transaction is part of index.
-        if let Some((_, hist_tx)) = hist_tx_cursor.last() {
-            let raw_tx_hash = hist_tx.value.tx_hash();
+        if let Some((epoch_number, hist_tx)) = hist_tx_cursor.last() {
+            let raw_tx_hash = self
+                .history_store
+                .load_historic_tx(&txn, epoch_number, hist_tx)
+                .tx_hash();
             if txn.get(&self.tx_hash_table, &raw_tx_hash).is_none() {
                 info!("History index out-of-date. Starting to rebuild index (this can take a long time).");
                 self.rebuild_index(&mut txn);
@@ -199,12 +202,16 @@ impl HistoryStoreIndex {
         let cursor = WriteTransaction::dup_cursor(txn, &self.history_store.hist_tx_table);
         debug!("Reading historic transactions.");
         for (epoch_number, hist_tx) in cursor.into_iter_start() {
+            let leaf_index = hist_tx.index;
+            let hist_tx = self
+                .history_store
+                .load_historic_tx(txn, epoch_number, hist_tx);
             self.put_historic_tx(
                 &mut hashes,
                 &mut addresses,
                 epoch_number,
-                hist_tx.index,
-                &hist_tx.value,
+                leaf_index,
+                &hist_tx,
             );
         }
 
@@ -685,6 +692,57 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn oversized_transactions_are_indexed() {
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let block_number = Policy::genesis_block_number() + 1;
+        let epoch_number = Policy::epoch_at(block_number);
+
+        // Exceeds the dup table limit for any page size
+        let mut oversized = create_transaction(block_number, 1);
+        if let HistoricTransactionData::Basic(ExecutedTransaction::Ok(tx)) = &mut oversized.data {
+            tx.proof = vec![0; 40_000];
+        }
+        let hist_txs = vec![create_transaction(block_number, 0), oversized.clone()];
+
+        // Store the transactions without an index, with the oversized one last
+        {
+            let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+            let mut txn = env.write_transaction();
+            history_store
+                .add_to_history(&mut txn, block_number, &hist_txs)
+                .unwrap();
+            txn.commit();
+        }
+
+        // Opening the index rebuilds it, which reads the oversized transaction
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+        let mut txn = env.write_transaction();
+        assert_eq!(
+            history_store.get_hist_tx_by_hash(&oversized.tx_hash(), Some(&txn)),
+            Some(oversized.clone())
+        );
+        let sender = &oversized.unwrap_basic().get_raw_transaction().sender;
+        assert_eq!(
+            history_store
+                .get_tx_hashes_by_address(sender, 10, None, Some(&txn))
+                .len(),
+            2
+        );
+
+        // Removing the history also removes the oversized transaction from the index
+        history_store
+            .remove_history(&mut txn, epoch_number)
+            .unwrap();
+        assert_eq!(
+            history_store.get_hist_tx_by_hash(&oversized.tx_hash(), Some(&txn)),
+            None
+        );
+        assert!(history_store
+            .get_tx_hashes_by_address(sender, 10, None, Some(&txn))
+            .is_empty());
+    }
 
     #[test]
     fn prove_num_leaves_works() {

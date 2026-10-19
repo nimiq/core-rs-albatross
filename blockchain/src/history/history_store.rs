@@ -3,7 +3,10 @@ use std::{cmp, ops::Range};
 use nimiq_block::MicroBlock;
 use nimiq_database::{
     declare_table,
-    mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction, OptionalTransaction},
+    mdbx::{
+        MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction, OptionalTransaction,
+        MAX_DUP_VALUE_SIZE,
+    },
     traits::{
         Database, DupReadCursor, DupWriteCursor, ReadCursor, ReadTransaction, WriteCursor,
         WriteTransaction,
@@ -28,14 +31,19 @@ use nimiq_transaction::{
 };
 
 use super::{
-    interface::HistoryInterface, utils::IndexedTransaction, validity_store::ValidityStore,
+    interface::HistoryInterface,
+    utils::{EpochBasedIndex, IndexedTransaction, StoredHistoricTransaction},
+    validity_store::ValidityStore,
 };
 use crate::history::{mmr_store::MMRStore, HistoryTreeChunk};
 
 // `u32` (epoch number) -> `IndexedHash` (`node_index || Blake2bHash`)
 declare_table!(HistoryTreeTable, "HistoryTrees", u32 => u32 => Blake2bHash);
-// `u32` (epoch number) -> `IndexedTransaction` (`leaf_index || HistoricTransaction`)
-declare_table!(HistoricTransactionTable, "HistoricTransactions", u32 => u32 => HistoricTransaction);
+// `u32` (epoch number) -> `IndexedTransaction` (`leaf_index || StoredHistoricTransaction`)
+declare_table!(HistoricTransactionTable, "HistoricTransactions", u32 => u32 => StoredHistoricTransaction);
+// `EpochBasedIndex` (`epoch number || leaf_index`) -> `HistoricTransaction`
+// Only holds the historic transactions that are too large for the `HistoricTransactions` dup table
+declare_table!(OversizedHistoricTransactionTable, "OversizedHistoricTransactions", EpochBasedIndex => HistoricTransaction);
 declare_table!(LastLeafTable, "LastLeafIndexesByBlock", u32 => u32);
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
@@ -51,6 +59,9 @@ pub struct HistoryStore {
     hist_tree_table: HistoryTreeTable,
     /// A database of all historic transactions indexed by their epoch number and leaf index.
     pub(super) hist_tx_table: HistoricTransactionTable,
+    /// A database of the historic transactions that are too large to be stored in
+    /// `hist_tx_table`, indexed by their epoch number and leaf index.
+    oversized_tx_table: OversizedHistoricTransactionTable,
     /// A database of the last leaf index for each block number.
     last_leaf_table: LastLeafTable,
 
@@ -71,6 +82,7 @@ impl HistoryStore {
             network_id,
             hist_tree_table: HistoryTreeTable,
             hist_tx_table: HistoricTransactionTable,
+            oversized_tx_table: OversizedHistoricTransactionTable,
             last_leaf_table: LastLeafTable,
         };
 
@@ -87,6 +99,7 @@ impl HistoryStore {
             network_id,
             hist_tree_table: HistoryTreeTable,
             hist_tx_table: HistoricTransactionTable,
+            oversized_tx_table: OversizedHistoricTransactionTable,
             last_leaf_table: LastLeafTable,
         };
 
@@ -99,7 +112,27 @@ impl HistoryStore {
     fn create_tables(&self) {
         self.db.create_dup_table(&self.hist_tree_table);
         self.db.create_dup_table(&self.hist_tx_table);
+        self.db.create_regular_table(&self.oversized_tx_table);
         self.db.create_regular_table(&self.last_leaf_table);
+    }
+
+    /// Returns the historic transaction for an entry of `hist_tx_table`, fetching it from the
+    /// oversized transactions table if the entry is only a marker.
+    pub(super) fn load_historic_tx<'db>(
+        &self,
+        txn: &impl ReadTransaction<'db>,
+        epoch_number: u32,
+        stored: IndexedTransaction,
+    ) -> HistoricTransaction {
+        match stored.value {
+            StoredHistoricTransaction::Inline(hist_tx) => hist_tx,
+            StoredHistoricTransaction::Oversized => txn
+                .get(
+                    &self.oversized_tx_table,
+                    &EpochBasedIndex::new(epoch_number, stored.index),
+                )
+                .expect("Oversized historic transaction not found"),
+        }
     }
 
     /// Gets an historic transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
@@ -114,7 +147,7 @@ impl HistoryStore {
 
         let mut cursor = txn.dup_cursor(&self.hist_tx_table);
         let value = cursor.set_subkey(&epoch_number, &leaf_index)?;
-        Some(value.value)
+        Some(self.load_historic_tx(&txn, epoch_number, value))
     }
 
     fn get_historic_txns(
@@ -143,7 +176,7 @@ impl HistoryStore {
 
             assert_eq!(epoch, epoch_number, "Epoch number mismatch");
             assert_eq!(hist_tx.index, leaf_index, "Index mismatch");
-            hist_txs.push(hist_tx.value);
+            hist_txs.push(self.load_historic_tx(&txn, epoch_number, hist_tx));
         }
 
         hist_txs
@@ -209,10 +242,17 @@ impl HistoryStore {
 
             let Some(hist_tx) = tx_opt else { continue };
             assert_eq!(hist_tx.index, leaf_index, "Invalid leaf index");
-            let hist_tx = hist_tx.value;
+            let is_oversized = matches!(hist_tx.value, StoredHistoricTransaction::Oversized);
+            let hist_tx = self.load_historic_tx(txn, epoch_number, hist_tx);
 
             // Remove it from the historic transaction database.
             cursor.remove();
+            if is_oversized {
+                txn.remove(
+                    &self.oversized_tx_table,
+                    &EpochBasedIndex::new(epoch_number, leaf_index),
+                );
+            }
 
             txns_size += hist_tx.serialized_size() as u64;
 
@@ -239,6 +279,19 @@ impl HistoryStore {
     ) {
         // Fast removal of all transactions.
         txn.remove(&self.hist_tx_table, &epoch_number);
+
+        // Remove the oversized transactions of this epoch, which are stored separately
+        {
+            let mut cursor = WriteTransaction::cursor(txn, &self.oversized_tx_table);
+            let mut entry = cursor.set_lowerbound_key(&EpochBasedIndex::new(epoch_number, 0));
+            while let Some((index, _)) = entry {
+                if index.epoch_number != epoch_number {
+                    break;
+                }
+                cursor.remove();
+                entry = cursor.next();
+            }
+        }
 
         let mut cursor = WriteTransaction::cursor(txn, &self.last_leaf_table);
 
@@ -398,9 +451,22 @@ impl HistoryStore {
                 return None;
             }
 
+            // A transaction that does not fit into a dup table value is stored separately, with
+            // a marker in its place
+            let hist_tx_size = hist_tx.serialized_size();
+            let stored = if size_of::<u32>() + hist_tx_size > MAX_DUP_VALUE_SIZE {
+                txn.put(
+                    &self.oversized_tx_table,
+                    &EpochBasedIndex::new(epoch_number, leaf_index),
+                    hist_tx,
+                );
+                StoredHistoricTransaction::Oversized
+            } else {
+                StoredHistoricTransaction::Inline(hist_tx.clone())
+            };
             let value = IndexedTransaction {
                 index: leaf_index,
-                value: hist_tx.clone(),
+                value: stored,
             };
             cursor.append_dup(&epoch_number, &value);
 
@@ -410,7 +476,7 @@ impl HistoryStore {
 
             txn.put(&self.last_leaf_table, &hist_tx.block_number, &leaf_index);
 
-            txns_size += hist_tx.serialized_size() as u64;
+            txns_size += hist_tx_size as u64;
         }
 
         if let Some(ref validity_store) = self.validity_store {
@@ -426,6 +492,7 @@ impl HistoryInterface for HistoryStore {
     fn clear(&self, txn: &mut MdbxWriteTransaction) {
         txn.clear_table(&self.hist_tree_table);
         txn.clear_table(&self.hist_tx_table);
+        txn.clear_table(&self.oversized_tx_table);
         txn.clear_table(&self.last_leaf_table);
     }
 
@@ -883,6 +950,114 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn oversized_transactions_are_stored_separately() {
+        // Initialize History Store.
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+        let block_number_1 = Policy::genesis_block_number() + 1;
+        let block_number_2 = block_number_1 + 1;
+        let epoch_number = Policy::epoch_at(block_number_1);
+
+        // The largest entry that still fits into the dup table, the smallest one that doesn't,
+        // and one that exceeds the dup table limit for any page size
+        let block_1 = vec![
+            create_transaction(block_number_1, 0),
+            create_transaction_with_entry_size(block_number_1, 1, MAX_DUP_VALUE_SIZE),
+            create_transaction_with_entry_size(block_number_1, 2, MAX_DUP_VALUE_SIZE + 1),
+        ];
+        let block_2 = vec![
+            create_transaction_with_entry_size(block_number_2, 3, 40_000),
+            create_transaction(block_number_2, 4),
+        ];
+        let all_txs = [block_1.clone(), block_2.clone()].concat();
+
+        let mut txn = env.write_transaction();
+        history_store
+            .add_to_history(&mut txn, block_number_1, &block_1)
+            .unwrap();
+        let (root, _) = history_store
+            .add_to_history(&mut txn, block_number_2, &block_2)
+            .unwrap();
+
+        // The history tree commits to the full transactions
+        assert_eq!(Some(root), HistoryStore::_root_from_hist_txs(&all_txs));
+
+        // Only the oversized transactions are replaced by a marker
+        let stored: Vec<_> = ReadTransaction::dup_cursor(&txn, &history_store.hist_tx_table)
+            .into_iter_dup_of(&epoch_number)
+            .map(|(_, stored)| stored.value)
+            .collect();
+        assert_eq!(
+            stored,
+            vec![
+                StoredHistoricTransaction::Inline(all_txs[0].clone()),
+                StoredHistoricTransaction::Inline(all_txs[1].clone()),
+                StoredHistoricTransaction::Oversized,
+                StoredHistoricTransaction::Oversized,
+                StoredHistoricTransaction::Inline(all_txs[4].clone()),
+            ]
+        );
+        let num_oversized = |txn: &MdbxWriteTransaction| {
+            ReadTransaction::cursor(txn, &history_store.oversized_tx_table)
+                .into_iter_start()
+                .count()
+        };
+        assert_eq!(num_oversized(&txn), 2);
+
+        // All read paths return the full transactions
+        assert_eq!(
+            history_store.get_block_transactions(block_number_1, Some(&txn)),
+            block_1
+        );
+        assert_eq!(
+            history_store.get_block_transactions(block_number_2, Some(&txn)),
+            block_2
+        );
+        assert_eq!(
+            history_store.get_epoch_transactions(epoch_number, Some(&txn)),
+            all_txs
+        );
+        assert_eq!(
+            history_store.get_epoch_transactions_after(block_number_1, Some(&txn)),
+            block_2
+        );
+        assert_eq!(
+            history_store.get_historic_tx(epoch_number, 3, Some(&txn)),
+            Some(all_txs[3].clone())
+        );
+        let chunk = history_store
+            .prove_chunk(epoch_number, block_number_2, 10, 0, Some(&txn))
+            .unwrap();
+        assert_eq!(chunk.history, all_txs);
+
+        // Reverting the last block removes its oversized transaction
+        let (_, removed_size) = history_store
+            .remove_partial_history(&mut txn, epoch_number, block_2.len())
+            .unwrap();
+        assert_eq!(
+            removed_size,
+            block_2
+                .iter()
+                .map(|hist_tx| hist_tx.serialized_size() as u64)
+                .sum::<u64>()
+        );
+        assert_eq!(num_oversized(&txn), 1);
+        assert_eq!(
+            history_store.get_epoch_transactions(epoch_number, Some(&txn)),
+            block_1
+        );
+
+        // Removing the epoch removes the remaining one
+        history_store
+            .remove_history(&mut txn, epoch_number)
+            .unwrap();
+        assert_eq!(num_oversized(&txn), 0);
+        assert!(history_store
+            .get_epoch_transactions(epoch_number, Some(&txn))
+            .is_empty());
+    }
 
     #[test]
     fn prove_num_leaves_works() {
@@ -1568,6 +1743,34 @@ mod tests {
                 ),
             )),
         }
+    }
+
+    /// Creates a basic historic transaction whose entry in the historic transactions table (leaf
+    /// index and transaction) takes exactly `entry_size` bytes, by padding its proof.
+    fn create_transaction_with_entry_size(
+        block: u32,
+        value: u64,
+        entry_size: usize,
+    ) -> HistoricTransaction {
+        let entry_size_of =
+            |hist_tx: &HistoricTransaction| size_of::<u32>() + hist_tx.serialized_size();
+        let unpadded_size = entry_size_of(&create_transaction(block, value));
+
+        // The length prefix of the proof grows with it, so the padding can be a bit smaller than
+        // the missing size
+        (0..=entry_size - unpadded_size)
+            .rev()
+            .map(|proof_len| {
+                let mut hist_tx = create_transaction(block, value);
+                if let HistoricTransactionData::Basic(ExecutedTransaction::Ok(tx)) =
+                    &mut hist_tx.data
+                {
+                    tx.proof = vec![0; proof_len];
+                }
+                hist_tx
+            })
+            .find(|hist_tx| entry_size_of(hist_tx) == entry_size)
+            .expect("Entry size not reachable")
     }
 
     fn gen_hist_txs() -> Vec<HistoricTransaction> {
