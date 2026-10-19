@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, error::Error, fmt::Debug, future, sync::Arc};
+use std::{collections::BTreeMap, error::Error, fmt::Debug, future, sync::Arc, time::Duration};
 
 use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt, TryFutureExt};
 use log::warn;
@@ -313,6 +313,7 @@ impl<M: RequestCommon> RequestCommon for ValidatorMessage<M> {
     // Use distinct type IDs for the validator network.
     const TYPE_ID: u16 = 10_000 + M::TYPE_ID;
     const MAX_REQUESTS: u32 = M::MAX_REQUESTS;
+    const TIME_WINDOW: Duration = M::TIME_WINDOW;
 }
 
 // Proposal - gossip
@@ -542,5 +543,38 @@ where
     fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId> {
         self.get_validator_cache(validator_id)
             .potentially_outdated_peer_id()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use nimiq_network_interface::request::{
+        RequestCommon, RequestMarker, DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW,
+    };
+    use nimiq_serde::{Deserialize, Serialize};
+
+    use super::ValidatorMessage;
+
+    #[derive(Debug, Deserialize, Serialize)]
+    struct Inner;
+
+    impl RequestCommon for Inner {
+        type Kind = RequestMarker;
+        const TYPE_ID: u16 = 7;
+        type Response = ();
+        const MAX_REQUESTS: u32 = 12;
+        const TIME_WINDOW: Duration = Duration::from_millis(345);
+    }
+
+    /// The rate limit of a validator message is the one its inner message declares.
+    #[test]
+    fn validator_messages_forward_the_rate_limit_of_the_inner_message() {
+        type Outer = ValidatorMessage<Inner>;
+        assert_eq!(Outer::TYPE_ID, 10_000 + Inner::TYPE_ID);
+        assert_eq!(Outer::MAX_REQUESTS, Inner::MAX_REQUESTS);
+        assert_eq!(Outer::TIME_WINDOW, Inner::TIME_WINDOW);
+        assert_ne!(Outer::TIME_WINDOW, DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW);
     }
 }
