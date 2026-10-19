@@ -122,7 +122,7 @@ impl Blockchain {
         if let Some(transactions) = block.transactions() {
             for transaction in transactions {
                 let transaction = transaction.get_raw_transaction();
-                if !self.tx_verification_cache.is_known(&transaction.hash()) {
+                if !self.tx_verification_cache.is_verified(transaction, version) {
                     transaction.verify(self.network_id, version)?;
                 }
             }

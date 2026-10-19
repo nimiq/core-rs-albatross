@@ -12,6 +12,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
     coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators, trie::TrieItem,
 };
+use nimiq_transaction::Transaction;
 use nimiq_utils::time::OffsetTime;
 use tokio::sync::broadcast;
 
@@ -431,16 +432,17 @@ impl Blockchain {
 }
 
 pub trait TransactionVerificationCache: Send + Sync {
-    // Implementations are keyed by transaction hash only. This is sound only while transaction
-    // verification remains protocol-version invariant, otherwise the cache key must include the
-    // protocol version (or equivalent upgrade boundary).
-    fn is_known(&self, tx_hash: &Blake2bHash) -> bool;
+    /// Returns whether this exact transaction, proof included, has already been verified under
+    /// `protocol_version`. The transaction hash excludes the proof, so a hash match alone must
+    /// not count as verified: the same hash can carry a different, invalid proof. The version is
+    /// part of the key because verification rules can change across a protocol upgrade.
+    fn is_verified(&self, transaction: &Transaction, protocol_version: u16) -> bool;
 }
 
 struct DefaultTransactionVerificationCache {}
 
 impl TransactionVerificationCache for DefaultTransactionVerificationCache {
-    fn is_known(&self, _: &Blake2bHash) -> bool {
+    fn is_verified(&self, _: &Transaction, _: u16) -> bool {
         false
     }
 }

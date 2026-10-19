@@ -29,6 +29,10 @@ pub(crate) struct MempoolState {
     // Maximum number of transactions stored per sender.
     pub(crate) tx_per_sender_limit: usize,
 
+    // The protocol version under which all stored transactions have been verified. The
+    // verification cache only vouches for a block transaction whose version matches this.
+    pub(crate) verified_version: u16,
+
     #[cfg(feature = "metrics")]
     pub(crate) metrics: Arc<MempoolMetrics>,
 }
@@ -38,12 +42,14 @@ impl MempoolState {
         regular_txns_limit: usize,
         control_txns_limit: usize,
         tx_per_sender_limit: usize,
+        verified_version: u16,
     ) -> Self {
         MempoolState {
             regular_transactions: MempoolTransactions::new(regular_txns_limit),
             control_transactions: MempoolTransactions::new(control_txns_limit),
             state_by_sender: HashMap::new(),
             tx_per_sender_limit,
+            verified_version,
             #[cfg(feature = "metrics")]
             metrics: Default::default(),
         }

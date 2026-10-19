@@ -76,6 +76,7 @@ impl Mempool {
             config.size_limit,
             config.control_size_limit,
             config.tx_per_sender_limit,
+            protocol_version,
         )));
 
         Self {
@@ -440,6 +441,10 @@ impl Mempool {
         for hash in invalid {
             state.remove(&blockchain, &hash, EvictionReason::Invalid);
         }
+
+        // Every surviving transaction has now been verified under this version, so the cache may
+        // vouch for transactions carrying this version again.
+        state.verified_version = protocol_version;
     }
 
     /// Get the mempool into a consistent and up-to-date state.
@@ -809,12 +814,18 @@ impl Mempool {
 }
 
 impl TransactionVerificationCache for Mempool {
-    fn is_known(&self, tx_hash: &Blake2bHash) -> bool {
-        if let Some(state) = self.state.try_read() {
-            state.contains(tx_hash)
-        } else {
-            false
-        }
+    fn is_verified(&self, transaction: &Transaction, protocol_version: u16) -> bool {
+        let Some(state) = self.state.try_read() else {
+            return false;
+        };
+        // Only vouch for a transaction we actually verified under this protocol version. All
+        // entries are verified under `verified_version` (set at construction and after each
+        // revalidation), and the hash binds every field except the proof, so an equal hash plus
+        // an equal proof means the block's transaction is byte-identical to the verified one.
+        state.verified_version == protocol_version
+            && state
+                .get(&transaction.hash())
+                .is_some_and(|known| known.proof == transaction.proof)
     }
 }
 
