@@ -118,17 +118,20 @@ impl<K: Clone + Eq + Hash, V> Drop for Interned<K, V> {
                 return;
             }
 
-            // If the interner doesn't have the key anymore, we might be in a
-            // recursive drop call since we also drop an interned value in this
-            // function.
+            // Only remove the cache entry if it is our own. In the recursive
+            // drop call below (we also drop an interned value in this
+            // function), our entry is already gone and another thread might
+            // have interned the same key again in the meantime.
             //
             // Do nothing in this case.
-            let Some(entry) = inner.cache.take(self.key()) else {
+            if !inner
+                .cache
+                .get(self.key())
+                .is_some_and(|entry| Arc::ptr_eq(&self.0, &entry.0))
+            {
                 return;
-            };
-
-            // This should point to the same thing as we do.
-            assert!(Arc::ptr_eq(&self.0, &entry.0));
+            }
+            let entry = inner.cache.take(self.key()).unwrap();
 
             // We need to drop the lock first because dropping `entry` is going
             // to cause a recursive call.
@@ -140,6 +143,12 @@ impl<K: Clone + Eq + Hash, V> Drop for Interned<K, V> {
 
 #[cfg(test)]
 mod test {
+    use std::{
+        sync::{mpsc, Arc},
+        thread,
+        time::Duration,
+    };
+
     use super::{Interned, Interner};
 
     #[test]
@@ -161,5 +170,35 @@ mod test {
         drop(interner);
         assert_eq!(Interned::strong_count(&interned), 1);
         drop(interned);
+    }
+
+    #[test]
+    fn interner_concurrent_intern_and_drop() {
+        // Dropping the last reference to a key races with other threads interning the same key
+        // again. A deadlock leaves the workers stuck, so wait for them with a timeout.
+        let interner = Arc::new(Interner::default());
+        let (done_tx, done_rx) = mpsc::channel();
+        let workers: Vec<_> = (0..8)
+            .map(|_| {
+                let interner = Arc::clone(&interner);
+                let done_tx = done_tx.clone();
+                thread::spawn(move || {
+                    for _ in 0..100_000 {
+                        drop(interner.intern(&(), ()));
+                    }
+                    done_tx.send(()).unwrap();
+                })
+            })
+            .collect();
+        drop(done_tx);
+
+        for _ in 0..workers.len() {
+            done_rx
+                .recv_timeout(Duration::from_secs(60))
+                .expect("a worker panicked or deadlocked");
+        }
+        for worker in workers {
+            worker.join().unwrap();
+        }
     }
 }
