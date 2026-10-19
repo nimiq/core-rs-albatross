@@ -748,3 +748,123 @@ async fn test_gossipsub_drops_oversized_messages() {
         .unwrap();
     assert_eq!(received_message, small);
 }
+
+/// The budget of `RateLimitedTopic`: two messages per burst, one back every
+/// `GOSSIP_RATE_LIMIT_REFILL`.
+const GOSSIP_RATE_LIMIT_BURST: u32 = 2;
+/// The time it takes to refill the whole budget of `RateLimitedTopic`.
+const GOSSIP_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(6);
+/// The time it takes to get one message back.
+const GOSSIP_RATE_LIMIT_REFILL: Duration =
+    Duration::from_secs(GOSSIP_RATE_LIMIT_WINDOW.as_secs() / GOSSIP_RATE_LIMIT_BURST as u64);
+/// Added to every wait for a refill, so that a slow runner does not publish too early.
+const GOSSIP_RATE_LIMIT_MARGIN: Duration = Duration::from_millis(500);
+/// Long enough for a message to arrive, or for a subscription to propagate.
+const ARRIVES: Duration = Duration::from_secs(10);
+/// Long enough to be sure that a message is not coming.
+const DOES_NOT_ARRIVE: Duration = Duration::from_secs(2);
+
+/// A topic with a budget small enough to exhaust in a test. Messages are accepted on arrival, the
+/// test does not validate them.
+pub struct RateLimitedTopic;
+
+impl Topic for RateLimitedTopic {
+    type Item = TestRecord;
+
+    const BUFFER_SIZE: usize = 8;
+    const NAME: &'static str = "test-libp2p-rate-limited";
+    const VALIDATE: bool = false;
+    const MAX_MESSAGES: u32 = GOSSIP_RATE_LIMIT_BURST;
+    const TIME_WINDOW: Duration = GOSSIP_RATE_LIMIT_WINDOW;
+}
+
+/// Publishes `message` on `RateLimitedTopic`, waiting for the subscription of the other node to
+/// reach `net` first.
+async fn publish_once_subscribed(net: &Network, message: TestRecord) {
+    let publish = async {
+        loop {
+            match net.publish::<RateLimitedTopic>(message.clone()).await {
+                Err(NetworkError::GossipsubPublish(
+                    gossipsub::PublishError::NoPeersSubscribedToTopic,
+                )) => sleep(Duration::from_millis(100)).await,
+                result => return result,
+            }
+        }
+    };
+    timeout(ARRIVES, publish)
+        .await
+        .expect("the subscription must propagate")
+        .expect("publishing must succeed");
+}
+
+/// The next message on `messages`, or `None` if nothing arrives within `wait`.
+async fn next_message<I>(
+    messages: &mut (impl Stream<Item = (TestRecord, I)> + Unpin),
+    wait: Duration,
+) -> Option<TestRecord> {
+    timeout(wait, messages.next())
+        .await
+        .ok()
+        .flatten()
+        .map(|(message, _)| message)
+}
+
+/// Messages beyond the burst are dropped and come back one per refill interval.
+#[test(tokio::test)]
+async fn it_can_limit_gossip_rate() {
+    let mut net = TestNetwork::new();
+    let net1 = net.spawn().await;
+    let net2 = net.spawn().await;
+
+    let mut messages = net1.subscribe::<RateLimitedTopic>().await.unwrap();
+    consume_stream(net2.subscribe::<RateLimitedTopic>().await.unwrap());
+
+    // The whole burst arrives.
+    publish_once_subscribed(&net2, TestRecord { x: 1 }).await;
+    assert_eq!(
+        next_message(&mut messages, ARRIVES).await,
+        Some(TestRecord { x: 1 }),
+        "the first message of the burst must arrive"
+    );
+    net2.publish::<RateLimitedTopic>(TestRecord { x: 2 })
+        .await
+        .unwrap();
+    assert_eq!(
+        next_message(&mut messages, ARRIVES).await,
+        Some(TestRecord { x: 2 }),
+        "the second message of the burst must arrive"
+    );
+
+    // The next message finds the bucket empty and is dropped. Making sure it does not arrive
+    // doubles as the wait for the refill.
+    net2.publish::<RateLimitedTopic>(TestRecord { x: 3 })
+        .await
+        .unwrap();
+    assert_eq!(
+        next_message(
+            &mut messages,
+            GOSSIP_RATE_LIMIT_REFILL + GOSSIP_RATE_LIMIT_MARGIN
+        )
+        .await,
+        None,
+        "a message beyond the burst must not arrive"
+    );
+
+    // One refill interval later exactly one message gets through again.
+    net2.publish::<RateLimitedTopic>(TestRecord { x: 4 })
+        .await
+        .unwrap();
+    assert_eq!(
+        next_message(&mut messages, ARRIVES).await,
+        Some(TestRecord { x: 4 }),
+        "one message must arrive once a refill interval has passed"
+    );
+    net2.publish::<RateLimitedTopic>(TestRecord { x: 5 })
+        .await
+        .unwrap();
+    assert_eq!(
+        next_message(&mut messages, DOES_NOT_ARRIVE).await,
+        None,
+        "only one message comes back per refill interval"
+    );
+}
