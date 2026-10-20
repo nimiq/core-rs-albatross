@@ -656,8 +656,10 @@ impl BlockchainInterface for BlockchainDispatcher {
             let data_store = blockchain.state.accounts.data_store(&bridge_address);
             let db_txn = blockchain.read_transaction();
 
-            // Query the nonce using the bridge contract's get_nonce method
-            let nonce = bridge_contract.get_nonce(&data_store.read(&db_txn), &address);
+            // The nonce store may not be synced yet, if the node is still syncing its accounts tree.
+            let nonce = bridge_contract
+                .get_nonce(&data_store.read(&db_txn), &address)
+                .map_err(|_| Error::NoConsensus)?;
 
             Ok(RPCData::with_blockchain(nonce, &blockchain_proxy))
         } else {

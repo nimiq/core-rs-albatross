@@ -7,19 +7,13 @@
 use std::sync::Arc;
 
 use nimiq_block::Block;
-use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
-use nimiq_database::traits::WriteTransaction;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool, verify::VerifyErr};
 use nimiq_primitives::{
-    account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::upgrades,
-    transaction::TransactionError,
+    account::AccountError, coin::Coin, key_nibbles::KeyNibbles, transaction::TransactionError,
 };
 use nimiq_test_log::test;
-use nimiq_test_utils::{
-    block_production::TemporaryBlockProducer,
-    bridge::{blake2b, key, record_leaf, BridgeChain, TARGET_KEY},
-};
+use nimiq_test_utils::bridge::{blake2b, key, record_leaf, BridgeChain, TARGET_KEY};
 use nimiq_transaction::Transaction;
 
 const AMOUNT: u64 = 500;
@@ -160,60 +154,6 @@ fn chain_with_bridge_before_oracle() -> BridgeChain {
         .expect("some oracle size puts the bridge first")
 }
 
-/// A node that follows `chain` from genesis by block diffs, as live sync does after a reset, and has
-/// received one chunk of the accounts tree, which ends at a key `is_end` accepts.
-fn syncing_node(
-    chain: &BridgeChain,
-    is_end: impl Fn(&KeyNibbles) -> bool,
-) -> TemporaryBlockProducer {
-    let node =
-        TemporaryBlockProducer::new_with_protocol_version(upgrades::v3::BRIDGE_ORACLE_CONTRACTS);
-    {
-        let blockchain = node.blockchain.read();
-        let mut txn = blockchain.write_transaction();
-        blockchain
-            .state
-            .accounts
-            .reinitialize_as_incomplete(&mut (&mut txn).into());
-        txn.commit();
-    }
-
-    let mut chunk = (1..=1_000)
-        .map(|limit| chain.node.get_chunk(KeyNibbles::ROOT, limit))
-        .find(|chunk| chunk.chunk.end_key.as_ref().is_some_and(&is_end));
-    assert!(chunk.is_some(), "no chunk ends at an accepted key");
-
-    let start = node.blockchain.read().block_number() + 1;
-    let head = chain.node.blockchain.read().block_number();
-    for number in start..=head {
-        let (block, diff) = {
-            let leader = chain.node.blockchain.read();
-            let block = leader.chain_store.get_block_at(number, true, None).unwrap();
-            let diff = leader
-                .chain_store
-                .get_accounts_diff(&block.hash(), None)
-                .unwrap();
-            (block, diff)
-        };
-        let chunks = if number == head {
-            vec![chunk.take().unwrap()]
-        } else {
-            vec![]
-        };
-        let (pushed, chunks_pushed) = node.push_with_chunks(block, diff, chunks).unwrap();
-        assert_eq!(pushed, PushResult::Extended);
-        chunks_pushed.unwrap();
-    }
-
-    assert!(!node.blockchain.read().state.accounts.is_complete(None));
-    assert!(node
-        .blockchain
-        .read()
-        .get_account_if_complete(&chain.bridge)
-        .is_some());
-    node
-}
-
 /// A release of a burn nobody made, signed by `signer` for its own address. The record names the
 /// bridge, so the release gets as far as reading the nonce store and the oracle.
 fn forged_release(chain: &BridgeChain, signer: &KeyPair, nonce: u64) -> Transaction {
@@ -237,9 +177,8 @@ fn a_syncing_node_refuses_a_release_whose_oracle_it_has_not_synced() {
 
     let bridge = KeyNibbles::from(&chain.bridge);
     let oracle = KeyNibbles::from(&chain.oracle);
-    let node = syncing_node(&chain, |end| {
-        bridge < *end && !bridge.is_prefix_of(end) && *end <= oracle
-    });
+    let node =
+        chain.syncing_node(|end| bridge < *end && !bridge.is_prefix_of(end) && *end <= oracle);
     assert!(node
         .blockchain
         .read()
@@ -265,7 +204,7 @@ fn a_syncing_node_refuses_a_release_whose_nonce_it_has_not_synced() {
     // The target's nonce is the only entry in the bridge's store, so a chunk ending inside the store
     // ends at it.
     let bridge = KeyNibbles::from(&chain.bridge);
-    let node = syncing_node(&chain, |end| bridge < *end && bridge.is_prefix_of(end));
+    let node = chain.syncing_node(|end| bridge < *end && bridge.is_prefix_of(end));
 
     let mempool = Mempool::new(Arc::clone(&node.blockchain), MempoolConfig::default());
     assert_eq!(

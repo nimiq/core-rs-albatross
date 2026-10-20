@@ -4,7 +4,6 @@ use nimiq_serde::{Deserialize, Serialize};
 
 #[cfg(feature = "interaction-traits")]
 use crate::data_store::DataStoreWrite;
-use crate::data_store_ops::DataStoreReadOps;
 
 /// Represents a nonce entry for an address in the bridge contract
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -31,24 +30,6 @@ impl BridgeContractStore {
     }
 }
 
-pub trait BridgeContractStoreReadOps {
-    fn get_nonce(&self, address: &Address) -> Option<BridgeNonce>;
-}
-
-pub(crate) struct BridgeContractStoreRead<'read, T: DataStoreReadOps>(&'read T);
-
-impl<'read, T: DataStoreReadOps> BridgeContractStoreRead<'read, T> {
-    pub fn new(data_store: &'read T) -> Self {
-        BridgeContractStoreRead(data_store)
-    }
-}
-
-impl<T: DataStoreReadOps> BridgeContractStoreReadOps for BridgeContractStoreRead<'_, T> {
-    fn get_nonce(&self, address: &Address) -> Option<BridgeNonce> {
-        self.0.get(&BridgeContractStore::nonce_key(address))
-    }
-}
-
 #[cfg(feature = "interaction-traits")]
 pub struct BridgeContractStoreWrite<'write, 'store, 'tree, 'txn, 'txni, 'env>(
     &'write mut DataStoreWrite<'store, 'tree, 'txn, 'txni, 'env>,
@@ -68,12 +49,5 @@ impl<'write, 'store, 'tree, 'txn, 'txni, 'env>
 
     pub fn remove_nonce(&mut self, address: &Address) {
         self.0.remove(&BridgeContractStore::nonce_key(address))
-    }
-}
-
-#[cfg(feature = "interaction-traits")]
-impl BridgeContractStoreReadOps for BridgeContractStoreWrite<'_, '_, '_, '_, '_, '_> {
-    fn get_nonce(&self, address: &Address) -> Option<BridgeNonce> {
-        self.0.get(&BridgeContractStore::nonce_key(address))
     }
 }
