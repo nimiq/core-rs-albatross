@@ -265,3 +265,24 @@ pub async fn run_tendermint(
         }
     }
 }
+
+/// Polls `tm` until it yields a decision, ignoring other stream items. Panics if none arrives
+/// within `duration`.
+pub async fn expect_decision_within<TProtocol: Protocol>(
+    tm: &mut Tendermint<TProtocol>,
+    duration: Duration,
+) -> TProtocol::Decision {
+    let decision = async {
+        loop {
+            match tm.next().await {
+                Some(Return::Decision(decision)) => return decision,
+                Some(_other_returns) => {}
+                None => panic!("Tendermint should not have terminated."),
+            }
+        }
+    };
+    match timeout(duration, decision).await {
+        Ok(decision) => decision,
+        Err(_elapsed) => panic!("Tendermint should have produced a decision."),
+    }
+}
