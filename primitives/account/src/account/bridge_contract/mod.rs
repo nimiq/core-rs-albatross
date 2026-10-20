@@ -21,13 +21,9 @@ use store::BridgeContractStore;
 #[cfg(feature = "interaction-traits")]
 pub use store::BridgeContractStoreWrite;
 pub use store::BridgeNonce;
-use store::{BridgeContractStoreRead, BridgeContractStoreReadOps};
 use thiserror::Error;
 
-use crate::{
-    account::oracle_contract::OracleContract, convert_receipt, data_store_ops::DataStoreReadOps,
-    AccountReceipt,
-};
+use crate::{account::oracle_contract::OracleContract, convert_receipt, AccountReceipt};
 #[cfg(feature = "interaction-traits")]
 use crate::{
     data_store::{DataStoreRead, DataStoreWrite},
@@ -75,12 +71,15 @@ pub struct BridgeContract {
 }
 
 impl BridgeContract {
-    /// Get the nonce for a given address, if it exists.
-    pub fn get_nonce<T: DataStoreReadOps>(&self, data_store: &T, address: &Address) -> u64 {
-        BridgeContractStoreRead::new(data_store)
-            .get_nonce(address)
-            .map(|n| n.nonce)
-            .unwrap_or(0)
+    /// The last nonce released to `address`, or 0 if none was. Fails if the node is still syncing
+    /// its accounts tree and has not synced the bridge's nonce store that far yet.
+    #[cfg(feature = "interaction-traits")]
+    pub fn get_nonce(
+        &self,
+        data_store: &DataStoreRead,
+        address: &Address,
+    ) -> Result<u64, IncompleteTrie> {
+        stored_nonce(data_store, address)
     }
 
     /// Checks that `burn_proof` proves its burn record against `oracle`, the bridge's oracle.
@@ -233,10 +232,7 @@ trait ReleaseState {
 #[cfg(feature = "interaction-traits")]
 impl ReleaseState for DataStoreRead<'_, '_, '_, '_> {
     fn last_nonce(&self, target: &Address) -> Result<u64, AccountError> {
-        let nonce = self
-            .try_get::<BridgeNonce>(&BridgeContractStore::nonce_key(target))
-            .map_err(not_synced)?;
-        Ok(nonce.map_or(0, |nonce| nonce.nonce))
+        stored_nonce(self, target).map_err(not_synced)
     }
 
     fn account(&self, address: &Address) -> Result<Option<Account>, AccountError> {
@@ -257,6 +253,14 @@ impl ReleaseState for DataStoreWrite<'_, '_, '_, '_, '_> {
     fn account(&self, address: &Address) -> Result<Option<Account>, AccountError> {
         Ok(self.get_global(&KeyNibbles::from(address)))
     }
+}
+
+/// The last nonce released to `target` according to the bridge's nonce store in `data_store`, or 0
+/// if none was.
+#[cfg(feature = "interaction-traits")]
+fn stored_nonce(data_store: &DataStoreRead, target: &Address) -> Result<u64, IncompleteTrie> {
+    let nonce = data_store.try_get::<BridgeNonce>(&BridgeContractStore::nonce_key(target))?;
+    Ok(nonce.map_or(0, |nonce| nonce.nonce))
 }
 
 /// A read reached the part of the accounts tree that is not synced yet.

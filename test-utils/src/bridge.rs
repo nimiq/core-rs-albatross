@@ -7,10 +7,13 @@
 
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
+use nimiq_database::traits::WriteTransaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::{account::AccountType, coin::Coin, policy::upgrades};
+use nimiq_primitives::{
+    account::AccountType, coin::Coin, key_nibbles::KeyNibbles, policy::upgrades,
+};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     account::{
@@ -404,6 +407,59 @@ impl BridgeChain {
         let block = self.produce_block(transactions);
         assert_eq!(self.node.push(block.clone()), Ok(PushResult::Extended));
         block
+    }
+
+    /// A node that follows this chain from genesis by block diffs, as live sync does after a reset,
+    /// and has received one chunk of the accounts tree, which ends at a key `is_end` accepts. The
+    /// chunk must include the bridge's account.
+    pub fn syncing_node(&self, is_end: impl Fn(&KeyNibbles) -> bool) -> TemporaryBlockProducer {
+        let node = TemporaryBlockProducer::new_with_protocol_version(
+            upgrades::v3::BRIDGE_ORACLE_CONTRACTS,
+        );
+        {
+            let blockchain = node.blockchain.read();
+            let mut txn = blockchain.write_transaction();
+            blockchain
+                .state
+                .accounts
+                .reinitialize_as_incomplete(&mut (&mut txn).into());
+            txn.commit();
+        }
+
+        let mut chunk = (1..=1_000)
+            .map(|limit| self.node.get_chunk(KeyNibbles::ROOT, limit))
+            .find(|chunk| chunk.chunk.end_key.as_ref().is_some_and(&is_end));
+        assert!(chunk.is_some(), "no chunk ends at an accepted key");
+
+        let start = node.blockchain.read().block_number() + 1;
+        let head = self.node.blockchain.read().block_number();
+        for number in start..=head {
+            let (block, diff) = {
+                let leader = self.node.blockchain.read();
+                let block = leader.chain_store.get_block_at(number, true, None).unwrap();
+                let diff = leader
+                    .chain_store
+                    .get_accounts_diff(&block.hash(), None)
+                    .unwrap();
+                (block, diff)
+            };
+            let chunks = if number == head {
+                vec![chunk.take().unwrap()]
+            } else {
+                vec![]
+            };
+            let (pushed, chunks_pushed) = node.push_with_chunks(block, diff, chunks).unwrap();
+            assert_eq!(pushed, PushResult::Extended);
+            chunks_pushed.unwrap();
+        }
+
+        assert!(!node.blockchain.read().state.accounts.is_complete(None));
+        assert!(node
+            .blockchain
+            .read()
+            .get_account_if_complete(&self.bridge)
+            .is_some());
+        node
     }
 
     /// The balance of `address`, in luna.
