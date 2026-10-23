@@ -3,6 +3,7 @@ name = "nimiq-network-interface"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
+license-file.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 description = "Network interface traits for Nimiq's Rust implementation"

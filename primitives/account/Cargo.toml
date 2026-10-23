@@ -3,6 +3,7 @@ name = "nimiq-account"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
+license-file.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 description = "Account primitives to be used in Nimiq's Albatross implementation"

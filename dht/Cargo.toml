@@ -8,6 +8,7 @@ description = "DHT record verifier for Nimiq's Rust implementation"
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
+license-file.workspace = true
 categories.workspace = true
 keywords.workspace = true
 

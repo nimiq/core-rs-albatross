@@ -3,6 +3,7 @@ name = "nimiq-mmr"
 version.workspace = true
 authors = ["Pascal Berrang <contact@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
 license.workspace = true
+license-file.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 description = "Merkle Mountain Range primitive for Nimiq's Rust implementation"
