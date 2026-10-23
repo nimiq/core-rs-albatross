@@ -7,7 +7,7 @@ authors = [
 ]
 license.workspace = true
 edition.workspace = true
-description = "A LMDB database wrapper with support for volatile storage"
+description = "An MDBX database wrapper with support for volatile storage"
 homepage.workspace = true
 repository.workspace = true
 categories.workspace = true
