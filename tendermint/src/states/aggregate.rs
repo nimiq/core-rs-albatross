@@ -167,7 +167,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     ///
     /// As precommit aggregations with 2f+1 votes result in a decision being produced, this only handles
     /// the prevote-to-precommit transition. Fresh precommit polkas are handled in `poll_aggregations`,
-    /// while cached ones are handled directly in `aggregate`.
+    /// cached ones in `process_proposal` once the proposal is known and in `aggregate`.
     ///
     /// This cannot fail.
     fn on_polka(&mut self, proposal_hash: TProtocol::ProposalHash) {

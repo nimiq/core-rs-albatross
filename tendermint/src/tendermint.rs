@@ -89,6 +89,9 @@ pub struct Tendermint<TProtocol: Protocol> {
     /// Set once a decision was reached. The next call to poll will then return Poll::Ready(None)
     decision: bool,
 
+    /// Decision completed by a late proposal, returned on the next poll.
+    pending_decision: Option<TProtocol::Decision>,
+
     /// Used to dispatch messages to aggregations.
     pub(crate) aggregation_senders:
         BTreeMap<(u32, Step), mpsc::Sender<TProtocol::AggregationMessage>>,
@@ -121,6 +124,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             future_round_verification: None,
             timeout: None,
             decision: false,
+            pending_decision: None,
             state_return_pending: false,
             pending_aggregation_starts: BTreeSet::default(),
         };
@@ -239,6 +243,20 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
         self.protocol
             .create_decision(proposal, inherent.clone(), aggregation, round)
+    }
+
+    /// Builds the decision for a known proposal if a cached precommit aggregation holds 2f+1
+    /// votes for it, regardless of the current round and step.
+    fn cached_decision(
+        &self,
+        proposal_hash: &TProtocol::ProposalHash,
+    ) -> Option<TProtocol::Decision> {
+        let ((round, _), aggregation) = self.state.best_votes.iter().find(|((_, step), agg)| {
+            *step == Step::Precommit
+                && agg.contributors_for(Some(proposal_hash)).len() >= TProtocol::TWO_F_PLUS_ONE
+        })?;
+        let proposal = self.state.known_proposals.get(proposal_hash)?.clone();
+        Some(self.build_decision(proposal, aggregation.clone(), *round))
     }
 
     /// Creates an aggregation for a given `id`. If that aggregation does already exist,
@@ -426,6 +444,11 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         // within the round (e.g. timed out into Precommit). Set it now.
         if self.has_two_f_plus_one(&proposal_hash, proposal_round) {
             self.update_valid(proposal_round, proposal_hash.clone());
+        }
+
+        // Likewise, a cached 2f+1 precommit polka for the proposal is conclusive now.
+        if let Some(decision) = self.cached_decision(&proposal_hash) {
+            self.pending_decision = Some(decision);
         }
 
         // make sure the next poll will return a state update
@@ -740,6 +763,13 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
                 should_export_state = true;
             }
             // Do nothing if the future ultimately resolved to None or Pending.
+        }
+
+        // A late proposal (gossiped on the previous poll or requested) may have completed a
+        // cached precommit polka.
+        if let Some(decision) = self.pending_decision.take() {
+            self.decision = true;
+            return Poll::Ready(Some(Return::Decision(decision)));
         }
 
         // Poll incoming level updates and dispatch to corresponding aggregations.
