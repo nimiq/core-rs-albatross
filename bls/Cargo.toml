@@ -4,7 +4,6 @@ version.workspace = true
 authors = ["Jack Grigg <str4d@i2pmail.org>", "The Nimiq Core Development Team <info@nimiq.com>"]
 description = "BLS signatures"
 license.workspace = true
-license-file.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 homepage.workspace = true

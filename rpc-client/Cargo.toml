@@ -3,7 +3,6 @@ name = "nimiq-rpc-client"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
-license-file.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 description = "JSON RPC client for the Nimiq Rust implementation"

@@ -3,7 +3,6 @@ name = "nimiq-utils"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
-license-file.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 description = "Various utilities (e.g., CRC, Merkle proofs, timers) for Nimiq's Rust implementation"

@@ -6,7 +6,6 @@ authors = [
     "The Nimiq Core Development Team <info@nimiq.com>",
 ]
 license.workspace = true
-license-file.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 description = "Ed25519 cryptographic key handling and signatures for Nimiq"
