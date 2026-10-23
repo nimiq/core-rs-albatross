@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Wallet logic for Nimiq's Rust implementation"
 homepage.workspace = true
 repository.workspace = true

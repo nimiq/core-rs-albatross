@@ -7,6 +7,7 @@ authors = [
 ]
 license.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Ed25519 cryptographic key handling and signatures for Nimiq"
 homepage.workspace = true
 repository.workspace = true

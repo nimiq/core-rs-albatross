@@ -3,6 +3,7 @@ name = "nimiq-dht"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "DHT record verifier for Nimiq's Rust implementation"
 homepage.workspace = true
 repository.workspace = true

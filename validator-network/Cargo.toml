@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Nimiq's validator network abstraction in Rust"
 homepage.workspace = true
 repository.workspace = true

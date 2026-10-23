@@ -4,6 +4,7 @@ version.workspace = true
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 license.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Derive macros for nimiq-serde"
 homepage.workspace = true
 repository.workspace = true
