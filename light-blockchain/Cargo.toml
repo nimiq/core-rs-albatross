@@ -3,7 +3,6 @@ name = "nimiq-light-blockchain"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
-license-file.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 description = "Block storage for Nimiq's Light Nodes"

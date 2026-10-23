@@ -3,7 +3,6 @@ name = "nimiq-vrf"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
-license-file.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 description = "Verifiable Random Function based on VXEdDSA"

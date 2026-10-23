@@ -3,7 +3,6 @@ name = "nimiq-mnemonic"
 version.workspace = true
 authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
 license.workspace = true
-license-file.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 description = "Mnemonic helper library for Nimiq"
