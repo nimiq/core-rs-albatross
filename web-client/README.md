@@ -5,6 +5,20 @@ to compile a client to WebAssembly and to run it in a web browser. This is a web
 to be used in web browsers only (no WASI support). It currently supports modern browsers and NodeJS
 as its Javascript environments.
 
+## Transaction status and execution
+
+`PlainTransactionDetails.state` describes inclusion and finality, while `executionResult`
+describes whether execution succeeded. A transaction can have `state: "confirmed"` and
+`executionResult: false`: it was finalized, but execution failed. Check both fields before
+reporting a successful payment. `executionResult` is `true` for successful execution and `false`
+for failed execution. If `sendTransaction()` returns `new` without an execution result, the client
+has not observed inclusion yet. The transaction may still have been included; do not assume
+failure or success from that response.
+
+`getTransaction(hash)` fetches an included transaction from the blockchain with a known
+`executionResult`. It returns an error if no matching transaction is found or the lookup fails.
+An error alone does not prove the transaction was not included.
+
 ## Running the example
 
 ### Requisites for every OS
