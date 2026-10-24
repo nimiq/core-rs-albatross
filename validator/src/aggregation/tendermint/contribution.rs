@@ -127,11 +127,18 @@ impl Aggregation<Blake2sHash> for TendermintContribution {
     }
 }
 
-/// Utility structure to implement traits for LevelUpdate.
+/// Utility structure to implement traits for LevelUpdate. It also holds the peer that sent the
+/// update, which is the one to blame should it turn out to be forged.
 #[derive(Clone, Debug)]
-pub struct AggregateMessage(pub(crate) LevelUpdate<TendermintContribution>);
+pub struct AggregateMessage<TPeerId>(
+    pub(crate) LevelUpdate<TendermintContribution>,
+    pub(crate) TPeerId,
+);
 
-impl Aggregation<Blake2sHash> for AggregateMessage {
+impl<TPeerId> Aggregation<Blake2sHash> for AggregateMessage<TPeerId>
+where
+    TPeerId: Clone + std::fmt::Debug + Send + Sync + Unpin + 'static,
+{
     fn all_contributors(&self) -> BitSet {
         self.0.aggregate.all_contributors()
     }
@@ -143,7 +150,10 @@ impl Aggregation<Blake2sHash> for AggregateMessage {
     }
 }
 
-impl AggregationMessage<Blake2sHash> for AggregateMessage {
+impl<TPeerId> AggregationMessage<Blake2sHash> for AggregateMessage<TPeerId>
+where
+    TPeerId: Clone + std::fmt::Debug + Send + Sync + Unpin + 'static,
+{
     fn sender(&self) -> u16 {
         self.0.origin
     }

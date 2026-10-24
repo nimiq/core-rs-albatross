@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     fmt::Debug,
     future::Future,
+    hash::Hash,
     pin::Pin,
     task::{Context, Poll, Waker},
     time::Duration,
@@ -23,6 +24,9 @@ use crate::{contribution::AggregatableContribution, identity::Identity, update::
 pub trait Network: Unpin + Send + Sync + 'static {
     type Contribution: AggregatableContribution;
     type Error: Debug + Send;
+    /// The peer a received level update came from. More than one peer may speak for the same
+    /// node, so this is what tells them apart.
+    type Sender: Clone + Debug + Eq + Hash + Send + Sync + Unpin + 'static;
 
     /// Sends a level update to the node specified by `node_id`.
     /// The node_id is the same one given by the IdentityRegistry.
@@ -32,7 +36,13 @@ pub trait Network: Unpin + Send + Sync + 'static {
         update: LevelUpdate<Self::Contribution>,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send + 'static;
 
-    fn ban_node(&self, node_id: u16) -> impl Future<Output = ()> + Send + 'static;
+    /// Bans `sender`, which delivered a contribution from the node specified by `node_id` that
+    /// failed verification.
+    fn ban_node(
+        &self,
+        node_id: u16,
+        sender: Self::Sender,
+    ) -> impl Future<Output = ()> + Send + 'static;
 }
 
 #[derive(Clone)]
@@ -125,8 +135,8 @@ impl<TNetwork: Network> NetworkHelper<TNetwork> {
         self.waker.wake();
     }
 
-    pub fn ban_node(&mut self, node_id: usize) {
-        let future = self.network.ban_node(node_id as u16).boxed();
+    pub fn ban_node(&mut self, node_id: usize, sender: TNetwork::Sender) {
+        let future = self.network.ban_node(node_id as u16, sender).boxed();
         self.pending_bans.push(future);
     }
 }
@@ -231,6 +241,7 @@ mod test {
     impl Network for Net {
         type Contribution = Contribution;
         type Error = ();
+        type Sender = ();
 
         fn send_update(
             &self,
@@ -245,7 +256,11 @@ mod test {
             }
         }
 
-        fn ban_node(&self, _node_id: u16) -> impl Future<Output = ()> + Send + 'static {
+        fn ban_node(
+            &self,
+            _node_id: u16,
+            _sender: Self::Sender,
+        ) -> impl Future<Output = ()> + Send + 'static {
             future::ready(())
         }
     }
