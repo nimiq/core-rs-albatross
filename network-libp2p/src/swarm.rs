@@ -913,7 +913,7 @@ fn handle_gossipsub_event(event: gossipsub::Event, event_info: EventInfo) {
                     peer_id = %propagation_source,
                     message_size = message.data.len(),
                     max_message_size = topic_info.max_message_size,
-                    "Dropping gossipsub message - message too large",
+                    "Rejecting gossipsub message - message too large",
                 );
                 event_info
                     .swarm
@@ -922,7 +922,7 @@ fn handle_gossipsub_event(event: gossipsub::Event, event_info: EventInfo) {
                     .report_message_validation_result(
                         &message_id,
                         &propagation_source,
-                        gossipsub::MessageAcceptance::Ignore,
+                        gossipsub::MessageAcceptance::Reject,
                     );
                 return;
             }
