@@ -27,7 +27,7 @@ async-trait = "0.1"
 clap = { version = "4.6", features = ["derive"] }
 futures = { workspace = true }
 hex = "0.4"
-parking_lot = "0.12"
+parking_lot = "0.13"
 serde = "1.0"
 serde_with = "3.22"
 thiserror = "2.0"
