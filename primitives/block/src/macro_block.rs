@@ -462,6 +462,48 @@ mod test {
         );
     }
 
+    /// Gossiped block headers and proposals larger than `MacroHeader::MAX_SIZE` are
+    /// dropped, so the largest valid election header must fit.
+    #[test]
+    fn max_size_covers_largest_valid_header() {
+        use nimiq_collections::BitSet;
+        use nimiq_hash::Blake2bHash;
+        use nimiq_keys::Address;
+        use nimiq_serde::{Serialize, SerializedMaxSize};
+
+        // One validator per slot is the largest valid validator set.
+        let validators = (0..Policy::SLOTS)
+            .map(|slot| {
+                let mut address = [0u8; 20];
+                address[..2].copy_from_slice(&slot.to_be_bytes());
+                Validator::new(
+                    Address::from(address),
+                    BlsCompressedPublicKey::default(),
+                    SchnorrPublicKey::from([0x11; 32]),
+                    slot..slot + 1,
+                )
+            })
+            .collect();
+        let header = MacroHeader {
+            version: u16::MAX,
+            block_number: u32::MAX,
+            round: u32::MAX,
+            timestamp: u64::MAX,
+            interlink: Some(vec![Blake2bHash::default(); 32]),
+            extra_data: vec![0; 32],
+            validators: Some(Validators::new(validators)),
+            next_batch_initial_punished_set: (0..Policy::SLOTS as usize).collect::<BitSet>(),
+            ..Default::default()
+        };
+
+        let size = header.serialized_size();
+        assert!(
+            size <= MacroHeader::MAX_SIZE,
+            "{size} > {}",
+            MacroHeader::MAX_SIZE
+        );
+    }
+
     /// Builds a single-band election header carrying `validators`, at the given protocol
     /// version. Only the fields that influence the header hash are set.
     fn election_header(validators: Validators, version: u16) -> MacroHeader {

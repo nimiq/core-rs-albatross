@@ -9,7 +9,7 @@ use nimiq_network_interface::{
     network::Network,
     request::{Handle, RequestCommon, RequestMarker},
 };
-use nimiq_serde::Serialize;
+use nimiq_serde::{Serialize, SerializedMaxSize};
 use nimiq_tendermint::{Inherent, Proposal, ProposalMessage, SignedProposalMessage};
 use parking_lot::RwLock;
 use serde::Deserialize;
@@ -44,7 +44,7 @@ impl<Id> Proposal<Blake2sHash, Blake2sHash> for Header<Id> {
 /// Tendermint itself does expect a different kind of structure, which will also include
 /// Message identifier for GossipSub. That identifier is used to signal the validity of
 /// the message to the network. See [nimiq_tendermint::SignedProposalMessage]
-#[derive(Clone, std::fmt::Debug, Deserialize, Serialize)]
+#[derive(Clone, std::fmt::Debug, Deserialize, Serialize, SerializedMaxSize)]
 pub struct SignedProposal {
     pub(crate) proposal: MacroHeader,
     pub(crate) round: u32,

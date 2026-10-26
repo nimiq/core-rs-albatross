@@ -47,6 +47,7 @@ fn network_config(address: Multiaddr) -> Config {
     .expect("PeerContact must be creatable");
 
     let gossipsub = gossipsub::ConfigBuilder::default()
+        .validate_messages()
         .validation_mode(gossipsub::ValidationMode::Permissive)
         .build()
         .expect("Invalid Gossipsub config");

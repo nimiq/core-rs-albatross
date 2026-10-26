@@ -11,6 +11,7 @@ use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{networks::NetworkId, slots_allocation::Validators};
+use nimiq_serde::SerializedMaxSize;
 use nimiq_tendermint::{
     Return as TendermintReturn, SignedProposalMessage, TaggedAggregationMessage, Tendermint,
 };
@@ -58,6 +59,8 @@ where
     const NAME: &'static str = "tendermint-proposal";
     const VALIDATE: bool = true;
     const MAX_MESSAGES: u32 = 10;
+    // Valid proposals are bounded below the gossipsub message size limit.
+    const MAX_MESSAGE_SIZE: usize = SignedProposal::MAX_SIZE;
 }
 
 /// Pretty much just a wrapper for tendermint, doing some type conversions.
