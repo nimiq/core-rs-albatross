@@ -1,8 +1,8 @@
-pub use lazy::LazyPublicKey;
+pub use lazy::{LazyAggregateSignature, LazyPublicKey};
 use nimiq_hash::Blake2sHash;
 pub use types::*;
 
-// Implements the LazyPublicKey type. Which is a faster, cached version of PublicKey.
+// Implements the LazyPublicKey and LazyAggregateSignature types, which are uncompressed on first use.
 mod lazy;
 
 // Implements all of the types needed to do BLS signatures.

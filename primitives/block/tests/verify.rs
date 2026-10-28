@@ -375,10 +375,7 @@ fn test_verify_skip_block() {
     };
 
     let micro_justification = MicroJustification::Skip(SkipBlockProof {
-        sig: MultiSignature {
-            signature: AggregateSignature::new(),
-            signers: BitSet::default(),
-        },
+        sig: MultiSignature::new(AggregateSignature::new(), BitSet::default()),
     });
 
     let transactions: Vec<ExecutedTransaction> =

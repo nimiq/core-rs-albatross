@@ -68,6 +68,10 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
                 }
             }
 
+            let Some(signature) = multi_sig.signature.uncompress() else {
+                return VerificationResult::Forged;
+            };
+
             // Hash the vote to its `G1` point, reusing the cached point for this proposal hash.
             let hash_curve = *self
                 .hash_curves
@@ -81,13 +85,13 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
                     Signature::hash_to_g1(vote.hash())
                 });
 
-            params.push((aggregated_public_key, hash_curve, multi_sig.clone()));
+            params.push((aggregated_public_key, hash_curve, *signature));
         }
         let result = spawn_blocking(move || {
             params
                 .into_par_iter()
-                .map(|(aggregated_public_key, hash_curve, contribution)| {
-                    if aggregated_public_key.verify_g1(hash_curve, &contribution.signature) {
+                .map(|(aggregated_public_key, hash_curve, signature)| {
+                    if aggregated_public_key.verify_g1(hash_curve, &signature) {
                         Ok(())
                     } else {
                         Err(())

@@ -1,6 +1,6 @@
 use ark_ec::CurveGroup;
 use nimiq_bls::*;
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedSize};
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng;
 use nimiq_utils::key_rng::SecureGenerate;
@@ -187,6 +187,42 @@ fn aggregate_signatures_serialization() {
         &message,
         &AggregateSignature::deserialize_from_vec(&ser_agg_sig).unwrap()
     ));
+}
+
+#[test]
+fn lazy_aggregate_signature() {
+    let rng = &mut test_rng(false);
+
+    let message = "Same message";
+    let keypair = KeyPair::generate(rng);
+    let agg_key = AggregatePublicKey::from_public_keys(&[keypair.public_key]);
+    let agg_sig = AggregateSignature::from_signatures(&[keypair.sign(&message)]);
+
+    // Same wire format as `AggregateSignature`.
+    let lazy = LazyAggregateSignature::from(agg_sig);
+    assert!(lazy.has_uncompressed());
+    let bytes = lazy.serialize_to_vec();
+    assert_eq!(bytes, agg_sig.serialize_to_vec());
+
+    // Deserializing doesn't uncompress, the first use does.
+    let decoded = LazyAggregateSignature::deserialize_from_vec(&bytes).unwrap();
+    assert!(!decoded.has_uncompressed());
+    assert_eq!(decoded, lazy);
+    assert!(decoded.verify(&agg_key, &message));
+    assert!(decoded.has_uncompressed());
+
+    // Bytes that aren't a valid curve point only fail once uncompressed.
+    let invalid = [0xff; CompressedSignature::SIZE];
+    assert!(AggregateSignature::deserialize_from_vec(&invalid).is_err());
+    let decoded = LazyAggregateSignature::deserialize_from_vec(&invalid).unwrap();
+    assert!(decoded.uncompress().is_none());
+    assert!(!decoded.verify(&agg_key, &message));
+
+    // The default is the identity, like `AggregateSignature`'s.
+    assert_eq!(
+        LazyAggregateSignature::default().serialize_to_vec(),
+        AggregateSignature::default().serialize_to_vec(),
+    );
 }
 
 #[test]

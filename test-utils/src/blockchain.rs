@@ -215,13 +215,13 @@ pub fn sign_macro_block(
     }
 
     // Create multisignature.
-    let multisig = MultiSignature {
-        signature: AggregateSignature::from_signatures(&vec![
+    let multisig = MultiSignature::new(
+        AggregateSignature::from_signatures(&vec![
             signed_precommit;
             Policy::TWO_F_PLUS_ONE as usize
         ]),
         signers,
-    };
+    );
 
     // Create Tendermint proof.
     let tendermint_proof = TendermintProof {

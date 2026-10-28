@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, hash::Hasher, io, mem, ops::Range};
 
-use nimiq_bls::{AggregatePublicKey, AggregateSignature, CompressedSignature};
+use nimiq_bls::{AggregatePublicKey, AggregateSignature, LazyAggregateSignature};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash as _, HashOutput, SerializeContent};
 use nimiq_keys::{
@@ -41,12 +41,11 @@ fn get_validator<'a>(
 }
 
 fn uncompress_signature(
-    signature: &CompressedSignature,
-) -> Result<AggregateSignature, EquivocationProofError> {
+    signature: &LazyAggregateSignature,
+) -> Result<&AggregateSignature, EquivocationProofError> {
     signature
         .uncompress()
-        .map(AggregateSignature)
-        .map_err(|_| EquivocationProofError::InvalidJustification)
+        .ok_or(EquivocationProofError::InvalidJustification)
 }
 
 impl EquivocationProof {
@@ -471,9 +470,9 @@ pub struct DoubleVoteProof {
     proposal_hash2: Option<Blake2sHash>,
     /// Aggregate signature for proposal 1. Kept compressed so that deserializing
     /// a proof stays cheap, it is only decompressed during verification.
-    signature1: CompressedSignature,
+    signature1: LazyAggregateSignature,
     /// Aggregate signature for proposal 2. See `signature1`.
-    signature2: CompressedSignature,
+    signature2: LazyAggregateSignature,
     /// Signers for proposal 1.
     #[serialize_size(bitset_max_elem = Policy::SLOTS as usize)]
     signers1: BitSet,
@@ -503,8 +502,8 @@ impl DoubleVoteProof {
             validator_address,
             proposal_hash1,
             proposal_hash2,
-            signature1: signature1.0.compress(),
-            signature2: signature2.0.compress(),
+            signature1: signature1.into(),
+            signature2: signature2.into(),
             signers1,
             signers2,
         }
@@ -604,8 +603,8 @@ impl DoubleVoteProof {
                 Ok(())
             };
 
-        verify(self.proposal_hash1.clone(), &checked_signers1, &signature1)?;
-        verify(self.proposal_hash2.clone(), &checked_signers2, &signature2)?;
+        verify(self.proposal_hash1.clone(), &checked_signers1, signature1)?;
+        verify(self.proposal_hash2.clone(), &checked_signers2, signature2)?;
         Ok(())
     }
 }
@@ -1278,12 +1277,14 @@ mod test {
     fn double_vote_proof_signatures_are_decompressed_lazily() {
         let mut proof = double_vote_proof();
         // Not the encoding of a valid curve point.
-        proof.signature1 = CompressedSignature {
+        let invalid = CompressedSignature {
             signature: [0xff; CompressedSignature::SIZE],
         };
-        assert!(proof.signature1.uncompress().is_err());
+        assert!(invalid.uncompress().is_err());
+        proof.signature1 = invalid.into();
 
         let decoded = DoubleVoteProof::deserialize_from_vec(&proof.serialize_to_vec()).unwrap();
+        assert!(!decoded.signature1.has_uncompressed());
 
         assert_eq!(
             decoded.verify_excluding_address_and_network(&Validators::new(vec![]), 0..1),

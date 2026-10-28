@@ -316,7 +316,12 @@ impl TemporaryBlockProducer {
             sig: MultiSignature::new(signature, signers),
         });
 
-        assert!(agg_pk.verify(&vote, &justification.as_ref().unwrap().sig.signature));
+        assert!(justification
+            .as_ref()
+            .unwrap()
+            .sig
+            .signature
+            .verify(&agg_pk, &vote));
 
         (
             MacroBlock {

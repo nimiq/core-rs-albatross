@@ -140,9 +140,9 @@ impl SkipBlockProof {
         }
 
         // Verify the aggregated signature against our aggregated public key.
-        agg_pk.verify_hash(
+        self.sig.signature.verify_hash(
+            &agg_pk,
             skip_block.signing_hash(state_root, protocol_version),
-            &self.sig.signature,
         )
     }
 }

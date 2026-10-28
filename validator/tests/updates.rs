@@ -3,33 +3,16 @@ use std::collections::BTreeMap;
 use nimiq_block::MultiSignature;
 use nimiq_bls::{AggregateSignature, KeyPair};
 use nimiq_collections::BitSet;
-use nimiq_handel::{
-    contribution::{AggregatableContribution, ContributionError},
-    update::LevelUpdate,
-};
+use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::Blake2sHash;
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_validator::aggregation::{
-    tendermint::contribution::TendermintContribution, update::SerializableLevelUpdate,
+    skip_block::SignedSkipBlockMessage, tendermint::contribution::TendermintContribution,
+    update::SerializableLevelUpdate,
 };
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct WrappedMultiSignature(pub MultiSignature);
-
-impl AggregatableContribution for WrappedMultiSignature {
-    fn contributors(&self) -> BitSet {
-        self.0.contributors()
-    }
-
-    fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError> {
-        self.0
-            .combine(&other_contribution.0)
-            .map_err(ContributionError::Overlapping)
-    }
-}
-
-fn create_multisig() -> WrappedMultiSignature {
+fn create_multisig() -> SignedSkipBlockMessage {
     let raw_key = hex::decode(
         "1b9e470e0deb06fe55774bb2cf499b411f55265c10d8d78742078381803451e058c88\
         391431799462edde4c7872649964137d8e03cd618dd4a25690c56ffd7f42fb7ae8049d29f38d569598b38d4\
@@ -41,15 +24,17 @@ fn create_multisig() -> WrappedMultiSignature {
     let signature = AggregateSignature::from_signatures(&[signature]);
     let mut signers = BitSet::default();
     signers.insert(1);
-    WrappedMultiSignature(MultiSignature { signature, signers })
+    SignedSkipBlockMessage {
+        proof: MultiSignature::new(signature, signers),
+    }
 }
 
 #[test]
 fn test_serialize_deserialize_level_update() {
-    let update: SerializableLevelUpdate<WrappedMultiSignature> =
+    let update: SerializableLevelUpdate<SignedSkipBlockMessage> =
         LevelUpdate::new(create_multisig(), None, 2, 3).into();
     let data = update.serialize_to_vec();
-    let update_2: SerializableLevelUpdate<WrappedMultiSignature> =
+    let update_2: SerializableLevelUpdate<SignedSkipBlockMessage> =
         Deserialize::deserialize_from_vec(&data).unwrap();
 
     assert_eq!(data.len(), update.serialized_size());
@@ -62,7 +47,7 @@ fn test_serialize_deserialize_level_update() {
 
 #[test]
 fn test_serialize_deserialize_with_message() {
-    let update: SerializableLevelUpdate<WrappedMultiSignature> =
+    let update: SerializableLevelUpdate<SignedSkipBlockMessage> =
         LevelUpdate::new(create_multisig(), None, 2, 3).into();
     assert_eq!(update.serialized_size(), 99);
 }
@@ -76,22 +61,22 @@ fn test_serialize_deserialize_with_message() {
 
 /// Contribution whose contributor bitset is exactly `signers`. The signature is irrelevant,
 /// `Checked` runs before any signature is looked at.
-fn multisig_with_signers(signers: impl IntoIterator<Item = usize>) -> WrappedMultiSignature {
+fn multisig_with_signers(signers: impl IntoIterator<Item = usize>) -> SignedSkipBlockMessage {
     let mut multisig = create_multisig();
-    multisig.0.signers = BitSet::from_iter(signers);
+    multisig.proof.signers = BitSet::from_iter(signers);
     multisig
 }
 
 fn roundtrip(
-    update: SerializableLevelUpdate<WrappedMultiSignature>,
-) -> Result<SerializableLevelUpdate<WrappedMultiSignature>, nimiq_serde::DeserializeError> {
+    update: SerializableLevelUpdate<SignedSkipBlockMessage>,
+) -> Result<SerializableLevelUpdate<SignedSkipBlockMessage>, nimiq_serde::DeserializeError> {
     Deserialize::deserialize_from_vec(&update.serialize_to_vec())
 }
 
 /// Control: the highest existing slot is accepted, so the rejections below are not an off by one.
 #[test]
 fn accepts_highest_valid_slot() {
-    let update: SerializableLevelUpdate<WrappedMultiSignature> = LevelUpdate::new(
+    let update: SerializableLevelUpdate<SignedSkipBlockMessage> = LevelUpdate::new(
         multisig_with_signers([Policy::SLOTS as usize - 1]),
         None,
         2,
@@ -106,7 +91,7 @@ fn accepts_highest_valid_slot() {
 /// its assertion, crashing the node.
 #[test]
 fn rejects_aggregate_with_slot_at_slot_count() {
-    let update: SerializableLevelUpdate<WrappedMultiSignature> =
+    let update: SerializableLevelUpdate<SignedSkipBlockMessage> =
         LevelUpdate::new(multisig_with_signers([Policy::SLOTS as usize]), None, 2, 3).into();
 
     assert!(roundtrip(update).is_err());
@@ -124,7 +109,7 @@ fn rejects_aggregate_with_slots_beyond_u16() {
         2 * wrapped,
         wrapped + Policy::SLOTS as usize,
     ] {
-        let update: SerializableLevelUpdate<WrappedMultiSignature> =
+        let update: SerializableLevelUpdate<SignedSkipBlockMessage> =
             LevelUpdate::new(multisig_with_signers([slot]), None, 2, 3).into();
 
         assert!(
@@ -139,7 +124,7 @@ fn rejects_aggregate_with_slots_beyond_u16() {
 /// an out of range individual contribution.
 #[test]
 fn rejects_individual_with_out_of_range_slot() {
-    let update: SerializableLevelUpdate<WrappedMultiSignature> = LevelUpdate::new(
+    let update: SerializableLevelUpdate<SignedSkipBlockMessage> = LevelUpdate::new(
         multisig_with_signers([0]),
         Some(multisig_with_signers([Policy::SLOTS as usize])),
         2,
@@ -154,7 +139,7 @@ fn rejects_individual_with_out_of_range_slot() {
 /// update rather than be silently dropped.
 #[test]
 fn rejects_aggregate_mixing_valid_and_out_of_range_slots() {
-    let update: SerializableLevelUpdate<WrappedMultiSignature> = LevelUpdate::new(
+    let update: SerializableLevelUpdate<SignedSkipBlockMessage> = LevelUpdate::new(
         multisig_with_signers([0, 1, 2, Policy::SLOTS as usize, u16::MAX as usize + 1]),
         None,
         2,
@@ -168,7 +153,7 @@ fn rejects_aggregate_mixing_valid_and_out_of_range_slots() {
 fn tendermint_contribution(
     buckets: impl IntoIterator<Item = (Option<Blake2sHash>, Vec<usize>)>,
 ) -> TendermintContribution {
-    let signature = create_multisig().0.signature;
+    let signature = *create_multisig().proof.signature.uncompress().unwrap();
     let contributions = buckets
         .into_iter()
         .map(|(hash, signers)| {

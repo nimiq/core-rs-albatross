@@ -1,4 +1,4 @@
-use nimiq_bls::AggregateSignature;
+use nimiq_bls::{AggregateSignature, LazyAggregateSignature};
 use nimiq_collections::bitset::BitSet;
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
@@ -10,26 +10,37 @@ TODO: Move this out of primitives and into validator/aggregation once the messag
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct MultiSignature {
-    pub signature: AggregateSignature,
+    /// Kept compressed so that deserializing stays cheap, it is only uncompressed when it is
+    /// verified or combined.
+    pub signature: LazyAggregateSignature,
     #[serialize_size(bitset_max_elem = Policy::SLOTS as usize)]
     pub signers: BitSet,
 }
 
 impl MultiSignature {
     pub fn new(signature: AggregateSignature, signers: BitSet) -> Self {
-        Self { signature, signers }
+        Self {
+            signature: signature.into(),
+            signers,
+        }
     }
 
     pub fn contributors(&self) -> BitSet {
         self.signers.clone()
     }
 
+    /// Combines `other` into this multisignature.
+    ///
+    /// Both signatures must have been verified or created locally, which makes them valid curve
+    /// points. Handel only combines such contributions.
     pub fn combine(&mut self, other: &MultiSignature) -> Result<(), BitSet> {
         // TODO: If we don't need the overlapping IDs for the error, we can use `intersection_size`
         let overlap = &self.signers & &other.signers;
 
         if overlap.is_empty() {
-            self.signature.merge_into(&other.signature);
+            let mut signature = *self.signature.uncompress().expect("Signature is verified");
+            signature.merge_into(other.signature.uncompress().expect("Signature is verified"));
+            self.signature = signature.into();
             self.signers = &self.signers | &other.signers;
             Ok(())
         } else {
@@ -47,4 +58,35 @@ pub(crate) fn checked_signer_slots(signers: &BitSet) -> Option<Vec<u16>> {
         slots.push(slot as u16);
     }
     Some(slots)
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_bls::{CompressedSignature, LazyAggregateSignature};
+    use nimiq_collections::BitSet;
+    use nimiq_serde::{Deserialize, Serialize, SerializedSize};
+    use nimiq_test_log::test;
+
+    use super::MultiSignature;
+
+    /// Signature bytes that don't encode a valid curve point.
+    fn invalid_signature() -> LazyAggregateSignature {
+        CompressedSignature {
+            signature: [0xff; CompressedSignature::SIZE],
+        }
+        .into()
+    }
+
+    #[test]
+    fn deserializing_does_not_uncompress_the_signature() {
+        let multisig = MultiSignature {
+            signature: invalid_signature(),
+            signers: BitSet::from_iter([0]),
+        };
+
+        let decoded = MultiSignature::deserialize_from_vec(&multisig.serialize_to_vec()).unwrap();
+
+        assert!(!decoded.signature.has_uncompressed());
+        assert!(decoded.signature.uncompress().is_none());
+    }
 }

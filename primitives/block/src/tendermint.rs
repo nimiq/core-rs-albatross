@@ -75,6 +75,6 @@ impl TendermintProof {
         }
 
         // Verify the aggregated signature against our aggregated public key.
-        agg_pk.verify(&message, &justification.sig.signature)
+        justification.sig.signature.verify(&agg_pk, &message)
     }
 }

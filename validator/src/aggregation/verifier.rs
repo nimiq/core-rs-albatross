@@ -38,7 +38,11 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVeri
             }
         }
 
-        if aggregated_public_key.verify_g1(self.hash_curve, &contribution.proof.signature) {
+        if contribution
+            .proof
+            .signature
+            .verify_g1(&aggregated_public_key, self.hash_curve)
+        {
             VerificationResult::Ok
         } else {
             VerificationResult::Forged
