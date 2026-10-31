@@ -77,6 +77,7 @@ pub struct MockNetwork {
     hub: Arc<Mutex<MockHubInner>>,
     is_connected: Arc<AtomicBool>,
     validation_results: Mutex<Vec<(&'static str, MockId<MockPeerId>, MsgAcceptance)>>,
+    disconnect_requests: Mutex<Vec<(MockPeerId, CloseReason)>>,
 }
 
 impl MockNetwork {
@@ -106,6 +107,7 @@ impl MockNetwork {
             hub,
             is_connected,
             validation_results: Mutex::new(Vec::new()),
+            disconnect_requests: Mutex::new(Vec::new()),
         }
     }
 
@@ -122,6 +124,12 @@ impl MockNetwork {
         &self,
     ) -> Vec<(&'static str, MockId<MockPeerId>, MsgAcceptance)> {
         std::mem::take(&mut self.validation_results.lock())
+    }
+
+    /// Returns and clears all `disconnect_peer` calls that ran,
+    /// whether or not the peer was connected.
+    pub fn take_disconnect_requests(&self) -> Vec<(MockPeerId, CloseReason)> {
+        std::mem::take(&mut self.disconnect_requests.lock())
     }
 
     fn dial_mock_address(&self, address: MockAddress) -> Result<(), MockNetworkError> {
@@ -459,7 +467,11 @@ impl Network for MockNetwork {
         self.peers.read().get(&peer_id).is_some()
     }
 
-    async fn disconnect_peer(&self, peer_id: MockPeerId, _: CloseReason) {
+    async fn disconnect_peer(&self, peer_id: MockPeerId, close_reason: CloseReason) {
+        self.disconnect_requests
+            .lock()
+            .push((peer_id, close_reason));
+
         if !self.has_peer(peer_id) {
             return;
         }

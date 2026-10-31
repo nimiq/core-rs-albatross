@@ -549,8 +549,8 @@ mod test {
         sync::syncer_proxy::SyncerProxy, BlsCache, Consensus, ConsensusEvent, ConsensusProxy,
     };
     use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
-    use nimiq_network_interface::network::Network as NetworkInterface;
-    use nimiq_network_mock::{MockHub, MockNetwork};
+    use nimiq_network_interface::network::{CloseReason, Network as NetworkInterface};
+    use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
     use nimiq_primitives::{policy::Policy, TendermintProposal};
     use nimiq_serde::{Deserialize, Serialize};
     use nimiq_tendermint::{ProposalMessage, SignedProposalMessage};
@@ -560,7 +560,7 @@ mod test {
         test_network::TestNetwork,
     };
     use nimiq_time::{sleep, timeout};
-    use nimiq_utils::spawn;
+    use nimiq_utils::{key_rng::SecureGenerate, spawn};
     use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
     use parking_lot::{Mutex, RwLock};
     use tokio::select;
@@ -708,6 +708,17 @@ mod test {
             .expect("Publishing on the proposal topic must succeed.");
         // receive the proposal
         proposals.next().await.expect("Proposal")
+    }
+
+    /// Waits until the network has executed at least one `disconnect_peer` call.
+    async fn next_disconnect_requests(network: &MockNetwork) -> Vec<(MockPeerId, CloseReason)> {
+        loop {
+            let requests = network.take_disconnect_requests();
+            if !requests.is_empty() {
+                return requests;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
     }
 
     /// Has a validator creating a batch worth of blocks and a proposal for the macro block.
@@ -1006,6 +1017,46 @@ mod test {
         assert!(
             proposal_receiver.next().now_or_never().is_none(),
             "proposal with signer == num_validators() must not be yielded by the receiver",
+        );
+    }
+
+    /// The receiver is only polled while producing a macro block, so banning the relayer
+    /// of an invalidly signed proposal must not depend on it.
+    #[test(tokio::test)]
+    async fn it_disconnects_relayer_of_invalid_signature_without_receiver() {
+        let (consensus_proxy, producer1, producer2, nw1, nw2, _signing_key) = setup().await;
+
+        for _ in 0..Policy::blocks_per_batch() - 1 {
+            let block = producer1.next_block(vec![], false);
+            producer2.push(block).expect("Pushing blocks must succeed");
+        }
+        let macro_block = producer1.next_block(vec![], false);
+
+        let (proposal_sender, _proposal_receiver) = ProposalBuffer::new(
+            Arc::clone(&producer2.blockchain),
+            Arc::new(ValidatorNetworkImpl::new(Arc::clone(&nw2))),
+            consensus_proxy,
+        );
+
+        // Signer 0 exists, but the signature is not made with its key.
+        let relayer = nw1.peer_id();
+        let proposal = create_proposal_msg(
+            nw1,
+            Arc::clone(&nw2),
+            SchnorrKeyPair::generate_default_csprng(),
+            macro_block.unwrap_macro_ref().header.clone(),
+            0,
+        )
+        .await;
+
+        proposal_sender.send(proposal);
+
+        let requests = timeout(Duration::from_secs(1), next_disconnect_requests(&nw2))
+            .await
+            .expect("relayer must be disconnected without polling the receiver");
+        assert!(
+            matches!(&requests[..], [(peer_id, CloseReason::MaliciousPeer)] if *peer_id == relayer),
+            "only the relayer must be disconnected as malicious, got {requests:?}",
         );
     }
 }
