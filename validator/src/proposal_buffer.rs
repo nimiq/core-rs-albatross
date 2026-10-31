@@ -21,7 +21,7 @@ use nimiq_network_interface::network::{CloseReason, MsgAcceptance, Network, Pubs
 use nimiq_primitives::{policy::Policy, TendermintProposal};
 use nimiq_serde::Serialize;
 use nimiq_tendermint::SignedProposalMessage;
-use nimiq_utils::{stream::FuturesUnordered, WakerExt as _};
+use nimiq_utils::{spawn, stream::FuturesUnordered, WakerExt as _};
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::{Mutex, RwLock};
 
@@ -77,9 +77,6 @@ pub(crate) struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static> 
         ProposalAndPubsubId<TValidatorNetwork>,
     >,
 
-    /// A FuturesUnordered collection of incomplete tasks to disconnect from a peer.
-    unresolved_disconnect_futures: FuturesUnordered<BoxFuture<'static, ()>>,
-
     /// Unordered Collection of all still pending futures of resolve block requests.
     resolve_block_futures: FuturesUnordered<
         BoxFuture<
@@ -117,7 +114,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNet
         let buffer = Self {
             network: Arc::clone(&network),
             buffer: LinkedHashMap::new(),
-            unresolved_disconnect_futures: FuturesUnordered::new(),
             resolve_block_futures: FuturesUnordered::new(),
             peers_with_resolving_blocks: HashSet::default(),
             waker: None,
@@ -131,44 +127,36 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNet
         let sender = ProposalSender {
             shared: Arc::clone(&shared),
             blockchain: Arc::clone(&blockchain),
-            network: Arc::clone(&network),
-        };
-        let receiver = ProposalReceiver {
-            shared,
-            blockchain,
             network,
         };
+        let receiver = ProposalReceiver { shared, blockchain };
 
         (sender, receiver)
     }
 
     /// Rejects the message received as pubsub_id, preventing its propagation
-    /// and disconnects from the peer who propagated it.
-    fn disconnect_and_reject(&mut self, pubsub_id: PubsubId<TValidatorNetwork>) {
+    /// and bans the peer who propagated it.
+    fn reject_and_ban(network: &Arc<TValidatorNetwork>, pubsub_id: PubsubId<TValidatorNetwork>) {
         // Retrieve the relayer of the proposal.
         let source = pubsub_id.propagation_source();
 
         // Don't propagate the proposal
-        self.network
+        network
             .validate_message::<ProposalTopic<TValidatorNetwork>>(pubsub_id, MsgAcceptance::Reject);
 
-        let network = Arc::clone(&self.network);
+        log::warn!(
+            peer_id = %source,
+            "Banning peer because an invalid proposal was received"
+        );
 
-        // disconnect the peer
-        let future = async move {
-            log::warn!(
-                peer_id = %source,
-                "Banning peer because an invalid proposal was received"
-            );
-
+        // Spawned so the ban does not depend on the receiver being polled: it only runs while a
+        // macro block is produced and may return early or be dropped once that block is decided.
+        let network = Arc::clone(network);
+        spawn(async move {
             network
                 .disconnect_peer(source, CloseReason::MaliciousPeer)
                 .await;
-        }
-        .boxed();
-
-        // Push the future to the futures unordered
-        self.unresolved_disconnect_futures.push(future);
+        });
     }
 
     /// Polls the resolve block futures. It removes all Futures which resulted in an Err return type until a
@@ -190,7 +178,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNet
                     log::debug!(?pubsub_id, "Proposal invalidly signed. Disconnecting the relaying peer and rejecting the proposal.");
                     self.peers_with_resolving_blocks
                         .remove(&pubsub_id.propagation_source());
-                    self.disconnect_and_reject(pubsub_id);
+                    Self::reject_and_ban(&self.network, pubsub_id);
                 }
                 Err(ResolveBlockError::Unresolved(error, pubsub_id)) => {
                     // The proposals validity cannot be determined as the predecessor cannot be resolved.
@@ -241,7 +229,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNet
                 // Macro block predecessors do not make any sense in the presence of micro blocks.
                 Ok(Block::Macro(_block)) => {
                     log::debug!(?pubsub_id, "The predecessing block of a macro block cannot be a macro block. Disconnecting the peer.");
-                    self.disconnect_and_reject(pubsub_id)
+                    Self::reject_and_ban(&self.network, pubsub_id)
                 }
                 // Micro block predecessors can be used to verify the signer. If the block itself is good will be checked later.
                 Ok(Block::Micro(block)) => {
@@ -250,7 +238,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNet
                             ?pubsub_id,
                             "Verification of signed proposal failed. Disconnecting the peer."
                         );
-                        self.disconnect_and_reject(pubsub_id);
+                        Self::reject_and_ban(&self.network, pubsub_id);
                     } else {
                         // No validate message call here, as later in the process more proposal verification happens.
                         return Some((signed_proposal, pubsub_id));
@@ -416,12 +404,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNet
         // the validity of proposals moot.
         drop(bc);
 
-        // Get the propagation source, as it is going to be required either way the verification goes,
-        // either for storing the proposal in the buffer, or to ban the relaying peer.
-        let source = proposal.1.propagation_source();
-
         // Verify the stated signer did in fact sign this proposal.
         if signature_valid {
+            let source = proposal.1.propagation_source();
+
             // Acquire the lock on the shared buffer.
             let mut shared = self.shared.lock();
 
@@ -442,33 +428,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNet
             // A new proposal was admitted into the buffer. Potential waiting tasks can be woken.
             shared.waker.wake();
         } else {
-            // The signature verification did not succeed.
-
-            // Signal the network, that this specific message is not to be propagated by this node.
-            // The message is also not only not interesting, but it is faulty.
-            self.network
-                .validate_message::<ProposalTopic<TValidatorNetwork>>(
-                    proposal.1,
-                    MsgAcceptance::Reject,
-                );
-
-            // Punish the propagation source of the proposal for propagating invalid proposal messages, i.e ban the peer.
-            let nw = Arc::clone(&self.network);
-
-            log::warn!(
-                peer_id = %source,
-                "Disconnecting peer because proposal signature verification failed"
+            log::debug!(
+                pubsub_id = ?proposal.1,
+                "Proposal signature verification failed. Disconnecting the peer."
             );
-
-            let future = async move {
-                nw.disconnect_peer(source, CloseReason::MaliciousPeer).await;
-            }
-            .boxed();
-
-            // Acquire the lock on the shared buffer.
-            let mut shared = self.shared.lock();
-            // Add the disconnect future to the FuturesUnordered collection.
-            shared.unresolved_disconnect_futures.push(future);
+            ProposalBuffer::reject_and_ban(&self.network, proposal.1);
         }
     }
 }
@@ -480,10 +444,6 @@ pub(crate) struct ProposalReceiver<TValidatorNetwork: ValidatorNetwork + 'static
     /// Reference to the blockchain structure. It is necessary to retrieve the proposals predecessor
     /// as well as the validators.
     blockchain: Arc<RwLock<Blockchain>>,
-
-    /// Reference to the network structure. Necessary to validate message for gossipsub as well as
-    /// banning peers if necessary.
-    network: Arc<TValidatorNetwork>,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<TValidatorNetwork> {
@@ -507,11 +467,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<
             ));
         }
 
-        // Poll the unresolved disconnect futures now that the new futures have been added.
-        while let Poll::Ready(Some(())) = shared.unresolved_disconnect_futures.poll_next_unpin(cx) {
-            // nothing to do for any of the completed futures
-        }
-
         // The buffer was emptied by `ProposalBuffer::poll_proposal`.
         //
         // We need to register a waker that wakes us when something is added to
@@ -528,7 +483,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for ProposalReceiver<T
         Self {
             shared: Arc::clone(&self.shared),
             blockchain: Arc::clone(&self.blockchain),
-            network: Arc::clone(&self.network),
         }
     }
 }
@@ -986,7 +940,7 @@ mod test {
 
         let proposal = create_proposal_msg(
             nw1,
-            nw2,
+            Arc::clone(&nw2),
             signing_key,
             macro_block.unwrap_macro_ref().header.clone(),
             invalid_signer,
@@ -994,6 +948,13 @@ mod test {
         .await;
 
         proposal_sender.send(proposal);
+
+        // Give spawned disconnects a chance to run.
+        sleep(Duration::from_millis(100)).await;
+        assert!(
+            nw2.take_disconnect_requests().is_empty(),
+            "invalid signer rejection should not disconnect the relayer",
+        );
 
         let shared = proposal_sender.shared.lock();
         assert!(
@@ -1007,10 +968,6 @@ mod test {
         assert!(
             shared.peers_with_resolving_blocks.is_empty(),
             "invalid signer must not register a peer for block resolution",
-        );
-        assert!(
-            shared.unresolved_disconnect_futures.is_empty(),
-            "invalid signer rejection should not enqueue disconnect work before buffer admission",
         );
         drop(shared);
 
