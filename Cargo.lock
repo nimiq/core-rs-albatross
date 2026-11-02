@@ -1004,7 +1004,7 @@ dependencies = [
  "hdrhistogram",
  "humantime",
  "hyper-util",
- "parking_lot",
+ "parking_lot 0.12.5",
  "prost 0.14.1",
  "prost-types 0.14.1",
  "serde",
@@ -1414,7 +1414,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d162beedaa69905488a8da94f5ac3edb4dd4788b732fadb7bd120b2625c1976"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -1896,9 +1896,9 @@ dependencies = [
 
 [[package]]
 name = "fixedbitset"
-version = "0.4.2"
+version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
+checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
 name = "flate2"
@@ -2407,7 +2407,7 @@ dependencies = [
  "ipconfig",
  "moka",
  "once_cell",
- "parking_lot",
+ "parking_lot 0.12.5",
  "rand 0.9.5",
  "resolv-conf",
  "smallvec",
@@ -3036,9 +3036,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
-version = "0.2.184"
+version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48f5d2a454e16a5ea0f4ced81bd44e4cfc7bd3a507b61887c99fd3538b28e4af"
+checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
 name = "libloading"
@@ -3067,7 +3067,7 @@ dependencies = [
  "indexmap 2.14.0",
  "libc",
  "mdbx-sys",
- "parking_lot",
+ "parking_lot 0.12.5",
  "sealed",
  "thiserror 2.0.21",
 ]
@@ -3170,7 +3170,7 @@ dependencies = [
  "multiaddr",
  "multihash",
  "multistream-select",
- "parking_lot",
+ "parking_lot 0.12.5",
  "pin-project",
  "quick-protobuf",
  "rand 0.8.8",
@@ -3192,7 +3192,7 @@ dependencies = [
  "hickory-resolver",
  "libp2p-core",
  "libp2p-identity",
- "parking_lot",
+ "parking_lot 0.12.5",
  "smallvec",
  "tracing",
 ]
@@ -3487,7 +3487,7 @@ dependencies = [
  "futures-rustls",
  "libp2p-core",
  "libp2p-identity",
- "parking_lot",
+ "parking_lot 0.12.5",
  "pin-project-lite",
  "rw-stream-sink",
  "soketto",
@@ -3556,6 +3556,15 @@ name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
+dependencies = [
+ "scopeguard",
+]
+
+[[package]]
+name = "lock_api"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65d91b22da179613dcf4d6ec8349563f52a363f6849e03b00dd0a185ec4a59af"
 dependencies = [
  "scopeguard",
 ]
@@ -3697,7 +3706,7 @@ dependencies = [
  "crossbeam-epoch",
  "crossbeam-utils",
  "equivalent",
- "parking_lot",
+ "parking_lot 0.12.5",
  "portable-atomic",
  "rustc_version",
  "smallvec",
@@ -3863,7 +3872,7 @@ dependencies = [
  "nimiq-trie",
  "nimiq-utils",
  "nimiq-vrf",
- "parking_lot",
+ "parking_lot 0.13.0",
  "rand 0.10.3",
  "serde",
  "tempfile",
@@ -3930,7 +3939,7 @@ dependencies = [
  "nimiq-trie",
  "nimiq-utils",
  "nimiq-vrf",
- "parking_lot",
+ "parking_lot 0.13.0",
  "prometheus-client 0.25.1",
  "rand 0.10.3",
  "rand_chacha 0.10.0",
@@ -3959,7 +3968,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-transaction",
  "nimiq-vrf",
- "parking_lot",
+ "parking_lot 0.13.0",
  "serde",
  "thiserror 2.0.21",
  "tokio-stream",
@@ -3978,7 +3987,7 @@ dependencies = [
  "nimiq-light-blockchain",
  "nimiq-primitives",
  "nimiq-transaction",
- "parking_lot",
+ "parking_lot 0.13.0",
  "tokio-stream",
 ]
 
@@ -3999,7 +4008,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-utils",
- "parking_lot",
+ "parking_lot 0.13.0",
  "rand 0.10.3",
  "rand_core_compat",
  "serde",
@@ -4065,7 +4074,7 @@ dependencies = [
  "nimiq-transaction-builder",
  "nimiq-trie",
  "nimiq-utils",
- "parking_lot",
+ "parking_lot 0.13.0",
  "pin-project",
  "rand 0.10.3",
  "serde",
@@ -4200,7 +4209,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-time",
  "nimiq-utils",
- "parking_lot",
+ "parking_lot 0.13.0",
  "rand 0.10.3",
  "serde",
  "thiserror 2.0.21",
@@ -4390,7 +4399,7 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-wallet",
- "parking_lot",
+ "parking_lot 0.13.0",
  "rand 0.10.3",
  "rustls",
  "rustls-pemfile",
@@ -4426,7 +4435,7 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-utils",
  "nimiq-vrf",
- "parking_lot",
+ "parking_lot 0.13.0",
  "rand 0.10.3",
  "thiserror 2.0.21",
  "tokio",
@@ -4484,7 +4493,7 @@ dependencies = [
  "nimiq-transaction-builder",
  "nimiq-utils",
  "nimiq-vrf",
- "parking_lot",
+ "parking_lot 0.13.0",
  "prometheus-client 0.25.1",
  "serde",
  "thiserror 2.0.21",
@@ -4516,7 +4525,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-transaction-builder",
  "nimiq-utils",
- "parking_lot",
+ "parking_lot 0.13.0",
  "tokio",
  "tokio-metrics",
  "tokio-stream",
@@ -4544,7 +4553,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-time",
  "nimiq-utils",
- "parking_lot",
+ "parking_lot 0.13.0",
  "prometheus-client 0.25.1",
  "tokio",
  "tokio-metrics",
@@ -4615,7 +4624,7 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-time",
  "nimiq-utils",
- "parking_lot",
+ "parking_lot 0.13.0",
  "pin-project",
  "pin-project-lite",
  "prometheus-client 0.25.1",
@@ -4642,7 +4651,7 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-time",
  "nimiq-utils",
- "parking_lot",
+ "parking_lot 0.13.0",
  "serde",
  "thiserror 2.0.21",
  "tokio",
@@ -4669,7 +4678,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-utils",
  "once_cell",
- "parking_lot",
+ "parking_lot 0.13.0",
  "rayon",
  "regex",
  "serde",
@@ -4731,7 +4740,7 @@ dependencies = [
  "nimiq-serde",
  "nimiq-transaction",
  "nimiq-vrf",
- "parking_lot",
+ "parking_lot 0.13.0",
  "serde",
  "serde_json",
  "serde_with",
@@ -4772,7 +4781,7 @@ dependencies = [
  "nimiq-validator-network",
  "nimiq-vrf",
  "nimiq-wallet",
- "parking_lot",
+ "parking_lot 0.13.0",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -4868,7 +4877,7 @@ dependencies = [
  "nimiq-log",
  "nimiq-primitives",
  "nimiq-test-log-proc-macro",
- "parking_lot",
+ "parking_lot 0.13.0",
  "tracing",
  "tracing-subscriber",
 ]
@@ -4920,7 +4929,7 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-vrf",
- "parking_lot",
+ "parking_lot 0.13.0",
  "paste",
  "rand 0.10.3",
  "serde",
@@ -5051,7 +5060,7 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
  "nimiq-test-utils",
- "parking_lot",
+ "parking_lot 0.13.0",
  "pin-project",
  "rand 0.10.3",
  "rand_core 0.10.1",
@@ -5106,7 +5115,7 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-vrf",
- "parking_lot",
+ "parking_lot 0.13.0",
  "rand 0.10.3",
  "rayon",
  "serde",
@@ -5128,7 +5137,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-serde",
  "nimiq-utils",
- "parking_lot",
+ "parking_lot 0.13.0",
  "serde",
  "thiserror 2.0.21",
  "time",
@@ -5208,7 +5217,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-transaction-builder",
  "nimiq-utils",
- "parking_lot",
+ "parking_lot 0.13.0",
  "rand 0.10.3",
  "serde",
  "serde-wasm-bindgen",
@@ -5459,8 +5468,18 @@ version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93857453250e3077bd71ff98b6a65ea6621a19bb0f559a85248955ac12c45a1a"
 dependencies = [
- "lock_api",
- "parking_lot_core",
+ "lock_api 0.4.14",
+ "parking_lot_core 0.9.12",
+]
+
+[[package]]
+name = "parking_lot"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9cf937ca4e1d0b7578784559063422fc39ae7c5a00f02471f2614d5486fd226"
+dependencies = [
+ "lock_api 0.5.0",
+ "parking_lot_core 0.10.0",
 ]
 
 [[package]]
@@ -5469,11 +5488,23 @@ version = "0.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1"
 dependencies = [
- "backtrace",
  "cfg-if",
  "libc",
+ "redox_syscall 0.5.18",
+ "smallvec",
+ "windows-link",
+]
+
+[[package]]
+name = "parking_lot_core"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cfff060068cc18aa7815010fcaf80c68c7fb9e85fc7f5c0f9bf142c21d19826"
+dependencies = [
+ "backtrace",
+ "libc",
  "petgraph",
- "redox_syscall",
+ "redox_syscall 0.9.5",
  "smallvec",
  "windows-link",
 ]
@@ -5511,12 +5542,14 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "petgraph"
-version = "0.6.5"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
+checksum = "8701b58ea97060d5e5b155d383a69952a60943f0e6dfe30b04c287beb0b27455"
 dependencies = [
  "fixedbitset",
+ "hashbrown 0.15.5",
  "indexmap 2.14.0",
+ "serde",
 ]
 
 [[package]]
@@ -5760,7 +5793,7 @@ checksum = "cf41c1a7c32ed72abe5082fb19505b969095c12da9f5732a4bc9878757fd087c"
 dependencies = [
  "dtoa",
  "itoa",
- "parking_lot",
+ "parking_lot 0.12.5",
  "prometheus-client-derive-encode 0.4.2",
 ]
 
@@ -5772,7 +5805,7 @@ checksum = "1784dc11a05f5a8f57c4a62915686be140f24f70301290b997e317241fa9ffc2"
 dependencies = [
  "dtoa",
  "itoa",
- "parking_lot",
+ "parking_lot 0.12.5",
  "prometheus-client-derive-encode 0.5.1",
 ]
 
@@ -6132,6 +6165,15 @@ name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
+dependencies = [
+ "bitflags 2.13.2",
+]
+
+[[package]]
+name = "redox_syscall"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "580c875845b41ecb1564ad1ae4703044cef774145e3d7a94dc2b3fa7c97868fd"
 dependencies = [
  "bitflags 2.13.2",
 ]
@@ -6934,9 +6976,9 @@ checksum = "7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589"
 
 [[package]]
 name = "smallvec"
-version = "1.15.1"
+version = "1.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
 
 [[package]]
 name = "snap"
@@ -7002,7 +7044,7 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "023a211cb3138dbc438680b32560ad89f699977624c9f8dbb95a47d5b4c07dd3"
 dependencies = [
- "lock_api",
+ "lock_api 0.4.14",
 ]
 
 [[package]]
@@ -7642,7 +7684,7 @@ dependencies = [
  "matchers",
  "nu-ansi-term",
  "once_cell",
- "parking_lot",
+ "parking_lot 0.12.5",
  "regex-automata",
  "sharded-slab",
  "smallvec",
@@ -8523,7 +8565,7 @@ dependencies = [
  "futures",
  "log",
  "nohash-hasher",
- "parking_lot",
+ "parking_lot 0.12.5",
  "pin-project",
  "rand 0.8.8",
  "static_assertions",
@@ -8538,7 +8580,7 @@ dependencies = [
  "futures",
  "log",
  "nohash-hasher",
- "parking_lot",
+ "parking_lot 0.12.5",
  "pin-project",
  "rand 0.9.5",
  "static_assertions",
