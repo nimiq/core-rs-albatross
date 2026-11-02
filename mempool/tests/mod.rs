@@ -2467,7 +2467,7 @@ async fn it_refuses_transactions_signed_by_small_order_keys() {
     assert_eq!(mempool.num_transactions(), 2);
 }
 
-/// `add_transaction` waits for a verification permit too, so RPC callers share the budget.
+/// `add_transaction` verifies one call at a time on its own permit, whatever the gossip budget.
 #[test]
 fn add_transaction_waits_for_a_verification_permit() {
     tokio::runtime::Builder::new_current_thread()
@@ -2529,12 +2529,12 @@ async fn add_transaction_one_at_a_time() {
     let mempool = Mempool::new(
         Arc::clone(&blockchain),
         MempoolConfig {
-            max_concurrent_verifications: 1,
+            max_concurrent_verifications: 4,
             ..Default::default()
         },
     );
 
-    // Park the first verification at its blockchain read; it holds the only permit.
+    // Park the first verification at its blockchain read; it holds the local permit.
     let parked = blockchain.write();
     let second_tx = txns.pop().unwrap();
     let first_tx = txns.pop().unwrap();
@@ -2547,9 +2547,16 @@ async fn add_transaction_one_at_a_time() {
     nimiq_time::timeout(Duration::from_secs(5), spawn_blocking(|| ()))
         .await
         .expect("add_transaction verified without a permit");
+
+    // Cancelling the first caller must not free its permit: its verification is still running.
+    drop(first);
+    assert!(futures::FutureExt::now_or_never(second.as_mut()).is_none());
+    nimiq_time::timeout(Duration::from_secs(5), spawn_blocking(|| ()))
+        .await
+        .expect("a cancelled add_transaction released its permit early");
     drop(parked);
 
-    assert_eq!(first.await, Ok(()));
+    // The cancelled verification still finishes on its blocking thread and inserts its transaction.
     assert_eq!(second.await, Ok(()));
     assert_eq!(mempool.num_transactions(), 2);
 }
@@ -2668,4 +2675,111 @@ async fn verify_one_at_a_time() {
     // The block selector accounts one extra byte per transaction for its execution status.
     let (txns, _) = mempool.get_transactions_for_block(txns_len + num_txns as usize);
     assert_eq!(txns.len(), num_txns as usize);
+}
+
+/// A local submission must not wait behind the gossip verification queue.
+#[test]
+fn add_transaction_does_not_queue_behind_gossip() {
+    // Two blocking threads: one parked gossip verification, one for the local submission.
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(2)
+        .build()
+        .unwrap()
+        .block_on(local_submission_bypasses_gossip_queue());
+}
+
+// The chain lock is held across awaits on purpose: it parks the verifications.
+#[allow(clippy::await_holding_lock)]
+async fn local_submission_bypasses_gossip_queue() {
+    let mut rng = test_rng(true);
+    let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
+
+    let sender_accounts =
+        generate_accounts(vec![1_000_000; 3], &mut genesis_builder, true, &mut rng);
+    let recipient_accounts = generate_accounts(vec![0; 3], &mut genesis_builder, false, &mut rng);
+    let mempool_transactions = (0..3)
+        .map(|i| TestTransaction {
+            fee: (i + 1) as u64,
+            value: 1,
+            sender: sender_accounts[i].clone(),
+            recipient: recipient_accounts[i].clone(),
+        })
+        .collect();
+    let (mut txns, _) = generate_transactions(mempool_transactions, true);
+
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+        None,
+        None,
+        false,
+    );
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+    let genesis_block = match genesis_info.block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env,
+            BlockchainConfig::default(),
+            Arc::new(OffsetTime::new()),
+            NetworkId::UnitAlbatross,
+            genesis_block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+    let mempool = Mempool::new(
+        Arc::clone(&blockchain),
+        MempoolConfig {
+            max_concurrent_verifications: 1,
+            ..Default::default()
+        },
+    );
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+    let (txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
+    mempool
+        .start_executor_with_txn_stream::<MockNetwork>(
+            Box::pin(ReceiverStream::new(txn_stream_rx)),
+            mock_network,
+        )
+        .await;
+
+    // Park every verification at its blockchain read. The first gossiped transaction holds the
+    // only gossip permit on a blocking thread, the second queues behind it.
+    let parked = blockchain.write();
+    let local_tx = txns.pop().unwrap();
+    for txn in txns {
+        txn_stream_tx.send((txn, mock_id.clone())).await.unwrap();
+    }
+    for _ in 0..10 {
+        yield_now().await;
+    }
+
+    // The local submission must start verifying at once, on the second blocking thread, so a
+    // probe for a blocking thread finds both busy. Queued behind gossip, it would hold no thread.
+    let mut local = Box::pin(mempool.add_transaction(local_tx, None));
+    assert!(futures::FutureExt::now_or_never(local.as_mut()).is_none());
+    assert!(
+        nimiq_time::timeout(Duration::from_millis(500), spawn_blocking(|| ()))
+            .await
+            .is_err(),
+        "the local submission waited behind the gossip queue"
+    );
+    drop(parked);
+
+    assert_eq!(local.await, Ok(()));
+    mempool.stop_executor_without_unsubscribe().await;
+    assert_eq!(mempool.num_transactions(), 3);
 }

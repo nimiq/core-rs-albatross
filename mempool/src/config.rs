@@ -12,8 +12,9 @@ pub struct MempoolConfig {
     pub control_size_limit: usize,
     /// Maximum number of transactions stored per sender
     pub tx_per_sender_limit: usize,
-    /// Maximum number of transactions verified at the same time. Verification runs on blocking
-    /// threads, so this is a CPU budget for transaction verification, not a thread count.
+    /// Maximum number of gossiped transactions verified at the same time. Verification runs on
+    /// blocking threads, so this is a CPU budget, not a thread count. Locally submitted
+    /// transactions (RPC) verify one at a time on a permit of their own.
     pub max_concurrent_verifications: usize,
     /// Mempool filter rules
     pub filter_rules: MempoolRules,

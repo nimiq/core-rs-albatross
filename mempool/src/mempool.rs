@@ -63,8 +63,11 @@ pub struct Mempool {
     /// Total number of ongoing verification tasks
     verification_tasks: Arc<AtomicU32>,
 
-    /// Permits bounding how many transactions are verified at the same time
+    /// Permits bounding how many gossiped transactions are verified at the same time
     verification_permits: Arc<Semaphore>,
+
+    /// Permit for locally submitted transactions, so that they never queue behind gossip
+    local_verification_permit: Arc<Semaphore>,
 }
 
 impl Mempool {
@@ -106,6 +109,7 @@ impl Mempool {
             verification_permits: Arc::new(Semaphore::new(
                 config.max_concurrent_verifications.max(1),
             )),
+            local_verification_permit: Arc::new(Semaphore::new(1)),
         }
     }
 
@@ -733,7 +737,8 @@ impl Mempool {
     }
 
     /// Adds a transaction to the local mempool without broadcasting it over the network.
-    /// Verification takes a permit and runs on a blocking thread, like gossiped transactions.
+    /// Verification runs on a blocking thread, one call at a time on its own permit, so that a
+    /// gossip flood never delays local submissions.
     pub async fn add_transaction(
         &self,
         transaction: Transaction,
@@ -742,12 +747,13 @@ impl Mempool {
         let blockchain = Arc::clone(&self.blockchain);
         let mempool_state = Arc::clone(&self.state);
         let filter = Arc::clone(&self.filter);
-        let _permit = self
-            .verification_permits
-            .acquire()
+        let permit = Arc::clone(&self.local_verification_permit)
+            .acquire_owned()
             .await
-            .expect("the verification semaphore is never closed");
+            .expect("the local verification semaphore is never closed");
         spawn_blocking(move || {
+            // Held on the blocking thread: a cancelled caller must not release it early.
+            let _permit = permit;
             let (network_id, protocol_version) = {
                 let blockchain = blockchain.read();
                 (blockchain.network_id, blockchain.protocol_version())
