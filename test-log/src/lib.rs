@@ -7,18 +7,21 @@ use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::Subscriber
 
 static INITIALIZE: Once = Once::new();
 
+/// The log filter of the test subscriber, for tests that install a scoped subscriber of their own.
+pub fn log_filter() -> Targets {
+    Targets::new()
+        .with_default(LevelFilter::INFO)
+        .with_nimiq_targets(LevelFilter::DEBUG)
+        .with_target("r1cs", LevelFilter::WARN)
+        .with_env()
+}
+
 #[doc(hidden)]
 pub fn initialize() {
     INITIALIZE.call_once(|| {
         tracing_subscriber::registry()
             .with(tracing_subscriber::fmt::layer().with_test_writer())
-            .with(
-                Targets::new()
-                    .with_default(LevelFilter::INFO)
-                    .with_nimiq_targets(LevelFilter::DEBUG)
-                    .with_target("r1cs", LevelFilter::WARN)
-                    .with_env(),
-            )
+            .with(log_filter())
             .init();
     });
 

@@ -1,31 +1,59 @@
-use std::{sync::Arc, time::SystemTime};
+use std::{
+    fmt::Debug,
+    sync::Arc,
+    task::Poll,
+    time::{Duration, SystemTime},
+};
 
-use futures::{stream, StreamExt};
+use futures::{future::poll_fn, stream, FutureExt, StreamExt};
 use nimiq_account::{Account, StakingContractStoreWrite, TransactionLog};
-use nimiq_block::{BlockError, MacroBlock, MacroHeader};
-use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
+use nimiq_block::{Block, BlockError, MacroBlock, MacroHeader};
+use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::traits::WriteTransaction;
+use nimiq_genesis::NetworkInfo;
+use nimiq_genesis_builder::GenesisInfo;
 use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
 use nimiq_tendermint::{
-    ProposalMessage, Protocol, ProtocolError, Return, SignedProposalMessage, Step, Tendermint,
+    ProposalMessage, Protocol, ProtocolError, Return, SignedProposalMessage,
+    State as TendermintState, Step, Tendermint,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     bitset::with_trailing_zero_limbs,
     block_production::TemporaryBlockProducer,
-    blockchain::{fill_micro_blocks, produce_macro_blocks},
+    blockchain::{
+        fill_micro_blocks, produce_macro_blocks, signing_key, validator_address, voting_key,
+    },
     test_network::TestNetwork,
     test_rng,
+    validator::build_validator,
 };
+use nimiq_time::timeout;
 use nimiq_transaction::account::staking_contract::SignalDataUpdate;
 use nimiq_utils::time::systemtime_to_timestamp;
-use nimiq_validator::{aggregation::tendermint::proposal::Header, tendermint::TendermintProtocol};
+use nimiq_validator::{
+    aggregation::tendermint::{proposal::Header, state::MacroState},
+    tendermint::TendermintProtocol,
+    validator::Validator,
+};
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
+use parking_lot::Mutex;
+use tracing_core::{
+    field::{Field, Visit},
+    Event, Subscriber,
+};
+use tracing_subscriber::{
+    fmt,
+    layer::{Context, SubscriberExt},
+    util::SubscriberInitExt,
+    Layer,
+};
 
 #[test(tokio::test)]
 async fn it_verifies_inferior_chain_proposals() {
@@ -834,5 +862,162 @@ async fn it_prevotes_nil_for_a_padded_punished_set() {
             Some(canonical_hash)
         );
         assert_eq!(round_0_prevote(&temp_producer, padded).await, None);
+    }
+}
+
+/// Runs `action` on the first log event with the given message, from within the logging call.
+struct RunOnLog {
+    message: &'static str,
+    action: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+}
+
+impl<S: Subscriber> Layer<S> for RunOnLog {
+    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        let mut visitor = MessageEq {
+            expected: self.message,
+            matches: false,
+        };
+        event.record(&mut visitor);
+        if !visitor.matches {
+            return;
+        }
+        // Release the lock before running the action, as the action may log itself.
+        let action = self.action.lock().take();
+        if let Some(action) = action {
+            action();
+        }
+    }
+}
+
+struct MessageEq {
+    expected: &'static str,
+    matches: bool,
+}
+
+impl Visit for MessageEq {
+    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+        if field.name() == "message" {
+            self.matches = format!("{value:?}") == self.expected;
+        }
+    }
+}
+
+/// Polls the validator until macro block `block_number` is the head of its chain.
+async fn finish_macro_block(
+    validator: &mut Validator<ValidatorNetworkImpl<MockNetwork>>,
+    block_number: u32,
+) -> MacroBlock {
+    let blockchain = Arc::clone(&validator.blockchain);
+    poll_fn(|cx| {
+        let _ = validator.poll_unpin(cx);
+        match blockchain.read().head() {
+            Block::Macro(block) if block.block_number() == block_number => {
+                Poll::Ready(block.clone())
+            }
+            _ => Poll::Pending,
+        }
+    })
+    .await
+}
+
+fn tendermint_state(
+    macro_state: Option<MacroState>,
+    block_number: u32,
+) -> Option<TendermintState<TendermintProtocol<ValidatorNetworkImpl<MockNetwork>>>> {
+    macro_state?.into_tendermint_state(block_number)
+}
+
+/// The only validator is at head H-1 when a competing skip block for H-2 becomes the head, just as
+/// its Tendermint instance for macro block H reaches a prevote polka. It must still finish H, from a
+/// persisted precommit and lock, and without changing any vote it had persisted before.
+#[test(tokio::test)]
+async fn it_finishes_macro_block_from_persisted_state_after_rebranch() {
+    let producer = TemporaryBlockProducer::new();
+    let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
+    let genesis = GenesisInfo {
+        block: network_info.genesis_block(),
+        hash: network_info.genesis_hash().clone(),
+        accounts: network_info.genesis_accounts(),
+    };
+    let (mut validator, mut consensus) = build_validator::<MockNetwork>(
+        0,
+        validator_address(),
+        false,
+        signing_key(),
+        voting_key(),
+        signing_key(),
+        genesis,
+        &mut Some(MockHub::default()),
+    )
+    .await;
+    let blockchain = Arc::clone(&validator.blockchain);
+    let push = |block| Blockchain::push(blockchain.upgradable_read(), block).unwrap();
+
+    // Head at H-1, with a competing skip block for H-2 kept aside.
+    let macro_block_number = Policy::macro_block_after(blockchain.read().block_number());
+    while producer.blockchain.read().block_number() < macro_block_number - 3 {
+        push(producer.next_block(vec![], false));
+    }
+    let skip_block = producer.next_block_no_push(vec![], true);
+    push(producer.next_block(vec![], false));
+    push(producer.next_block(vec![], false));
+
+    // The skip block becomes the head the moment Tendermint sees the prevote polka.
+    let rebranch = Arc::new(Mutex::new(None));
+    let state_at_polka = Arc::new(Mutex::new(None));
+    let action = {
+        let blockchain = Arc::clone(&blockchain);
+        let macro_state = Arc::clone(validator.macro_state());
+        let rebranch = Arc::clone(&rebranch);
+        let state_at_polka = Arc::clone(&state_at_polka);
+        move || {
+            *state_at_polka.lock() = macro_state.read().clone();
+            *rebranch.lock() = Some(Blockchain::push(blockchain.upgradable_read(), skip_block));
+        }
+    };
+    let _log_guard = tracing_subscriber::registry()
+        .with(RunOnLog {
+            message: "Aggregation resulted in Block polka",
+            action: Mutex::new(Some(Box::new(action))),
+        })
+        .with(
+            fmt::layer()
+                .with_test_writer()
+                .with_filter(nimiq_test_log::log_filter()),
+        )
+        .set_default();
+
+    consensus.force_established();
+    let decision = timeout(
+        Duration::from_secs(20),
+        finish_macro_block(&mut validator, macro_block_number),
+    )
+    .await
+    .expect("the validator must finish the macro block");
+    assert_eq!(
+        *rebranch.lock(),
+        Some(Ok(PushResult::Rebranched)),
+        "the skip block must become the head while the macro block is produced",
+    );
+
+    // As the only validator, its own precommit decides H, so that precommit must be persisted.
+    let persisted = tendermint_state(validator.macro_state().read().clone(), macro_block_number)
+        .expect("a Tendermint state for the finished macro block must be persisted");
+    let round = decision.justification.as_ref().unwrap().round;
+    let proposal_hash = Hash::hash::<Blake2sHash>(&decision.header);
+    assert_eq!(
+        persisted.votes.get(&(round, Step::Precommit)),
+        Some(&Some(proposal_hash.clone())),
+        "finished {decision} without a persisted precommit, persisted votes: {:?}",
+        persisted.votes,
+    );
+    assert_eq!(persisted.locked, Some((round, proposal_hash)));
+
+    // Votes persisted before the rebranch may have left the node, so they must not change.
+    let votes_at_polka = tendermint_state(state_at_polka.lock().take(), macro_block_number)
+        .expect("the prevote must be persisted when the polka forms")
+        .votes;
+    for (id, vote) in &votes_at_polka {
+        assert_eq!(persisted.votes.get(id), Some(vote), "vote {id:?} changed");
     }
 }
