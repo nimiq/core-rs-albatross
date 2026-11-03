@@ -1,6 +1,7 @@
 use nimiq_account::RevertInfo;
+use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::{
-    AbstractBlockchain, ChunksPushError, ChunksPushResult, PushResult,
+    AbstractBlockchain, ChunksPushError, ChunksPushResult, PushError, PushResult,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
@@ -655,4 +656,138 @@ fn can_detect_invalid_chunks() {
             AccountError::ChunkError(MerkleRadixTrieError::InvalidChunk(..))
         ))
     );
+}
+
+/// The block whose sibling the fork proposals build on: the last micro block of the second batch
+/// (the first batch pays no rewards).
+fn forked_block_number() -> u32 {
+    Policy::macro_block_after(Policy::macro_block_after(Policy::genesis_block_number())) - 1
+}
+
+/// A node receives the trie items before `missing_from` with the first block and the rest of the
+/// trie with `completing_block`. It stores a sibling of the forked block and verifies a macro block
+/// proposal built on the sibling.
+fn verify_proposal_on_fork(
+    missing_from: KeyNibbles,
+    completing_block: u32,
+) -> Result<(), PushError> {
+    let producer = TemporaryBlockProducer::new();
+    let fork_producer = TemporaryBlockProducer::new();
+    let node = TemporaryBlockProducer::new_incomplete();
+
+    let forked_block = forked_block_number();
+    assert!(completing_block <= forked_block);
+    let push = |block: Block, diff: TrieDiff, chunks: Vec<TrieChunkWithStart>| {
+        // The fork producer builds its own block at the forked height.
+        if block.block_number() < forked_block {
+            assert_eq!(fork_producer.push(block.clone()), Ok(PushResult::Extended));
+        }
+        let (result, chunks_result) = node.push_with_chunks(block, diff, chunks).unwrap();
+        assert_eq!(result, PushResult::Extended);
+        assert!(chunks_result.is_ok());
+    };
+
+    // First block with the trie items before `missing_from`, then empty blocks up to the
+    // completing block.
+    let (block, diff) = producer.next_block_and_diff_with_txs(vec![], false, vec![]);
+    let items = producer.get_chunk(KeyNibbles::ROOT, 1000).chunk.items;
+    let known_items = items.iter().filter(|item| item.key < missing_from).count();
+    let chunks = match known_items {
+        0 => vec![],
+        n => vec![producer.get_chunk(KeyNibbles::ROOT, n)],
+    };
+    push(block, diff, chunks);
+
+    while producer.blockchain.read().block_number() + 1 < completing_block {
+        let (block, diff) = producer.next_block_and_diff_with_txs(vec![], false, vec![]);
+        push(block, diff, vec![]);
+    }
+    let missing = node
+        .blockchain
+        .read()
+        .get_missing_accounts_range(None)
+        .unwrap();
+    assert!(items
+        .iter()
+        .all(|item| missing.contains(&item.key) == (item.key >= missing_from)));
+
+    // The completing block brings the rest of the trie.
+    let (block, diff) = producer.next_block_and_diff_with_txs(vec![], false, vec![]);
+    let chunk = producer.get_chunk(missing.start, 1000);
+    push(block, diff, vec![chunk]);
+    assert!(node.blockchain.read().accounts_complete());
+
+    // Empty blocks up to the forked block, whose sibling is stored as a fork.
+    while producer.blockchain.read().block_number() < forked_block {
+        let (block, diff) = producer.next_block_and_diff_with_txs(vec![], false, vec![]);
+        push(block, diff, vec![]);
+    }
+    let (sibling, sibling_diff) =
+        fork_producer.next_block_and_diff_with_txs(b"fork".to_vec(), false, vec![]);
+    assert_eq!(
+        node.push_with_chunks(sibling, sibling_diff, vec![]),
+        Ok((PushResult::Forked, Ok(ChunksPushResult::EmptyChunks)))
+    );
+    let head = node.blockchain.read().head_hash();
+
+    // Proposal on top of the sibling, without its body.
+    let header = {
+        let blockchain = fork_producer.blockchain.read();
+        let timestamp = blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME;
+        fork_producer
+            .producer
+            .next_macro_block_proposal(&blockchain, timestamp, 0, vec![], None)
+            .unwrap()
+            .header
+    };
+    let proposal = MacroBlock {
+        header,
+        body: None,
+        justification: None,
+    };
+    fork_producer
+        .blockchain
+        .upgradable_read()
+        .verify_macro_block_proposal(proposal.clone(), 0, None)
+        .expect("The proposal must verify on top of the sibling");
+
+    let result = node
+        .blockchain
+        .upgradable_read()
+        .verify_macro_block_proposal(proposal, 0, None)
+        .map(|_| ());
+
+    // Verification leaves the node's chain and state as they were.
+    assert_eq!(node.blockchain.read().head_hash(), head);
+    assert!(node.blockchain.read().accounts_complete());
+    result
+}
+
+/// Verifying a proposal on a fork rebranches and reverts the chunk that completed the trie, here
+/// the whole trie. The node cannot verify the proposal and must reject it.
+#[test]
+fn it_rejects_fork_proposals_if_the_rebranch_reverts_the_whole_trie() {
+    let result = verify_proposal_on_fork(KeyNibbles::ROOT, forked_block_number());
+    assert_eq!(result, Err(PushError::IncompleteAccountsTrie));
+}
+
+/// As above, but the reverted chunk starts at the validator's reward address, after the staking
+/// contract and its data, which stay known.
+#[test]
+fn it_rejects_fork_proposals_if_the_rebranch_reverts_part_of_the_trie() {
+    // The funded genesis account is the validator's reward address.
+    let reward_address = KeyNibbles::from(&Address::from(&key_pair_with_funds().public));
+    let staking_contract = KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS);
+    assert!(staking_contract < reward_address && !staking_contract.is_prefix_of(&reward_address));
+
+    let result = verify_proposal_on_fork(reward_address, forked_block_number());
+    assert_eq!(result, Err(PushError::IncompleteAccountsTrie));
+}
+
+/// As in the whole-trie case, but the trie completes one block before the forked height: the
+/// rebranch reverts no chunk and the node verifies the proposal.
+#[test]
+fn it_verifies_fork_proposals_if_the_rebranch_reverts_no_chunk() {
+    let result = verify_proposal_on_fork(KeyNibbles::ROOT, forked_block_number() - 1);
+    assert_eq!(result, Ok(()));
 }
