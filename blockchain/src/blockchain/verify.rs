@@ -562,20 +562,9 @@ impl Blockchain {
         block: &mut Block,
         prev_info: ChainInfo,
     ) -> Result<MacroBody, PushError> {
-        // Check to see if the trie is incomplete. Proposal verification only happens when actively validating and thus the
-        // trie should not be incomplete initially. It might be incomplete while rebranching blocks and those need to
-        // be taken into account.
-        let prev_missing_range = self.get_missing_accounts_range(None);
-        if prev_missing_range.is_some() {
-            warn!(
-                %block,
-                ?prev_missing_range,
-                "Verifying proposal while current missing accounts is not none",
-            );
-        }
-
         // Create a ChainInfo for the proposed block.
-        let chain_info = ChainInfo::from_block(block.clone(), &prev_info, prev_missing_range)?;
+        // The trie is complete here (checked by the caller), so there is no missing range.
+        let chain_info = ChainInfo::from_block(block.clone(), &prev_info, None)?;
 
         let read_txn = self.read_transaction();
         // First the common ancestor of the two chains needs to be found.
@@ -617,6 +606,13 @@ impl Blockchain {
 
             return Err(PushError::InvalidFork);
         }
+
+        // Reverting blocks may have reverted the chunks that completed the accounts trie.
+        if !self.state.accounts.is_complete(Some(&write_txn)) {
+            debug!(%block, "Tendermint - await_proposal: Accounts trie incomplete after rebranching");
+            return Err(PushError::IncompleteAccountsTrie);
+        }
+
         // The state is now prepared contained within `write_txn` to just invoke verify_proposal_state.
         self.verify_proposal_state(block, &mut write_txn)
     }
