@@ -3,7 +3,7 @@ use std::{ops::Add, sync::Arc};
 use nimiq_block::{Block, BlockError, SkipBlockProof};
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{
-    AbstractBlockchain, BlockchainEvent, PushError, PushError::InvalidBlock, PushResult,
+    AbstractBlockchain, BlockchainEvent, ForkEvent, PushError, PushError::InvalidBlock, PushResult,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -14,6 +14,7 @@ use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     blockchain::{
         fill_micro_blocks_with_txns, next_protocol_upgrade_block, produce_macro_blocks_with_txns,
+        validator_address,
     },
     blockchain_events_broadcast::{assert_events_eq_unordered, try_collect_events},
     test_custom_block::{
@@ -411,6 +412,55 @@ fn it_works_with_valid_blocks() {
 
     // A simple push of a macro block
     simply_push_macro_block(&config, &Ok(PushResult::Extended));
+}
+
+/// The slot owner signs several micro blocks on the same parent. The second one must be reported
+/// by a valid fork proof against the slot owner, and no sibling may yield more than one.
+#[test]
+fn it_reports_equivocation_with_at_most_one_fork_proof_per_sibling() {
+    let slot_owner = TemporaryBlockProducer::new();
+    let signing_key = &slot_owner.producer.signing_key.public;
+    let siblings: Vec<Block> = (0..4)
+        .map(|i| slot_owner.next_block_no_push(vec![i], false))
+        .collect();
+
+    let node = TemporaryLightBlockProducer::new();
+    let mut fork_rx = node.light_blockchain.read().fork_notifier.subscribe();
+    let mut pushed_hashes = vec![];
+
+    for (i, sibling) in siblings.into_iter().enumerate() {
+        pushed_hashes.push(sibling.hash());
+        let result = node.push(sibling);
+        let events = try_collect_events(&mut fork_rx).unwrap();
+
+        match i {
+            0 => {
+                assert_eq!(result, Ok(PushResult::Extended));
+                assert!(events.is_empty());
+            }
+            1 => {
+                assert_eq!(result, Ok(PushResult::Forked));
+                assert_eq!(events.len(), 1);
+            }
+            _ => {
+                assert!(result.is_ok());
+                assert!(
+                    events.len() <= 1,
+                    "{} fork proofs for one sibling",
+                    events.len()
+                );
+            }
+        }
+        for ForkEvent::Detected(proof) in events {
+            assert_eq!(proof.validator_address(), &validator_address());
+            assert_eq!(
+                proof.verify_excluding_address_and_network(signing_key),
+                Ok(())
+            );
+            assert!(pushed_hashes.contains(&proof.header1_hash()));
+            assert!(pushed_hashes.contains(&proof.header2_hash()));
+        }
+    }
 }
 
 #[test]
