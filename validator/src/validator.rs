@@ -642,7 +642,10 @@ where
                             update_block_number = update.block_number,
                             "Discarding obsolete Tendermint state update"
                         );
-                        continue;
+                        // Tendermint acts on a yielded state when polled next, so the instance
+                        // must stop here. The event for the new head sets up the next producer.
+                        self.macro_producer = None;
+                        return;
                     }
 
                     let mut write_transaction = self.env.write_transaction();
