@@ -677,15 +677,23 @@ impl Blockchain {
         // verified the validator for the current slot, this is enough to check for fork proofs.
         // Note: We don't verify the justifications for the other blocks here, since they had to
         // already be verified in order to be added to the blockchain.
-        let mut micro_blocks: Vec<Block> = self
+        let block_hashes = self
             .chain_store
-            .get_blocks_at(block.header.block_number, false, Some(txn))
-            .unwrap_or_default();
+            .get_block_hashes_at(block.header.block_number, Some(txn));
 
-        // Filter out any skip blocks.
-        micro_blocks.retain(|block| block.is_micro() && !block.is_skip());
+        // Load the stored blocks lazily and filter out any skip blocks.
+        let micro_blocks = block_hashes.iter().filter_map(|hash| {
+            let stored_block = self
+                .chain_store
+                .get_block(hash, false, Some(txn))
+                .expect("Corrupted store: Block referenced from index not found");
+            match stored_block {
+                Block::Micro(micro_block) if !micro_block.is_skip_block() => Some(micro_block),
+                _ => None,
+            }
+        });
 
-        for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
+        for micro_block in micro_blocks {
             // If there's another micro block set to this block height, which also has the same
             // VrfSeed entropy we notify the fork event.
             if block.header.seed.entropy() == micro_block.header.seed.entropy() {
@@ -712,6 +720,9 @@ impl Blockchain {
 
                 // We shouldn't log errors if there are no listeners.
                 _ = self.fork_notifier.send(ForkEvent::Detected(proof));
+
+                // One proof is enough to punish the producer.
+                return;
             }
         }
     }

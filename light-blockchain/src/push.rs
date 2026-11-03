@@ -414,13 +414,21 @@ impl LightBlockchain {
         // verified the validator for the current slot, this is enough to check for fork proofs.
         // Note: We don't verify the justifications for the other blocks here, since they already
         // had to be verified in order to be added to the blockchain.
-        let mut micro_blocks: Vec<Block> =
-            self.chain_store.get_blocks_at(block.header.block_number);
+        let block_hashes = self
+            .chain_store
+            .get_block_hashes(&block.header.block_number)
+            .unwrap_or_default();
 
-        // Filter out any skip blocks.
-        micro_blocks.retain(|block| block.is_micro() && !block.is_skip());
+        // Load the stored blocks lazily and filter out any skip blocks.
+        let micro_blocks = block_hashes.iter().filter_map(|hash| {
+            let chain_info = self.chain_store.get_chain_info(hash, false).ok()?;
+            match &chain_info.head {
+                Block::Micro(micro_block) if !micro_block.is_skip_block() => Some(micro_block),
+                _ => None,
+            }
+        });
 
-        for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
+        for micro_block in micro_blocks {
             // If there's another micro block set to this block height, which also has the same
             // VrfSeed entropy we notify the fork event.
             if block.header.seed.entropy() == micro_block.header.seed.entropy() {
@@ -434,6 +442,7 @@ impl LightBlockchain {
 
                 let justification2 = micro_block
                     .justification
+                    .clone()
                     .expect("Missing justification")
                     .unwrap_micro();
 
@@ -441,12 +450,15 @@ impl LightBlockchain {
                     validator_address.clone(),
                     block.header.clone(),
                     justification1,
-                    micro_block.header,
+                    micro_block.header.clone(),
                     justification2,
                 );
 
                 // We shouldn't log errors if there are no listeners.
                 _ = self.fork_notifier.send(ForkEvent::Detected(proof));
+
+                // One proof is enough to punish the producer.
+                return;
             }
         }
     }
