@@ -23,7 +23,7 @@ use libp2p::{
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
-use nimiq_serde::DeserializeError;
+use nimiq_serde::{DeserializeError, Serialize as _};
 use nimiq_time::{interval, sleep, Interval, Sleep};
 use nimiq_utils::tagged_signing::TaggedKeyPair;
 use parking_lot::RwLock;
@@ -32,8 +32,8 @@ use thiserror::Error;
 
 use super::{
     behaviour::Config,
-    message_codec::{MessageReader, MessageWriter},
-    peer_contacts::{PeerContactBook, SignedPeerContact},
+    message_codec::{MessageReader, MessageWriter, MAX_MESSAGE_SIZE},
+    peer_contacts::{PeerContactBook, PeerContactError, SignedPeerContact},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
 use crate::{AUTONAT_DIAL_BACK_PROTOCOL, AUTONAT_DIAL_REQUEST_PROTOCOL};
@@ -79,6 +79,9 @@ pub enum Error {
 
     #[error("Peer contact has an invalid signature: {peer_contact:?}")]
     InvalidPeerContactSignature { peer_contact: SignedPeerContact },
+
+    #[error("Peer contact is invalid: {0}")]
+    InvalidPeerContact(#[from] PeerContactError),
 
     #[error("Peer replied with incorrect response to challenge.")]
     ChallengeResponseFailed,
@@ -183,6 +186,10 @@ pub struct Handler {
 impl Handler {
     const STATE_TRANSITION_TIMEOUT: Duration = Duration::from_millis(3000);
     const MAX_SEND_UPDATE_INTERVAL: Duration = Duration::from_secs(3600);
+    /// Upper bound for the serialized size of the fields of a discovery message, apart from the
+    /// peer contacts.
+    const MAX_MESSAGE_OVERHEAD: usize = 128;
+
     pub fn new(
         peer_id: PeerId,
         config: Config,
@@ -234,16 +241,30 @@ impl Handler {
     /// protocols and service filters, they are limited to the number of peers specified by the peer.
     /// This list also includes our own contact which should be already filtered since we already have
     /// connections to these peers.
+    /// Contacts are left out if needed, such that they fit into a single message together with our own contact.
     fn get_peer_contacts(
         &self,
         peer_contact_book: &PeerContactBook,
         limit: usize,
     ) -> Vec<SignedPeerContact> {
+        let mut remaining_size = MAX_MESSAGE_SIZE
+            .saturating_sub(Self::MAX_MESSAGE_OVERHEAD)
+            .saturating_sub(
+                peer_contact_book
+                    .get_own_contact()
+                    .signed()
+                    .serialized_size(),
+            );
+
         peer_contact_book
             .query(self.services_filter)
             .sample(&mut rand::rng(), limit)
             .into_iter()
-            .map(|c| c.signed().clone())
+            .filter_map(|c| {
+                let contact = c.signed();
+                remaining_size = remaining_size.checked_sub(contact.serialized_size())?;
+                Some(contact.clone())
+            })
             .collect()
     }
 
@@ -580,6 +601,16 @@ impl ConnectionHandler for Handler {
                                         );
                                     }
 
+                                    // Check that the peer's contact is small enough for us to relay it.
+                                    // Relayed contacts exceeding the limits are ignored instead.
+                                    if let Err(error) = peer_contact.check_size_limits() {
+                                        return Poll::Ready(
+                                            ConnectionHandlerEvent::NotifyBehaviour(
+                                                HandlerOutEvent::Error(error.into()),
+                                            ),
+                                        );
+                                    }
+
                                     // Check and verify the peer contacts received
                                     if peer_contacts.len() > self.config.update_limit as usize {
                                         return Poll::Ready(
@@ -810,5 +841,26 @@ impl ConnectionHandler for Handler {
 
         // If we've left the loop, we're waiting on something.
         Poll::Pending
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_network_interface::peer_info::Services;
+    use nimiq_test_log::test;
+
+    use super::{Handler, SignedPeerContact, MAX_MESSAGE_SIZE};
+    use crate::discovery::behaviour::Config;
+
+    #[test]
+    fn peer_contacts_of_maximum_size_fit_into_a_message() {
+        // With the default update limit, peer contacts are never left out because of their size
+        let update_limit = Config::new(Default::default(), Services::empty(), false).update_limit;
+
+        assert!(
+            (update_limit as usize + 1) * SignedPeerContact::MAX_SIZE
+                + Handler::MAX_MESSAGE_OVERHEAD
+                <= MAX_MESSAGE_SIZE
+        );
     }
 }

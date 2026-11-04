@@ -10,6 +10,9 @@ mod writer;
 
 pub use self::{reader::MessageReader, writer::MessageWriter};
 
+/// Maximum size of a message (excluding the header).
+pub const MAX_MESSAGE_SIZE: usize = 1_000_000;
+
 #[cfg(test)]
 mod tests {
     use futures::{io::Cursor, SinkExt, StreamExt};

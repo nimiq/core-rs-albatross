@@ -9,9 +9,7 @@ use futures::{AsyncRead, Stream};
 use nimiq_serde::{Deserialize, DeserializeError, SerializedSize as _};
 use pin_project::pin_project;
 
-use super::header::Header;
-
-const MAX_MESSAGE_SIZE: u32 = 1_000_000;
+use super::{header::Header, MAX_MESSAGE_SIZE};
 
 const CHUNK_SIZE: usize = 1024;
 
@@ -172,7 +170,7 @@ where
                 };
 
                 // Verify max message size.
-                if header.size > MAX_MESSAGE_SIZE {
+                if header.size as usize > MAX_MESSAGE_SIZE {
                     return Poll::Ready(Some(Err(DeserializeError::bad_encoding())));
                 }
 

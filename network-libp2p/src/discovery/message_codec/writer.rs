@@ -9,7 +9,7 @@ use futures::{ready, AsyncWrite, Sink};
 use nimiq_serde::{Serialize, SerializedSize as _};
 use pin_project::pin_project;
 
-use super::header::Header;
+use super::{header::Header, MAX_MESSAGE_SIZE};
 
 fn write_from_buf<W>(
     inner: &mut W,
@@ -92,8 +92,19 @@ where
             return Err(std::io::Error::from(std::io::ErrorKind::WouldBlock));
         }
 
-        // Reserve space for the header and message.
         let n = Serialize::serialized_size(item);
+
+        // The receiving `MessageReader` rejects oversized messages. Senders must keep their messages within the limit.
+        if n > MAX_MESSAGE_SIZE {
+            error!(
+                size = n,
+                maximum = MAX_MESSAGE_SIZE,
+                "MessageWriter: Refusing to send message that exceeds the maximum size"
+            );
+            return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
+        }
+
+        // Reserve space for the header and message.
         self_projected.buffer.reserve(n + Header::SIZE);
 
         let header = Header::new(n as u32);
@@ -144,7 +155,7 @@ mod tests {
     use nimiq_serde::{Deserialize, Serialize, SerializedSize};
     use nimiq_test_log::test;
 
-    use super::{Header, MessageWriter};
+    use super::{Header, MessageWriter, MAX_MESSAGE_SIZE};
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {
@@ -166,5 +177,20 @@ mod tests {
         let data = message_writer.into_inner();
 
         assert_eq!(&test_message.serialize_to_vec(), &data[Header::SIZE..])
+    }
+
+    #[test(tokio::test)]
+    pub async fn it_refuses_oversized_messages() {
+        let test_message = TestMessage {
+            foo: 42,
+            bar: "a".repeat(MAX_MESSAGE_SIZE),
+        };
+
+        let mut message_writer = MessageWriter::new(vec![]);
+
+        let error = message_writer.send(&test_message).await.unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+
+        assert!(message_writer.into_inner().is_empty());
     }
 }

@@ -17,6 +17,7 @@ use nimiq_network_interface::{
     peer_info::{PeerInfo, Services},
     validator_record::ValidatorRecord,
 };
+use nimiq_serde::{seq_max_size, Serialize as _, SerializedSize as _};
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,10 @@ use crate::{utils, Network};
 pub enum PeerContactError {
     #[error("Exceeded number of advertised addresses")]
     AdvertisedAddressesExceeded,
+    #[error("Exceeded length of an advertised address: {len}")]
+    AdvertisedAddressLengthExceeded { len: usize },
+    #[error("Exceeded size of the peer contact: {size}")]
+    SizeExceeded { size: usize },
 }
 
 /// The validator info contains all information which is not present in a [PeerContact]
@@ -73,7 +78,10 @@ pub struct PeerContact {
 
 impl PeerContact {
     /// Maximum number of advertised addresses
-    const MAX_ADDRESSES: usize = 15;
+    pub const MAX_ADDRESSES: usize = 15;
+
+    /// Maximum encoded length of an advertised address.
+    pub const MAX_ADDRESS_LEN: usize = 512;
 
     pub fn new<I: IntoIterator<Item = Multiaddr>>(
         advertised_addresses: I,
@@ -85,6 +93,7 @@ impl PeerContact {
         if addresses.len() > Self::MAX_ADDRESSES {
             return Err(PeerContactError::AdvertisedAddressesExceeded);
         }
+        Self::verify_address_lengths(&addresses)?;
 
         addresses.sort();
 
@@ -135,7 +144,18 @@ impl PeerContact {
     }
 
     /// Adds a set of addresses
-    pub fn add_addresses(&mut self, addresses: Vec<Multiaddr>) {
+    pub fn add_addresses(&mut self, mut addresses: Vec<Multiaddr>) {
+        addresses.retain(|address| {
+            let fits = address.len() <= Self::MAX_ADDRESS_LEN;
+            if !fits {
+                log::warn!(
+                    maximum = Self::MAX_ADDRESS_LEN,
+                    len = address.len(),
+                    "Ignoring address since it exceeds the maximum allowed length"
+                );
+            }
+            fits
+        });
         if addresses.len() + self.addresses.len() > Self::MAX_ADDRESSES {
             log::warn!(
                 maximum = Self::MAX_ADDRESSES,
@@ -166,6 +186,17 @@ impl PeerContact {
         }
         Ok(())
     }
+
+    /// Verifies that none of the addresses exceeds the maximum allowed length.
+    fn verify_address_lengths(addresses: &[Multiaddr]) -> Result<(), PeerContactError> {
+        if let Some(address) = addresses
+            .iter()
+            .find(|address| address.len() > Self::MAX_ADDRESS_LEN)
+        {
+            return Err(PeerContactError::AdvertisedAddressLengthExceeded { len: address.len() });
+        }
+        Ok(())
+    }
 }
 
 impl TaggedSignable for PeerContact {
@@ -183,6 +214,14 @@ pub struct SignedPeerContact {
 }
 
 impl SignedPeerContact {
+    /// Maximum serialized size of a peer contact. This leaves room for the maximum number of
+    /// addresses of maximum length plus the remaining fields, such that our own contact and the
+    /// contacts we relay to a peer always fit into a single discovery message.
+    pub const MAX_SIZE: usize = seq_max_size(
+        seq_max_size(u8::SIZE, PeerContact::MAX_ADDRESS_LEN),
+        PeerContact::MAX_ADDRESSES,
+    ) + 256;
+
     /// Verifies that the signature is valid for this peer contact and also does
     /// intrinsic verification on the inner PeerContact.
     pub fn verify(&self) -> bool {
@@ -191,6 +230,21 @@ impl SignedPeerContact {
         };
         self.signature
             .tagged_verify(&self.inner, &self.inner.public_key)
+    }
+
+    /// Checks that this peer contact and its addresses are within the size limits, such that
+    /// we can relay it to other peers.
+    ///
+    /// This is deliberately not part of [`Self::verify`]: older versions accept and relay peer
+    /// contacts exceeding these limits, so a relayed contact violating them doesn't mean that the
+    /// relaying peer misbehaves.
+    pub fn check_size_limits(&self) -> Result<(), PeerContactError> {
+        PeerContact::verify_address_lengths(&self.inner.addresses)?;
+        let size = self.serialized_size();
+        if size > Self::MAX_SIZE {
+            return Err(PeerContactError::SizeExceeded { size });
+        }
+        Ok(())
     }
 
     /// Gets the public key of this peer contact.
@@ -362,6 +416,11 @@ impl PeerContactBook {
             return;
         }
 
+        // Don't store contacts that we can't relay to other peers
+        if !Self::is_relayable(&contact) {
+            return;
+        }
+
         log::debug!(peer_id = %contact.peer_id(), addresses = ?contact.inner.addresses, "Adding peer contact");
         let current_ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -445,6 +504,11 @@ impl PeerContactBook {
             return;
         }
 
+        // Don't store contacts that we can't relay to other peers
+        if !Self::is_relayable(&info.contact) {
+            return;
+        }
+
         let info = Arc::new(info);
         match self.peer_contacts.entry(info.peer_id) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
@@ -460,6 +524,17 @@ impl PeerContactBook {
                     "Adding peer contact",
                 );
                 entry.insert(info);
+            }
+        }
+    }
+
+    /// Returns whether the contact is within the size limits, such that we can relay it to other peers.
+    fn is_relayable(contact: &SignedPeerContact) -> bool {
+        match contact.check_size_limits() {
+            Ok(()) => true,
+            Err(error) => {
+                log::debug!(peer_id = %contact.peer_id(), %error, "Ignoring oversized peer contact");
+                false
             }
         }
     }
@@ -704,5 +779,144 @@ mod serde_public_key {
             .map_err(|_| D::Error::custom("Invalid value"))?;
 
         Ok(PublicKey::from(pk))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use instant::SystemTime;
+    use libp2p::{identity::Keypair, multiaddr::Protocol, Multiaddr};
+    use nimiq_keys::Address;
+    use nimiq_network_interface::peer_info::Services;
+    use nimiq_test_log::test;
+    use nimiq_utils::tagged_signing::TaggedSignature;
+
+    use super::{PeerContact, PeerContactBook, PeerContactError, SignedPeerContact, ValidatorInfo};
+
+    /// Creates an address with the given encoded length.
+    fn address(len: usize) -> Multiaddr {
+        // The `/dns/` protocol code and the length prefix of the name take 3 bytes
+        let address = Multiaddr::empty().with(Protocol::Dns("a".repeat(len - 3).into()));
+        assert_eq!(address.len(), len);
+        address
+    }
+
+    fn peer_contact(keypair: &Keypair, addresses: Vec<Multiaddr>) -> PeerContact {
+        let timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        PeerContact::new(
+            addresses,
+            keypair.public(),
+            Services::FULL_BLOCKS,
+            timestamp,
+        )
+        .expect("Peer contact must be creatable")
+    }
+
+    /// Returns whether `insert` and `insert_filtered` store the peer contact.
+    fn is_stored(contact: &SignedPeerContact) -> (bool, bool) {
+        let keypair = Keypair::generate_ed25519();
+        let own_contact = peer_contact(&keypair, vec![]).sign(&keypair);
+
+        let mut peer_contact_book = PeerContactBook::new(own_contact.clone(), false, true, true);
+        peer_contact_book.insert(contact.clone());
+        let inserted = peer_contact_book.get(&contact.peer_id()).is_some();
+
+        let mut peer_contact_book = PeerContactBook::new(own_contact, false, true, true);
+        peer_contact_book.insert_filtered(contact.clone(), Services::FULL_BLOCKS, false);
+        let inserted_filtered = peer_contact_book.get(&contact.peer_id()).is_some();
+
+        (inserted, inserted_filtered)
+    }
+
+    #[test]
+    fn address_length_is_limited() {
+        let keypair = Keypair::generate_ed25519();
+
+        // An address of maximum length is accepted
+        let contact =
+            peer_contact(&keypair, vec![address(PeerContact::MAX_ADDRESS_LEN)]).sign(&keypair);
+        assert!(contact.check_size_limits().is_ok());
+        assert_eq!(is_stored(&contact), (true, true));
+
+        // A longer address is rejected for our own contact
+        let len = PeerContact::MAX_ADDRESS_LEN + 1;
+        assert!(matches!(
+            PeerContact::new([address(len)], keypair.public(), Services::FULL_BLOCKS, 0),
+            Err(PeerContactError::AdvertisedAddressLengthExceeded { len: l }) if l == len
+        ));
+
+        // A contact signed by its owner with a longer address is not stored
+        let mut contact = peer_contact(&keypair, vec![]);
+        contact.addresses.push(address(len));
+        let contact = contact.sign(&keypair);
+        assert!(matches!(
+            contact.check_size_limits(),
+            Err(PeerContactError::AdvertisedAddressLengthExceeded { .. })
+        ));
+        assert_eq!(is_stored(&contact), (false, false));
+
+        // Relayed contacts failing verification close the connection to the relaying peer. Older
+        // versions accept and relay contacts exceeding the size limits, so these must verify.
+        assert!(
+            contact.verify(),
+            "Size limits must not be enforced by `verify`"
+        );
+    }
+
+    #[test]
+    fn size_is_limited() {
+        let keypair = Keypair::generate_ed25519();
+
+        // The validator info can be used to inflate a peer contact with short addresses
+        let mut contact = peer_contact(&keypair, vec![address(PeerContact::MAX_ADDRESS_LEN)]);
+        contact.validator_info = Some(ValidatorInfo {
+            validator_address: Address::default(),
+            signature: TaggedSignature::from_bytes(vec![0; SignedPeerContact::MAX_SIZE]),
+        });
+        let contact = contact.sign(&keypair);
+
+        assert!(contact.verify());
+        assert!(matches!(
+            contact.check_size_limits(),
+            Err(PeerContactError::SizeExceeded { .. })
+        ));
+        assert_eq!(is_stored(&contact), (false, false));
+    }
+
+    #[test]
+    fn largest_valid_contact_is_within_size_limits() {
+        let keypair = Keypair::generate_ed25519();
+
+        let mut contact = PeerContact::new(
+            vec![address(PeerContact::MAX_ADDRESS_LEN); PeerContact::MAX_ADDRESSES],
+            keypair.public(),
+            Services::all(),
+            u64::MAX,
+        )
+        .expect("Peer contact must be creatable");
+        contact.validator_info = Some(ValidatorInfo {
+            validator_address: Address::default(),
+            signature: TaggedSignature::from_bytes(vec![0; 64]),
+        });
+
+        assert!(contact.sign(&keypair).check_size_limits().is_ok());
+    }
+
+    #[test]
+    fn add_addresses_ignores_oversized_addresses() {
+        let keypair = Keypair::generate_ed25519();
+        let mut contact = peer_contact(&keypair, vec![]);
+        let valid_address = address(PeerContact::MAX_ADDRESS_LEN);
+
+        contact.add_addresses(vec![
+            address(PeerContact::MAX_ADDRESS_LEN + 1),
+            valid_address.clone(),
+        ]);
+
+        assert_eq!(contact.addresses, vec![valid_address]);
     }
 }

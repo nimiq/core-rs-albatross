@@ -11,7 +11,7 @@ use futures::StreamExt;
 use instant::SystemTime;
 use libp2p::{
     core::{
-        multiaddr::{multiaddr, Multiaddr},
+        multiaddr::{multiaddr, Multiaddr, Protocol},
         transport::{MemoryTransport, PortUse},
         upgrade::{DeniedUpgrade, Version},
         Endpoint,
@@ -164,6 +164,50 @@ impl NetworkBehaviour for DuplicateDiscoverySubstreamAttackBehaviour {
     }
 }
 
+fn discovery_config() -> discovery::Config {
+    discovery::Config {
+        genesis_hash: Blake2bHash::default(),
+        // Short enough that the peers send their first periodic update quickly, but still
+        // twice `min_recv_update_interval`, so no update is rejected as too frequent.
+        update_interval: Duration::from_secs(2),
+        min_send_update_interval: Duration::from_secs(2),
+        update_limit: 64,
+        required_services: Services::FULL_BLOCKS,
+        min_recv_update_interval: Duration::from_secs(1),
+        house_keeping_interval: Duration::from_secs(1),
+        keep_alive: true,
+        only_secure_ws_connections: false,
+    }
+}
+
+/// Creates the peer contact book of a node. The `extra_address` is added to the node's own contact
+/// without checking its size.
+fn own_peer_contact_book(
+    keypair: &Keypair,
+    address: Multiaddr,
+    services: Services,
+    extra_address: Option<Multiaddr>,
+) -> Arc<RwLock<PeerContactBook>> {
+    let mut peer_contact = PeerContact::new(
+        Some(address),
+        keypair.public(),
+        services,
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    )
+    .expect("PeerContact must be creatable");
+    peer_contact.addresses.extend(extra_address);
+
+    Arc::new(RwLock::new(PeerContactBook::new(
+        peer_contact.sign(keypair),
+        false,
+        true,
+        true,
+    )))
+}
+
 struct TestNode {
     peer_id: PeerId,
     swarm: Swarm<discovery::Behaviour>,
@@ -173,6 +217,12 @@ struct TestNode {
 
 impl TestNode {
     pub fn new() -> Self {
+        Self::with_config(discovery_config(), None)
+    }
+
+    /// Creates a node with the given discovery config. The `extra_address` is added to the node's
+    /// own contact without checking its size.
+    pub fn with_config(config: discovery::Config, extra_address: Option<Multiaddr>) -> Self {
         let keypair = Keypair::generate_ed25519();
         let peer_id = PeerId::from(keypair.public());
 
@@ -188,38 +238,12 @@ impl TestNode {
             .timeout(Duration::from_secs(20))
             .boxed();
 
-        let config = discovery::Config {
-            genesis_hash: Blake2bHash::default(),
-            // Short enough that the peers send their first periodic update quickly, but still
-            // twice `min_recv_update_interval`, so no update is rejected as too frequent.
-            update_interval: Duration::from_secs(2),
-            min_send_update_interval: Duration::from_secs(2),
-            update_limit: 64,
-            required_services: Services::FULL_BLOCKS,
-            min_recv_update_interval: Duration::from_secs(1),
-            house_keeping_interval: Duration::from_secs(1),
-            keep_alive: true,
-            only_secure_ws_connections: false,
-        };
-
-        let peer_contact = PeerContact::new(
-            Some(address.clone()),
-            keypair.public(),
+        let peer_contact_book = own_peer_contact_book(
+            &keypair,
+            address.clone(),
             config.required_services,
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        )
-        .expect("PeerContact must be creatable")
-        .sign(&keypair);
-
-        let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(
-            peer_contact,
-            false,
-            true,
-            true,
-        )));
+            extra_address,
+        );
 
         let behaviour =
             discovery::Behaviour::new(config, keypair.clone(), Arc::clone(&peer_contact_book));
@@ -262,14 +286,19 @@ impl TestNode {
 }
 
 fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
+    peer_contact_with_addresses(
+        vec![format!("/dns/test{n}.local/tcp/443/wss")
+            .parse()
+            .expect("Must be able to parse Mutltiaddr")],
+        services,
+    )
+}
+
+fn peer_contact_with_addresses(addresses: Vec<Multiaddr>, services: Services) -> SignedPeerContact {
     let keypair = Keypair::generate_ed25519();
 
     let peer_contact = PeerContact::new(
-        Some(
-            format!("/dns/test{n}.local/tcp/443/wss")
-                .parse()
-                .expect("Must be able to parse Mutltiaddr"),
-        ),
+        addresses,
         keypair.public(),
         services,
         SystemTime::now()
@@ -689,5 +718,118 @@ fn test_insert_filtered_only_replaces_with_newer_timestamp() {
         peer_contact_book.get(&peer_id).unwrap().signed(),
         &newer_contact,
         "newer timestamp must replace the existing contact"
+    );
+}
+
+/// Drives `node` until it either established discovery with `peer_id` or the connection to it was
+/// closed. Returns whether discovery was established.
+async fn establishes_discovery(node: &mut TestNode, peer_id: PeerId) -> bool {
+    let outcome = async {
+        loop {
+            match node.swarm.select_next_some().await {
+                SwarmEvent::Behaviour(discovery::Event::Established { peer_id: id, .. })
+                    if id == peer_id =>
+                {
+                    return true
+                }
+                SwarmEvent::ConnectionClosed { peer_id: id, .. } if id == peer_id => return false,
+                _ => {}
+            }
+        }
+    };
+
+    match timeout(Duration::from_secs(10), outcome).await {
+        Ok(established) => established,
+        Err(_) => panic!("Timeout while waiting for the discovery handshake"),
+    }
+}
+
+#[test(tokio::test)]
+async fn test_oversized_own_peer_contact_does_not_eclipse_victim() {
+    let mut victim = TestNode::new();
+    let mut honest = TestNode::new();
+
+    // The victim relays the contacts it knows to its peers
+    victim
+        .peer_contact_book
+        .write()
+        .insert_all((0..60).map(|n| random_peer_contact(n, Services::FULL_BLOCKS)));
+
+    // The attacker's own contact just fits into a discovery message
+    let mut attacker = TestNode::with_config(
+        discovery_config(),
+        Some(Multiaddr::empty().with(Protocol::Dns("a".repeat(995_000).into()))),
+    );
+    let attacker_peer_id = attacker.peer_id;
+    attacker.dial(victim.address.clone());
+    spawn(attacker.swarm.for_each(|_| async {}));
+
+    // The victim rejects the attacker's contact and closes the connection
+    assert!(
+        !establishes_discovery(&mut victim, attacker_peer_id).await,
+        "Victim must not establish discovery with the attacker"
+    );
+    assert!(
+        victim
+            .peer_contact_book
+            .read()
+            .get(&attacker_peer_id)
+            .is_none(),
+        "Victim must not store the attacker's contact"
+    );
+
+    // The victim's discovery messages stay acceptable to honest peers
+    honest.dial(victim.address.clone());
+    spawn(victim.swarm.for_each(|_| async {}));
+    assert!(
+        establishes_discovery(&mut honest, victim.peer_id).await,
+        "Honest peer must establish discovery with the victim"
+    );
+}
+
+#[test(tokio::test)]
+async fn test_discovery_messages_stay_within_max_message_size() {
+    // Peers that accept more contacts per update than fit into a single message
+    let config = discovery::Config {
+        update_limit: 200,
+        ..discovery_config()
+    };
+    let victim = TestNode::with_config(config.clone(), None);
+    let mut honest = TestNode::with_config(config, None);
+
+    // Valid contacts of maximum size, i.e. with the maximum number of addresses of maximum length
+    let address = Multiaddr::empty().with(Protocol::Dns(
+        "a".repeat(PeerContact::MAX_ADDRESS_LEN - 3).into(),
+    ));
+    assert_eq!(address.len(), PeerContact::MAX_ADDRESS_LEN);
+    let addresses = vec![address; PeerContact::MAX_ADDRESSES];
+    victim.peer_contact_book.write().insert_all(
+        (0..200).map(|_| peer_contact_with_addresses(addresses.clone(), Services::FULL_BLOCKS)),
+    );
+    assert_eq!(
+        victim
+            .peer_contact_book
+            .read()
+            .query(Services::FULL_BLOCKS)
+            .count(),
+        200
+    );
+
+    honest.dial(victim.address.clone());
+    spawn(victim.swarm.for_each(|_| async {}));
+    assert!(
+        establishes_discovery(&mut honest, victim.peer_id).await,
+        "Honest peer must establish discovery with the victim"
+    );
+
+    // Only the contacts that don't fit into the message are left out
+    let num_received = honest
+        .peer_contact_book
+        .read()
+        .query(Services::FULL_BLOCKS)
+        .count();
+    assert!(
+        num_received > 100,
+        "Honest peer only received {num_received} contacts"
     );
 }
