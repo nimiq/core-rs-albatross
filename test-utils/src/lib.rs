@@ -1,4 +1,5 @@
 pub mod accounts_revert;
+pub mod bitset;
 pub mod block_production;
 pub mod blockchain;
 pub mod blockchain_events_broadcast;

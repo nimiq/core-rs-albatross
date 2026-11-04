@@ -66,6 +66,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             // Store the vote for this round and step. It will always be for the proposal, except for when it is
             // locked on a value which is not the proposal.
             // Note that even though the node proposes a proposal, it might not vote for it, as valid and locked are not identical.
+            // The protocol's endorsement is not consulted: a fresh proposal is this node's own, a re-proposed valid value has a polka.
             let vote = if self.is_allowed_to_vote_on(&proposal_hash, vr) {
                 Some(proposal_hash)
             } else {

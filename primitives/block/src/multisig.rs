@@ -1,7 +1,9 @@
+use log::debug;
 use nimiq_bls::{AggregateSignature, LazyAggregateSignature};
 use nimiq_collections::bitset::BitSet;
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
+use serde::Deserializer;
 
 /*
 This does not really belong here, but as there would otherwise be a cyclic dependency it needs to be here for now.
@@ -13,8 +15,24 @@ pub struct MultiSignature {
     /// Kept compressed so that deserializing stays cheap, it is only uncompressed when it is
     /// verified or combined.
     pub signature: LazyAggregateSignature,
+    #[serde(deserialize_with = "deserialize_canonical_signers")]
     #[serialize_size(bitset_max_elem = Policy::SLOTS as usize)]
     pub signers: BitSet,
+}
+
+/// Decodes a signer set and drops trailing zero limbs. They signal no slot, the signature does not
+/// depend on the encoding and no block hash covers a justification, so nothing a verifier checks
+/// changes; keeping them would let any peer inflate a stored proof or a handel contribution. The
+/// allocation they occupied is released too, so a padded copy costs no more memory than a canonical one.
+fn deserialize_canonical_signers<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<BitSet, D::Error> {
+    let mut signers = <BitSet as serde::Deserialize>::deserialize(deserializer)?;
+    if !signers.is_canonical() {
+        debug!("Dropping trailing zero limbs from a signer set");
+        signers.canonicalize();
+    }
+    Ok(signers)
 }
 
 impl MultiSignature {

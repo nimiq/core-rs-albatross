@@ -109,6 +109,34 @@ async fn four_validators_can_create_micro_blocks() {
     assert!(blockchain.read().block_number() >= 10 + Policy::genesis_block_number());
 }
 
+/// A macro block needs prevotes from validators that did not propose it. Uses the libp2p network:
+/// the vote aggregation reaches validators through their DHT records, which the mock hub lacks.
+#[test(tokio::test)]
+async fn four_validators_can_create_a_macro_block() {
+    let env =
+        MdbxDatabase::new_volatile(Default::default()).expect("Could not open a volatile database");
+
+    let validators =
+        build_validators::<Network>(env, &(1u64..=4u64).collect::<Vec<_>>(), &mut None).await;
+
+    let blockchain = Arc::clone(&validators.first().unwrap().blockchain);
+    let mut events = blockchain.read().notifier_as_stream();
+
+    for validator in validators {
+        spawn(validator);
+    }
+
+    // Take events until the first macro block has been produced.
+    let macro_block_number = Policy::macro_block_after(Policy::genesis_block_number());
+    timeout(Duration::from_secs(120), async {
+        while blockchain.read().macro_head().block_number() < macro_block_number {
+            events.next().await;
+        }
+    })
+    .await
+    .expect("The validators should have produced a macro block");
+}
+
 #[test(tokio::test)]
 async fn validators_can_do_skip_block() {
     let env =

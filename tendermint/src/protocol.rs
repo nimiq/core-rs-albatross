@@ -121,6 +121,20 @@ pub trait Protocol: Clone + Send + Sync + Unpin + Sized + 'static {
         precalculated_inherent: Option<Self::Inherent>,
     ) -> Result<Self::Inherent, ProposalError>;
 
+    /// Whether this node prevotes for `proposal` on its own account, that is when the proposal
+    /// arrives without a valid round and no polka exists for it yet. Local policy on top of
+    /// `verify_proposal`, not validity: a valid proposal this node does not endorse is still
+    /// stored, precommitted once it gathers 2f+1 prevotes and re-proposed as the valid value, so
+    /// declining can keep a polka from forming but never stalls a height. To every other
+    /// validator declining looks like a proposal timeout. Endorses everything by default.
+    ///
+    /// An implementation must endorse every proposal an honest proposer of any deployed version
+    /// can create: with f+1 validators declining, such a proposal never gets its polka.
+    fn endorses_proposal(&self, proposal: &Self::Proposal) -> bool {
+        let _ = proposal;
+        true
+    }
+
     /// Broadcasts a signed proposal given as `proposal`.
     /// Returns nothing, as there is no way of reacting to not being able to broadcast a proposal.
     fn broadcast_proposal(

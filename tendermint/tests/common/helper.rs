@@ -180,6 +180,7 @@ pub async fn run_tendermint(
         observe_sender,
         known_proposals,
         aggregate_senders: Arc::new(Mutex::new(BTreeMap::default())),
+        unendorsed: Default::default(),
     };
 
     let (proposal_sender, proposal_receiver) = mpsc::channel(10);

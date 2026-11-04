@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
 };
 
@@ -91,6 +91,15 @@ pub struct Validator {
     /// (round, hash) => SignedProposal
     known_proposals: BTreeMap<(u32, u32), SignedProposalMessage<TestProposal, bool>>,
     observe_sender: mpsc::Sender<Observe>,
+    /// Proposals this validator does not endorse, see [`Protocol::endorses_proposal`].
+    unendorsed: BTreeSet<u32>,
+}
+
+impl Validator {
+    /// Makes this validator decline to prevote for `proposal` on its own account.
+    pub fn unendorse(&mut self, proposal: u32) {
+        self.unendorsed.insert(proposal);
+    }
 }
 
 // Dummy PartialEq implementation such that State<Validator> implements PartialEq.
@@ -117,6 +126,7 @@ pub fn create_validator(
         observe_sender,
         known_proposals,
         aggregate_senders: Arc::new(Mutex::new(BTreeMap::default())),
+        unendorsed: BTreeSet::default(),
     };
 
     (validator, receiver)
@@ -176,6 +186,10 @@ impl Protocol for Validator {
         } else {
             Err(ProposalError::InvalidProposal)
         }
+    }
+
+    fn endorses_proposal(&self, proposal: &Self::Proposal) -> bool {
+        !self.unendorsed.contains(&proposal.0)
     }
 
     fn verify_aggregation_message(

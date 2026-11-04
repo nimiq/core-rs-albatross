@@ -42,6 +42,13 @@ impl BitSet {
         self.store.capacity() << 3
     }
 
+    /// Whether this set's encoding is free of trailing zero limbs. Locally built sets are always
+    /// canonical; only a decoded one can be padded, since the decoder keeps trailing zeros verbatim
+    /// so hash-committed encodings stay reproducible. Interior zero limbs are canonical.
+    pub fn is_canonical(&self) -> bool {
+        self.store.last() != Some(&0)
+    }
+
     pub fn clear(&mut self) {
         self.store.clear();
         self.count = 0;
@@ -139,11 +146,19 @@ impl BitSet {
         self.compact();
     }
 
-    /// Removes unnecessary parts from store.
+    /// Removes trailing zero limbs. Only a decoded set can carry them, see [`BitSet::is_canonical`].
     #[inline]
     fn compact(&mut self) {
         let num_empty = self.store.iter().rev().take_while(|&v| *v == 0).count();
         self.store.truncate(self.store.len() - num_empty);
+    }
+
+    /// Drops trailing zero limbs and releases the allocation they occupied. Only a decoded set can
+    /// carry them, see [`BitSet::is_canonical`]. The shrink is kept out of `compact`, which runs on
+    /// every set operation.
+    pub fn canonicalize(&mut self) {
+        self.compact();
+        self.store.shrink_to_fit();
     }
 
     /// Infinite iterator of excluded items
@@ -509,6 +524,58 @@ mod tests {
         let set = sample_bitset();
         let bin = set.serialize_to_vec();
         assert_eq!(hex::decode("02FEFF1F40").unwrap(), bin);
+    }
+
+    /// Padding survives decoding untouched — it is hash-committed, so it has to re-serialize
+    /// verbatim — but `is_canonical` reports it.
+    #[test]
+    fn it_reports_trailing_zero_limbs_as_non_canonical() {
+        assert!(BitSet::new().is_canonical());
+        assert!(sample_bitset().is_canonical());
+
+        // `02FEFF1F40` with zero limbs appended: length prefix grows, trailing `00`s added.
+        for (hex_bytes, zeros) in [("03FEFF1F4000", 1), ("05FEFF1F40000000", 3)] {
+            let padded = BitSet::deserialize_from_vec(&hex::decode(hex_bytes).unwrap()).unwrap();
+            assert!(!padded.is_canonical(), "{zeros} trailing zero limbs");
+            // Semantically identical and byte-exact on the way back out.
+            assert_eq!(padded, sample_bitset());
+            assert_eq!(padded.serialize_to_vec(), hex::decode(hex_bytes).unwrap());
+        }
+
+        // Nothing but padding is still padding.
+        let only_zeros = BitSet::deserialize_from_vec(&hex::decode("020000").unwrap()).unwrap();
+        assert!(!only_zeros.is_canonical());
+        assert!(only_zeros.is_empty());
+
+        // Interior zero limbs are canonical: `{0, 200}` needs limbs 1 and 2 to be zero.
+        let interior = BitSet::from_iter([0, 200]);
+        assert!(interior.is_canonical());
+        assert_eq!(
+            interior.serialize_to_vec(),
+            hex::decode("040100008002").unwrap(),
+        );
+    }
+
+    /// `canonicalize` is what the signer-set normalizer in `nimiq-block` relies on: the decoded
+    /// padding goes, the set and its canonical encoding stay.
+    #[test]
+    fn it_canonicalizes_decoded_padding() {
+        let mut padded =
+            BitSet::deserialize_from_vec(&hex::decode("05FEFF1F40000000").unwrap()).unwrap();
+        assert!(!padded.is_canonical());
+        padded.canonicalize();
+        assert!(padded.is_canonical());
+        assert_eq!(padded, sample_bitset());
+        assert_eq!(
+            padded.serialize_to_vec(),
+            hex::decode("02FEFF1F40").unwrap()
+        );
+
+        // Nothing but padding compacts to the empty set.
+        let mut only_zeros = BitSet::deserialize_from_vec(&hex::decode("020000").unwrap()).unwrap();
+        only_zeros.canonicalize();
+        assert!(only_zeros.is_canonical() && only_zeros.is_empty());
+        assert_eq!(only_zeros.serialize_to_vec(), hex::decode("00").unwrap());
     }
 
     #[test]

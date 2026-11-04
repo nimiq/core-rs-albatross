@@ -64,6 +64,12 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
     /// Evaluates a given `proposal_hash` with corresponding VR, to check whether or not it is voted for.
     ///
+    /// The protocol's endorsement is not consulted here: a vote is cast only once this node saw
+    /// 2f+1 prevotes for the proposal in round `vr`, so declining could no longer keep a polka from
+    /// forming, while every validator that saw that polka re-proposes this value until the height
+    /// decides. Declining would stall the height for as long as the proposer's supporters withhold
+    /// their votes.
+    ///
     /// This cannot fail and will always progress the step to Prevote.
     fn received_proposal_with_vr(&mut self, proposal_hash: TProtocol::ProposalHash, vr: u32) {
         log::debug!(
@@ -98,6 +104,11 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
     /// Evaluates a given `proposal_hash`, to check whether or not it is voted for.
     ///
+    /// Without a VR the proposal has no polka yet, so this is the one place where the protocol's
+    /// endorsement is consulted: declining here can keep a polka from forming, while everything
+    /// after a polka (locking, precommitting, re-proposing) follows the network regardless, see
+    /// [`Protocol::endorses_proposal`].
+    ///
     /// This cannot fail and will always progress the step to Prevote.
     fn received_proposal_without_vr(&mut self, proposal_hash: TProtocol::ProposalHash) {
         log::debug!(
@@ -105,9 +116,15 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             ?proposal_hash,
             "Proposal without VR received",
         );
+        let endorsed = self.protocol.endorses_proposal(
+            self.state
+                .known_proposals
+                .get(&proposal_hash)
+                .expect("proposal must be known"),
+        );
         // Check if allowed to vote for the proposal.
-        if self.is_allowed_to_vote_on(&proposal_hash, None) {
-            // Vote for the proposal if allowed to vote for the proposal.
+        if self.is_allowed_to_vote_on(&proposal_hash, None) && endorsed {
+            // Vote for the proposal if allowed to vote for the proposal and the protocol endorses it.
             self.state.votes.insert(
                 (self.state.current_round, Step::Prevote),
                 Some(proposal_hash),

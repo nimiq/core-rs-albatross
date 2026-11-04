@@ -412,6 +412,18 @@ where
             })
     }
 
+    fn endorses_proposal(&self, proposal: &Self::Proposal) -> bool {
+        // Padding signals no slot but is hash-committed, so a finalized padded set is permanent.
+        // Policy rather than validity: `verify_proposal` and `push` accept the block, so this node
+        // still follows a polka the rest of the network forms and the height cannot stall on it.
+        let header = &proposal.0;
+        let canonical = header.next_batch_initial_punished_set.is_canonical();
+        if !canonical {
+            warn!(%header, round = header.round, "Padded punished set, not prevoting for the proposal");
+        }
+        canonical
+    }
+
     fn sign_proposal(
         &self,
         proposal_message: &ProposalMessage<Self::Proposal>,

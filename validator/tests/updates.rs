@@ -7,6 +7,7 @@ use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::Blake2sHash;
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::{Deserialize, Serialize};
+use nimiq_test_utils::bitset::with_trailing_zero_limbs;
 use nimiq_validator::aggregation::{
     skip_block::SignedSkipBlockMessage, tendermint::contribution::TendermintContribution,
     update::SerializableLevelUpdate,
@@ -208,4 +209,52 @@ fn rejects_tendermint_contribution_with_out_of_range_slot_in_any_bucket() {
     let data = update.serialize_to_vec();
 
     assert!(SerializableLevelUpdate::<TendermintContribution>::deserialize_from_vec(&data).is_ok());
+}
+
+/// A padded signer set in a contribution is compacted when the level update is decoded, so neither
+/// the handel verifier nor the aggregate this node builds from it ever sees the padding.
+#[test]
+fn test_level_update_drops_signer_set_padding() {
+    const PADDING_LIMBS: usize = 64;
+
+    let canonical = create_multisig().proof;
+    let padded = MultiSignature {
+        signature: canonical.signature.clone(),
+        signers: with_trailing_zero_limbs(&canonical.signers, PADDING_LIMBS),
+    };
+    assert!(!padded.signers.is_canonical());
+    assert_eq!(padded, canonical);
+
+    // Tendermint: the contribution is a map of per-vote multi-signatures.
+    let contribution = |sig: &MultiSignature| TendermintContribution {
+        contributions: BTreeMap::from([(None, sig.clone())]),
+    };
+    let update: SerializableLevelUpdate<TendermintContribution> =
+        LevelUpdate::new(contribution(&padded), None, 2, 3).into();
+    let canonical_update: SerializableLevelUpdate<TendermintContribution> =
+        LevelUpdate::new(contribution(&canonical), None, 2, 3).into();
+    let bytes = update.serialize_to_vec();
+    assert_eq!(
+        bytes.len(),
+        canonical_update.serialize_to_vec().len() + PADDING_LIMBS
+    );
+
+    let decoded: SerializableLevelUpdate<TendermintContribution> =
+        Deserialize::deserialize_from_vec(&bytes).unwrap();
+    assert_eq!(
+        decoded.serialize_to_vec(),
+        canonical_update.serialize_to_vec()
+    );
+    let signers = &decoded.into_level_update(2).aggregate.contributions[&None].signers;
+    assert!(signers.is_canonical());
+    assert_eq!(*signers, canonical.signers);
+
+    // Skip block: the contribution is the multi-signature itself.
+    let update: SerializableLevelUpdate<SignedSkipBlockMessage> =
+        LevelUpdate::new(SignedSkipBlockMessage { proof: padded }, None, 2, 3).into();
+    let decoded: SerializableLevelUpdate<SignedSkipBlockMessage> =
+        Deserialize::deserialize_from_vec(&update.serialize_to_vec()).unwrap();
+    let signers = &decoded.into_level_update(2).aggregate.proof.signers;
+    assert!(signers.is_canonical());
+    assert_eq!(*signers, canonical.signers);
 }

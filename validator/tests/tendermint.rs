@@ -1,18 +1,26 @@
 use std::{sync::Arc, time::SystemTime};
 
+use futures::{stream, StreamExt};
 use nimiq_account::{Account, StakingContractStoreWrite, TransactionLog};
-use nimiq_block::{BlockError, MacroBlock};
+use nimiq_block::{BlockError, MacroBlock, MacroHeader};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::traits::WriteTransaction;
+use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
-use nimiq_tendermint::{ProposalMessage, Protocol, ProtocolError, SignedProposalMessage};
+use nimiq_tendermint::{
+    ProposalMessage, Protocol, ProtocolError, Return, SignedProposalMessage, Step, Tendermint,
+};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
-    block_production::TemporaryBlockProducer, test_network::TestNetwork, test_rng,
+    bitset::with_trailing_zero_limbs,
+    block_production::TemporaryBlockProducer,
+    blockchain::{fill_micro_blocks, produce_macro_blocks},
+    test_network::TestNetwork,
+    test_rng,
 };
 use nimiq_transaction::account::staking_contract::SignalDataUpdate;
 use nimiq_utils::time::systemtime_to_timestamp;
@@ -663,4 +671,168 @@ async fn it_ensures_macro_block_observes_block_separation_time() {
         .read()
         .verify_macro_block_proposal(macro_block, 0, None)
         .expect("a proposal within the drift allowance must verify");
+}
+
+/// A proposal with a padded punished set verifies like its canonical twin but is not endorsed: the
+/// node keeps it, follows a polka on it and only withholds its own prevote, so the refusal can cost
+/// the proposer a round but never stall the height. Rejecting it instead would leave an unpatched
+/// 2f+1 locked on a value the patched validators never precommit.
+#[test(tokio::test)]
+async fn it_does_not_endorse_a_padded_punished_set() {
+    let temp_producer = TemporaryBlockProducer::default();
+    fill_micro_blocks(&temp_producer.producer, &temp_producer.blockchain);
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+    let (macro_block_number, current_validators) = {
+        let bc = blockchain.read();
+        (
+            bc.block_number() + 1,
+            bc.current_validators().unwrap().clone(),
+        )
+    };
+
+    let hub = MockHub::default();
+    let nw = MockNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
+    let interface = TendermintProtocol::new(
+        Arc::clone(&blockchain),
+        val_net,
+        temp_producer.producer.clone(),
+        current_validators,
+        0,
+        NetworkId::UnitAlbatross,
+        macro_block_number,
+    );
+
+    let (message, _body) = interface
+        .create_proposal(0)
+        .expect("Should have created proposal");
+    let canonical = message.proposal.0;
+    assert!(canonical.next_batch_initial_punished_set.is_canonical());
+
+    // What a malicious proposer gossips: the same block with its punished set padded.
+    let mut padded = canonical.clone();
+    padded.next_batch_initial_punished_set =
+        with_trailing_zero_limbs(&canonical.next_batch_initial_punished_set, 64);
+    padded.cached_hash = None;
+    assert!(!padded.next_batch_initial_punished_set.is_canonical());
+
+    // Both are valid proposals.
+    for header in [&canonical, &padded] {
+        let message = ProposalMessage {
+            round: 0,
+            valid_round: None,
+            proposal: Header(header.clone(), None),
+        };
+        let signature = interface.sign_proposal(&message);
+        assert!(interface
+            .verify_proposal(&SignedProposalMessage { message, signature }, None)
+            .is_ok());
+    }
+
+    // Only the canonical one gets this node's prevote.
+    assert!(interface.endorses_proposal(&Header(canonical, None)));
+    assert!(!interface.endorses_proposal(&Header(padded, None)));
+}
+
+/// Runs the Tendermint state machine on the real protocol as a validator awaiting the proposal of
+/// round 0, hands it `header` as that proposal and returns the prevote it casts.
+async fn round_0_prevote(
+    temp_producer: &TemporaryBlockProducer,
+    header: MacroHeader,
+) -> Option<Blake2sHash> {
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+    let (macro_block_number, current_validators) = {
+        let bc = blockchain.read();
+        (
+            bc.block_number() + 1,
+            bc.current_validators().unwrap().clone(),
+        )
+    };
+
+    let hub = MockHub::default();
+    let nw = MockNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let interface = TendermintProtocol::new(
+        blockchain,
+        Arc::new(ValidatorNetworkImpl::new(nw)),
+        temp_producer.producer.clone(),
+        current_validators,
+        // The only validator has band 0 and proposes every round, any other band awaits it.
+        1,
+        NetworkId::UnitAlbatross,
+        macro_block_number,
+    );
+    assert!(!interface.is_proposer(0).unwrap());
+
+    let message = ProposalMessage {
+        round: 0,
+        valid_round: None,
+        proposal: Header(header, None),
+    };
+    let signature = interface.sign_proposal(&message);
+    let mut tendermint = Tendermint::new(
+        interface,
+        None,
+        stream::iter([SignedProposalMessage { message, signature }])
+            .chain(stream::pending())
+            .boxed(),
+        stream::pending().boxed(),
+    );
+
+    // Padded or not, the proposal is valid.
+    assert!(matches!(
+        tendermint.next().await,
+        Some(Return::ProposalAccepted(_))
+    ));
+    // The next state carries the prevote, the aggregation signing it would only start after it.
+    let Some(Return::Update(state)) = tendermint.next().await else {
+        panic!("Expected the state carrying the prevote");
+    };
+    state.votes[&(0, Step::Prevote)].clone()
+}
+
+/// The same policy as the validator's state machine applies it: a canonical proposal gets the
+/// prevote and its padded twin a nil one, at a checkpoint and at an election block, whose header
+/// nodes keep forever.
+#[test(tokio::test)]
+async fn it_prevotes_nil_for_a_padded_punished_set() {
+    let checkpoint = TemporaryBlockProducer::default();
+    fill_micro_blocks(&checkpoint.producer, &checkpoint.blockchain);
+
+    let election = TemporaryBlockProducer::default();
+    produce_macro_blocks(
+        &election.producer,
+        &election.blockchain,
+        Policy::batches_per_epoch() as usize - 1,
+    );
+    fill_micro_blocks(&election.producer, &election.blockchain);
+
+    for (temp_producer, is_election) in [(checkpoint, false), (election, true)] {
+        let canonical = {
+            let blockchain = temp_producer.blockchain.read();
+            temp_producer
+                .producer
+                .next_macro_block_proposal(
+                    &blockchain,
+                    blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                    0,
+                    vec![],
+                    None,
+                )
+                .unwrap()
+                .header
+        };
+        assert_eq!(canonical.is_election(), is_election);
+
+        let mut padded = canonical.clone();
+        padded.next_batch_initial_punished_set =
+            with_trailing_zero_limbs(&canonical.next_batch_initial_punished_set, 64);
+        padded.cached_hash = None;
+
+        let canonical_hash: Blake2sHash = Hash::hash(&canonical);
+        assert_eq!(
+            round_0_prevote(&temp_producer, canonical).await,
+            Some(canonical_hash)
+        );
+        assert_eq!(round_0_prevote(&temp_producer, padded).await, None);
+    }
 }
