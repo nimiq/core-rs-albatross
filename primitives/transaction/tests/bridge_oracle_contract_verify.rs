@@ -413,6 +413,67 @@ fn oracle_update_rejects_unsigned_update() {
     );
 }
 
+/// The owner signs a re-serialization of the data, but the chain refuses a repeated transaction by
+/// the hash of its bytes. Data that decodes to a signed update or owner change without being its
+/// canonical encoding would replay it under a new hash, so it is rejected.
+#[test]
+fn oracle_data_must_be_canonically_encoded() {
+    let key = key_pair();
+    let update = oracle_update_tx(&key, vec![any_hash(1)]);
+
+    let mut change_owner = Transaction::new_signaling(
+        oracle_contract_address(),
+        AccountType::Oracle,
+        oracle_contract_address(),
+        AccountType::Oracle,
+        0.try_into().unwrap(),
+        IncomingOracleTransactionData::ChangeOwner {
+            new_owner: Address::from([2u8; 20]),
+            proof: SignatureProof::default(),
+        }
+        .serialize_to_vec(),
+        1,
+        NetworkId::UnitAlbatross,
+    );
+    let proof =
+        SignatureProof::from_ed25519(key.public, key.sign(&change_owner.serialize_content()));
+    change_owner.recipient_data =
+        IncomingOracleTransactionData::set_signature_on_data(&change_owner.recipient_data, proof)
+            .unwrap();
+
+    // Each tx's data starts with its variant tag, and an update's then with its number of hashes,
+    // both varints that also decode from an overlong encoding.
+    let u = &update.recipient_data;
+    let c = &change_owner.recipient_data;
+    assert_eq!((u[..2].to_vec(), c[0]), (vec![0x00, 0x01], 0x01));
+    let re_encodings = [
+        (&update, [&[0x80, 0x00], &u[1..]].concat()),
+        (&update, [&[0x00, 0x81, 0x00], &u[2..]].concat()),
+        (&change_owner, [&[0x81, 0x00], &c[1..]].concat()),
+    ];
+
+    for (signed, data) in re_encodings {
+        assert_eq!(
+            AccountType::verify_incoming_transaction(signed, ACTIVATION),
+            Ok(())
+        );
+
+        let mut tx = signed.clone();
+        tx.recipient_data = data;
+        assert_eq!(
+            IncomingOracleTransactionData::parse(&tx)
+                .unwrap()
+                .serialize_to_vec(),
+            signed.recipient_data,
+            "decodes to the signed data"
+        );
+        assert_eq!(
+            AccountType::verify_incoming_transaction(&tx, ACTIVATION),
+            Err(TransactionError::InvalidData),
+        );
+    }
+}
+
 // =====================================================================
 // Zero-value releases
 // =====================================================================

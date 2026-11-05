@@ -172,6 +172,18 @@ impl IncomingOracleTransactionData {
     }
 
     pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
+        // The owner's signature is checked over a re-serialization of the data, while the chain
+        // refuses a transaction it has already included by the hash of the bytes as sent. Only
+        // the canonical encoding is valid, so that an owner-signed update or owner change has one
+        // hash: re-encoded, an applied one would pass as a transaction the chain has not seen.
+        if self.serialize_to_vec() != transaction.recipient_data {
+            warn!(
+                "Oracle data is not canonically encoded. The offending transaction is the following:\n{:?}",
+                transaction
+            );
+            return Err(TransactionError::InvalidData);
+        }
+
         match self {
             IncomingOracleTransactionData::Update { proof, .. } => {
                 // Verify signature by creating a transaction without the signature first
