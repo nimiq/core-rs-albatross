@@ -4,17 +4,22 @@
 //! appends whatever an owner-signed update holds, the same root again included. What stops an
 //! applied update from being written a second time is the chain refusing a transaction it has
 //! already included within the validity window, so these tests pin that refusal for the oracle.
+//!
+//! The chain recognizes a transaction by the hash of its bytes, while the owner's signature is
+//! checked over a re-serialization of the update. The update must therefore be canonically
+//! encoded, or its sender could re-encode an applied one into bytes the chain has not seen.
 
 use nimiq_account::{Account, OracleContract};
 use nimiq_block::BlockError;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
-use nimiq_primitives::policy::Policy;
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_primitives::{policy::Policy, transaction::TransactionError};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
-use nimiq_test_utils::bridge::{blake2b, BridgeChain};
+use nimiq_test_utils::bridge::{blake2b, funds, BridgeChain};
 use nimiq_transaction::{
     account::{htlc_contract::AnyHash, oracle_contract::IncomingOracleTransactionData},
-    Transaction,
+    SignatureProof, Transaction,
 };
 
 const HASH_COUNT: u16 = 4;
@@ -126,4 +131,58 @@ fn an_update_included_twice_in_one_block_is_refused() {
         Err(PushError::InvalidBlock(BlockError::DuplicateTransaction))
     );
     assert_eq!(oracle(&chain).serialize_to_vec(), before.serialize_to_vec());
+}
+
+/// `update` with its data replaced by `data`, signed again by the relayer that sent it. Only the
+/// update's sender can make this transaction, and it keeps the owner's signature.
+fn re_encoded(update: &Transaction, data: Vec<u8>) -> Transaction {
+    let relayer = funds();
+    let mut tx = update.clone();
+    tx.recipient_data = data;
+    tx.proof = SignatureProof::from_ed25519(relayer.public, relayer.sign(&tx.serialize_content()))
+        .serialize_to_vec();
+    tx
+}
+
+#[test]
+fn an_applied_update_re_encoded_by_its_sender_is_refused() {
+    let chain = BridgeChain::new(HASH_COUNT);
+    let update = chain.update(vec![root("first")]);
+    chain.push_block(vec![update.clone()]);
+    let applied = oracle(&chain);
+
+    // The data starts with the update's variant tag, 0, and its number of hashes, 1, each a
+    // varint that also decodes from an overlong encoding.
+    let data = &update.recipient_data;
+    assert_eq!(data[..2], [0x00, 0x01]);
+    let overlong_tag = [&[0x80, 0x00], &data[1..]].concat();
+    let overlong_count = [&[0x00, 0x81, 0x00], &data[2..]].concat();
+
+    for data in [overlong_tag, overlong_count] {
+        let replay = re_encoded(&update, data);
+        assert_eq!(
+            IncomingOracleTransactionData::parse(&replay)
+                .unwrap()
+                .serialize_to_vec(),
+            update.recipient_data,
+            "the same update, owner signature included"
+        );
+        assert_ne!(
+            replay.hash::<Blake2bHash>(),
+            update.hash::<Blake2bHash>(),
+            "a transaction the duplicate check has not seen"
+        );
+
+        let block = chain.produce_block(vec![replay]);
+        assert_eq!(
+            chain.node.push(block),
+            Err(PushError::InvalidBlock(BlockError::InvalidTransaction(
+                TransactionError::InvalidData
+            )))
+        );
+        assert_eq!(
+            oracle(&chain).serialize_to_vec(),
+            applied.serialize_to_vec()
+        );
+    }
 }
