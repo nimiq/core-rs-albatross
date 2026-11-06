@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize, Eq, PartialEq, Clone)]
 struct DummyU32 {
+    // Fixed width: as varints, a wrong password verifies in 1 of 507 runs.
+    #[serde(with = "nimiq_serde::fixint::be")]
     value: u32,
+    #[serde(with = "nimiq_serde::fixint::be")]
     checksum: u32,
 }
 
