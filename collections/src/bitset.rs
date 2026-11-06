@@ -1,6 +1,6 @@
 use std::{
     fmt,
-    iter::{repeat, FromIterator},
+    iter::{from_fn, repeat, FromIterator},
     ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign},
 };
 
@@ -153,12 +153,23 @@ impl BitSet {
             .filter_map(|(i, one)| if one { None } else { Some(i) })
     }
 
-    /// Iterator of included items
+    /// Iterator of included items, in ascending order.
+    ///
+    /// Skips zero words instead of testing each of their bits: decoded sets keep any trailing
+    /// zero words they were sent with, and each one costs a peer only one byte to send.
     pub fn iter(&'_ self) -> impl Iterator<Item = usize> + '_ {
-        self.iter_bits()
-            .take(self.store.len() * 64)
-            .enumerate()
-            .filter_map(|(i, one)| if one { Some(i) } else { None })
+        self.store.iter().enumerate().flat_map(|(i, &word)| {
+            let mut rest = word;
+            from_fn(move || {
+                if rest == 0 {
+                    return None;
+                }
+                let bit = rest.trailing_zeros() as usize;
+                // Clear the lowest set bit.
+                rest &= rest - 1;
+                Some(i * 64 + bit)
+            })
+        })
     }
 
     /// Infinite iterator of bits
@@ -471,6 +482,11 @@ impl<'de> Visitor<'de> for BitSetVisitor {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        hint::black_box,
+        time::{Duration, Instant},
+    };
+
     use nimiq_serde::{Deserialize, Serialize};
     use nimiq_test_log::test;
 
@@ -563,5 +579,109 @@ mod tests {
         set2.insert(70);
         let set3 = set1 | set2;
         assert_eq!(set3.len(), 20);
+    }
+
+    /// Reference for `iter()`: tests every bit of every word, zero words included.
+    fn iter_per_bit(set: &BitSet) -> Vec<usize> {
+        set.iter_bits()
+            .take(set.store.len() * 64)
+            .enumerate()
+            .filter_map(|(i, one)| one.then_some(i))
+            .collect()
+    }
+
+    fn from_words(store: Vec<u64>) -> BitSet {
+        let count = store.iter().map(|word| word.count_ones() as usize).sum();
+        BitSet { store, count }
+    }
+
+    #[test]
+    fn it_iterates_same_items_as_per_bit_walk() {
+        let mut sets = vec![
+            BitSet::new(),
+            sample_bitset(),
+            (0..512).collect::<BitSet>(),
+            [0, 63, 64 * 3 + 5, 64 * 7 + 63]
+                .into_iter()
+                .collect::<BitSet>(),
+            from_words(vec![0, 0, 1 << 63, 0, u64::MAX, 0, 0]),
+            // One item past the 512 validator slots.
+            (0..=512).collect::<BitSet>(),
+            // The shape a peer can send: a long run of zero words, then one bit. The bit is in
+            // word 65536, past the range of a u16 index.
+            from_words([vec![0; 1 << 16], vec![1 << 5]].concat()),
+        ];
+
+        // Pseudo-random words (splitmix64): a third zero, a third with one bit set, a third
+        // random. Each store is checked as is and followed by three zero words.
+        let mut state = 0u64;
+        let mut next = move || {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        };
+        for len in 0..32 {
+            let mut store: Vec<u64> = (0..len)
+                .map(|_| match next() % 3 {
+                    0 => 0,
+                    1 => 1 << (next() % 64),
+                    _ => next(),
+                })
+                .collect();
+            sets.push(from_words(store.clone()));
+            store.extend([0; 3]);
+            sets.push(from_words(store));
+        }
+
+        for set in sets {
+            let items: Vec<usize> = set.iter().collect();
+            assert_eq!(items, iter_per_bit(&set));
+            assert_eq!(items.len(), set.len());
+        }
+    }
+
+    #[test]
+    fn it_iterates_decoded_set_with_zero_padding() {
+        // `sample_bitset()` followed by three zero words.
+        let bin = hex::decode("05FEFF1F40000000").unwrap();
+        let set = BitSet::deserialize_from_vec(&bin).unwrap();
+        // The decoder keeps the padding, so the set encodes back to the same bytes.
+        assert_eq!(set.store.len(), 5);
+        assert_eq!(set.serialize_to_vec(), bin);
+        assert_eq!(set, sample_bitset());
+        assert_eq!(
+            set.iter().collect::<Vec<_>>(),
+            sample_bitset().iter().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn it_skips_zero_words_when_iterating() {
+        // A peer pays one byte per zero word, so `iter()` must skip zero words instead of testing
+        // their 64 bits one by one. Skipping is tens of times faster, also in debug builds, so
+        // four walks with `iter()` finish well before one per-bit walk. If `iter()` walked every
+        // bit again, the four walks would take about four times as long. Both sides collect the
+        // same way, so only the walk differs, and each keeps its fastest of five runs to filter
+        // out pauses caused by other load on the machine.
+        let set = from_words([vec![1], vec![0; 1 << 15]].concat());
+        let mut skipping = Duration::MAX;
+        let mut per_bit = Duration::MAX;
+        for _ in 0..5 {
+            let start = Instant::now();
+            for _ in 0..4 {
+                assert_eq!(black_box(&set).iter().collect::<Vec<_>>(), [0]);
+            }
+            skipping = skipping.min(start.elapsed());
+
+            let start = Instant::now();
+            assert_eq!(iter_per_bit(black_box(&set)), [0]);
+            per_bit = per_bit.min(start.elapsed());
+        }
+        assert!(
+            skipping < per_bit,
+            "4 walks with iter() took {skipping:?}, 1 per-bit walk took {per_bit:?}",
+        );
     }
 }
