@@ -117,7 +117,7 @@ gloo-timers = { path = "patches/gloo-timers" }
 version = "2.3.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2024"
-rust-version = "1.94.1"
+rust-version = "1.97.1"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
@@ -126,7 +126,6 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [workspace.lints]
 clippy.assigning_clones = "allow"                                              # false positives: https://github.com/rust-lang/rust-clippy/issues/12709
-clippy.empty_docs = "allow"                                                    # false positives: https://github.com/rust-lang/rust-clippy/issues/12377
 clippy.large_enum_variant = "allow"
 clippy.result_large_err = "allow"
 clippy.too_many_arguments = "allow"
