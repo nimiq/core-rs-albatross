@@ -1,10 +1,14 @@
+use nimiq_serde::{Deserialize as _, Serialize as _};
 use nimiq_test_log::test;
 use nimiq_utils::otp::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize, Eq, PartialEq, Clone)]
 struct DummyU32 {
+    // Fixed width: as varints, a wrong password verifies in 1 of 258111 runs.
+    #[serde(with = "nimiq_serde::fixint::be")]
     value: u32,
+    #[serde(with = "nimiq_serde::fixint::be")]
     checksum: u32,
 }
 
@@ -60,6 +64,22 @@ fn create_unlocked_checked() {
         let unlocked = unlocked.ok().unwrap();
         assert!(unlocked.eq(&secret));
     }
+}
+
+#[test]
+fn unlock_rejects_trailing_bytes() {
+    let password = "password";
+    let bytes = Locked::with_defaults([7u8; 8], password.as_bytes())
+        .unwrap()
+        .serialize_to_vec();
+
+    // The serialized lock does not depend on its type parameter.
+    let locked = Locked::<[u8; 8]>::deserialize_all(&bytes).unwrap();
+    assert!(locked.unlock_unchecked(password.as_bytes()).is_ok());
+
+    // Read as a shorter type, the correct password leaves bytes unread.
+    let locked = Locked::<[u8; 4]>::deserialize_all(&bytes).unwrap();
+    assert!(locked.unlock_unchecked(password.as_bytes()).is_err());
 }
 
 #[test]

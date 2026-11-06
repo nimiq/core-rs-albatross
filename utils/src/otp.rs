@@ -229,7 +229,7 @@ impl<T: Zeroize + Deserialize + Serialize> Locked<T> {
             return Err(self);
         };
 
-        let result = T::deserialize_from_vec(&key).ok();
+        let result = T::deserialize_all(&key).ok();
 
         // Always overwrite unencrypted vector.
         for byte in key.iter_mut() {
