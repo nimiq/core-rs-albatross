@@ -136,7 +136,7 @@ async fn main_inner() -> Result<(), Error> {
             client.consensus_proxy(),
             client.network(),
             &nimiq_task_metric,
-        )
+        )?;
     }
 
     // Create the "monitor" future which never completes to keep the client alive.
