@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use futures::future::BoxFuture;
@@ -12,7 +12,7 @@ use hyper_util::{
     rt::tokio::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
 };
-use log::{error, info};
+use log::error;
 use nimiq_time::sleep;
 use nimiq_utils::{spawn, Credentials};
 use parking_lot::RwLock;
@@ -24,12 +24,10 @@ use tokio::net::TcpListener;
 const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
 
 pub async fn metrics_server(
-    addr: SocketAddr,
+    listener: TcpListener,
     registry: Registry,
     credentials: Option<Credentials>,
-) -> Result<(), std::io::Error> {
-    let listener = TcpListener::bind(&addr).await?;
-    info!("Metrics server on http://{}/metrics", addr);
+) {
     let metrics_service = MetricService::new(registry, credentials);
     loop {
         // An accept error (e.g. the process ran out of file descriptors) must not take

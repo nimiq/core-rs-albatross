@@ -1,5 +1,6 @@
-use std::{fmt::Debug, net::SocketAddr, sync::Arc};
+use std::{fmt::Debug, io, net::SocketAddr, sync::Arc};
 
+use log::info;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusProxy;
 use nimiq_mempool::mempool::Mempool;
@@ -92,6 +93,11 @@ impl<T: EncodeGaugeValue + Sized + Debug> Debug for NumericClosureMetric<T> {
     }
 }
 
+/// Binds the metrics server to `addr` and spawns it together with the metric updaters.
+///
+/// Binding happens before this function returns, so that a misconfigured or already used
+/// address is reported to the caller instead of silently leaving the node without metrics.
+/// Must be called from within a Tokio runtime.
 pub fn start_metrics_server<TNetwork: Network>(
     addr: SocketAddr,
     credentials: Option<Credentials>,
@@ -100,7 +106,9 @@ pub fn start_metrics_server<TNetwork: Network>(
     consensus_proxy: ConsensusProxy<TNetwork>,
     network: Arc<nimiq_network_libp2p::Network>,
     task_monitors: &[NimiqTaskMonitor],
-) {
+) -> io::Result<()> {
+    let listener = bind(addr)?;
+
     let mut registry = Registry::default();
     let nimiq_registry = registry.sub_registry_with_prefix("nimiq");
 
@@ -148,7 +156,7 @@ pub fn start_metrics_server<TNetwork: Network>(
     }
 
     // Spawn the metrics server
-    spawn(async move { metrics_server(addr, registry, credentials).await.unwrap() });
+    spawn(metrics_server(listener, registry, credentials));
 
     // Spawn Tokio task monitor updaters
     for task_monitor in task_monitors {
@@ -164,5 +172,37 @@ pub fn start_metrics_server<TNetwork: Network>(
                 .await;
             }
         });
+    }
+
+    Ok(())
+}
+
+/// Binds the metrics server's listening socket.
+fn bind(addr: SocketAddr) -> io::Result<tokio::net::TcpListener> {
+    let with_context =
+        |error: io::Error| io::Error::new(error.kind(), format!("cannot bind to {addr}: {error}"));
+    let listener = std::net::TcpListener::bind(addr).map_err(with_context)?;
+    listener.set_nonblocking(true).map_err(with_context)?;
+    let listener = tokio::net::TcpListener::from_std(listener).map_err(with_context)?;
+    info!(
+        "Metrics server on http://{}/metrics",
+        listener.local_addr().unwrap_or(addr)
+    );
+    Ok(listener)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bind;
+
+    #[tokio::test]
+    async fn bind_fails_with_context_when_address_is_in_use() {
+        let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = taken.local_addr().unwrap();
+
+        let error = bind(addr).unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::AddrInUse);
+        assert!(error.to_string().contains(&addr.to_string()));
     }
 }
