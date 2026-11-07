@@ -595,6 +595,10 @@ impl<N: Network> StateQueue<N> {
         let blockchain = self.blockchain.read();
         let accounts_complete = blockchain.accounts_complete();
         let block_number = blockchain.block_number();
+        if accounts_complete {
+            // The chunks are all there, whether or not diffs are still needed.
+            self.sync_progress.store(100, Ordering::Release);
+        }
         if self.start_key.is_complete() {
             // Already marked complete, nothing to do.
             return (accounts_complete, block_number);
@@ -618,6 +622,17 @@ impl<N: Network> StateQueue<N> {
         (accounts_complete, block_number)
     }
 
+    /// Restarts the reported state sync progress where the chunk requests restart: at the start
+    /// of the trie's missing range.
+    fn restart_sync_progress(&self) {
+        let progress = self
+            .blockchain
+            .read()
+            .get_missing_accounts_range(None)
+            .map_or(100.0, |missing| key_progress(&missing.start));
+        self.sync_progress.store(progress as u32, Ordering::Release);
+    }
+
     pub fn num_buffered_chunks(&self) -> usize {
         self.buffer_size
     }
@@ -629,6 +644,12 @@ impl<N: Network> StateQueue<N> {
     pub fn chunk_request_state(&self) -> &ChunkRequestState {
         &self.start_key
     }
+}
+
+/// Approximates how far into the accounts key space `key` lies, in percent.
+fn key_progress(key: &KeyNibbles) -> f32 {
+    let key = u32::from_str_radix(&format!("{key}00000000")[..8], 16).unwrap_or(0);
+    (key as f32 / u32::MAX as f32) * 100.0
 }
 
 impl<N: Network> Stream for StateQueue<N> {
@@ -660,6 +681,7 @@ impl<N: Network> Stream for StateQueue<N> {
                         // Also restart state sync if we were paused and passed the block number that contained the end key.
                         info!("Trie incomplete, starting state sync.");
                         self.start_key = ChunkRequestState::Reset;
+                        self.restart_sync_progress();
                         self.diff_queue.set_diff_needed(true);
                     }
                 }
@@ -667,6 +689,7 @@ impl<N: Network> Stream for StateQueue<N> {
                     if !self.blockchain.read().accounts_complete() {
                         info!("Reset due to rebranch.");
                         self.start_key = ChunkRequestState::Reset;
+                        self.restart_sync_progress();
                         self.diff_queue.set_diff_needed(true);
                     }
                 }
@@ -694,10 +717,7 @@ impl<N: Network> Stream for StateQueue<N> {
                     // We throw away the remaining incoming chunks if we are complete.
                     // This avoids breaking the state sync invariant new block + no diffs, then no chunks.
                     if !self.start_key.is_complete() {
-                        let key = u32::from_str_radix(&format!("{start_key}00000000")[..8], 16)
-                            .unwrap_or(0);
-
-                        let percentage = (key as f32 / u32::MAX as f32) * 100.0;
+                        let percentage = key_progress(&start_key);
 
                         self.sync_progress
                             .store(percentage as u32, Ordering::Release);
