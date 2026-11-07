@@ -52,3 +52,7 @@ nimiq-utils = { workspace = true, features = ["credentials", "spawn"] }
 
 [features]
 extended-staking = ["nimiq-primitives/coin"]
+
+[dev-dependencies]
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
