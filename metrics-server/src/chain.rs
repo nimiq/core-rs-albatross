@@ -7,6 +7,8 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_primitives::coin::Coin;
 use parking_lot::RwLock;
 use prometheus_client::registry::{Registry, Unit};
+#[cfg(feature = "extended-staking")]
+use prometheus_client::{collector::Collector, encoding::DescriptorEncoder, metrics::MetricType};
 
 use crate::{NumericClosureMetric, OptionalClosureMetric};
 
@@ -53,84 +55,7 @@ impl BlockMetrics {
 
     #[cfg(feature = "extended-staking")]
     fn register_extended_staking(registry: &mut Registry, blockchain: Arc<RwLock<Blockchain>>) {
-        // Total active stake
-        let bc = Arc::clone(&blockchain);
-        let closure = OptionalClosureMetric::new_gauge(Box::new(move || {
-            let contract = bc.read().get_staking_contract_if_complete(None)?;
-            let sum = contract.active_validators.values().cloned().sum::<Coin>();
-            Some(u64::from(sum) as i64)
-        }));
-        registry.register("active_stake", "Total active stake", closure);
-
-        // Number of inactive validators
-        let bc = Arc::clone(&blockchain);
-        let closure = OptionalClosureMetric::new_gauge(Box::new(move || {
-            let blockchain = bc.read();
-            let contract = blockchain.get_staking_contract_if_complete(None)?;
-
-            let txn = blockchain.read_transaction();
-            let data_store = blockchain.get_staking_contract_store();
-            let count = contract
-                .iter_validators(&data_store.read(&txn))
-                .filter(|validator| validator.inactive_from.is_some())
-                .count();
-            Some(count as i64)
-        }));
-        registry.register(
-            "inactive_validators",
-            "Number of inactive validators",
-            closure,
-        );
-
-        // Total inactive stake
-        let bc = Arc::clone(&blockchain);
-        let closure = OptionalClosureMetric::new_gauge(Box::new(move || {
-            let blockchain = bc.read();
-            let contract = blockchain.get_staking_contract_if_complete(None)?;
-
-            let txn = blockchain.read_transaction();
-            let data_store = blockchain.get_staking_contract_store();
-            let stake = contract
-                .iter_validators(&data_store.read(&txn))
-                .filter(|validator| validator.inactive_from.is_some())
-                .map(|validator| validator.total_stake)
-                .sum::<Coin>();
-            Some(u64::from(stake) as i64)
-        }));
-        registry.register("inactive_stake", "Total inactive stake", closure);
-
-        // Number of jailed validators
-        let bc = Arc::clone(&blockchain);
-        let closure = OptionalClosureMetric::new_gauge(Box::new(move || {
-            let blockchain = bc.read();
-            let contract = blockchain.get_staking_contract_if_complete(None)?;
-
-            let txn = blockchain.read_transaction();
-            let data_store = blockchain.get_staking_contract_store();
-            let count = contract
-                .iter_validators(&data_store.read(&txn))
-                .filter(|validator| validator.jailed_from.is_some())
-                .count();
-            Some(count as i64)
-        }));
-        registry.register("jailed_validators", "Number of jailed validators", closure);
-
-        // Total jailed stake
-        let bc = Arc::clone(&blockchain);
-        let closure = OptionalClosureMetric::new_gauge(Box::new(move || {
-            let blockchain = bc.read();
-            let contract = blockchain.get_staking_contract_if_complete(None)?;
-
-            let txn = blockchain.read_transaction();
-            let data_store = blockchain.get_staking_contract_store();
-            let stake = contract
-                .iter_validators(&data_store.read(&txn))
-                .filter(|validator| validator.jailed_from.is_some())
-                .map(|validator| validator.total_stake)
-                .sum::<Coin>();
-            Some(u64::from(stake) as i64)
-        }));
-        registry.register("jailed_stake", "Total jailed stake", closure);
+        registry.register_collector(Box::new(ExtendedStakingCollector { blockchain }));
     }
 
     fn register_accounts_trie(registry: &mut Registry, blockchain: Arc<RwLock<Blockchain>>) {
@@ -190,6 +115,104 @@ impl BlockMetrics {
             "Number of elected validators",
             closure,
         );
+    }
+}
+
+/// The extended staking gauges. They are computed together so that a scrape takes the
+/// blockchain lock once and walks the validators once, instead of once per gauge.
+#[cfg(feature = "extended-staking")]
+struct ExtendedStakingCollector {
+    blockchain: Arc<RwLock<Blockchain>>,
+}
+
+#[cfg(feature = "extended-staking")]
+struct ExtendedStakingTotals {
+    active_stake: Coin,
+    inactive_validators: u64,
+    inactive_stake: Coin,
+    jailed_validators: u64,
+    jailed_stake: Coin,
+}
+
+#[cfg(feature = "extended-staking")]
+impl ExtendedStakingCollector {
+    /// Returns `None` while the accounts trie is incomplete.
+    fn totals(&self) -> Option<ExtendedStakingTotals> {
+        let blockchain = self.blockchain.read();
+        let contract = blockchain.get_staking_contract_if_complete(None)?;
+        let txn = blockchain.read_transaction();
+        let data_store = blockchain.get_staking_contract_store();
+
+        let mut totals = ExtendedStakingTotals {
+            active_stake: contract.active_validators.values().cloned().sum(),
+            inactive_validators: 0,
+            inactive_stake: Coin::ZERO,
+            jailed_validators: 0,
+            jailed_stake: Coin::ZERO,
+        };
+        for validator in contract.iter_validators(&data_store.read(&txn)) {
+            if validator.inactive_from.is_some() {
+                totals.inactive_validators += 1;
+                totals.inactive_stake += validator.total_stake;
+            }
+            if validator.jailed_from.is_some() {
+                totals.jailed_validators += 1;
+                totals.jailed_stake += validator.total_stake;
+            }
+        }
+        Some(totals)
+    }
+}
+
+#[cfg(feature = "extended-staking")]
+impl std::fmt::Debug for ExtendedStakingCollector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExtendedStakingCollector")
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "extended-staking")]
+impl Collector for ExtendedStakingCollector {
+    fn encode(&self, mut encoder: DescriptorEncoder) -> Result<(), std::fmt::Error> {
+        let totals = self.totals();
+        let gauges = [
+            (
+                "active_stake",
+                "Total active stake",
+                totals.as_ref().map(|t| u64::from(t.active_stake)),
+            ),
+            (
+                "inactive_validators",
+                "Number of inactive validators",
+                totals.as_ref().map(|t| t.inactive_validators),
+            ),
+            (
+                "inactive_stake",
+                "Total inactive stake",
+                totals.as_ref().map(|t| u64::from(t.inactive_stake)),
+            ),
+            (
+                "jailed_validators",
+                "Number of jailed validators",
+                totals.as_ref().map(|t| t.jailed_validators),
+            ),
+            (
+                "jailed_stake",
+                "Total jailed stake",
+                totals.as_ref().map(|t| u64::from(t.jailed_stake)),
+            ),
+        ];
+        for (name, help, value) in gauges {
+            // Like `OptionalClosureMetric`: describe the gauge, but emit no sample while the
+            // value is unknown.
+            let mut metric_encoder =
+                encoder.encode_descriptor(name, help, None, MetricType::Gauge)?;
+            if let Some(value) = value {
+                metric_encoder.encode_gauge(&(value as i64))?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -277,6 +300,36 @@ mod tests {
         );
         for gauge in staking_gauges() {
             assert!(sample(&encoded, gauge).is_some(), "{gauge}");
+        }
+    }
+
+    #[cfg(feature = "extended-staking")]
+    #[test]
+    fn computes_the_extended_staking_gauges() {
+        let producer = TemporaryBlockProducer::new();
+        let (active_stake, num_validators) = {
+            let blockchain = producer.blockchain.read();
+            let contract = blockchain.get_staking_contract();
+            let active_stake: nimiq_primitives::coin::Coin =
+                contract.active_validators.values().cloned().sum();
+            (u64::from(active_stake), contract.active_validators.len())
+        };
+        assert!(num_validators > 0);
+
+        let encoded = encode_metrics(&producer.blockchain);
+
+        assert_eq!(
+            sample(&encoded, "nimiq_staking_active_stake"),
+            Some(active_stake as f64)
+        );
+        // The unit test genesis has no inactive or jailed validators.
+        for gauge in [
+            "nimiq_staking_inactive_validators",
+            "nimiq_staking_inactive_stake",
+            "nimiq_staking_jailed_validators",
+            "nimiq_staking_jailed_stake",
+        ] {
+            assert_eq!(sample(&encoded, gauge), Some(0.0), "{gauge}");
         }
     }
 
