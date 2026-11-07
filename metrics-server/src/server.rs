@@ -107,7 +107,15 @@ impl MetricService {
     fn respond_with_metrics(&self) -> Response<Full<Bytes>> {
         let mut encoded = String::new();
         let reg = self.get_reg();
-        encode(&mut encoded, &reg.read()).unwrap();
+        if let Err(error) = encode(&mut encoded, &reg.read()) {
+            // A metric failed to encode (e.g. a collector returned an error). Report it to the
+            // scraper, so the target shows up as failing, instead of panicking the connection.
+            error!(%error, "Failed to encode metrics");
+            return Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from("Failed to encode metrics")))
+                .unwrap();
+        }
         let metrics_content_type = "application/openmetrics-text;charset=utf-8;version=1.0.0";
         Response::builder()
             .status(StatusCode::OK)
@@ -167,8 +175,11 @@ impl Service<Request<IncomingBody>> for MetricService {
 mod tests {
     use std::{io::Read, time::Duration};
 
+    use hyper::http::StatusCode;
     use nimiq_utils::{spawn, spawn_blocking};
-    use prometheus_client::registry::Registry;
+    use prometheus_client::{
+        collector::Collector, encoding::DescriptorEncoder, registry::Registry,
+    };
     use tokio::net::TcpListener;
 
     use super::{serve, MetricService};
@@ -190,5 +201,25 @@ mod tests {
         .await;
 
         assert_eq!(read.unwrap(), 0, "the server should close the connection");
+    }
+
+    #[derive(Debug)]
+    struct FailingCollector;
+
+    impl Collector for FailingCollector {
+        fn encode(&self, _encoder: DescriptorEncoder) -> Result<(), std::fmt::Error> {
+            Err(std::fmt::Error)
+        }
+    }
+
+    #[test]
+    fn answers_500_when_encoding_fails() {
+        let mut registry = Registry::default();
+        registry.register_collector(Box::new(FailingCollector));
+        let service = MetricService::new(registry, None);
+
+        let response = service.respond_with_metrics();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
