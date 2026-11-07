@@ -23,6 +23,7 @@ enum TxRemovedReason {
     AlreadyIncludedTx,
     Invalid,
     TooFull,
+    SenderAccountUnknown,
 }
 
 impl MempoolMetrics {
@@ -43,6 +44,7 @@ impl MempoolMetrics {
             EvictionReason::AlreadyIncluded => TxRemovedReason::AlreadyIncludedTx,
             EvictionReason::Invalid => TxRemovedReason::Invalid,
             EvictionReason::TooFull => TxRemovedReason::TooFull,
+            EvictionReason::SenderAccountUnknown => TxRemovedReason::SenderAccountUnknown,
         };
         self.evicted_tx
             .get_or_create(&RemovedReasonLabel { reason })
