@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use futures::future::BoxFuture;
@@ -13,10 +13,15 @@ use hyper_util::{
     server::conn::auto::Builder,
 };
 use log::{error, info};
+use nimiq_time::sleep;
 use nimiq_utils::{spawn, Credentials};
 use parking_lot::RwLock;
 use prometheus_client::{encoding::text::encode, registry::Registry};
 use tokio::net::TcpListener;
+
+/// How long to wait before accepting again after `accept()` failed, so that a persistent
+/// error (such as running out of file descriptors) does not turn into a busy loop.
+const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
 
 pub async fn metrics_server(
     addr: SocketAddr,
@@ -27,7 +32,16 @@ pub async fn metrics_server(
     info!("Metrics server on http://{}/metrics", addr);
     let metrics_service = MetricService::new(registry, credentials);
     loop {
-        let (stream, _) = listener.accept().await?;
+        // An accept error (e.g. the process ran out of file descriptors) must not take
+        // the metrics server down for the rest of the node's lifetime.
+        let stream = match listener.accept().await {
+            Ok((stream, _)) => stream,
+            Err(error) => {
+                error!(%error, "Metrics server failed to accept a connection");
+                sleep(ACCEPT_ERROR_BACKOFF).await;
+                continue;
+            }
+        };
         let io = TokioIo::new(stream);
         let svc_clone = metrics_service.clone();
         spawn(async move {
