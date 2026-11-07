@@ -9,10 +9,10 @@ use hyper::{
     Response,
 };
 use hyper_util::{
-    rt::tokio::{TokioExecutor, TokioIo},
+    rt::tokio::{TokioExecutor, TokioIo, TokioTimer},
     server::conn::auto::Builder,
 };
-use log::error;
+use log::{debug, error};
 use nimiq_time::sleep;
 use nimiq_utils::{spawn, Credentials};
 use parking_lot::RwLock;
@@ -23,12 +23,39 @@ use tokio::net::TcpListener;
 /// error (such as running out of file descriptors) does not turn into a busy loop.
 const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
 
+/// How long a client may take to send the request headers, measured from when the connection
+/// starts waiting for a request (including idle keep-alive connections). Without it, a client
+/// that connects and never sends anything holds its connection and task forever.
+const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(10);
+
 pub async fn metrics_server(
     listener: TcpListener,
     registry: Registry,
     credentials: Option<Credentials>,
 ) {
-    let metrics_service = MetricService::new(registry, credentials);
+    serve(
+        listener,
+        MetricService::new(registry, credentials),
+        HEADER_READ_TIMEOUT,
+    )
+    .await
+}
+
+async fn serve(
+    listener: TcpListener,
+    metrics_service: MetricService,
+    header_read_timeout: Duration,
+) {
+    // Scrapers talk HTTP/1.1 to plain-HTTP targets. Serving HTTP/1 only also skips the
+    // protocol detection of the auto builder, which would wait for the first bytes without
+    // any timeout before the header read timeout applies.
+    let mut builder = Builder::new(TokioExecutor::new()).http1_only();
+    builder
+        .http1()
+        .timer(TokioTimer::new())
+        .header_read_timeout(header_read_timeout);
+    let builder = Arc::new(builder);
+
     loop {
         // An accept error (e.g. the process ran out of file descriptors) must not take
         // the metrics server down for the rest of the node's lifetime.
@@ -42,12 +69,18 @@ pub async fn metrics_server(
         };
         let io = TokioIo::new(stream);
         let svc_clone = metrics_service.clone();
+        let builder = Arc::clone(&builder);
         spawn(async move {
-            if let Err(error) = Builder::new(TokioExecutor::new())
-                .serve_connection(io, svc_clone)
-                .await
-            {
-                error!(%error, "server error",);
+            if let Err(error) = builder.serve_connection(io, svc_clone).await {
+                // Idle keep-alive connections between scrapes end this way, so it is routine.
+                if error
+                    .downcast_ref::<hyper::Error>()
+                    .is_some_and(hyper::Error::is_timeout)
+                {
+                    debug!(%error, "Metrics server closed a connection that sent no request");
+                } else {
+                    error!(%error, "server error",);
+                }
             }
         });
     }
@@ -127,5 +160,35 @@ impl Service<Request<IncomingBody>> for MetricService {
             self.respond_with_404_not_found()
         };
         Box::pin(async { Ok(resp) })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{io::Read, time::Duration};
+
+    use nimiq_utils::{spawn, spawn_blocking};
+    use prometheus_client::registry::Registry;
+    use tokio::net::TcpListener;
+
+    use super::{serve, MetricService};
+
+    #[tokio::test]
+    async fn closes_connections_that_send_no_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let service = MetricService::new(Registry::default(), None);
+        spawn(serve(listener, service, Duration::from_millis(100)));
+
+        let read = spawn_blocking(move || {
+            let mut stream = std::net::TcpStream::connect(addr).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream.read(&mut [0u8; 1])
+        })
+        .await;
+
+        assert_eq!(read.unwrap(), 0, "the server should close the connection");
     }
 }
