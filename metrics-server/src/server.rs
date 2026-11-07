@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    fmt::{self, Debug},
+    sync::Arc,
+    time::Duration,
+};
 
 use bytes::Bytes;
 use futures::future::BoxFuture;
@@ -28,14 +32,18 @@ const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
 /// that connects and never sends anything holds its connection and task forever.
 const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Reports whether the node is ready to serve, for the `/ready` endpoint.
+pub type ReadinessCheck = Arc<dyn Fn() -> bool + Send + Sync>;
+
 pub async fn metrics_server(
     listener: TcpListener,
     registry: Registry,
     credentials: Option<Credentials>,
+    is_ready: ReadinessCheck,
 ) {
     serve(
         listener,
-        MetricService::new(registry, credentials),
+        MetricService::new(registry, credentials, is_ready),
         HEADER_READ_TIMEOUT,
     )
     .await
@@ -86,19 +94,34 @@ async fn serve(
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MetricService {
     reg: Arc<RwLock<Registry>>,
     credentials: Option<Arc<Credentials>>,
+    is_ready: ReadinessCheck,
+}
+
+impl Debug for MetricService {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MetricService")
+            .field("reg", &self.reg)
+            .field("credentials", &self.credentials)
+            .finish_non_exhaustive()
+    }
 }
 
 type SharedRegistry = Arc<RwLock<Registry>>;
 
 impl MetricService {
-    pub fn new(registry: Registry, credentials: Option<Credentials>) -> Self {
+    pub fn new(
+        registry: Registry,
+        credentials: Option<Credentials>,
+        is_ready: ReadinessCheck,
+    ) -> Self {
         Self {
             reg: Arc::new(RwLock::new(registry)),
             credentials: credentials.map(Arc::new),
+            is_ready,
         }
     }
     fn get_reg(&self) -> SharedRegistry {
@@ -123,13 +146,24 @@ impl MetricService {
             .body(Full::new(Bytes::from(encoded)))
             .unwrap()
     }
-    fn respond_with_404_not_found(&self) -> Response<Full<Bytes>> {
+    fn respond_with_text(status: StatusCode, text: &'static str) -> Response<Full<Bytes>> {
         Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Full::new(Bytes::from(
-                "Not found try localhost:[port]/metrics",
-            )))
+            .status(status)
+            .body(Full::new(Bytes::from(text)))
             .unwrap()
+    }
+    fn respond_with_readiness(&self) -> Response<Full<Bytes>> {
+        if (self.is_ready)() {
+            Self::respond_with_text(StatusCode::OK, "Ready")
+        } else {
+            Self::respond_with_text(StatusCode::SERVICE_UNAVAILABLE, "Consensus not established")
+        }
+    }
+    fn respond_with_404_not_found(&self) -> Response<Full<Bytes>> {
+        Self::respond_with_text(
+            StatusCode::NOT_FOUND,
+            "Not found. Available paths: /metrics, /health, /ready",
+        )
     }
     fn respond_with_401_unauthorized(&self) -> Response<Full<Bytes>> {
         Response::builder()
@@ -156,16 +190,19 @@ impl Service<Request<IncomingBody>> for MetricService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn call(&self, req: Request<IncomingBody>) -> Self::Future {
-        let req_path = req.uri().path();
-        let req_method = req.method();
-        let resp = if (req_method == Method::GET) && (req_path == "/metrics") {
-            if !self.is_authorized(&req) {
-                self.respond_with_401_unauthorized()
-            } else {
-                self.respond_with_metrics()
+        let resp = match (req.method(), req.uri().path()) {
+            (&Method::GET, "/metrics") => {
+                if !self.is_authorized(&req) {
+                    self.respond_with_401_unauthorized()
+                } else {
+                    self.respond_with_metrics()
+                }
             }
-        } else {
-            self.respond_with_404_not_found()
+            // Liveness and readiness probes (e.g. Docker, Kubernetes) are unauthenticated:
+            // they reveal nothing but the node's state and probes rarely support credentials.
+            (&Method::GET, "/health") => Self::respond_with_text(StatusCode::OK, "OK"),
+            (&Method::GET, "/ready") => self.respond_with_readiness(),
+            _ => self.respond_with_404_not_found(),
         };
         Box::pin(async { Ok(resp) })
     }
@@ -173,22 +210,82 @@ impl Service<Request<IncomingBody>> for MetricService {
 
 #[cfg(test)]
 mod tests {
-    use std::{io::Read, time::Duration};
+    use std::{
+        io::{Read, Write},
+        net::SocketAddr,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        time::Duration,
+    };
 
     use hyper::http::StatusCode;
-    use nimiq_utils::{spawn, spawn_blocking};
+    use nimiq_utils::{spawn, spawn_blocking, Credentials};
     use prometheus_client::{
         collector::Collector, encoding::DescriptorEncoder, registry::Registry,
     };
     use tokio::net::TcpListener;
 
-    use super::{serve, MetricService};
+    use super::{serve, MetricService, ReadinessCheck, HEADER_READ_TIMEOUT};
+
+    async fn start(credentials: Option<Credentials>, is_ready: ReadinessCheck) -> SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let service = MetricService::new(Registry::default(), credentials, is_ready);
+        spawn(serve(listener, service, HEADER_READ_TIMEOUT));
+        addr
+    }
+
+    /// Sends `GET path` and returns the response's status line.
+    async fn get_status(addr: SocketAddr, path: &'static str) -> String {
+        spawn_blocking(move || {
+            let mut stream = std::net::TcpStream::connect(addr).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            write!(
+                stream,
+                "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            )
+            .unwrap();
+            let mut response = String::new();
+            stream.read_to_string(&mut response).unwrap();
+            response.lines().next().unwrap_or_default().to_owned()
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn serves_health_and_readiness_without_credentials() {
+        let ready = Arc::new(AtomicBool::new(false));
+        let is_ready = {
+            let ready = Arc::clone(&ready);
+            Arc::new(move || ready.load(Ordering::Relaxed))
+        };
+        let credentials = Credentials::new("user", "secret");
+        let addr = start(Some(credentials), is_ready).await;
+
+        assert_eq!(get_status(addr, "/health").await, "HTTP/1.1 200 OK");
+        assert_eq!(
+            get_status(addr, "/ready").await,
+            "HTTP/1.1 503 Service Unavailable"
+        );
+        ready.store(true, Ordering::Relaxed);
+        assert_eq!(get_status(addr, "/ready").await, "HTTP/1.1 200 OK");
+
+        assert_eq!(
+            get_status(addr, "/metrics").await,
+            "HTTP/1.1 401 Unauthorized"
+        );
+        assert_eq!(get_status(addr, "/other").await, "HTTP/1.1 404 Not Found");
+    }
 
     #[tokio::test]
     async fn closes_connections_that_send_no_request() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let service = MetricService::new(Registry::default(), None);
+        let service = MetricService::new(Registry::default(), None, Arc::new(|| true));
         spawn(serve(listener, service, Duration::from_millis(100)));
 
         let read = spawn_blocking(move || {
@@ -216,7 +313,7 @@ mod tests {
     fn answers_500_when_encoding_fails() {
         let mut registry = Registry::default();
         registry.register_collector(Box::new(FailingCollector));
-        let service = MetricService::new(registry, None);
+        let service = MetricService::new(registry, None, Arc::new(|| true));
 
         let response = service.respond_with_metrics();
 

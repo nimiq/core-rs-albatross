@@ -19,8 +19,12 @@ use tokio_metrics::TaskMonitor;
 #[cfg(tokio_unstable)]
 use crate::tokio_runtime::TokioRuntimeMetrics;
 use crate::{
-    chain::BlockMetrics, consensus::ConsensusMetrics, mempool::MempoolMetrics,
-    network::NetworkMetrics, server::metrics_server, tokio_task::TokioTaskMetrics,
+    chain::BlockMetrics,
+    consensus::ConsensusMetrics,
+    mempool::MempoolMetrics,
+    network::NetworkMetrics,
+    server::{metrics_server, ReadinessCheck},
+    tokio_task::TokioTaskMetrics,
 };
 
 mod chain;
@@ -112,6 +116,11 @@ pub fn start_metrics_server<TNetwork: Network>(
     let mut registry = Registry::default();
     let nimiq_registry = registry.sub_registry_with_prefix("nimiq");
 
+    let is_ready: ReadinessCheck = {
+        let consensus_proxy = consensus_proxy.clone();
+        Arc::new(move || consensus_proxy.is_established())
+    };
+
     BlockMetrics::register(nimiq_registry, blockchain_proxy);
     ConsensusMetrics::register(nimiq_registry, consensus_proxy);
     NetworkMetrics::register(nimiq_registry, network);
@@ -156,7 +165,7 @@ pub fn start_metrics_server<TNetwork: Network>(
     }
 
     // Spawn the metrics server
-    spawn(metrics_server(listener, registry, credentials));
+    spawn(metrics_server(listener, registry, credentials, is_ready));
 
     // Spawn Tokio task monitor updaters
     for task_monitor in task_monitors {
