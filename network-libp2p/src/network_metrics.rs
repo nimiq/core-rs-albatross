@@ -28,11 +28,21 @@ impl Default for NetworkMetrics {
     }
 }
 
+/// Returns the topic without its subtopic. Subtopics are named `<topic>_<subtopic>` (see
+/// `Network::subscribe_subtopic`), e.g. one per address for address subscriptions, which would
+/// make an unbounded label. Gossipsub only delivers messages of subscribed topics, so the base
+/// topic is always one of our own topic names and the label stays bounded.
+fn base_topic(topic: &str) -> &str {
+    topic
+        .split_once('_')
+        .map_or(topic, |(base, _subtopic)| base)
+}
+
 impl NetworkMetrics {
     pub fn register(&self, registry: &mut Registry) {
         registry.register(
             "gossipsub_messages_received",
-            "Number of received gossipsub messages",
+            "Number of received gossipsub messages, before validation",
             self.gossipsub_messages_received.clone(),
         );
 
@@ -50,29 +60,11 @@ impl NetworkMetrics {
     }
 
     pub(crate) fn note_received_pubsub_message(&self, topic: &TopicHash) {
-        if [
-            "address-subscription",
-            "block-body",
-            "block-header",
-            "control-transaction",
-            "regular-transaction",
-            "tendermint-proposal",
-            "zk-proof",
-        ]
-        .contains(&&*topic.to_string())
-        {
-            self.gossipsub_messages_received
-                .get_or_create(&TopicLabels {
-                    topic: topic.to_string(),
-                })
-                .inc();
-        } else {
-            self.gossipsub_messages_received
-                .get_or_create(&TopicLabels {
-                    topic: "unknown".into(),
-                })
-                .inc();
-        }
+        self.gossipsub_messages_received
+            .get_or_create(&TopicLabels {
+                topic: base_topic(topic.as_str()).to_owned(),
+            })
+            .inc();
     }
 
     pub(crate) fn note_published_pubsub_message(&self, topic_str: &str) {
@@ -85,5 +77,36 @@ impl NetworkMetrics {
 
     pub(crate) fn note_response_time(&self, duration: Duration) {
         self.response_times.observe(duration.as_secs_f64());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use libp2p::gossipsub::TopicHash;
+    use prometheus_client::{encoding::text::encode, registry::Registry};
+
+    use super::NetworkMetrics;
+
+    #[test]
+    fn labels_received_messages_by_base_topic() {
+        let metrics = NetworkMetrics::default();
+        let mut registry = Registry::default();
+        metrics.register(&mut registry);
+
+        metrics.note_received_pubsub_message(&TopicHash::from_raw("block-header"));
+        metrics.note_received_pubsub_message(&TopicHash::from_raw(
+            "address-subscription_12D3KooWExamplePeer",
+        ));
+        metrics.note_received_pubsub_message(&TopicHash::from_raw(
+            "address-subscription_12D3KooWOtherPeer",
+        ));
+
+        let mut encoded = String::new();
+        encode(&mut encoded, &registry).unwrap();
+        assert!(encoded.contains(r#"gossipsub_messages_received_total{topic="block-header"} 1"#));
+        assert!(encoded
+            .contains(r#"gossipsub_messages_received_total{topic="address-subscription"} 2"#));
+        assert!(!encoded.contains("12D3KooW"));
+        assert!(!encoded.contains(r#"topic="unknown""#));
     }
 }
