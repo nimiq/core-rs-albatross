@@ -97,6 +97,40 @@ impl<T: EncodeGaugeValue + Sized + Debug> Debug for NumericClosureMetric<T> {
     }
 }
 
+/// A gauge computed at scrape time whose value can be unknown, e.g. because the accounts trie
+/// is still being synced. An unknown value emits no sample instead of a misleading 0, so that
+/// queries and alerts see "no data" rather than a plausible but wrong value.
+struct OptionalClosureMetric<T: EncodeGaugeValue + Sized + Debug> {
+    lambda: Box<dyn Fn() -> Option<T> + Sync + Send>,
+}
+
+impl<T: EncodeGaugeValue + Sized + Debug> OptionalClosureMetric<T> {
+    pub fn new_gauge(lambda: Box<dyn Fn() -> Option<T> + Sync + Send>) -> Self {
+        OptionalClosureMetric { lambda }
+    }
+}
+
+impl<T: EncodeGaugeValue + Sized + Debug> EncodeMetric for OptionalClosureMetric<T> {
+    fn encode(&self, mut encoder: MetricEncoder) -> Result<(), std::fmt::Error> {
+        if let Some(value) = (self.lambda)() {
+            encoder.encode_gauge(&value)?;
+        }
+        Ok(())
+    }
+
+    fn metric_type(&self) -> MetricType {
+        MetricType::Gauge
+    }
+}
+
+impl<T: EncodeGaugeValue + Sized + Debug> Debug for OptionalClosureMetric<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OptionalClosureMetric")
+            .field("value", &(self.lambda)())
+            .finish()
+    }
+}
+
 /// Binds the metrics server to `addr` and spawns it together with the metric updaters.
 ///
 /// Binding happens before this function returns, so that a misconfigured or already used
