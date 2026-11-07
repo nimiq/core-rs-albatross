@@ -23,7 +23,9 @@ impl Default for NetworkMetrics {
         NetworkMetrics {
             gossipsub_messages_received: Default::default(),
             gossipsub_messages_published: Default::default(),
-            response_times: Histogram::new([0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0]),
+            // Up to the request timeout (10 s, see `REQUEST_TIMEOUT`), so slow responses are
+            // not all lumped into the `+Inf` bucket.
+            response_times: Histogram::new([0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0]),
         }
     }
 }
@@ -82,6 +84,8 @@ impl NetworkMetrics {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use libp2p::gossipsub::TopicHash;
     use prometheus_client::{encoding::text::encode, registry::Registry};
 
@@ -108,5 +112,19 @@ mod tests {
             .contains(r#"gossipsub_messages_received_total{topic="address-subscription"} 2"#));
         assert!(!encoded.contains("12D3KooW"));
         assert!(!encoded.contains(r#"topic="unknown""#));
+    }
+
+    #[test]
+    fn buckets_response_times_up_to_the_request_timeout() {
+        let metrics = NetworkMetrics::default();
+        let mut registry = Registry::default();
+        metrics.register(&mut registry);
+
+        metrics.note_response_time(Duration::from_secs(7));
+
+        let mut encoded = String::new();
+        encode(&mut encoded, &registry).unwrap();
+        assert!(encoded.contains(r#"request_durations_bucket{le="5.0"} 0"#));
+        assert!(encoded.contains(r#"request_durations_bucket{le="10.0"} 1"#));
     }
 }
