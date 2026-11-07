@@ -67,10 +67,21 @@ impl BlockMetrics {
         }));
         sub_registry.register("accounts", "Number of accounts", closure);
 
+        let bc = blockchain.clone();
         let closure = NumericClosureMetric::new_gauge(Box::new(move || {
-            blockchain.read().state.accounts.num_branches() as i64
+            bc.read().state.accounts.num_branches() as i64
         }));
         sub_registry.register("num_branches", "Number of branch nodes", closure);
+
+        // Tells why the staking gauges have no samples, and when a full node finished state sync.
+        let closure = NumericClosureMetric::new_gauge(Box::new(move || {
+            blockchain.read().accounts_complete() as i64
+        }));
+        sub_registry.register(
+            "complete",
+            "1 if the accounts trie is complete, 0 while it is still being synced",
+            closure,
+        );
     }
 
     fn register_chain(registry: &mut Registry, blockchain: BlockchainProxy) {
@@ -273,6 +284,7 @@ mod tests {
 
         let encoded = encode_metrics(&producer.blockchain);
 
+        assert_eq!(sample(&encoded, "nimiq_accounts_trie_complete"), Some(0.0));
         for gauge in staking_gauges() {
             assert!(
                 encoded.contains(&format!("# TYPE {gauge} gauge")),
@@ -294,6 +306,7 @@ mod tests {
 
         let encoded = encode_metrics(&producer.blockchain);
 
+        assert_eq!(sample(&encoded, "nimiq_accounts_trie_complete"), Some(1.0));
         assert_eq!(
             sample(&encoded, "nimiq_staking_active_validators"),
             Some(num_active_validators as f64)
