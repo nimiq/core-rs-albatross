@@ -93,7 +93,13 @@ impl ValidityStore {
         block_number: u32,
         transaction_hash: RawTransactionHash,
     ) {
-        db_txn.put(&self.txn_hashes, &transaction_hash, &block_number);
+        // Equivocation events hash the same in every block that records them. The lowest such
+        // block owns the hash: reverts from the head keep it while one remains, pruning drops it
+        // with that block.
+        let owner = db_txn.get(&self.txn_hashes, &transaction_hash);
+        if owner.is_none_or(|owner| block_number < owner) {
+            db_txn.put(&self.txn_hashes, &transaction_hash, &block_number);
+        }
         db_txn.put(&self.block_txns, &block_number, &transaction_hash);
     }
 
@@ -116,8 +122,11 @@ impl ValidityStore {
             .map(|(_, hash)| hash)
             .collect();
 
+        // A hash owned by an earlier block stays, since that block still records it.
         for txn_hash in block_txns {
-            db_txn.remove(&self.txn_hashes, &txn_hash);
+            if db_txn.get(&self.txn_hashes, &txn_hash) == Some(block_number) {
+                db_txn.remove(&self.txn_hashes, &txn_hash);
+            }
         }
 
         db_txn.remove(&self.block_txns, &block_number);
