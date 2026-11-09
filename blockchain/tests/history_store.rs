@@ -402,6 +402,125 @@ fn it_pushes_and_reverts_block_with_txns() {
     revert_block(&temp_producer1, &hist_tx_pre);
 }
 
+// Revert `num_blocks` blocks in one go and assert that history store is reverted as well.
+fn revert_blocks(
+    temp_producer: &TemporaryBlockProducer,
+    num_blocks: u32,
+    hist_tx_pre: &[HistoricTransaction],
+) {
+    let blockchain = temp_producer.blockchain.read();
+    let mut txn = blockchain.write_transaction();
+    blockchain.revert_blocks(num_blocks, &mut txn).unwrap();
+    txn.commit();
+
+    assert_eq!(hist_tx_pre, &get_hist_tx(temp_producer));
+}
+
+// The equivocation entry the history store recorded for `proof`.
+fn equivocation_entry(
+    temp_producer: &TemporaryBlockProducer,
+    proof: &EquivocationProof,
+) -> HistoricTransaction {
+    let data = HistoricTransactionData::Equivocation(EquivocationEvent {
+        locator: proof.locator(),
+    });
+    get_hist_tx(temp_producer)
+        .into_iter()
+        .find(|hist_tx| hist_tx.data == data)
+        .expect("the proof must be included")
+}
+
+fn in_validity_window(temp_producer: &TemporaryBlockProducer, entry: &HistoricTransaction) -> bool {
+    temp_producer
+        .blockchain
+        .read()
+        .contains_tx_in_validity_window(&entry.tx_hash(), None)
+}
+
+/// Seeds a chain at `version` that includes a fork proof in two consecutive blocks. Returns the
+/// stored equivocation entry and the history before each inclusion.
+fn include_proof_twice(
+    version: u16,
+) -> (
+    TemporaryBlockProducer,
+    HistoricTransaction,
+    Vec<HistoricTransaction>,
+    Vec<HistoricTransaction>,
+) {
+    let temp_producer1 = TemporaryBlockProducer::new_with_protocol_version(version);
+    let temp_producer2 = TemporaryBlockProducer::new_with_protocol_version(version);
+    let proof = do_fork(&temp_producer1, &temp_producer2);
+
+    let (hist_tx_pre_first, _) =
+        add_block_assert_history_store(&temp_producer1, vec![proof.clone()], vec![], false);
+    let entry = equivocation_entry(&temp_producer1, &proof);
+    let (hist_tx_pre_repeat, _) =
+        add_block_assert_history_store(&temp_producer1, vec![proof], vec![], false);
+    assert!(
+        in_validity_window(&temp_producer1, &entry),
+        "version {version}"
+    );
+
+    (temp_producer1, entry, hist_tx_pre_first, hist_tx_pre_repeat)
+}
+
+/// An equivocation entry recorded by two blocks stays in the validity window when only the later
+/// block is reverted, since the first inclusion is still on the chain. Reverting both removes it.
+#[test]
+fn it_keeps_an_equivocation_entry_when_reverting_its_repeated_inclusion() {
+    for version in 1..=Policy::max_supported_version() {
+        let (temp_producer, entry, _, hist_tx_pre_repeat) = include_proof_twice(version);
+        revert_blocks(&temp_producer, 1, &hist_tx_pre_repeat);
+        assert!(
+            in_validity_window(&temp_producer, &entry),
+            "version {version}"
+        );
+
+        let (temp_producer, entry, hist_tx_pre_first, _) = include_proof_twice(version);
+        revert_blocks(&temp_producer, 2, &hist_tx_pre_first);
+        assert!(
+            !in_validity_window(&temp_producer, &entry),
+            "version {version}"
+        );
+    }
+}
+
+/// An equivocation entry recorded by two blocks stays in the validity window after a rebranch onto
+/// a branch that forks off between the two inclusions, since the first inclusion is on both chains.
+#[test]
+fn it_keeps_an_equivocation_entry_when_rebranching_away_from_its_repeated_inclusion() {
+    for version in 1..=Policy::max_supported_version() {
+        let temp_producer1 = TemporaryBlockProducer::new_with_protocol_version(version);
+        let temp_producer2 = TemporaryBlockProducer::new_with_protocol_version(version);
+        let proof = do_fork(&temp_producer1, &temp_producer2);
+
+        // The first inclusion is shared by both producers.
+        add_block_assert_history_store(&temp_producer1, vec![proof.clone()], vec![], false);
+        let entry = equivocation_entry(&temp_producer1, &proof);
+        let first_inclusion = temp_producer1.blockchain.read().head().clone();
+        assert_eq!(
+            temp_producer2.push(first_inclusion),
+            Ok(PushResult::Extended)
+        );
+
+        // Producer 1 includes the proof again, producer 2 builds a longer branch without it.
+        add_block_assert_history_store(&temp_producer1, vec![proof], vec![], false);
+        assert!(
+            in_validity_window(&temp_producer1, &entry),
+            "version {version}"
+        );
+        let branch_block = temp_producer2.next_block(vec![], false);
+        assert_eq!(temp_producer1.push(branch_block), Ok(PushResult::Forked));
+        let branch_head = temp_producer2.next_block(vec![], false);
+        assert_eq!(temp_producer1.push(branch_head), Ok(PushResult::Rebranched));
+
+        assert!(
+            in_validity_window(&temp_producer1, &entry),
+            "version {version}"
+        );
+    }
+}
+
 #[test]
 fn it_pushes_macro_block_with_rewards() {
     // Adds the same initial block to both producers.
