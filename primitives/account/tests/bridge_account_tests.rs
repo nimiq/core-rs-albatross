@@ -1143,60 +1143,155 @@ fn bridge_outgoing_revert_nonce1_removes_entry() {
 }
 
 // =====================================================================
-// Bridge: prune / restore round-trip
+// Bridge: drained to zero
 // =====================================================================
 
-/// Prune/restore invariant: restored bridge has same fields as original (balance=0).
+/// The bridge at `bridge_addr()`. Fails if the address holds anything else, as it does once the
+/// bridge is pruned.
+fn stored_bridge(test: &TestCommitRevert) -> BridgeContract {
+    match test.get_complete(&bridge_addr(), None) {
+        Account::Bridge(bridge) => bridge,
+        other => panic!("the bridge must stay a bridge, found {other:?}"),
+    }
+}
+
+/// The last nonce the bridge released to `target`, read as `getBridgeNonce` reads it.
+fn released_nonce(test: &TestCommitRevert, target: &Address) -> u64 {
+    let db_txn = test.env().read_transaction();
+    stored_bridge(test)
+        .get_nonce(&test.data_store(&bridge_addr()).read(&db_txn), target)
+        .expect("the accounts tree is complete")
+}
+
+/// A lock: `value` luna sent from `sender` into the bridge.
+fn make_lock_tx(sender: &Address, value: u64) -> Transaction {
+    Transaction::new_extended(
+        sender.clone(),
+        AccountType::Basic,
+        vec![],
+        bridge_addr(),
+        AccountType::Bridge,
+        vec![],
+        Coin::from_u64_unchecked(value),
+        Coin::ZERO,
+        1,
+        NetworkId::UnitAlbatross,
+    )
+}
+
+/// A bridge is never pruned, not even when a release drains it to zero. Honest releases never take
+/// the creation deposit, but a compromised oracle owner can take everything the bridge holds, and
+/// the bridge must outlive that: it takes locks again, the target's next burn releases once there
+/// is enough to pay it, and the nonce store still refuses the burn already paid. Pruning removed
+/// the account but not its nonce store, after which no lock or release could reach the bridge.
 #[test]
-fn bridge_prune_restore_roundtrip_fields() {
-    use nimiq_account::{AccountPruningInteraction, AccountReceipt};
-
+fn a_bridge_drained_to_zero_takes_locks_and_releases_again() {
     let owner = KeyPair::generate_default_csprng();
-    let original = BridgeContract {
-        owner: Address::from(&owner.public),
-        oracle_address: oracle_addr(),
-        balance: Coin::ZERO,
-        source_chain_id: SOURCE_CHAIN_ID,
-        chain_config: chain_config(),
-        transaction_count: 7,
+    let locker = Address::from([0x1Cu8; 20]);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    let everything = make_burn_data(&nimiq_target(), BRIDGE_DEPOSIT, 1, SOURCE_CHAIN_ID);
+    let next = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 2, SOURCE_CHAIN_ID);
+    let test = TestCommitRevert::with_initial_state(&[
+        (
+            oracle_addr(),
+            Account::Oracle(make_multi_root_oracle(&[&everything, &next])),
+        ),
+        (
+            bridge_addr(),
+            Account::Bridge(bridge_with(&oracle_addr(), &owner)),
+        ),
+        (
+            locker.clone(),
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(2 * BRIDGE_DEPOSIT),
+            }),
+        ),
+    ]);
+    let drain = || {
+        make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            BRIDGE_DEPOSIT,
+            everything.clone(),
+            0,
+            &target_key(),
+        )
+    };
+    let release_next = || {
+        make_outgoing_tx(
+            &bridge_addr(),
+            &nimiq_target(),
+            RELEASE_AMOUNT,
+            next.clone(),
+            1,
+            &target_key(),
+        )
     };
 
-    assert!(original.can_be_pruned());
+    // The drain leaves an empty bridge. `commit_and_test` also reverts it and checks that the
+    // accounts tree, nonce store included, is back byte for byte.
+    let receipts = test
+        .commit_and_test(&[drain()], &[], &bs, &mut BlockLogger::empty())
+        .expect("a release of everything the bridge holds commits");
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+    assert_eq!(
+        stored_bridge(&test),
+        BridgeContract {
+            balance: Coin::ZERO,
+            transaction_count: 1,
+            ..bridge_with(&oracle_addr(), &owner)
+        },
+    );
+    assert_eq!(released_nonce(&test, &nimiq_target()), 1);
 
-    let test = TestCommitRevert::with_initial_state(&[]);
-    let env = test.env();
+    // The next burn is refused for want of funds, as by any bridge that holds too little.
+    assert_eq!(
+        rejected_block(&test, &[release_next()], &bs),
+        AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(RELEASE_AMOUNT),
+            balance: Coin::ZERO,
+        },
+    );
 
-    // Prune
-    let read_txn = env.read_transaction();
-    let ds = test.data_store(&bridge_addr());
-    let receipt: Option<AccountReceipt> = original.clone().prune(ds.read(&read_txn));
-    assert!(receipt.is_some());
+    // A lock refills the bridge.
+    let receipts = test
+        .commit_and_test(
+            &[make_lock_tx(&locker, BRIDGE_DEPOSIT)],
+            &[],
+            &bs,
+            &mut BlockLogger::empty(),
+        )
+        .expect("a lock into a drained bridge commits");
+    assert!(
+        matches!(receipts.transactions[0], OperationReceipt::Ok(_)),
+        "a drained bridge must take locks",
+    );
+    assert_eq!(
+        stored_bridge(&test).balance,
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT)
+    );
 
-    // Restore in a write txn
-    let mut raw = env.write_transaction();
-    let mut txn: nimiq_trie::WriteTransactionProxy = (&mut raw).into();
-    let restored =
-        BridgeContract::restore(AccountType::Bridge, receipt.as_ref(), ds.write(&mut txn))
-            .expect("restore must succeed");
-    drop(txn);
-    raw.commit();
+    // The burn it paid stays paid, although the bridge could pay it again.
+    assert_eq!(
+        rejected_block(&test, &[drain()], &bs),
+        AccountError::InvalidTransaction(TransactionError::InvalidData),
+    );
 
-    let bridge = match restored {
-        Account::Bridge(b) => b,
-        _ => panic!("wrong account type after restore"),
-    };
-    assert_eq!(bridge.owner, original.owner);
-    assert_eq!(bridge.oracle_address, original.oracle_address);
-    assert_eq!(bridge.source_chain_id, original.source_chain_id);
-    assert_eq!(bridge.transaction_count, original.transaction_count);
-    assert_eq!(bridge.balance, Coin::ZERO);
-
-    // Non-zero balance bridge must not be prunable
-    let rich = BridgeContract {
-        balance: Coin::from_u64_unchecked(1),
-        ..original.clone()
-    };
-    assert!(!rich.can_be_pruned());
+    // And the next one releases.
+    let receipts = test
+        .commit_and_test(&[release_next()], &[], &bs, &mut BlockLogger::empty())
+        .expect("the next release commits");
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+    assert_eq!(
+        stored_bridge(&test).balance,
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT - RELEASE_AMOUNT)
+    );
+    assert_eq!(released_nonce(&test, &nimiq_target()), 2);
+    assert_eq!(
+        test.get_complete(&nimiq_target(), None).balance(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT + RELEASE_AMOUNT),
+    );
 }
 
 // =====================================================================
@@ -2121,6 +2216,7 @@ fn a_forged_oracle_root_cannot_pay_out_more_nim_than_the_bridge_holds() {
     // Exactly the locked balance is the ceiling, and it is reachable.
     let everything = make_burn_data(&nimiq_target(), BRIDGE_DEPOSIT, 1, SOURCE_CHAIN_ID);
     let test = env_with_attested_burn(&everything, &attacker, BRIDGE_DEPOSIT);
+    let before = stored_bridge(&test);
     let drain = make_outgoing_tx(
         &bridge_addr(),
         &nimiq_target(),
@@ -2129,7 +2225,10 @@ fn a_forged_oracle_root_cannot_pay_out_more_nim_than_the_bridge_holds() {
         0,
         &target_key(),
     );
-    let receipts = commit_block(&test, &[drain], &bs);
+    // A reorg undoes the drain exactly: `commit_and_test` reverts it and compares the accounts tree.
+    let receipts = test
+        .commit_and_test(&[drain], &[], &bs, &mut BlockLogger::empty())
+        .expect("a release of the whole balance commits");
     assert!(
         matches!(receipts.transactions[0], OperationReceipt::Ok(_)),
         "draining the full locked balance is within the blast radius",
@@ -2138,6 +2237,20 @@ fn a_forged_oracle_root_cannot_pay_out_more_nim_than_the_bridge_holds() {
         test.get_complete(&nimiq_target(), None).balance(),
         Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
         "the whole custody, and not one luna more, can be taken",
+    );
+    assert_eq!(
+        stored_bridge(&test),
+        BridgeContract {
+            balance: Coin::ZERO,
+            transaction_count: 1,
+            ..before
+        },
+        "the drained bridge stays, with nothing else changed",
+    );
+    assert_eq!(
+        released_nonce(&test, &nimiq_target()),
+        1,
+        "and its nonce store records the forged burn as paid",
     );
 }
 
