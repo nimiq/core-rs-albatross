@@ -48,6 +48,10 @@ mod store;
 /// ```
 ///
 /// Nonces are stored in the accounts tree subtree for replay protection.
+///
+/// A bridge is never pruned, not even when its balance reaches zero. Honest releases never take the
+/// creation deposit, but a compromised oracle owner can drain the bridge, and it must still take
+/// locks afterwards and release later burns, with its nonce store refusing the ones it paid.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct BridgeContract {
     /// The owner/operator of the bridge contract
@@ -754,62 +758,26 @@ impl AccountInherentInteraction for BridgeContract {
     }
 }
 
+/// A bridge is never pruned (see [`BridgeContract`]). Pruning would also remove only the account,
+/// not its nonce store.
 #[cfg(feature = "interaction-traits")]
 impl AccountPruningInteraction for BridgeContract {
     fn can_be_pruned(&self) -> bool {
-        self.balance.is_zero()
+        false
     }
 
     fn prune(self, _data_store: DataStoreRead) -> Option<AccountReceipt> {
-        Some(PrunedBridgeContract::from(self).into())
+        unreachable!("a bridge is never pruned")
     }
 
     fn restore(
         _ty: AccountType,
-        pruned_account: Option<&AccountReceipt>,
+        _pruned_account: Option<&AccountReceipt>,
         _data_store: DataStoreWrite,
     ) -> Result<Account, AccountError> {
-        let receipt = pruned_account.ok_or(AccountError::InvalidReceipt)?;
-        let pruned_account = PrunedBridgeContract::try_from(receipt)?;
-        Ok(Account::Bridge(BridgeContract::from(pruned_account)))
+        unreachable!("a bridge is never pruned")
     }
 }
-
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-struct PrunedBridgeContract {
-    pub owner: Address,
-    pub oracle_address: Address,
-    pub source_chain_id: u32,
-    pub chain_config: ChainConfig,
-    pub transaction_count: u64,
-}
-
-impl From<BridgeContract> for PrunedBridgeContract {
-    fn from(contract: BridgeContract) -> Self {
-        PrunedBridgeContract {
-            owner: contract.owner,
-            oracle_address: contract.oracle_address,
-            source_chain_id: contract.source_chain_id,
-            chain_config: contract.chain_config,
-            transaction_count: contract.transaction_count,
-        }
-    }
-}
-
-impl From<PrunedBridgeContract> for BridgeContract {
-    fn from(receipt: PrunedBridgeContract) -> Self {
-        BridgeContract {
-            balance: Coin::ZERO,
-            owner: receipt.owner,
-            oracle_address: receipt.oracle_address,
-            source_chain_id: receipt.source_chain_id,
-            chain_config: receipt.chain_config,
-            transaction_count: receipt.transaction_count,
-        }
-    }
-}
-
-convert_receipt!(PrunedBridgeContract);
 
 /// Receipt for process outgoing transactions. This is necessary to be able to revert
 /// these transactions.

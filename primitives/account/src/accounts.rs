@@ -218,7 +218,9 @@ impl Accounts {
     }
 
     fn prune(&self, txn: &mut WriteTransactionProxy, address: &Address) {
-        // TODO Remove subtree
+        // This removes the account's own key and nothing under it. Only accounts that keep no
+        // store under their address can be pruned: the staking and bridge contracts, which do,
+        // never are.
         self.tree.remove(txn, &KeyNibbles::from(address));
     }
 
