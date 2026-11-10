@@ -728,7 +728,8 @@ fn scaled(value: u128, divisor: u64) -> Result<u64, ()> {
 fn load_evm_u64_scaled_divides_before_narrowing() {
     // The whole point: a word beyond u64::MAX is readable once divided, where `LoadEvmU64`
     // followed by `Div` would have rejected the word before ever dividing it.
-    // 1,000 NIM is 10^8 luna, i.e. 10^21 wei — about 54 times more than a u64 can hold.
+    // 1,000 NIM in an 18-decimal token is 10^8 luna, i.e. 10^21 base units — about 54 times more
+    // than a u64 can hold.
     let wei = 10_000_000_000_000u64;
     let luna = 100_000_000u64;
     assert!(luna as u128 * wei as u128 > u64::MAX as u128);

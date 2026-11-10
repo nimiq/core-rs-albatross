@@ -3,8 +3,8 @@
 //! A bridge is created with its `ChainConfig` serialized into an opaque hex blob. The validation
 //! program embedded in that blob is what turns a record forwarded through the EVM oracle into the
 //! source, amount, address, nonce and bridge that consensus pays out against, and consensus cannot
-//! tell a correct program from a subtly wrong one: a mis-scaled constant there mis-pays real money
-//! in a way no other check catches.
+//! tell a correct program from a subtly wrong one: a wrong opcode or offset there mis-pays real
+//! money in a way no other check catches.
 //!
 //! These tests pin the blob byte-for-byte, decode every field, and assert the exact values the
 //! program extracts from realistic records, so a change to either the blob or the encoding fails
@@ -41,9 +41,6 @@ const BURN_PAYLOAD_LEN: usize = 156;
 /// The Nimiq bridge the records below name.
 const NIMIQ_BRIDGE: [u8; 20] = [0x0B; 20];
 
-/// wNIM carries 18 decimals and NIM has 5 (luna), so one luna is 10^13 wei.
-const WEI_PER_LUNA: u64 = 10_000_000_000_000;
-
 /// One NIM in luna, for readable vectors.
 const LUNA_PER_NIM: u64 = 100_000;
 
@@ -56,8 +53,8 @@ fn evm_word(value: u128) -> [u8; 32] {
 
 /// Builds the 156-byte record of a burn on Amoy, forwarded by the `PolygonBridge` and naming
 /// `NIMIQ_BRIDGE`.
-fn burn_payload(target: [u8; 20], nimiq_nonce: u128, amount_wei: u128) -> Vec<u8> {
-    burn_payload_on(AMOY_CHAIN_ID as u128, target, nimiq_nonce, amount_wei)
+fn burn_payload(target: [u8; 20], nimiq_nonce: u128, amount_luna: u128) -> Vec<u8> {
+    burn_payload_on(AMOY_CHAIN_ID as u128, target, nimiq_nonce, amount_luna)
 }
 
 /// Same as `burn_payload`, for a burn emitted on `chain_id`.
@@ -65,14 +62,14 @@ fn burn_payload_on(
     chain_id: u128,
     target: [u8; 20],
     nimiq_nonce: u128,
-    amount_wei: u128,
+    amount_luna: u128,
 ) -> Vec<u8> {
     record(
         AMOY_SOURCE_CONTRACT,
         chain_id,
         target,
         nimiq_nonce,
-        amount_wei,
+        amount_luna,
         NIMIQ_BRIDGE,
     )
 }
@@ -83,14 +80,14 @@ fn record(
     chain_id: u128,
     target: [u8; 20],
     nimiq_nonce: u128,
-    amount_wei: u128,
+    amount_luna: u128,
     nimiq_bridge: [u8; 20],
 ) -> Vec<u8> {
     let mut payload = Vec::with_capacity(BURN_PAYLOAD_LEN);
     payload.extend_from_slice(&source);
     payload.extend_from_slice(&target);
     payload.extend_from_slice(&evm_word(nimiq_nonce));
-    payload.extend_from_slice(&evm_word(amount_wei));
+    payload.extend_from_slice(&evm_word(amount_luna));
     payload.extend_from_slice(&evm_word(chain_id));
     payload.extend_from_slice(&nimiq_bridge);
     assert_eq!(payload.len(), BURN_PAYLOAD_LEN);
@@ -106,11 +103,10 @@ fn expected_amoy_program() -> ValidationProgram {
         ValidationOp::PushConst(SOURCE_OFFSET),
         ValidationOp::LoadAddress,
         ValidationOp::Store("source_contract".to_string()),
-        // amount: the 32-byte word at offset 72, divided down to luna at full 256-bit width
-        // before narrowing. Reading it with `LoadEvmU64` and dividing afterwards would require
-        // the *wei* figure to fit a u64, capping a burn at about 18.44 NIM.
+        // amount: the 32-byte word at offset 72, in luna. wNIM has NIM's 5 decimals, so its base
+        // unit is the luna and the word is read unscaled.
         ValidationOp::PushConst(AMOUNT_OFFSET),
-        ValidationOp::LoadEvmU64Scaled(WEI_PER_LUNA),
+        ValidationOp::LoadEvmU64,
         ValidationOp::Store("amount".to_string()),
         // target_address: the 20 raw bytes at offset 20.
         ValidationOp::PushConst(TARGET_OFFSET),
@@ -294,30 +290,15 @@ fn amoy_source_contract_is_the_last_20_bytes_of_the_blob() {
 fn amoy_program_extracts_expected_values_from_burn_events() {
     let config = amoy_chain_config();
 
-    // (description, target, nonce, amount_wei, expected luna)
-    let vectors: [(&str, [u8; 20], u128, u128, u64); 6] = [
+    // (description, target, nonce, amount in luna)
+    let vectors: [(&str, [u8; 20], u128, u64); 6] = [
+        ("1 NIM", [0x11; 20], 1, LUNA_PER_NIM),
+        ("1 luna", [0x22; 20], 42, 1),
+        ("12.5 NIM", [0xAB; 20], 7, 12 * LUNA_PER_NIM + 50_000),
         (
-            "1 NIM",
-            [0x11; 20],
-            1,
-            1_000_000_000_000_000_000,
-            LUNA_PER_NIM,
-        ),
-        ("1 luna (dust)", [0x22; 20], 42, WEI_PER_LUNA as u128, 1),
-        (
-            "12.5 NIM",
-            [0xAB; 20],
-            7,
-            12_500_000_000_000_000_000,
-            12 * LUNA_PER_NIM + 50_000,
-        ),
-        (
-            // 1,000 NIM is 10^21 wei, some 54 times more than a u64 holds. Dividing at full
-            // width is what makes an ordinary transfer expressible at all.
             "1,000 NIM",
             [0xFF; 20],
             u32::MAX as u128,
-            1_000 * LUNA_PER_NIM as u128 * WEI_PER_LUNA as u128,
             1_000 * LUNA_PER_NIM,
         ),
         (
@@ -326,20 +307,18 @@ fn amoy_program_extracts_expected_values_from_burn_events() {
             "the Coin ceiling",
             [0xCD; 20],
             11,
-            Coin::MAX_SAFE_VALUE as u128 * WEI_PER_LUNA as u128,
             Coin::MAX_SAFE_VALUE,
         ),
         (
             "nonce above u32, still a valid u64",
             [0x01; 20],
             u64::MAX as u128,
-            1_000_000_000_000_000_000,
             LUNA_PER_NIM,
         ),
     ];
 
-    for (description, target, nonce, amount_wei, expected_luna) in vectors {
-        let payload = burn_payload(target, nonce, amount_wei);
+    for (description, target, nonce, expected_luna) in vectors {
+        let payload = burn_payload(target, nonce, expected_luna.into());
 
         assert_eq!(
             extract(&config, &payload, "amount"),
@@ -422,7 +401,7 @@ fn amoy_program_reads_the_source_and_the_bridge_from_the_record() {
             AMOY_CHAIN_ID as u128,
             [0x11; 20],
             1,
-            1_000_000_000_000_000_000,
+            LUNA_PER_NIM as u128,
             nimiq_bridge,
         );
         let parsed = outgoing_tx(payload).parse_burn_data(&config).unwrap();
@@ -431,23 +410,21 @@ fn amoy_program_reads_the_source_and_the_bridge_from_the_record() {
     }
 }
 
-/// Consensus divides wei by 10^13 and truncates. Whole-luna granularity is enforced only by the
-/// EVM contract (`amount % CONVERSION_FACTOR == 0` in `EvmBridge.burn`), so if that check were
-/// ever removed the sub-luna remainder would be burned on Polygon and silently dropped here.
+/// wNIM's base unit is the luna, so the amount word is the luna figure itself: nothing is divided,
+/// and nothing below a luna exists to be truncated.
 #[test]
-fn amoy_program_truncates_sub_luna_remainders() {
+fn amoy_program_reads_the_amount_in_luna_unscaled() {
     let config = amoy_chain_config();
-    let payload = burn_payload(
-        [0x33; 20],
-        1,
-        1_000_000_000_000_000_000 + WEI_PER_LUNA as u128 - 1,
-    );
 
-    assert_eq!(
-        extract(&config, &payload, "amount"),
-        StackValue::U64(LUNA_PER_NIM),
-        "one luna minus one wei of remainder must be truncated, not rounded up"
-    );
+    // 10^13, which a scaling program would divide, is read as is.
+    for luna in [1u64, 7, LUNA_PER_NIM + 1, 10_000_000_000_000] {
+        let payload = burn_payload([0x33; 20], 1, luna.into());
+        assert_eq!(
+            extract(&config, &payload, "amount"),
+            StackValue::U64(luna),
+            "{luna} luna must be read as is"
+        );
+    }
 }
 
 /// `And` is a logical operator in this VM, not a bitwise mask, so `nonce AND u32::MAX` collapses
@@ -461,7 +438,7 @@ fn amoy_burn_block_height_is_a_logical_flag_not_a_masked_nonce() {
     let config = amoy_chain_config();
 
     for nonce in [1u128, 2, u32::MAX as u128, 1u128 << 40, u64::MAX as u128] {
-        let payload = burn_payload([0x44; 20], nonce, 1_000_000_000_000_000_000);
+        let payload = burn_payload([0x44; 20], nonce, LUNA_PER_NIM as u128);
         assert_eq!(
             extract(&config, &payload, "burn_block_height"),
             StackValue::U64(1),
@@ -470,7 +447,7 @@ fn amoy_burn_block_height_is_a_logical_flag_not_a_masked_nonce() {
     }
 
     // A zero nonce makes the flag zero, and `ParsedBurnData` rejects both.
-    let payload = burn_payload([0x44; 20], 0, 1_000_000_000_000_000_000);
+    let payload = burn_payload([0x44; 20], 0, LUNA_PER_NIM as u128);
     assert_eq!(
         extract(&config, &payload, "burn_block_height"),
         StackValue::U64(0)
@@ -485,61 +462,43 @@ fn amoy_burn_block_height_is_a_logical_flag_not_a_masked_nonce() {
 // 4. Boundary: the per-burn ceiling this program imposes.
 // ---------------------------------------------------------------------------------------------
 
-/// The amount is divided at full 256-bit width before it is narrowed, so what has to fit a u64 is
-/// the *luna* figure and not the wei one. Extraction therefore tops out at `u64::MAX` luna, and
-/// `Coin` is stricter still, so `Coin` is the limit a user can actually meet. Both are pinned:
-/// they are properties of this program, and neither must move silently.
-///
-/// Reading the word with `LoadEvmU64` and dividing afterwards would put the ceiling at `u64::MAX`
-/// *wei* — about 18.44674 NIM, below any ordinary transfer.
+/// The amount word must fit a u64, so extraction tops out at `u64::MAX` luna, and `Coin` is
+/// stricter still, so `Coin` is the limit a user can actually meet. Both are pinned: they are
+/// properties of this program, and neither must move silently.
 #[test]
 fn amoy_program_ceiling_is_the_coin_limit_rather_than_the_evm_word() {
     let config = amoy_chain_config();
 
-    // The entire supply is expressible, which is the point of the width.
+    // The entire supply is expressible.
     let total_supply_luna = 21_000_000_000u64 * LUNA_PER_NIM;
     assert!(total_supply_luna < Coin::MAX_SAFE_VALUE);
-    let payload = burn_payload(
-        [0x55; 20],
-        1,
-        total_supply_luna as u128 * WEI_PER_LUNA as u128,
-    );
+    let payload = burn_payload([0x55; 20], 1, total_supply_luna.into());
     assert_eq!(
         extract(&config, &payload, "amount"),
         StackValue::U64(total_supply_luna),
     );
 
     // Extraction tops out at u64::MAX luna exactly...
-    let payload = burn_payload([0x55; 20], 1, u64::MAX as u128 * WEI_PER_LUNA as u128);
-    assert_eq!(
-        extract(&config, &payload, "amount"),
-        StackValue::U64(u64::MAX)
-    );
-    // ...and a remainder below one luna does not push it over.
-    let payload = burn_payload(
-        [0x55; 20],
-        1,
-        u64::MAX as u128 * WEI_PER_LUNA as u128 + WEI_PER_LUNA as u128 - 1,
-    );
+    let payload = burn_payload([0x55; 20], 1, u64::MAX.into());
     assert_eq!(
         extract(&config, &payload, "amount"),
         StackValue::U64(u64::MAX)
     );
 
-    // One luna more and the quotient no longer fits: refused, never truncated.
-    for amount_wei in [(u64::MAX as u128 + 1) * WEI_PER_LUNA as u128, u128::MAX] {
-        let payload = burn_payload([0x55; 20], 1, amount_wei);
+    // ...and one luna more no longer fits: refused, never truncated.
+    for amount_luna in [u64::MAX as u128 + 1, u128::MAX] {
+        let payload = burn_payload([0x55; 20], 1, amount_luna);
         assert!(
             matches!(
                 config.validation_program.extract_only(&payload),
                 Err(BridgeError::InvalidAmount)
             ),
-            "amount {amount_wei} wei must be rejected, not truncated"
+            "amount {amount_luna} luna must be rejected, not truncated"
         );
     }
 
     // `Coin` binds first, so that is the ceiling a release can actually reach.
-    let above_coin = (Coin::MAX_SAFE_VALUE as u128 + 1) * WEI_PER_LUNA as u128;
+    let above_coin = Coin::MAX_SAFE_VALUE as u128 + 1;
     let payload = burn_payload([0x55; 20], 1, above_coin);
     assert_eq!(
         extract(&config, &payload, "amount"),
@@ -554,11 +513,7 @@ fn amoy_program_ceiling_is_the_coin_limit_rather_than_the_evm_word() {
         "...but it cannot become a Coin, so the release is refused"
     );
     // Exactly at the Coin limit still parses.
-    let payload = burn_payload(
-        [0x55; 20],
-        1,
-        Coin::MAX_SAFE_VALUE as u128 * WEI_PER_LUNA as u128,
-    );
+    let payload = burn_payload([0x55; 20], 1, Coin::MAX_SAFE_VALUE.into());
     assert_eq!(
         outgoing_tx(payload)
             .parse_burn_data(&config)
@@ -571,7 +526,7 @@ fn amoy_program_ceiling_is_the_coin_limit_rather_than_the_evm_word() {
 #[test]
 fn amoy_program_rejects_nonces_above_the_u64_word_ceiling() {
     let config = amoy_chain_config();
-    let payload = burn_payload([0x66; 20], u64::MAX as u128 + 1, 1_000_000_000_000_000_000);
+    let payload = burn_payload([0x66; 20], u64::MAX as u128 + 1, LUNA_PER_NIM as u128);
 
     assert!(matches!(
         config.validation_program.extract_only(&payload),
@@ -584,7 +539,7 @@ fn amoy_program_rejects_nonces_above_the_u64_word_ceiling() {
 #[test]
 fn amoy_program_rejects_payloads_shorter_than_the_record_layout() {
     let config = amoy_chain_config();
-    let full = burn_payload([0x77; 20], 1, 1_000_000_000_000_000_000);
+    let full = burn_payload([0x77; 20], 1, LUNA_PER_NIM as u128);
 
     for len in [0, 1, 19, 20, 40, 72, 103, 104, 135, 136, 155] {
         assert!(
@@ -606,7 +561,7 @@ fn amoy_program_reads_the_chain_id_from_the_payload() {
     let config = amoy_chain_config();
 
     for chain_id in [1u128, 137, 31337, u32::MAX as u128] {
-        let payload = burn_payload_on(chain_id, [0x88; 20], 1, 1_000_000_000_000_000_000);
+        let payload = burn_payload_on(chain_id, [0x88; 20], 1, LUNA_PER_NIM as u128);
         assert_eq!(
             extract(&config, &payload, "target_chain_id"),
             StackValue::U64(chain_id as u64),
@@ -626,29 +581,19 @@ fn amoy_program_reads_the_chain_id_from_the_payload() {
 fn amoy_program_rejects_chain_ids_outside_u32() {
     let config = amoy_chain_config();
 
-    let payload = burn_payload_on(
-        u32::MAX as u128 + 1,
-        [0x99; 20],
-        1,
-        1_000_000_000_000_000_000,
-    );
+    let payload = burn_payload_on(u32::MAX as u128 + 1, [0x99; 20], 1, LUNA_PER_NIM as u128);
     assert!(matches!(
         outgoing_tx(payload).parse_burn_data(&config),
         Err(BridgeError::InvalidRecipientData)
     ));
 
-    let payload = burn_payload_on(
-        u64::MAX as u128 + 1,
-        [0x99; 20],
-        1,
-        1_000_000_000_000_000_000,
-    );
+    let payload = burn_payload_on(u64::MAX as u128 + 1, [0x99; 20], 1, LUNA_PER_NIM as u128);
     assert!(matches!(
         config.validation_program.extract_only(&payload),
         Err(BridgeError::InvalidAmount)
     ));
 
-    let payload = burn_payload_on(0, [0x99; 20], 1, 1_000_000_000_000_000_000);
+    let payload = burn_payload_on(0, [0x99; 20], 1, LUNA_PER_NIM as u128);
     assert!(matches!(
         outgoing_tx(payload).parse_burn_data(&config),
         Err(BridgeError::InvalidChainId)

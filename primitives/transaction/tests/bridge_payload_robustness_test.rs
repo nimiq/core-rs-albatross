@@ -114,7 +114,7 @@ fn amoy_payload() -> Vec<u8> {
     payload.extend_from_slice(&AMOY_SOURCE_CONTRACT);
     payload.extend_from_slice(&[0x77u8; 20]);
     payload.extend_from_slice(&word(1));
-    payload.extend_from_slice(&word(1_000_000_000_000_000_000));
+    payload.extend_from_slice(&word(100_000));
     payload.extend_from_slice(&word(80_002));
     payload.extend_from_slice(&[0x0Bu8; 20]);
     payload
@@ -298,7 +298,7 @@ fn garbled_full_length_amoy_records_are_rejected_with_typed_errors() {
             all_ones.parse_burn_data(&config),
             Err(BridgeError::InvalidAmount)
         ),
-        "an amount word that overflows after scaling must be an InvalidAmount"
+        "an amount word that does not fit a u64 must be an InvalidAmount"
     );
 
     let all_zeros = release(vec![0x00; AMOY_LAYOUT_LEN]);

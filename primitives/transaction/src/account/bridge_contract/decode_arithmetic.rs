@@ -87,9 +87,9 @@ pub fn bytes32_to_u64(bytes: &[u8; 32]) -> Result<u64, BridgeError> {
 /// This exists because narrowing first and dividing afterwards throws away the whole point of the
 /// division. An EVM token amount is a 256-bit word in the token's own base units; converting it to
 /// luna means dividing by the decimal factor. If the word has to fit a u64 *before* that division,
-/// the reachable range is capped at `u64::MAX` base units rather than `u64::MAX` luna — for wNIM's
-/// 10^13 wei per luna that is a ceiling of about 18.44 NIM per burn. Dividing first lifts the
-/// ceiling to `u64::MAX` luna, far above the total supply.
+/// the reachable range is capped at `u64::MAX` base units rather than `u64::MAX` luna — for an
+/// 18-decimal token wrapping NIM, at 10^13 base units per luna, that is a ceiling of about 18.44
+/// NIM per burn. Dividing first lifts the ceiling to `u64::MAX` luna, far above the total supply.
 ///
 /// The division is exact byte-wise long division, so no precision is lost and no wide-integer
 /// dependency is needed. Truncation of any sub-unit remainder is intentional and matches `Div`.

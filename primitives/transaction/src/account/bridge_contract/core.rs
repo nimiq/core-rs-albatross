@@ -1289,8 +1289,9 @@ pub enum ValidationOp {
     ///
     /// The narrowing to u64 happens *after* the division, so the reachable range is `u64::MAX`
     /// units of the divided quantity rather than `u64::MAX` of the token's base unit. Reading an
-    /// amount with `LoadEvmU64` and dividing afterwards caps a wNIM burn at roughly 18.44 NIM;
-    /// this reads the same word and lifts that ceiling above the total supply.
+    /// amount of an 18-decimal token with `LoadEvmU64` and dividing afterwards caps a burn at
+    /// roughly 18.44 tokens; this reads the same word and lifts that ceiling above the total
+    /// supply.
     LoadEvmU64Scaled(u64),
 
     // ============================================================================

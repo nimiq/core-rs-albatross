@@ -393,7 +393,7 @@ fn test_decode_arithmetic_blockchain_values() {
 // Wide division: dividing a 256-bit word before narrowing it
 // =================================================================================================
 
-/// wNIM carries 18 decimals and NIM has 5, so one luna is 10^13 wei.
+/// An 18-decimal token wrapping NIM, which has 5 decimals: one luna is 10^13 of its base units.
 const WEI_PER_LUNA: u64 = 10_000_000_000_000;
 
 /// A 32-byte big-endian word holding `value`.
@@ -425,7 +425,7 @@ fn divide_bytes32_divides_exactly_and_truncates_the_remainder() {
 /// narrowing first would have rejected it outright.
 #[test]
 fn divide_bytes32_reaches_amounts_that_narrowing_first_would_reject() {
-    // 1,000 NIM as wNIM: 10^8 luna, i.e. 10^21 wei — about 54 times u64::MAX.
+    // 1,000 NIM in that token: 10^8 luna, i.e. 10^21 base units — about 54 times u64::MAX.
     let thousand_nim_in_wei = 100_000_000u128 * WEI_PER_LUNA as u128;
     assert!(thousand_nim_in_wei > u64::MAX as u128);
 

@@ -62,7 +62,7 @@ fn padded_burn_record(total_len: usize) -> Vec<u8> {
     payload.extend_from_slice(&AMOY_SOURCE_CONTRACT); // source_contract
     payload.extend_from_slice(&[0xAAu8; 20]); // target_address
     payload.extend_from_slice(&word(1)); // target_nonce
-    payload.extend_from_slice(&word(500 * 10_000_000_000_000)); // amount, in wNIM units
+    payload.extend_from_slice(&word(500)); // amount, in luna
     payload.extend_from_slice(&word(80_002)); // target_chain_id
     payload.extend_from_slice(&[0x0Bu8; 20]); // bridge_address
     assert_eq!(payload.len(), AMOY_RECORD_LEN);
