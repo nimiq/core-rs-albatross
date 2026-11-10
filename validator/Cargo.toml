@@ -24,7 +24,7 @@ futures = { workspace = true }
 hashlink = "0.12"
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 log = { workspace = true }
-parking_lot = "0.12"
+parking_lot = "0.13"
 rand = "0.10"
 rayon = "1.12"
 serde = "1.0"

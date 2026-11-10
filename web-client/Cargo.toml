@@ -69,7 +69,7 @@ features = [
 ]
 
 [dev-dependencies]
-parking_lot = "0.12"
+parking_lot = "0.13"
 serde = "1.0"
 wasm-bindgen-test = "0.3"
 
