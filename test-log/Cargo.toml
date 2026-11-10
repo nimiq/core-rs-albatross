@@ -17,7 +17,7 @@ workspace = true
 
 [dependencies]
 log = { workspace = true }
-parking_lot = "0.12"
+parking_lot = "0.13"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 nimiq-log = { workspace = true }
