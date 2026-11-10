@@ -1099,7 +1099,15 @@ async fn revert_chunks_for_state_live_sync() {
         "Should immediately receive block"
     );
     assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
-    assert_eq!(live_sync.queue().num_buffered_heights(), 0);
+    // BlockQueue runs on its own task and only releases the buffered #202 once it sees the
+    // `Stored` event of its parent, which can race the missing-blocks push result above.
+    timeout(Duration::from_secs(5), async {
+        while live_sync.queue().num_buffered_heights() != 0 {
+            yield_now().await;
+        }
+    })
+    .await
+    .expect("BlockQueue should release the block once its parent is stored");
 
     info!("Applying chunk #{}", 2);
     assert!(
