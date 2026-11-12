@@ -17,7 +17,7 @@ use nimiq_handel::{
 };
 use nimiq_hash::{Blake2bHash, Blake2sHash};
 use nimiq_network_interface::{
-    network::CloseReason,
+    network::{CloseReason, Network as NetworkInterface},
     request::{MessageMarker, RequestCommon},
 };
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
@@ -44,6 +44,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
 {
     type Contribution = SignedSkipBlockMessage;
     type Error = TValidatorNetwork::Error;
+    type Sender = <TValidatorNetwork::NetworkType as NetworkInterface>::PeerId;
 
     fn send_update(
         &self,
@@ -63,15 +64,17 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
         async move { network.send_to(node_id, update_message).await }
     }
 
-    fn ban_node(&self, node_id: u16) -> impl Future<Output = ()> + Send + 'static {
+    fn ban_node(
+        &self,
+        _node_id: u16,
+        sender: Self::Sender,
+    ) -> impl Future<Output = ()> + Send + 'static {
+        // Blame the peer that sent the contribution, which is not necessarily the one we would
+        // send to.
         let network = Arc::clone(&self.network);
         async move {
-            let Some(peer_id) = network.get_peer_id(node_id) else {
-                return;
-            };
-
             network
-                .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                .disconnect_peer(sender, CloseReason::MaliciousPeer)
                 .await
         }
     }
@@ -257,14 +260,17 @@ impl SkipBlockAggregation {
         let current_skip_block = skip_block_info.clone();
         let input_stream = network
             .receive::<SkipBlockUpdate>()
-            .filter_map(move |(item, validator_id)| {
+            .filter_map(move |(item, validator_id, peer_id)| {
                 // Check that the update is for the current skip block aggregation.
                 if item.info != current_skip_block {
                     debug!(?current_skip_block, received_skip_block =? item.info,"Discarding skip block update as it comes from a different skip block aggregation");
                     return future::ready(None);
                 }
 
-                future::ready(Some(item.level_update.into_level_update(validator_id)))
+                future::ready(Some((
+                    item.level_update.into_level_update(validator_id),
+                    peer_id,
+                )))
             })
             .boxed();
 
