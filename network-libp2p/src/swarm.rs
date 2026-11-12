@@ -1146,6 +1146,10 @@ fn handle_request_response_response(
     response: Option<Vec<u8>>,
     event_info: EventInfo,
 ) {
+    // Taken before the early return below, so the entry cannot leak.
+    #[cfg(feature = "metrics")]
+    let initiated = event_info.state.requests_initiated.remove(&request_id);
+
     let Some(channel) = event_info.state.requests.remove(&request_id) else {
         debug!(%request_id, "No request found for response");
         return;
@@ -1161,7 +1165,7 @@ fn handle_request_response_response(
     channel.send(response).ok();
 
     #[cfg(feature = "metrics")]
-    if let Some(instant) = event_info.state.requests_initiated.remove(&request_id) {
+    if let Some(instant) = initiated {
         event_info.metrics.note_response_time(instant.elapsed());
     }
 }
@@ -1174,6 +1178,10 @@ fn handle_request_response_outbound_failure(
     event_info: EventInfo,
 ) {
     error!(%request_id, %peer_id, %connection_id, %error, "Failed to send request to peer");
+
+    // A failed request has no response time, but its start time must still be dropped.
+    #[cfg(feature = "metrics")]
+    event_info.state.requests_initiated.remove(&request_id);
 
     let Some(channel) = event_info.state.requests.remove(&request_id) else {
         debug!(%request_id, %connection_id, %peer_id, "No request found for outbound failure");

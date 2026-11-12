@@ -250,6 +250,7 @@ async fn main_inner() -> Result<(), Error> {
             client.network(),
             &[],
         )
+        .expect("Failed to start metrics server");
     }
 
     // Start Spammer

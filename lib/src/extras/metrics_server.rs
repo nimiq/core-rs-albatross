@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{io, net::SocketAddr, sync::Arc};
 
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusProxy;
@@ -16,7 +16,7 @@ pub fn start_metrics_server<TNetwork: Network>(
     consensus_proxy: ConsensusProxy<TNetwork>,
     network: Arc<nimiq_network_libp2p::Network>,
     task_monitors: &[NimiqTaskMonitor],
-) {
+) -> io::Result<()> {
     #[cfg(not(feature = "nimiq-mempool"))]
     let mempool = None;
     nimiq_metrics_server::start_metrics_server(
@@ -27,5 +27,5 @@ pub fn start_metrics_server<TNetwork: Network>(
         consensus_proxy,
         network,
         task_monitors,
-    );
+    )
 }
