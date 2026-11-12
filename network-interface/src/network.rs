@@ -30,6 +30,8 @@ pub enum NetworkEvent<P> {
 pub type SubscribeEvents<PeerId> =
     BoxStream<'static, Result<NetworkEvent<PeerId>, BroadcastStreamRecvError>>;
 
+/// The default time it takes to refill the whole message budget of a peer, see
+/// [`Topic::TIME_WINDOW`].
 const DEFAULT_GOSSIPSUB_RATE_LIMIT_TIME_WINDOW: Duration = Duration::from_secs(10);
 
 pub trait Topic {
@@ -38,7 +40,14 @@ pub trait Topic {
     const BUFFER_SIZE: usize;
     const NAME: &'static str;
     const VALIDATE: bool;
+    /// The maximum number of messages on this topic a peer can send in a burst. Implementations
+    /// treat the budget as a token bucket that refills one message every
+    /// `TIME_WINDOW / MAX_MESSAGES`, so this is also the number of messages a peer can send per
+    /// [`TIME_WINDOW`](Self::TIME_WINDOW) on average. Messages beyond the budget are rate limited
+    /// by the network implementation. Must be at least one.
     const MAX_MESSAGES: u32;
+    /// The time it takes to refill the whole budget of [`MAX_MESSAGES`](Self::MAX_MESSAGES).
+    /// Must be at least a nanosecond per message, so it cannot be zero.
     const TIME_WINDOW: Duration = DEFAULT_GOSSIPSUB_RATE_LIMIT_TIME_WINDOW;
     /// Maximum size in bytes of a serialized message on this topic. Larger messages are
     /// dropped before they are deserialized.
