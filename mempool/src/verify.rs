@@ -30,6 +30,8 @@ pub enum VerifyErr {
     NoConsensus,
     #[error("Sender has reached the maximum number of transactions in the mempool")]
     SenderLimitReached,
+    #[error("Transaction uses a small-order (wildcard) Ed25519 key")]
+    SmallOrderKey,
 }
 
 /// Verifies a transaction and adds it to the mempool.

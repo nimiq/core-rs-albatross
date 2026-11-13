@@ -24,7 +24,7 @@ use nimiq_test_utils::{
     test_rng,
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
 };
-use nimiq_transaction::{ExecutedTransaction, Transaction};
+use nimiq_transaction::{ExecutedTransaction, SignatureProof, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
@@ -2346,4 +2346,108 @@ async fn tx_per_sender_limit_is_enforced() {
         tx_per_sender_limit,
         "Mempool size should be unchanged after rejected transaction"
     );
+}
+
+#[test(tokio::test)]
+async fn it_refuses_transactions_signed_by_small_order_keys() {
+    let mut rng = test_rng(true);
+    let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
+
+    let sender_accounts =
+        generate_accounts(vec![1_000_000; 1], &mut genesis_builder, true, &mut rng);
+    let recipient_accounts = generate_accounts(vec![0; 2], &mut genesis_builder, false, &mut rng);
+    let (honest_txns, _) = generate_transactions(
+        recipient_accounts
+            .iter()
+            .enumerate()
+            .map(|(i, recipient)| TestTransaction {
+                fee: (i + 1) as u64,
+                value: 1,
+                sender: sender_accounts[0].clone(),
+                recipient: recipient.clone(),
+            })
+            .collect(),
+        true,
+    );
+
+    // The identity point (`y = 1`), funded so that balance can't be why it is refused.
+    let mut small_order_key = [0u8; SchnorrPublicKey::SIZE];
+    small_order_key[0] = 1;
+    let small_order_key = SchnorrPublicKey::from(small_order_key);
+    let small_order_address = Address::from(&small_order_key);
+    genesis_builder.with_basic_account(
+        small_order_address.clone(),
+        Coin::from_u64_unchecked(1_000_000),
+    );
+
+    let mut rng2 = test_rng(true);
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng2)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng2).public_key,
+        Address::default(),
+        None,
+        None,
+        false,
+    );
+
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+    let genesis_block = match genesis_info.block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            BlockchainConfig::default(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
+
+    // Anyone can sign for the small-order address with the all-zero signature.
+    let mut small_order_tx = Transaction::new_basic(
+        small_order_address,
+        recipient_accounts[0].address.clone(),
+        Coin::from_u64_unchecked(1),
+        Coin::from_u64_unchecked(1),
+        1 + Policy::genesis_block_number(),
+        NetworkId::UnitAlbatross,
+    );
+    small_order_tx.proof =
+        SignatureProof::from_ed25519(small_order_key, Default::default()).serialize_to_vec();
+    let protocol_version = blockchain.read().protocol_version();
+    assert_eq!(
+        small_order_tx.verify(NetworkId::UnitAlbatross, protocol_version),
+        Ok(()),
+        "consensus still accepts the wildcard signature"
+    );
+
+    // A reverted block puts its honest transaction back, but not the small-order one.
+    let reverted_block =
+        create_dummy_micro_block(Some(vec![small_order_tx.clone(), honest_txns[0].clone()]));
+    mempool.update(&[], &[(Blake2bHash::default(), reverted_block)]);
+    assert!(mempool.contains_transaction_by_hash(&honest_txns[0].hash()));
+    assert!(!mempool.contains_transaction_by_hash(&small_order_tx.hash()));
+
+    // Direct submission is refused too; an honest transaction is accepted.
+    assert_eq!(
+        mempool.add_transaction(small_order_tx.clone(), None),
+        Err(VerifyErr::SmallOrderKey)
+    );
+    assert_eq!(
+        mempool.add_transaction(honest_txns[1].clone(), None),
+        Ok(())
+    );
+    assert_eq!(mempool.num_transactions(), 2);
 }

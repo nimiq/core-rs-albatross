@@ -103,6 +103,13 @@ impl SignatureProof {
         self.public_key == PublicKey::Ed25519(Ed25519PublicKey::default())
     }
 
+    /// Returns whether this proof's public key is any small-order Ed25519 key (see
+    /// [`Ed25519PublicKey::is_small_order`]). This is broader than
+    /// [`Self::is_default_public_key`], which is the only one consensus rejects so far.
+    pub fn has_small_order_public_key(&self) -> bool {
+        matches!(&self.public_key, PublicKey::Ed25519(public_key) if public_key.is_small_order())
+    }
+
     pub fn verify(&self, message: &[u8]) -> bool {
         if self.webauthn_fields.is_some() {
             self.verify_webauthn(message)

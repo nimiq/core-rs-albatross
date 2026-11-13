@@ -4,6 +4,7 @@ use std::{
     str::FromStr,
 };
 
+use curve25519_dalek::edwards::CompressedEdwardsY;
 use hex::FromHex;
 use zeroize::Zeroize;
 
@@ -23,7 +24,8 @@ impl Ed25519PublicKey {
         // The all-zero (default) public key is a low-order curve point for which the
         // all-zero signature satisfies the (cofactored, ZIP-215) verification equation
         // for *any* message. Accepting it would turn the default `SignatureProof` into a
-        // universal wildcard, so we reject it explicitly as a signer.
+        // universal wildcard, so we reject it explicitly as a signer. The other small-order keys
+        // (see `is_small_order`) are still accepted: rejecting them changes consensus.
         if self.as_bytes() == &[0u8; Ed25519PublicKey::SIZE] {
             return false;
         }
@@ -33,6 +35,14 @@ impl Ed25519PublicKey {
         } else {
             false
         }
+    }
+
+    /// Returns whether this key encodes a small-order (torsion) point.
+    /// Returns `false` for bytes that don't decode to a point.
+    pub fn is_small_order(&self) -> bool {
+        CompressedEdwardsY(*self.as_bytes())
+            .decompress()
+            .is_some_and(|point| point.is_small_order())
     }
 
     #[inline]

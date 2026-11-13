@@ -1,3 +1,4 @@
+use hex::FromHex;
 use nimiq_keys::{
     Address, AddressParseError, ES256PublicKey, ES256Signature, Ed25519PublicKey, Ed25519Signature,
     KeyPair, PrivateKey, SecureGenerate,
@@ -64,6 +65,60 @@ fn it_rejects_the_default_public_key() {
     assert!(!public_key.verify(&signature, b""));
     assert!(!public_key.verify(&signature, b"any message"));
     assert!(!public_key.verify(&signature, b"another message"));
+}
+
+/// Every encoding of a small-order point that ZIP-215 decoding accepts: 8 canonical ones and 6
+/// non-canonical ones.
+const SMALL_ORDER_KEYS: [&str; 14] = [
+    // Canonical. The all-zero key must stay first: consensus already rejects it.
+    "0000000000000000000000000000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000000000000000000000000080",
+    "0100000000000000000000000000000000000000000000000000000000000000",
+    "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+    "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+    "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+    "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+    // Non-canonical.
+    "0100000000000000000000000000000000000000000000000000000000000080",
+    "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+];
+
+#[test]
+fn it_detects_small_order_keys() {
+    for hex in SMALL_ORDER_KEYS {
+        let key = Ed25519PublicKey::from_hex(hex).unwrap();
+        assert!(key.is_small_order(), "{hex} should be small-order");
+    }
+
+    // RFC 8032 test vector keys.
+    for hex in [
+        "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+        "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025",
+        "0200000000000000000000000000000000000000000000000000000000000000",
+    ] {
+        assert!(!Ed25519PublicKey::from_hex(hex).unwrap().is_small_order());
+    }
+    let mut rng = test_rng(false);
+    for _ in 0..16 {
+        assert!(!KeyPair::generate(&mut rng).public.is_small_order());
+    }
+}
+
+#[test]
+fn small_order_keys_still_verify_the_zero_signature() {
+    let signature = Ed25519Signature::default();
+    for hex in &SMALL_ORDER_KEYS[1..] {
+        let key = Ed25519PublicKey::from_hex(hex).unwrap();
+        for message in [&b""[..], b"any message", b"another message"] {
+            assert!(key.verify(&signature, message), "{hex}");
+        }
+    }
 }
 
 #[test]

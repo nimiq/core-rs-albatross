@@ -431,6 +431,53 @@ impl Transaction {
         &self.recipient
     }
 
+    /// Returns whether this transaction relies on a small-order Ed25519 key, either as a signer
+    /// (its own proof, every HTLC proof, the proof embedded in staking data) or as a new validator
+    /// signing key. See [`SignatureProof::has_small_order_public_key`].
+    ///
+    /// Only Albatross proof formats are handled. Parts that fail to deserialize count as `false`,
+    /// since transaction verification rejects them anyway.
+    pub fn uses_small_order_key(&self) -> bool {
+        let sender_proof = match self.sender_type {
+            AccountType::Basic | AccountType::Vesting | AccountType::Staking => {
+                SignatureProof::deserialize_all(&self.proof)
+                    .is_ok_and(|proof| proof.has_small_order_public_key())
+            }
+            AccountType::HTLC => {
+                OutgoingHTLCTransactionProof::parse(self).is_ok_and(|proof| match proof {
+                    OutgoingHTLCTransactionProof::RegularTransfer {
+                        signature_proof, ..
+                    }
+                    | OutgoingHTLCTransactionProof::TimeoutResolve {
+                        signature_proof_sender: signature_proof,
+                    } => signature_proof.has_small_order_public_key(),
+                    OutgoingHTLCTransactionProof::EarlyResolve {
+                        signature_proof_recipient,
+                        signature_proof_sender,
+                    } => {
+                        signature_proof_recipient.has_small_order_public_key()
+                            || signature_proof_sender.has_small_order_public_key()
+                    }
+                })
+            }
+        };
+
+        sender_proof
+            || (self.recipient_type == AccountType::Staking
+                && IncomingStakingTransactionData::parse(self).is_ok_and(|data| {
+                    data.signature_proof()
+                        .is_some_and(SignatureProof::has_small_order_public_key)
+                        || matches!(
+                            &data,
+                            IncomingStakingTransactionData::CreateValidator { signing_key, .. }
+                            | IncomingStakingTransactionData::UpdateValidator {
+                                new_signing_key: Some(signing_key),
+                                ..
+                            } if signing_key.is_small_order()
+                        )
+                }))
+    }
+
     pub fn related_addresses(&self) -> BTreeSet<Address> {
         let mut addresses = BTreeSet::new();
 

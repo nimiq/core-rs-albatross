@@ -81,6 +81,13 @@ impl MempoolState {
             return Err(VerifyErr::Known);
         }
 
+        // Refuse transactions relying on small-order Ed25519
+        // keys. Checked here, not in `verify_tx`, because reverted blocks re-add through `put()`.
+        if tx.uses_small_order_key() {
+            debug!(%tx_hash, "Refusing transaction that uses a small-order Ed25519 key");
+            return Err(VerifyErr::SmallOrderKey);
+        }
+
         // Reject if this sender already has too many transactions in the mempool.
         if let Some(sender_state) = self.state_by_sender.get(&tx.sender)
             && sender_state.txns.len() >= self.tx_per_sender_limit

@@ -276,6 +276,23 @@ impl IncomingStakingTransactionData {
         }
     }
 
+    /// Returns the embedded signature proof, or `None` for `AddStake`, which carries none.
+    pub fn signature_proof(&self) -> Option<&SignatureProof> {
+        match self {
+            IncomingStakingTransactionData::CreateValidator { proof, .. }
+            | IncomingStakingTransactionData::UpdateValidator { proof, .. }
+            | IncomingStakingTransactionData::DeactivateValidator { proof, .. }
+            | IncomingStakingTransactionData::ReactivateValidator { proof, .. }
+            | IncomingStakingTransactionData::RetireValidator { proof, .. }
+            | IncomingStakingTransactionData::CreateStaker { proof, .. }
+            | IncomingStakingTransactionData::UpdateStaker { proof, .. }
+            | IncomingStakingTransactionData::SetActiveStake { proof, .. }
+            | IncomingStakingTransactionData::RetireStake { proof, .. }
+            | IncomingStakingTransactionData::SetSignalData { proof, .. } => Some(proof),
+            IncomingStakingTransactionData::AddStake { .. } => None,
+        }
+    }
+
     pub fn set_signature_on_data(
         data: &[u8],
         signature_proof: SignatureProof,
