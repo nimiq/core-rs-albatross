@@ -31,8 +31,14 @@ impl MultiSignature {
 
     /// Combines `other` into this multisignature.
     ///
-    /// Both signatures must have been verified or created locally, which makes them valid curve
-    /// points. Handel only combines such contributions.
+    /// Fails with the overlapping signers if both multisignatures share a signer, leaving `self`
+    /// unchanged.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either signature is not a valid curve point. Signatures that were verified or
+    /// created locally always are. Handel only combines such contributions, since its verifiers
+    /// return `Forged` for an invalid point before a contribution is stored.
     pub fn combine(&mut self, other: &MultiSignature) -> Result<(), BitSet> {
         // TODO: If we don't need the overlapping IDs for the error, we can use `intersection_size`
         let overlap = &self.signers & &other.signers;
@@ -62,25 +68,17 @@ pub(crate) fn checked_signer_slots(signers: &BitSet) -> Option<Vec<u16>> {
 
 #[cfg(test)]
 mod tests {
-    use nimiq_bls::{CompressedSignature, LazyAggregateSignature};
     use nimiq_collections::BitSet;
-    use nimiq_serde::{Deserialize, Serialize, SerializedSize};
+    use nimiq_serde::{Deserialize, Serialize};
     use nimiq_test_log::test;
+    use nimiq_test_utils::bls::signature_not_on_curve;
 
     use super::MultiSignature;
-
-    /// Signature bytes that don't encode a valid curve point.
-    fn invalid_signature() -> LazyAggregateSignature {
-        CompressedSignature {
-            signature: [0xff; CompressedSignature::SIZE],
-        }
-        .into()
-    }
 
     #[test]
     fn deserializing_does_not_uncompress_the_signature() {
         let multisig = MultiSignature {
-            signature: invalid_signature(),
+            signature: signature_not_on_curve().into(),
             signers: BitSet::from_iter([0]),
         };
 

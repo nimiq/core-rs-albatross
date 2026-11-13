@@ -122,6 +122,7 @@ mod tests {
         networks::NetworkId, slots_allocation::ValidatorsBuilder, TendermintIdentifier,
         TendermintStep, TendermintVote,
     };
+    use nimiq_test_utils::bls::signature_not_on_curve;
     use nimiq_utils::key_rng::SecureGenerate;
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -209,16 +210,19 @@ mod tests {
         );
     }
 
-    /// A contribution with disjoint buckets and valid signatures must verify. This confirms the
-    /// rejection above is caused by the bucket overlap, not by invalid signatures.
-    #[test]
-    fn accepts_contribution_with_disjoint_buckets() {
-        let (registry, kp0, kp1, id) = setup();
-        let verifier = TendermintVerifier::new(registry, id.clone());
+    fn proposal_hash() -> Blake2sHash {
+        Blake2sHash::from([1u8; 32])
+    }
 
-        let proposal = Blake2sHash::from([1u8; 32]);
+    /// Slot 0 votes for the proposal, slot 1 votes for None: disjoint buckets with valid
+    /// signatures.
+    fn disjoint_contribution(
+        kp0: &BlsKeyPair,
+        kp1: &BlsKeyPair,
+        id: TendermintIdentifier,
+    ) -> TendermintContribution {
         let vote_proposal = TendermintVote {
-            proposal_hash: Some(proposal),
+            proposal_hash: Some(proposal_hash()),
             id: id.clone(),
         };
         let vote_none = TendermintVote {
@@ -226,14 +230,43 @@ mod tests {
             id,
         };
 
-        // Slot 0 votes for the proposal, slot 1 votes for None: disjoint buckets.
-        let proposal_bucket =
+        let mut contribution =
             TendermintContribution::from_vote(vote_proposal, &kp0.secret_key, 0..1);
         let none_bucket = TendermintContribution::from_vote(vote_none, &kp1.secret_key, 1..2);
+        contribution.contributions.extend(none_bucket.contributions);
+        contribution
+    }
 
-        let mut disjoint = proposal_bucket;
-        disjoint.contributions.extend(none_bucket.contributions);
+    /// A contribution with disjoint buckets and valid signatures must verify. This confirms the
+    /// rejections above and below are caused by the bucket overlap and the invalid signature.
+    #[test]
+    fn accepts_contribution_with_disjoint_buckets() {
+        let (registry, kp0, kp1, id) = setup();
+        let verifier = TendermintVerifier::new(registry, id.clone());
+
+        let disjoint = disjoint_contribution(&kp0, &kp1, id);
 
         assert_eq!(block_on(verifier.verify(&disjoint)), VerificationResult::Ok,);
+    }
+
+    /// A bucket signature that isn't a curve point fails the whole contribution as forged, even
+    /// if the other buckets are valid.
+    #[test]
+    fn rejects_contribution_with_invalid_signature() {
+        let (registry, kp0, kp1, id) = setup();
+        let verifier = TendermintVerifier::new(registry, id.clone());
+
+        // `None` sorts before the proposal, so the valid `None` bucket is checked first.
+        let mut contribution = disjoint_contribution(&kp0, &kp1, id);
+        contribution
+            .contributions
+            .get_mut(&Some(proposal_hash()))
+            .unwrap()
+            .signature = signature_not_on_curve().into();
+
+        assert_eq!(
+            block_on(verifier.verify(&contribution)),
+            VerificationResult::Forged,
+        );
     }
 }

@@ -623,7 +623,7 @@ impl SerializeContent for DoubleVoteProof {
 
 #[cfg(test)]
 mod test {
-    use nimiq_bls::{AggregateSignature, CompressedSignature, SecretKey};
+    use nimiq_bls::{AggregateSignature, SecretKey};
     use nimiq_collections::BitSet;
     use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
     use nimiq_keys::{Address, KeyPair, PrivateKey};
@@ -631,8 +631,9 @@ mod test {
         networks::NetworkId, policy::Policy, slots_allocation::Validators, TendermintIdentifier,
         TendermintProposal, TendermintStep, TendermintVote,
     };
-    use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize, SerializedSize};
+    use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
     use nimiq_test_log::test;
+    use nimiq_test_utils::bls::signature_not_on_curve;
     use nimiq_vrf::VrfSeed;
 
     use crate::{
@@ -1276,12 +1277,7 @@ mod test {
     #[test]
     fn double_vote_proof_signatures_are_decompressed_lazily() {
         let mut proof = double_vote_proof();
-        // Not the encoding of a valid curve point.
-        let invalid = CompressedSignature {
-            signature: [0xff; CompressedSignature::SIZE],
-        };
-        assert!(invalid.uncompress().is_err());
-        proof.signature1 = invalid.into();
+        proof.signature1 = signature_not_on_curve().into();
 
         let decoded = DoubleVoteProof::deserialize_from_vec(&proof.serialize_to_vec()).unwrap();
         assert!(!decoded.signature1.has_uncompressed());

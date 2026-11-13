@@ -1,4 +1,9 @@
-use ark_ec::CurveGroup;
+use ark_ec::{short_weierstrass::SWFlags, CurveGroup};
+use ark_ff::{BigInteger, Field, PrimeField};
+use ark_mnt6_753::{Fq, G1Affine};
+use ark_serialize::{
+    CanonicalDeserializeWithFlags, CanonicalSerializeWithFlags, SerializationError,
+};
 use nimiq_bls::*;
 use nimiq_serde::{Deserialize, Serialize, SerializedSize};
 use nimiq_test_log::test;
@@ -211,11 +216,14 @@ fn lazy_aggregate_signature() {
     assert!(decoded.verify(&agg_key, &message));
     assert!(decoded.has_uncompressed());
 
-    // Bytes that aren't a valid curve point only fail once uncompressed.
-    let invalid = [0xff; CompressedSignature::SIZE];
+    // Bytes that aren't a curve point deserialize, and only fail once uncompressed.
+    let invalid = nimiq_test_utils::bls::signature_not_on_curve().signature;
     assert!(AggregateSignature::deserialize_from_vec(&invalid).is_err());
     let decoded = LazyAggregateSignature::deserialize_from_vec(&invalid).unwrap();
+    assert!(!decoded.has_uncompressed());
     assert!(decoded.uncompress().is_none());
+    // The failed decompression is cached as well.
+    assert!(decoded.has_uncompressed());
     assert!(!decoded.verify(&agg_key, &message));
 
     // The default is the identity, like `AggregateSignature`'s.
@@ -223,6 +231,52 @@ fn lazy_aggregate_signature() {
         LazyAggregateSignature::default().serialize_to_vec(),
         AggregateSignature::default().serialize_to_vec(),
     );
+}
+
+/// Uncompressing a signature can fail at three stages: the flags, the range check on x and the
+/// square root that recovers y. Each vector fails at exactly one of them.
+#[test]
+fn compressed_signature_uncompress_failure_stages() {
+    let parse_x = |bytes: &[u8; CompressedSignature::SIZE]| {
+        Fq::deserialize_with_flags::<_, SWFlags>(&bytes[..])
+    };
+
+    // Control: x = 0 with the flags cleared is a valid point, so `both_flags` only differs from
+    // a valid point in its flags.
+    assert!(CompressedSignature::default().uncompress().is_ok());
+
+    // Setting both the infinity and the y-sign flag is rejected before x is read.
+    let mut both_flags = [0u8; CompressedSignature::SIZE];
+    both_flags[CompressedSignature::SIZE - 1] = 0b1100_0000;
+    assert!(matches!(
+        parse_x(&both_flags),
+        Err(SerializationError::UnexpectedFlags)
+    ));
+
+    // x = p, the smallest x that is out of range for the base field.
+    let mut x_out_of_range = [0u8; CompressedSignature::SIZE];
+    x_out_of_range.copy_from_slice(&Fq::MODULUS.to_bytes_le()[..CompressedSignature::SIZE]);
+    assert!(matches!(
+        parse_x(&x_out_of_range),
+        Err(SerializationError::InvalidData)
+    ));
+    // Control: x = p - 1 is still in range.
+    let mut x_max = [0u8; CompressedSignature::SIZE];
+    (-Fq::ONE)
+        .serialize_with_flags(&mut x_max[..], SWFlags::YIsPositive)
+        .unwrap();
+    assert!(parse_x(&x_max).is_ok());
+
+    // x = 1 passes both checks above, but there is no y.
+    let not_on_curve = nimiq_test_utils::bls::signature_not_on_curve().signature;
+    let (x, flags) = parse_x(&not_on_curve).unwrap();
+    assert_eq!(x, Fq::ONE);
+    assert_eq!(flags, SWFlags::YIsPositive);
+    assert!(G1Affine::get_ys_from_x_unchecked(x).is_none());
+
+    for signature in [both_flags, x_out_of_range, not_on_curve] {
+        assert!(CompressedSignature { signature }.uncompress().is_err());
+    }
 }
 
 #[test]

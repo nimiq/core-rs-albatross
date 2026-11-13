@@ -80,6 +80,8 @@ impl LazyPublicKey {
         self.0.key()
     }
 
+    /// Returns whether the result of [`Self::uncompress`] is cached, by any reference to this
+    /// interned key. Also `true` if that result is `None` because the bytes aren't a curve point.
     pub fn has_uncompressed(&self) -> bool {
         self.0.value().get().is_some()
     }
@@ -182,29 +184,25 @@ impl LazyAggregateSignature {
         &self.compressed
     }
 
+    /// Returns whether the result of [`Self::uncompress`] is cached. Also `true` if that result
+    /// is `None` because the bytes aren't a curve point.
     pub fn has_uncompressed(&self) -> bool {
         self.uncompressed.get().is_some()
     }
 
     pub fn verify<M: Hash>(&self, public_key: &AggregatePublicKey, msg: &M) -> bool {
-        if let Some(signature) = self.uncompress() {
-            return public_key.verify(msg, signature);
-        }
-        false
+        self.uncompress()
+            .is_some_and(|signature| public_key.verify(msg, signature))
     }
 
     pub fn verify_hash(&self, public_key: &AggregatePublicKey, hash: SigHash) -> bool {
-        if let Some(signature) = self.uncompress() {
-            return public_key.verify_hash(hash, signature);
-        }
-        false
+        self.uncompress()
+            .is_some_and(|signature| public_key.verify_hash(hash, signature))
     }
 
     pub fn verify_g1(&self, public_key: &AggregatePublicKey, hash_curve: G1Projective) -> bool {
-        if let Some(signature) = self.uncompress() {
-            return public_key.verify_g1(hash_curve, signature);
-        }
-        false
+        self.uncompress()
+            .is_some_and(|signature| public_key.verify_g1(hash_curve, signature))
     }
 }
 
