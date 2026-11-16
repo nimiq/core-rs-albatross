@@ -23,5 +23,8 @@
 
     /* If your code runs in the DOM: */
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
+
+    /* Since TypeScript 6, @types packages are no longer included automatically. */
+    "types": ["node"],
   }
 }

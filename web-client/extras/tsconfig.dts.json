@@ -1,0 +1,9 @@
+{
+  // Used for the declaration build of the lib with tsup (see scripts/build-lib.sh).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // tsup 8 always sets the `baseUrl` option for its declaration build, which is deprecated since TypeScript 6
+    // (TS5101). Newer tsup versions don't, but require Node >= 22.18.
+    "ignoreDeprecations": "6.0"
+  }
+}

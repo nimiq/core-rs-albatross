@@ -1,3 +1,5 @@
+#!/bin/bash
+
 set -e
 
 cd extras
@@ -17,5 +19,5 @@ sed --in-place='' --expression=s/"@nimiq\/core"/"..\/..\/nodejs\/index.js"/g ../
 sed --in-place='' --expression=s/"@nimiq\/core"/"..\/..\/nodejs\/index.mjs"/g ../dist/lib/node/index.mjs
 
 # Build types
-yarn tsup lib/index.ts --format cjs --platform node --out-dir ../dist/lib *.ts --dts-only
+yarn tsup lib/index.ts --format cjs --platform node --out-dir ../dist/lib *.ts --dts-only --tsconfig tsconfig.dts.json
 sed --in-place='' --expression=s/"@nimiq\/core"/".."/g ../dist/lib/index.d.ts

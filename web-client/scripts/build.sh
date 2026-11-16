@@ -179,6 +179,16 @@ if contains "types" "$TARGETS"; then
     wasm-bindgen --weak-refs --target web --out-name web --out-dir dist/types/wasm "$CARGO_OUTPUT"
     wasm-bindgen --weak-refs --target bundler --out-name bundler --out-dir dist/types/wasm "$CARGO_OUTPUT"
     find dist/types/wasm ! -name 'web.d.ts' ! -name 'bundler.d.ts' -type f -exec rm {} +
+
+    # The generated classes implement `[Symbol.dispose]()`, which is only declared in TypeScript's
+    # `esnext.disposable` lib. Reference that lib from the declarations themselves, so they also typecheck for
+    # consumers whose `lib` setting doesn't include it (e.g. `"lib": ["ES2021", "DOM"]`, without `skipLibCheck`).
+    for DTS_FILE in dist/types/wasm/*.d.ts; do
+        if grep -q 'Symbol\.dispose' "$DTS_FILE" && ! grep -q '<reference lib="esnext.disposable" />' "$DTS_FILE"; then
+            { echo '/// <reference lib="esnext.disposable" />'; cat "$DTS_FILE"; } > "$DTS_FILE.tmp"
+            mv "$DTS_FILE.tmp" "$DTS_FILE"
+        fi
+    done
 fi
 
 # Build launcher

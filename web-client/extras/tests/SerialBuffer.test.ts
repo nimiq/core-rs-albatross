@@ -201,6 +201,25 @@ describe('SerialBuffer', () => {
         }).toThrowError('Malformed value/length');
     });
 
+    it('returns plain, ArrayBuffer-backed Uint8Arrays from subarray and read', () => {
+        const buffer = new SerialBuffer([1, 2, 3, 4, 5]);
+
+        const view = buffer.subarray(1, 3);
+        expect(view).not.toBeInstanceOf(SerialBuffer);
+        expect(view).toEqual(new Uint8Array([2, 3]));
+        expect(view.buffer).toBe(buffer.buffer);
+        expect(view.buffer).toBeInstanceOf(ArrayBuffer);
+        expect(buffer.subarray(-1, 10)).toEqual(new Uint8Array([1, 2, 3, 4, 5]));
+        expect(buffer.subarray(3, 1)).toEqual(new Uint8Array([]));
+
+        buffer.readPos = 1;
+        const read = buffer.read(2);
+        expect(read).not.toBeInstanceOf(SerialBuffer);
+        expect(read).toEqual(new Uint8Array([2, 3]));
+        expect(read.buffer).not.toBe(buffer.buffer);
+        expect(read.buffer).toBeInstanceOf(ArrayBuffer);
+    });
+
     it('throws an error on invalid writes/reads', () => {
         const value1 = Number.MAX_SAFE_INTEGER;
 

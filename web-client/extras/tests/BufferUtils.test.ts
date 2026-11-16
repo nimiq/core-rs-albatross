@@ -7,6 +7,13 @@ describe('BufferUtils', () => {
         expect(BufferUtils.toUtf8(BufferUtils.fromUtf8('{x:"test"}'))).toEqual('{x:"test"}');
     });
 
+    it('returns ArrayBuffer-backed byte arrays', () => {
+        // These are typed as `ArrayBufferUint8Array` (`Uint8Array<ArrayBuffer>` on TypeScript >= 5.7).
+        expect(BufferUtils.fromUtf8('test').buffer).toBeInstanceOf(ArrayBuffer);
+        expect(BufferUtils.fromBase32('ABCD').buffer).toBeInstanceOf(ArrayBuffer);
+        expect(BufferUtils.xor(new Uint8Array([1, 2]), new Uint8Array([3, 4])).buffer).toBeInstanceOf(ArrayBuffer);
+    });
+
     it('toUtf8 works with large buffers', () => {
         const size = 9827592;
         const arr = new Uint8Array(size);
