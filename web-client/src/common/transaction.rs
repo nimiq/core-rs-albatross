@@ -158,10 +158,13 @@ impl Transaction {
         key_pair: &KeyPair,
         // Due to wasm-bindgen limitations, we need to wrap the optional argument like this:
         // https://docs.rs/wasm-bindgen-derive/latest/wasm_bindgen_derive/#optional-arguments.
-        inner_key_pair: &OptionalKeyPair,
+        // The outer `Option` makes it an optional argument (`inner_key_pair?`) in the TypeScript types.
+        inner_key_pair: Option<OptionalKeyPair>,
     ) -> Result<(), JsError> {
-        let inner_key_pair = wasm_bindgen_derive::try_from_js_option::<KeyPair>(inner_key_pair)
-            .map_err(|err| JsError::new(&err))?;
+        let inner_key_pair = wasm_bindgen_derive::try_from_js_option::<KeyPair>(
+            inner_key_pair.map_or(JsValue::UNDEFINED, JsValue::from),
+        )
+        .map_err(|err| JsError::new(&err))?;
 
         self.do_sign(key_pair, inner_key_pair.as_ref())
     }
