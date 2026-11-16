@@ -753,6 +753,15 @@ impl Policy {
         Self::VALIDATOR_DEPOSIT
     }
 
+    /// The stake necessary to create a staker in Lunas (1 NIM = 100,000 Lunas).
+    /// This minimum is applied to the amount of:
+    ///     - non-retired stake
+    ///     - total stake balance
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MINIMUM_STAKE))]
+    pub fn wasm_minimum_stake() -> u64 {
+        Self::MINIMUM_STAKE
+    }
+
     /// The number of epochs a validator is put in jail for. The jailing only happens for severe offenses.
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = JAIL_EPOCHS))]
     pub fn wasm_jail_epochs() -> u32 {
