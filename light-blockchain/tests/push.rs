@@ -414,10 +414,11 @@ fn it_works_with_valid_blocks() {
     simply_push_macro_block(&config, &Ok(PushResult::Extended));
 }
 
-/// The slot owner signs several micro blocks on the same parent. The second one must be reported
-/// by a valid fork proof against the slot owner, and no sibling may yield more than one.
+/// The slot owner signs several micro blocks on the same parent. Every sibling after the first
+/// must be reported by exactly one valid fork proof against the slot owner, which pairs it with an
+/// earlier sibling.
 #[test]
-fn it_reports_equivocation_with_at_most_one_fork_proof_per_sibling() {
+fn it_reports_each_equivocating_sibling_with_one_fork_proof() {
     let slot_owner = TemporaryBlockProducer::new();
     let signing_key = &slot_owner.producer.signing_key.public;
     let siblings: Vec<Block> = (0..4)
@@ -426,40 +427,31 @@ fn it_reports_equivocation_with_at_most_one_fork_proof_per_sibling() {
 
     let node = TemporaryLightBlockProducer::new();
     let mut fork_rx = node.light_blockchain.read().fork_notifier.subscribe();
-    let mut pushed_hashes = vec![];
 
-    for (i, sibling) in siblings.into_iter().enumerate() {
-        pushed_hashes.push(sibling.hash());
-        let result = node.push(sibling);
+    let mut siblings = siblings.into_iter();
+    let first = siblings.next().unwrap();
+    let mut earlier_hashes = vec![first.hash()];
+    assert_eq!(node.push(first), Ok(PushResult::Extended));
+    assert!(try_collect_events(&mut fork_rx).unwrap().is_empty());
+
+    for sibling in siblings {
+        let hash = sibling.hash();
+        assert_eq!(node.push(sibling), Ok(PushResult::Forked));
+
         let events = try_collect_events(&mut fork_rx).unwrap();
+        assert_eq!(events.len(), 1);
+        let ForkEvent::Detected(proof) = &events[0];
+        assert_eq!(proof.validator_address(), &validator_address());
+        assert_eq!(
+            proof.verify_excluding_address_and_network(signing_key),
+            Ok(())
+        );
 
-        match i {
-            0 => {
-                assert_eq!(result, Ok(PushResult::Extended));
-                assert!(events.is_empty());
-            }
-            1 => {
-                assert_eq!(result, Ok(PushResult::Forked));
-                assert_eq!(events.len(), 1);
-            }
-            _ => {
-                assert!(result.is_ok());
-                assert!(
-                    events.len() <= 1,
-                    "{} fork proofs for one sibling",
-                    events.len()
-                );
-            }
-        }
-        for ForkEvent::Detected(proof) in events {
-            assert_eq!(proof.validator_address(), &validator_address());
-            assert_eq!(
-                proof.verify_excluding_address_and_network(signing_key),
-                Ok(())
-            );
-            assert!(pushed_hashes.contains(&proof.header1_hash()));
-            assert!(pushed_hashes.contains(&proof.header2_hash()));
-        }
+        // The proof pairs the new sibling with an earlier one.
+        let headers = [proof.header1_hash(), proof.header2_hash()];
+        assert!(headers.contains(&hash));
+        assert!(headers.iter().any(|header| earlier_hashes.contains(header)));
+        earlier_hashes.push(hash);
     }
 }
 
