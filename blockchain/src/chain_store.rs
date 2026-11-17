@@ -407,33 +407,6 @@ impl ChainStore {
             .collect()
     }
 
-    pub fn get_blocks_at(
-        &self,
-        block_height: u32,
-        include_body: bool,
-        txn_option: Option<&MdbxReadTransaction>,
-    ) -> Result<Vec<Block>, BlockchainError> {
-        let txn = txn_option.or_new(&self.db);
-
-        // Iterate all blocks at the given height.
-        let mut blocks = Vec::new();
-        let cursor = txn.dup_cursor(&self.height_idx);
-        let iter = cursor.into_iter_dup_of(&block_height).map(|(_, hash)| hash);
-
-        for block_hash in iter {
-            blocks.push(
-                self.get_block(&block_hash, include_body, Some(&txn))
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "Corrupted store: Block {block_hash} referenced from index not found"
-                        )
-                    }),
-            );
-        }
-
-        Ok(blocks)
-    }
-
     fn get_blocks_backward(
         &self,
         start_block_hash: &Blake2bHash,

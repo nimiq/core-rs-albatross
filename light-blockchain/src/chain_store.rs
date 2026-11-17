@@ -255,26 +255,6 @@ impl ChainStore {
         }
     }
 
-    pub fn get_blocks_at(&self, block_height: u32) -> Vec<Block> {
-        // Look for the block hashes at the indicated height
-        let mut blocks = Vec::new();
-        let block_hashes = self.height_idx.get(&block_height);
-        if let Some(block_hashes) = block_hashes {
-            // We found some hashes for the indicated height. Look for the blocks in the chain DB.
-            for hash in block_hashes {
-                if let Some(block) = self
-                    .chain_db
-                    .get(hash)
-                    .map(|chain_info| chain_info.head.clone())
-                {
-                    blocks.push(block)
-                }
-            }
-        }
-
-        blocks
-    }
-
     fn get_blocks_backward(
         &self,
         start_block_hash: &Blake2bHash,
