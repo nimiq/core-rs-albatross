@@ -463,6 +463,48 @@ fn it_reports_equivocation_with_at_most_one_fork_proof_per_sibling() {
     }
 }
 
+/// Blocks of another branch at the same height are not an equivocation and must not hide one:
+/// detection has to continue past stored blocks that descend from a different seed.
+#[test]
+fn it_reports_equivocation_past_blocks_of_another_branch() {
+    // Branch A: micro block, micro block. Branch B: skip block, micro block. The blocks at the
+    // second height come from the same slot owner, but from different seeds.
+    let branch_a = TemporaryBlockProducer::new();
+    let a1 = branch_a.next_block(vec![], false);
+    let a2 = branch_a.next_block_no_push(vec![], false);
+    let a2_sibling = branch_a.next_block_no_push(vec![1], false);
+
+    let branch_b = TemporaryBlockProducer::new();
+    let b1 = branch_b.next_block(vec![], true);
+    let b2 = branch_b.next_block_no_push(vec![], false);
+    let b2_sibling = branch_b.next_block_no_push(vec![1], false);
+
+    let node = TemporaryLightBlockProducer::new();
+    let signing_key = &node.producer.signing_key.public;
+    let mut fork_rx = node.light_blockchain.read().fork_notifier.subscribe();
+
+    for block in [b1, b2.clone(), a1, a2.clone()] {
+        assert!(node.push(block).is_ok());
+    }
+    assert!(try_collect_events(&mut fork_rx).unwrap().is_empty());
+
+    // Whichever of a2/b2 comes first in the height index, one of the two siblings has to be
+    // matched against the block that comes second.
+    for (sibling, original) in [(a2_sibling, a2), (b2_sibling, b2)] {
+        assert!(node.push(sibling.clone()).is_ok());
+        let events = try_collect_events(&mut fork_rx).unwrap();
+        assert_eq!(events.len(), 1);
+        let ForkEvent::Detected(proof) = &events[0];
+        let mut expected = [sibling.hash(), original.hash()];
+        expected.sort();
+        assert_eq!([proof.header1_hash(), proof.header2_hash()], expected);
+        assert_eq!(
+            proof.verify_excluding_address_and_network(signing_key),
+            Ok(())
+        );
+    }
+}
+
 #[test]
 fn it_validates_version() {
     expect_push_micro_block(
