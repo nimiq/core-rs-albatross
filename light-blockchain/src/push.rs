@@ -419,6 +419,11 @@ impl LightBlockchain {
             .get_block_hashes(&block.header.block_number)
             .unwrap_or_default();
 
+        // In the common case there is no other block at this height.
+        if block_hashes.is_empty() {
+            return;
+        }
+
         // Load the stored blocks lazily and filter out any skip blocks.
         let micro_blocks = block_hashes.iter().filter_map(|hash| {
             let chain_info = self.chain_store.get_chain_info(hash, false).ok()?;
@@ -428,10 +433,11 @@ impl LightBlockchain {
             }
         });
 
+        let entropy = block.header.seed.entropy();
         for micro_block in micro_blocks {
             // If there's another micro block set to this block height, which also has the same
             // VrfSeed entropy we notify the fork event.
-            if block.header.seed.entropy() == micro_block.header.seed.entropy() {
+            if entropy == micro_block.header.seed.entropy() {
                 // Get the justification for the block. We assume that the
                 // validator's signature is valid.
                 let justification1 = block

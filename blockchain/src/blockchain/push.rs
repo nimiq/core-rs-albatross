@@ -681,22 +681,30 @@ impl Blockchain {
             .chain_store
             .get_block_hashes_at(block.header.block_number, Some(txn));
 
+        // In the common case there is no other block at this height.
+        if block_hashes.is_empty() {
+            return;
+        }
+
         // Load the stored blocks lazily and filter out any skip blocks.
         let micro_blocks = block_hashes.iter().filter_map(|hash| {
             let stored_block = self
                 .chain_store
                 .get_block(hash, false, Some(txn))
-                .expect("Corrupted store: Block referenced from index not found");
+                .unwrap_or_else(|_| {
+                    panic!("Corrupted store: Block {hash} referenced from index not found")
+                });
             match stored_block {
                 Block::Micro(micro_block) if !micro_block.is_skip_block() => Some(micro_block),
                 _ => None,
             }
         });
 
+        let entropy = block.header.seed.entropy();
         for micro_block in micro_blocks {
             // If there's another micro block set to this block height, which also has the same
             // VrfSeed entropy we notify the fork event.
-            if block.header.seed.entropy() == micro_block.header.seed.entropy() {
+            if entropy == micro_block.header.seed.entropy() {
                 // Get the justification for the block. We assume that the
                 // validator's signature is valid.
                 let justification1 = block
