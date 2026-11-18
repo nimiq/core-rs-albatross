@@ -181,10 +181,12 @@ mod tests {
 
     #[test(tokio::test)]
     pub async fn it_refuses_oversized_messages() {
+        // `foo` takes 1 byte and the length prefix of `bar` 3 bytes
         let test_message = TestMessage {
             foo: 42,
-            bar: "a".repeat(MAX_MESSAGE_SIZE),
+            bar: "a".repeat(MAX_MESSAGE_SIZE - 3),
         };
+        assert_eq!(test_message.serialized_size(), MAX_MESSAGE_SIZE + 1);
 
         let mut message_writer = MessageWriter::new(vec![]);
 

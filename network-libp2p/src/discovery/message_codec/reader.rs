@@ -234,10 +234,10 @@ mod tests {
 
     use bytes::{BufMut, BytesMut};
     use futures::{io::Cursor, StreamExt};
-    use nimiq_serde::{Deserialize, Serialize, SerializedSize};
+    use nimiq_serde::{Deserialize, DeserializeError, Serialize, SerializedSize};
     use nimiq_test_log::test;
 
-    use super::{Header, MessageReader};
+    use super::{Header, MessageReader, MAX_MESSAGE_SIZE};
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {
@@ -290,5 +290,17 @@ mod tests {
         assert_eq!(reader.next().await, Some(Ok(m1)));
         assert_eq!(reader.next().await, Some(Ok(m2)));
         assert_eq!(reader.next().await, None);
+    }
+
+    #[test(tokio::test)]
+    pub async fn it_rejects_oversized_messages() {
+        // The message is rejected based on its header, without reading any data
+        let data = Header::new(MAX_MESSAGE_SIZE as u32 + 1).serialize_to_vec();
+        let mut reader = MessageReader::<_, TestMessage>::new(Cursor::new(data));
+
+        assert_eq!(
+            reader.next().await,
+            Some(Err(DeserializeError::bad_encoding()))
+        );
     }
 }
