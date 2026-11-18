@@ -1227,6 +1227,64 @@ fn it_handles_empty_hash_update_with_existing_hashes() {
     );
 }
 
+/// An empty update changes nothing, logs nothing and has no receipt, and its revert likewise
+/// changes and logs nothing: on an oracle never written to as on one holding hashes. The revert on
+/// an oracle never written to used to log an update its commit never logged.
+#[test]
+fn an_empty_update_and_its_revert_change_nothing_and_log_nothing() {
+    let (accounts, never_written, key_1, _key_2) = init_tree();
+    let block_state = BlockState::new(1, 1, Policy::max_supported_version());
+    let mut holding_hashes = never_written.clone();
+    apply_update(
+        &accounts,
+        &mut holding_hashes,
+        &key_1,
+        vec![make_hash(1), make_hash(2)],
+        &block_state,
+    );
+    let empty = make_update_transaction(Address([1u8; 20]), &key_1, vec![]);
+
+    for (state, mut oracle) in [
+        ("never written to", never_written),
+        ("holding hashes", holding_hashes),
+    ] {
+        let before = oracle.clone();
+        let mut db_txn = accounts.env().write_transaction();
+        let mut txn: nimiq_trie::WriteTransactionProxy = (&mut db_txn).into();
+        let data_store = accounts.data_store(&Address([1u8; 20]));
+
+        let mut commit_log = TransactionLog::empty();
+        let receipt = oracle
+            .commit_incoming_transaction(
+                &empty,
+                &block_state,
+                data_store.write(&mut txn),
+                &mut commit_log,
+            )
+            .expect("an empty update commits");
+        assert_eq!(receipt, None, "{state}: an empty update has no receipt");
+        assert_eq!(
+            commit_log.logs,
+            vec![],
+            "{state}: an empty update logs nothing"
+        );
+        assert_eq!(oracle, before, "{state}: an empty update changes nothing");
+
+        let mut revert_log = TransactionLog::empty();
+        oracle
+            .revert_incoming_transaction(
+                &empty,
+                &block_state,
+                receipt,
+                data_store.write(&mut txn),
+                &mut revert_log,
+            )
+            .expect("an empty update reverts");
+        assert_eq!(revert_log.logs, vec![], "{state}: its revert logs nothing");
+        assert_eq!(oracle, before, "{state}: its revert changes nothing");
+    }
+}
+
 /// The algorithm is fixed at creation, so the first update cannot choose another one. Before,
 /// an empty contract took the algorithm of whatever was written to it first, and a bridge created
 /// against it had nothing to check its own hash function against.
