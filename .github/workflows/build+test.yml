@@ -146,9 +146,12 @@ jobs:
     - name: Compile to wasm and generate bindings
       working-directory: ./web-client
       run: ./scripts/build.sh --only nodejs,types
-    - name: Validate type declarations
+    - name: Validate published type declarations
       working-directory: ./web-client/extras
-      run: yarn tsc ../dist/types/wasm/bundler.d.ts
+      run: yarn test:types
+    - name: Typecheck web-client extras
+      working-directory: ./web-client/extras
+      run: yarn typecheck
     - name: Install dependencies in the web-client/dist folder
       working-directory: ./web-client/dist
       run: yarn install

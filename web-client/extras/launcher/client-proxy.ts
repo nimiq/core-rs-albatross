@@ -1,4 +1,5 @@
 import type { Remote } from 'comlink';
+import type { Worker as NodeWorker } from 'node:worker_threads';
 import type { Client, PlainClientConfiguration } from '../../dist/types/bundler';
 
 export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (worker: Worker) => Remote<Client>): {
@@ -80,14 +81,17 @@ export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (work
 
 /** Abstractions over the differences between web workers and NodeJS worker_threads */
 
-function addEventListener(worker: Worker, type: string, listener: (event: MessageEvent | {}) => void): void {
-    const method = 'addListener' in worker ? 'addListener' : 'addEventListener';
-    worker[method](type, listener);
+// In NodeJS, the worker factory returns a worker_threads Worker, even though it's typed as a web Worker.
+type AnyWorker = Worker | NodeWorker;
+
+function addEventListener(worker: AnyWorker, type: string, listener: (event: MessageEvent | {}) => void): void {
+    if ('addListener' in worker) worker.addListener(type, listener);
+    else worker.addEventListener(type, listener);
 }
 
-function removeEventListener(worker: Worker, type: string, listener: (event: MessageEvent | {}) => void): void {
-    const method = 'removeListener' in worker ? 'removeListener' : 'removeEventListener';
-    worker[method](type, listener);
+function removeEventListener(worker: AnyWorker, type: string, listener: (event: MessageEvent | {}) => void): void {
+    if ('removeListener' in worker) worker.removeListener(type, listener);
+    else worker.removeEventListener(type, listener);
 }
 
 function getEventData(event: MessageEvent | {}): {} {

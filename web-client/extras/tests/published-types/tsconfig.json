@@ -1,0 +1,16 @@
+{
+  // Typechecks the *published* types of @nimiq/core (from ../../../dist) the way a consumer would:
+  // without skipLibCheck, in strict mode, and with a conservative lib that does not include `esnext`.
+  // Requires the types and the lib to be built first (scripts/build.sh).
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": false,
+    "noEmit": true,
+    "target": "ES2021",
+    "lib": ["ES2021", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": []
+  },
+  "files": ["consumer.ts"]
+}

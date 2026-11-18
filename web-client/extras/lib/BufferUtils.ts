@@ -1,3 +1,4 @@
+import type { ArrayBufferUint8Array } from './ArrayUtils';
 import { SerialBuffer } from './SerialBuffer';
 import { StringUtils } from './StringUtils';
 
@@ -165,7 +166,7 @@ class BufferUtils {
         return res;
     }
 
-    static fromBase32(base32: string, alphabet: string = BufferUtils.BASE32_ALPHABET.NIMIQ): Uint8Array {
+    static fromBase32(base32: string, alphabet: string = BufferUtils.BASE32_ALPHABET.NIMIQ): ArrayBufferUint8Array {
         const charmap: Record<string, number> = {};
         alphabet.toUpperCase().split('').forEach((c, i) => {
             if (!(c in charmap)) charmap[c] = i;
@@ -215,7 +216,7 @@ class BufferUtils {
         return new SerialBuffer(new Uint8Array((hex.match(/.{2}/g) || []).map(byte => parseInt(byte, 16))));
     }
 
-    private static _utf8TextEncoder(str: string): Uint8Array {
+    private static _utf8TextEncoder(str: string): ArrayBufferUint8Array {
         if (typeof TextEncoder === 'undefined') throw new Error('TextEncoder not supported');
         if (BufferUtils._UTF8_ENCODER === null) throw new Error('TextEncoder does not support utf8');
         if (BufferUtils._UTF8_ENCODER === undefined) {
@@ -229,7 +230,7 @@ class BufferUtils {
         return BufferUtils._UTF8_ENCODER.encode(str);
     }
 
-    static fromUtf8(str: string): Uint8Array {
+    static fromUtf8(str: string): ArrayBufferUint8Array {
         return BufferUtils._utf8TextEncoder(str);
     }
 
@@ -292,7 +293,7 @@ class BufferUtils {
         return 0;
     }
 
-    static xor(a: Uint8Array, b: Uint8Array): Uint8Array {
+    static xor(a: Uint8Array, b: Uint8Array): ArrayBufferUint8Array {
         const res = new Uint8Array(a.byteLength);
         for (let i = 0; i < a.byteLength; ++i) {
             res[i] = a[i] ^ b[i];
