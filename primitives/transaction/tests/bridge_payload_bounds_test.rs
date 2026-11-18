@@ -1,17 +1,10 @@
 //! Burn-payload size bounds on the consensus release path.
 //!
-//! `OutgoingTransaction::validate()` documents a 10,000-byte cap on the burn payload, but the
-//! consensus release path never calls it: it deserializes `sender_data` with
-//! `OutgoingBridgeTransactionData::parse` and then calls `.verify()`, which checks only the
-//! signature. `validate_outgoing_transaction_comprehensive`, which does re-check the cap, has no
-//! callers at all.
-//!
-//! What actually bounds the payload is `Policy::MAX_TX_SENDER_DATA_SIZE`, enforced while
-//! deserializing an extended transaction — so it applies to every transaction that arrives over
-//! the wire or is read out of a block. That bound is *tighter* than the documented cap, which is
-//! why the unenforced cap is not currently reachable. These tests pin the real ceiling, pin the
-//! discrepancy, and fail loudly if `MAX_TX_SENDER_DATA_SIZE` is ever raised past 10,000 — at which
-//! point the unenforced cap would stop being harmless.
+//! The release path has no payload cap of its own: it deserializes `sender_data` with
+//! `OutgoingBridgeTransactionData::parse` and verifies the signature. What bounds the payload is
+//! `Policy::MAX_TX_SENDER_DATA_SIZE`, enforced while deserializing an extended transaction, so it
+//! applies to every transaction that arrives over the wire or is read out of a block. These tests
+//! pin that ceiling, so that changing the policy limit or the envelope is a visible decision.
 
 mod amoy;
 
@@ -25,9 +18,6 @@ use nimiq_transaction::{
     SignatureProof, Transaction,
 };
 use nimiq_utils::merkle::MerklePath;
-
-/// The documented (but unenforced) cap in `OutgoingTransaction::validate()`.
-const DOCUMENTED_PAYLOAD_CAP: usize = 10_000;
 
 fn key_pair() -> KeyPair {
     KeyPair::from(
@@ -202,59 +192,6 @@ fn merkle_proof_nodes_shrink_the_burn_payload_budget() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The documented cap, and why it is currently unreachable
-// ---------------------------------------------------------------------------------------------
-
-/// The 10,000-byte cap is real code that works when called, is *not* applied on the path consensus
-/// uses, and cannot currently be reached because the transport cap is tighter.
-///
-/// The last assertion is the one that matters over time: `MAX_TX_SENDER_DATA_SIZE` has already
-/// been raised once for the bridge's EVM-compatible Merkle proofs. If it is raised past 10,000,
-/// the unenforced cap stops being harmless and this test fails, forcing a choice: enforce the cap
-/// on the deserialized path, or delete the dead validator and document the real bound.
-#[test]
-fn documented_10kb_burn_payload_cap_is_unreachable_from_the_wire() {
-    // The cap works when it is called...
-    assert!(matches!(
-        burn_proof(DOCUMENTED_PAYLOAD_CAP + 1, empty_path()).validate(),
-        Err(BridgeError::InvalidDataLength)
-    ));
-    assert!(burn_proof(DOCUMENTED_PAYLOAD_CAP, empty_path())
-        .validate()
-        .is_ok());
-
-    // ...but it is not applied on the path consensus takes: `parse` deserializes an oversized
-    // payload happily, and `verify` only checks the signature.
-    let oversized = release_tx(sender_data(DOCUMENTED_PAYLOAD_CAP + 1_000, empty_path()));
-    let parsed = OutgoingBridgeTransactionData::parse(&oversized)
-        .expect("parse does not apply the payload cap");
-    assert_eq!(
-        parsed.burn_proof.burn_transaction_data.len(),
-        DOCUMENTED_PAYLOAD_CAP + 1_000,
-    );
-
-    // It stays harmless only because such a transaction cannot be deserialized at all.
-    assert!(
-        !survives_the_wire(&oversized),
-        "the transport cap is what keeps the unenforced payload cap harmless"
-    );
-    // The guard that has to hold over time, stated behaviourally so it is actually compiled: a
-    // payload *at* the documented cap must not be able to arrive at all. The day
-    // `MAX_TX_SENDER_DATA_SIZE` grows enough for one to arrive, this fails and forces the choice
-    // between enforcing the cap and removing it.
-    assert!(
-        !survives_the_wire(&release_tx(sender_data(
-            DOCUMENTED_PAYLOAD_CAP,
-            empty_path()
-        ))),
-        "a burn payload at the unenforced {DOCUMENTED_PAYLOAD_CAP}-byte cap can now reach \
-         consensus (MAX_TX_SENDER_DATA_SIZE is {}): the cap must be enforced on the deserialized \
-         path, or deleted and the real bound documented",
-        Policy::MAX_TX_SENDER_DATA_SIZE,
-    );
-}
-
-// ---------------------------------------------------------------------------------------------
 // Bounded work at the ceiling, and the empty payload
 // ---------------------------------------------------------------------------------------------
 
@@ -298,8 +235,8 @@ fn max_size_burn_payload_parses_without_panicking() {
     assert_eq!(parsed.bridge_address, minimal_parsed.bridge_address);
 }
 
-/// The other half of the unreachable `validate()`: empty payloads. The risk rationale rests on
-/// these being caught downstream, so pin that they are — on the path consensus actually takes.
+/// An empty payload is refused on the path consensus takes, and by the constructor the RPC and the
+/// web client build releases with.
 #[test]
 fn empty_burn_payload_is_rejected_on_the_release_path() {
     let config = amoy_chain_config();
@@ -313,9 +250,8 @@ fn empty_burn_payload_is_rejected_on_the_release_path() {
         empty.parse_burn_data(&config),
         Err(BridgeError::InvalidDataLength)
     ));
-    // And the unreachable validator would have rejected it too.
     assert!(matches!(
-        empty.validate(),
+        OutgoingTransaction::new(Vec::new(), empty_path(), 0),
         Err(BridgeError::InvalidDataLength)
     ));
 }

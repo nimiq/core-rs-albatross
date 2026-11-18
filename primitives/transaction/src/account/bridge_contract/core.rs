@@ -479,34 +479,22 @@ pub struct OutgoingTransaction {
 }
 
 impl OutgoingTransaction {
-    /// Creates a new outgoing transaction with validation.
-    ///
+    /// Creates the burn proof of a release. A release must carry its burn record, so an empty one
+    /// is refused here, as consensus would refuse it. The record's size is bounded by
+    /// `Policy::MAX_TX_SENDER_DATA_SIZE`, which every transaction meets when it is deserialized.
     pub fn new(
         burn_transaction_data: Vec<u8>,
         merkle_proof: AnyMerkleProof,
         oracle_state_index: u64,
     ) -> Result<Self, BridgeError> {
-        let transaction = Self {
+        if burn_transaction_data.is_empty() {
+            return Err(BridgeError::InvalidDataLength);
+        }
+        Ok(Self {
             burn_transaction_data,
             merkle_proof,
             oracle_state_index,
-        };
-        transaction.validate()?;
-        Ok(transaction)
-    }
-
-    /// Validates the outgoing transaction fields.
-    ///
-    /// Checks that burn data is present and within size limits.
-    ///
-    pub fn validate(&self) -> Result<(), BridgeError> {
-        if self.burn_transaction_data.is_empty() {
-            return Err(BridgeError::InvalidDataLength);
-        }
-        if self.burn_transaction_data.len() > 10_000 {
-            return Err(BridgeError::InvalidDataLength);
-        }
-        Ok(())
+        })
     }
 
     /// Parses burn transaction data using the validation program.
@@ -703,11 +691,6 @@ impl OutgoingTransaction {
     /// Returns the depth of the Merkle proof (number of nodes).
     pub fn proof_depth(&self) -> usize {
         self.merkle_proof.len()
-    }
-
-    /// Checks if the proof depth is within the allowed maximum.
-    pub fn is_proof_depth_valid(&self, max_depth: u32) -> bool {
-        self.proof_depth() <= max_depth as usize
     }
 }
 /// Merkle proof validator for cross-chain transaction verification.
@@ -1224,24 +1207,6 @@ pub mod data_encoding {
         // Apply endianness conversion if needed
         // For now, we return the data as-is
         Ok(data.to_vec())
-    }
-
-    /// Validates that data conforms to the chain's encoding requirements.
-    pub fn validate_data_encoding(
-        data: &[u8],
-        _chain_config: &ChainConfig,
-    ) -> Result<(), BridgeError> {
-        if data.is_empty() {
-            return Err(BridgeError::InvalidDataLength);
-        }
-
-        // Check maximum data size (10KB limit)
-        if data.len() > 10_000 {
-            return Err(BridgeError::InvalidDataLength);
-        }
-
-        // Additional validation based on chain format could be added here
-        Ok(())
     }
 }
 
@@ -2047,9 +2012,7 @@ pub mod transaction_validation {
     use nimiq_hash::{Blake2bHasher, Hasher};
     use nimiq_primitives::{coin::Coin, policy::Policy};
 
-    use super::{
-        AddressFormat, BridgeError, ChainConfig, IncomingTransaction, OutgoingTransaction,
-    };
+    use super::{AddressFormat, BridgeError, ChainConfig, IncomingTransaction};
 
     /// Validates all fields of a burn transaction.
     /// Validates that an amount is positive and within acceptable ranges.
@@ -2173,48 +2136,6 @@ pub mod transaction_validation {
 
         // Validate recipient data
         tx.recipient_data.validate(chain_config)?;
-
-        Ok(())
-    }
-
-    /// Performs comprehensive validation of an outgoing transaction.
-    ///
-    /// Validates all fields including burn data, amount, nonce, block height,
-    /// and proof depth.
-    pub fn validate_outgoing_transaction_comprehensive(
-        tx: &OutgoingTransaction,
-        max_proof_depth: u32,
-        chain_config: &ChainConfig,
-    ) -> Result<(), BridgeError> {
-        // Validate burn transaction data
-        if tx.burn_transaction_data.is_empty() {
-            return Err(BridgeError::InvalidDataLength);
-        }
-
-        if tx.burn_transaction_data.len() > 10_000 {
-            return Err(BridgeError::InvalidDataLength);
-        }
-
-        // Parse the transaction to validate its contents
-        let parsed = tx.parse_burn_data(chain_config)?;
-
-        // Validate amount
-        validate_amount(parsed.amount, None)?;
-
-        // Validate nonce
-        if parsed.target_nonce == 0 {
-            return Err(BridgeError::NonceAlreadyUsed);
-        }
-
-        // Validate block height
-        if parsed.burn_block_height == 0 {
-            return Err(BridgeError::InvalidValidityHeight);
-        }
-
-        // Validate proof depth
-        if !tx.is_proof_depth_valid(max_proof_depth) {
-            return Err(BridgeError::ProofDepthExceeded);
-        }
 
         Ok(())
     }
