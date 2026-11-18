@@ -2421,3 +2421,60 @@ async fn trie_completing_on_a_macro_head_opens_the_gate_without_a_new_block() {
         "the gate must open on the completing chunk at macro block #{head_number}, no block follows"
     );
 }
+
+/// The reported state sync progress (e.g. RPC `getSyncStatus`) must reach 100% once the trie is
+/// complete, not stay at the start key of the last chunk received, and start over when a macro
+/// sync reinitializes the trie as incomplete.
+#[test(tokio::test)]
+async fn reports_state_sync_progress() {
+    let NodeAndPeer {
+        target,
+        live_sync,
+        network,
+        block_tx,
+        mut mock_node,
+        peer_id,
+        mock_id,
+        source,
+    } = incomplete_node_with_complete_peer().await;
+    // Replace the live sync by one that reports its progress.
+    drop((live_sync, block_tx));
+    let sync_progress = Arc::new(AtomicU32::new(0));
+    let (mut live_sync, block_tx) =
+        live_sync_over_with_progress(&target, &network, Arc::clone(&sync_progress));
+    live_sync.add_peer(peer_id);
+    spawn(async move { while mock_node.next().await.is_some() {} });
+    let progress = || sync_progress.load(std::sync::atomic::Ordering::Acquire);
+    assert_eq!(progress(), 0);
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    let block = push_micro_block(&producer, &source);
+    block_tx.send((block, mock_id.clone())).await.unwrap();
+    assert!(
+        drive_until(&mut live_sync, || target.read().accounts_complete()).await,
+        "timed out waiting for the state sync"
+    );
+    settle(&mut live_sync).await;
+    assert_eq!(progress(), 100, "the trie is complete");
+
+    // Macro sync reinitializes the trie as incomplete.
+    produce_macro_blocks(&producer, &source, 1);
+    let macro_block = Block::Macro(source.read().macro_head().clone());
+    assert_eq!(
+        Blockchain::push_macro(target.upgradable_read(), macro_block),
+        Ok(PushResult::Extended)
+    );
+    assert!(!target.read().accounts_complete());
+    settle(&mut live_sync).await;
+    assert!(progress() < 100, "the trie was reinitialized as incomplete");
+
+    // And completes again.
+    let block = push_micro_block(&producer, &source);
+    block_tx.send((block, mock_id)).await.unwrap();
+    assert!(
+        drive_until(&mut live_sync, || target.read().accounts_complete()).await,
+        "timed out re-syncing the chunks"
+    );
+    settle(&mut live_sync).await;
+    assert_eq!(progress(), 100, "the trie is complete again");
+}

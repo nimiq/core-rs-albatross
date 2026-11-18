@@ -4549,6 +4549,8 @@ dependencies = [
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "nimiq-primitives",
+ "nimiq-test-log",
+ "nimiq-test-utils",
  "nimiq-time",
  "nimiq-utils",
  "parking_lot 0.13.0",

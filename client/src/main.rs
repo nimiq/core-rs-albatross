@@ -137,6 +137,7 @@ async fn main_inner() -> Result<(), Error> {
             client.network(),
             &nimiq_task_metric,
         )
+        .expect("Failed to start metrics server");
     }
 
     // Create the "monitor" future which never completes to keep the client alive.
