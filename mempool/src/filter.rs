@@ -51,8 +51,8 @@ impl MempoolFilter {
     pub fn accepts_transaction(&self, tx: &Transaction) -> bool {
         tx.fee >= self.rules.tx_fee &&
              tx.value >= self.rules.tx_value &&
-             // Unchecked addition of coins.
-             tx.value + tx.fee >= self.rules.tx_value_total &&
+             // Saturating: this runs before the stateless verification bounds the sum.
+             tx.total_value() >= self.rules.tx_value_total &&
              tx.fee_per_byte() >= self.rules.tx_fee_per_byte && (
                 !tx.flags.contains(TransactionFlags::CONTRACT_CREATION) || (
                     tx.fee >= self.rules.contract_fee ||

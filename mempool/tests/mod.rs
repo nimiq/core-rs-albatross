@@ -2862,6 +2862,27 @@ async fn unfunded_sender_is_refused_before_signature_verification() {
     ));
 }
 
+/// The filter sees transactions nobody has verified yet: a value and a fee that only overflow
+/// together are refused, they must not panic.
+#[test(tokio::test)]
+async fn overflowing_total_is_refused_before_signature_verification() {
+    let (blockchain, sender, recipient) = blockchain_with_sender(0);
+    let tx = Transaction::new_basic(
+        sender.address,
+        recipient.address,
+        Coin::MAX,
+        Coin::from_u64_unchecked(1),
+        1 + Policy::genesis_block_number(),
+        NetworkId::UnitAlbatross,
+    );
+
+    let mempool = Mempool::new(blockchain, MempoolConfig::default());
+    assert!(matches!(
+        mempool.add_transaction(tx, None).await,
+        Err(VerifyErr::InvalidAccount(_))
+    ));
+}
+
 /// The sender's pending reservation counts in the pre-check: a second transaction that no longer
 /// fits is refused without verifying its signature.
 #[test(tokio::test)]
