@@ -4,8 +4,8 @@ use nimiq_account::{
 };
 use nimiq_database::traits::{Database, WriteTransaction};
 use nimiq_hash::{
-    Blake2bHash, Blake2bHasher, HashOutput, Hasher, Keccak256Hash, Keccak256Hasher, Sha256Hash,
-    Sha256Hasher,
+    Blake2bHash, Blake2bHasher, Hash, HashOutput, Hasher, Keccak256Hash, Keccak256Hasher,
+    Sha256Hash, Sha256Hasher,
 };
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
@@ -616,6 +616,69 @@ fn an_outgoing_transaction_from_the_bridge_that_is_not_a_release_invalidates_its
 
     // The release itself still goes through.
     let receipts = commit_block(&test, &[release], &bs);
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+}
+
+/// The target's signature covers a re-serialization of the release, while the chain tells
+/// transactions apart by the hash of their bytes. Whoever relays a signed release could re-encode
+/// it into other bytes that decode to it, with an overlong varint, and so give it a new hash under
+/// the same signature. The target's nonce stops a second payout, but anything tracking releases by
+/// hash would be misled, so only the canonical encoding is valid.
+#[test]
+fn a_release_re_encoded_non_canonically_is_refused() {
+    let owner = KeyPair::generate_default_csprng();
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_attested_burn(&burn_data, blake2b_bridge(&owner), &[]);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+    let signed = make_outgoing_tx_full(
+        RELEASE_AMOUNT,
+        burn_data,
+        first_write_proof(),
+        0,
+        &target_key(),
+    );
+
+    // The data starts with the record's length, 84, a varint, and the record is followed by the
+    // proof's variant tag, 3 for a Blake2b path, another varint. Both also decode overlong.
+    let data = &signed.sender_data;
+    assert_eq!((data[0], data[85]), (84, 3));
+    let re_encodings = [
+        [&[0x80 | 84, 0x00], &data[1..]].concat(),
+        [&data[..85], &[0x83, 0x00], &data[86..]].concat(),
+    ];
+
+    for sender_data in re_encodings {
+        let mut re_encoded = signed.clone();
+        re_encoded.sender_data = sender_data;
+        assert_eq!(
+            OutgoingBridgeTransactionData::parse(&re_encoded)
+                .expect("the re-encoding must decode")
+                .serialize_to_vec(),
+            signed.sender_data,
+            "the same release, the target's signature included",
+        );
+        assert_ne!(
+            re_encoded.hash::<Blake2bHash>(),
+            signed.hash::<Blake2bHash>(),
+            "a transaction the chain has not seen",
+        );
+
+        assert_eq!(
+            re_encoded.verify(NetworkId::UnitAlbatross, Policy::max_supported_version()),
+            Err(TransactionError::InvalidData),
+        );
+        assert_eq!(
+            invalid_block_moving_nothing(&test, &re_encoded, &bs),
+            AccountError::InvalidTransaction(TransactionError::InvalidData),
+        );
+    }
+
+    // The canonical encoding releases.
+    assert_eq!(
+        signed.verify(NetworkId::UnitAlbatross, Policy::max_supported_version()),
+        Ok(())
+    );
+    let receipts = commit_block(&test, &[signed], &bs);
     assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
 }
 

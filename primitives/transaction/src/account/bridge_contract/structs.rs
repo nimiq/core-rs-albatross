@@ -124,6 +124,18 @@ impl OutgoingBridgeTransactionData {
     }
 
     pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
+        // The target's signature is checked over a re-serialization of the data, while the chain
+        // tells transactions apart by the hash of the bytes as sent. Only the canonical encoding is
+        // valid, so that a signed release has one hash: re-encoded by whoever relays it, it would
+        // pass as a release nobody has seen. The target's nonce still stops a second payout.
+        if self.serialize_to_vec() != transaction.sender_data {
+            warn!(
+                "Release data is not canonically encoded. The offending transaction is the following:\n{:?}",
+                transaction
+            );
+            return Err(TransactionError::InvalidData);
+        }
+
         // Verify signature by creating a transaction without the signature first
         verify_transaction_signature(transaction, &self.proof)?;
         Ok(())
