@@ -1096,12 +1096,15 @@ impl PlainTransaction {
     }
 }
 
-/// Describes the state of a transaction as known by the client.
+/// Describes the inclusion and finality of a transaction as known by the client, not whether its
+/// execution succeeded. An `Included` or `Confirmed` transaction can have `executionResult: false`.
 #[cfg(feature = "client")]
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "lowercase")]
 pub enum TransactionState {
-    /// The transaction only exists locally and has not been broadcast or accepted by any peers.
+    /// The client has not observed inclusion. `sendTransaction()` can return this state after
+    /// broadcasting if no inclusion notification arrives before its wait ends. This does not prove
+    /// the transaction was not included.
     New,
     /// The transaction has been broadcast and accepted by peers and is waiting in the mempool for
     /// inclusion into the blockchain.
@@ -1110,7 +1113,8 @@ pub enum TransactionState {
     /// macro block.
     #[serde(alias = "mined")]
     Included,
-    /// The transaction is included in the blockchain and has been finalized by a following macro block.
+    /// The transaction is included in the blockchain and has been finalized by a following macro
+    /// block. Finality does not imply successful execution; check `executionResult`.
     Confirmed,
     /// The transaction was invalided by a blockchain state change before it could be included into
     /// the chain, or was replaced by a higher-fee transaction, or cannot be applied anymore after a
@@ -1131,7 +1135,11 @@ pub struct PlainTransactionDetails {
     #[serde(flatten)]
     pub transaction: PlainTransaction,
 
+    /// Inclusion and finality state, independent of the execution result.
     pub state: TransactionState,
+    /// `true` if execution succeeded, `false` if it failed. An unavailable result means the client
+    /// has not observed the outcome, as can happen when `sendTransaction()` returns state `new`.
+    /// It does not prove that the transaction was not included or that execution succeeded.
     #[tsify(optional)]
     pub execution_result: Option<bool>,
     #[tsify(optional)]
