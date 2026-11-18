@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -31,7 +32,8 @@ use crate::{
 // * level.state RwLock
 // * Evaluator::new -> threshold (now covered outside of this crate)
 
-type LevelUpdateStream<C> = BoxStream<'static, LevelUpdate<C>>;
+/// Level updates received from other peers, each with the peer that delivered it.
+type LevelUpdateStream<C, S> = BoxStream<'static, (LevelUpdate<C>, S)>;
 
 /// Future implementation for the next aggregation event
 pub struct Aggregation<TId, P, N>
@@ -47,10 +49,10 @@ where
     levels: Vec<Level>,
 
     /// Stream of level updates received from other peers.
-    input_stream: LevelUpdateStream<P::Contribution>,
+    input_stream: LevelUpdateStream<P::Contribution, N::Sender>,
 
     /// List of remaining pending contributions
-    pending_contributions: PendingContributionList<TId, P>,
+    pending_contributions: PendingContributionList<TId, P, N::Sender>,
 
     /// The protocol specifying how this aggregation works.
     protocol: P,
@@ -69,12 +71,32 @@ where
 
     /// Future of the currently verified pending contribution.
     /// There is only ever one contribution being verified at a time.
-    current_verification:
-        Option<BoxFuture<'static, (VerificationResult, PendingContribution<P::Contribution>)>>,
+    current_verification: Option<
+        BoxFuture<
+            'static,
+            (
+                VerificationResult,
+                PendingContribution<P::Contribution, N::Sender>,
+            ),
+        >,
+    >,
 
     /// The final result of the aggregation once it has been produced.
     /// A `Some(_)` value here indicates that the aggregation has finished.
     final_result: Option<P::Contribution>,
+
+    /// The peers that delivered a contribution that failed verification, each with the origin it
+    /// spoke for. Their updates are ignored for the rest of this aggregation.
+    ///
+    /// A full aggregation only has to name enough signers to be considered, and it is verified
+    /// before anything else, so without this, a peer that keeps sending forged full aggregations
+    /// would keep the verifier busy with them and delay every honest contribution, even if banning
+    /// it takes a while.
+    ///
+    /// This is keyed by peer rather than by origin alone because more than one peer can speak for
+    /// the same origin, and the peer that forged the contribution may not be one the origin
+    /// controls. Updates from the origin's other peers are still considered.
+    rejected_senders: HashSet<(usize, N::Sender)>,
 }
 
 impl<TId, P, N> Aggregation<TId, P, N>
@@ -87,7 +109,7 @@ where
         protocol: P,
         config: Config,
         own_contribution: P::Contribution,
-        input_stream: LevelUpdateStream<P::Contribution>,
+        input_stream: LevelUpdateStream<P::Contribution, N::Sender>,
         network: N,
     ) -> Self {
         // Create the sender, buffering a single message per recipient.
@@ -105,13 +127,13 @@ where
             PendingContributionList::new(protocol.identify(), protocol.evaluator());
 
         // Add our own contribution to the list.
-        // Set the trusted flag such that the signature will not get verified.
+        // It has no sender, so it is trusted and its signature will not get verified.
         pending_contributions.add_contribution(
             own_contribution.clone(),
             0,
             protocol.node_id(),
+            None,
             Kind::Aggregate,
-            true,
         );
 
         // Regardless of level completion consecutive levels need to be activated at some point.
@@ -135,6 +157,7 @@ where
             periodic_update_interval,
             current_verification: None,
             final_result: None,
+            rejected_senders: HashSet::new(),
         }
     }
 
@@ -355,7 +378,7 @@ where
     /// aggregate will be emitted.
     fn apply_contribution(
         &mut self,
-        contribution: PendingContribution<P::Contribution>,
+        contribution: PendingContribution<P::Contribution, N::Sender>,
     ) -> P::Contribution {
         // Special case for full aggregations, which are sent at level `num_levels`.
         if contribution.level == self.levels.len() {
@@ -398,9 +421,12 @@ where
     /// verification resolves immediately, None otherwise.
     fn start_verification(
         &mut self,
-        pending_contribution: PendingContribution<P::Contribution>,
+        pending_contribution: PendingContribution<P::Contribution, N::Sender>,
         cx: &mut Context<'_>,
-    ) -> Option<(VerificationResult, PendingContribution<P::Contribution>)> {
+    ) -> Option<(
+        VerificationResult,
+        PendingContribution<P::Contribution, N::Sender>,
+    )> {
         // Create a new verification future.
         let verifier = self.protocol.verifier();
         let mut fut = async move {
@@ -415,6 +441,21 @@ where
 
         self.current_verification = Some(fut);
         None
+    }
+
+    /// Stops considering contributions that the sender of `contribution`, which failed
+    /// verification, delivers for its origin for the rest of this aggregation, and bans that
+    /// sender. See [`Self::rejected_senders`].
+    fn reject_sender(&mut self, contribution: PendingContribution<P::Contribution, N::Sender>) {
+        // Only received contributions are verified, and those always have a sender.
+        let Some(sender) = contribution.sender else {
+            return;
+        };
+        let origin = contribution.origin;
+        if self.rejected_senders.insert((origin, sender.clone())) {
+            self.pending_contributions.remove_sender(origin, &sender);
+            self.network.ban_node(origin, sender);
+        }
     }
 
     /// Responds to an update received from `node_id` with our own best aggregate for `level_id`.
@@ -445,7 +486,7 @@ where
 
         // Poll the input stream for new level updates.
         let evaluator = self.protocol.evaluator();
-        while let Poll::Ready(Some(update)) =
+        while let Poll::Ready(Some((update, sender))) =
             // Our caller assumes that calling `poll_next` on this stream
             // clears the queue.
             //
@@ -457,6 +498,15 @@ where
             // cooperate from this particular future.
             task::unconstrained(self.input_stream.next()).poll_unpin(cx)
         {
+            // Ignore peers that already delivered a contribution for this origin that failed
+            // verification.
+            if self
+                .rejected_senders
+                .contains(&(update.origin(), sender.clone()))
+            {
+                continue;
+            }
+
             // Verify the level update.
             if let Err(error) = evaluator.verify(&update) {
                 warn!(
@@ -479,16 +529,16 @@ where
                 update.aggregate,
                 level,
                 origin,
+                Some(sender.clone()),
                 Kind::Aggregate,
-                false,
             );
             if let Some(individual) = update.individual {
                 self.pending_contributions.add_contribution(
                     individual,
                     level,
                     origin,
+                    Some(sender),
                     Kind::Individual,
-                    false,
                 );
             }
         }
@@ -512,7 +562,7 @@ where
                     ?contribution,
                     "Rejecting invalid contribution"
                 );
-                self.network.ban_node(contribution.origin);
+                self.reject_sender(contribution);
             }
         };
 
@@ -563,7 +613,7 @@ where
                         ?contribution,
                         "Rejecting invalid contribution"
                     );
-                    self.network.ban_node(contribution.origin);
+                    self.reject_sender(contribution);
                 }
             }
         }
