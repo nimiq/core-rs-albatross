@@ -479,6 +479,147 @@ fn a_target_signed_release_submitted_by_a_third_party_is_accepted() {
 }
 
 // =====================================================================
+// Outgoing transactions that are not canonical releases
+// =====================================================================
+
+/// Commits a block holding `tx` and returns why `tx` makes it invalid. The accounts tree, the
+/// bridge's nonce store included, is compared in the block's own write transaction after the
+/// rejection: an invalid block is discarded, so comparing it afterwards would prove nothing.
+fn invalid_block_moving_nothing(
+    test: &TestCommitRevert,
+    tx: &Transaction,
+    bs: &BlockState,
+) -> AccountError {
+    let root_before = test.get_root_hash_assert(None);
+    let env = test.env();
+    let mut raw = env.write_transaction();
+    let mut txn: nimiq_trie::WriteTransactionProxy = (&mut raw).into();
+    let error = match test.commit(
+        &mut txn,
+        std::slice::from_ref(tx),
+        &[],
+        bs,
+        &mut BlockLogger::empty(),
+    ) {
+        Err(AccountsError::InvalidTransaction(error, offender)) => {
+            assert_eq!(&offender, tx, "the block must be invalid because of tx");
+            error
+        }
+        other => panic!("the block must be invalid, got {other:?}"),
+    };
+    test.tree
+        .update_root(&mut txn)
+        .expect("the accounts tree is complete");
+    assert_eq!(
+        test.get_root_hash_assert(Some(&txn)),
+        root_before,
+        "a refused transaction must leave the accounts tree as it was",
+    );
+    error
+}
+
+/// Nothing but a release moves value out of the bridge, and the bridge's `owner` has no power over
+/// its funds. The owner signs a withdrawal of everything the bridge holds: as a basic transaction
+/// from the bridge's address, and as an outgoing bridge transaction whose only authority is that
+/// signature. Garbage `sender_data` and every truncation of a valid release fail to parse. Each
+/// is refused when verified, and a block holding it is invalid and moves nothing.
+#[test]
+fn an_outgoing_transaction_from_the_bridge_that_is_not_a_release_invalidates_its_block() {
+    let owner = KeyPair::generate_default_csprng();
+    let owner_address = Address::from(&owner.public);
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = env_with_attested_burn(&burn_data, blake2b_bridge(&owner), &[]);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // Signed by the owner, in the transaction's proof, as a basic account's owner would sign.
+    let signed_by_owner = |mut tx: Transaction| {
+        tx.proof = SignatureProof::from_ed25519(owner.public, owner.sign(&tx.serialize_content()))
+            .serialize_to_vec();
+        tx
+    };
+    // An outgoing bridge transaction to the owner carrying `sender_data`.
+    let from_bridge = |sender_data: Vec<u8>| {
+        Transaction::new_extended(
+            bridge_addr(),
+            AccountType::Bridge,
+            sender_data,
+            owner_address.clone(),
+            AccountType::Basic,
+            vec![],
+            Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+            Coin::ZERO,
+            1,
+            NetworkId::UnitAlbatross,
+        )
+    };
+    // A basic transaction's sender is a basic account, and the owner's key is not the bridge's.
+    let basic = signed_by_owner(Transaction::new_basic(
+        bridge_addr(),
+        owner_address.clone(),
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+        Coin::ZERO,
+        1,
+        NetworkId::UnitAlbatross,
+    ));
+    assert_eq!(
+        basic.verify(NetworkId::UnitAlbatross, Policy::max_supported_version()),
+        Err(TransactionError::InvalidProof),
+    );
+    assert_eq!(
+        invalid_block_moving_nothing(&test, &basic, &bs),
+        AccountError::TypeMismatch {
+            expected: AccountType::Basic,
+            got: AccountType::Bridge,
+        },
+    );
+
+    // Everything else is an outgoing bridge transaction whose `sender_data` is not a release.
+    let release = make_outgoing_tx_full(
+        RELEASE_AMOUNT,
+        burn_data,
+        first_write_proof(),
+        0,
+        &target_key(),
+    );
+    let mut unparsable = vec![
+        (
+            "only the owner's proof".to_string(),
+            signed_by_owner(from_bridge(vec![])),
+        ),
+        (
+            "garbage sender_data".to_string(),
+            signed_by_owner(from_bridge(b"not a release".to_vec())),
+        ),
+    ];
+    unparsable.extend((0..release.sender_data.len()).map(|len| {
+        let mut truncated = release.clone();
+        truncated.sender_data.truncate(len);
+        (format!("a release truncated to {len} bytes"), truncated)
+    }));
+
+    for (case, tx) in unparsable {
+        assert!(
+            matches!(
+                tx.verify(NetworkId::UnitAlbatross, Policy::max_supported_version()),
+                Err(TransactionError::InvalidSerialization(_))
+            ),
+            "{case} must be refused when verified",
+        );
+        assert!(
+            matches!(
+                invalid_block_moving_nothing(&test, &tx, &bs),
+                AccountError::InvalidTransaction(TransactionError::InvalidSerialization(_))
+            ),
+            "{case} must invalidate its block",
+        );
+    }
+
+    // The release itself still goes through.
+    let receipts = commit_block(&test, &[release], &bs);
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+}
+
+// =====================================================================
 // Non-Blake2b hash types end-to-end
 // =====================================================================
 
