@@ -291,11 +291,13 @@ impl AccountTransactionInteraction for OracleContract {
                 IncomingOracleTransactionData::Update { hashes, .. } => {
                     let num_hashes = hashes.len() as u64;
 
+                    // An empty update changed nothing and logged nothing, on an oracle never
+                    // written to as well, so its revert does neither.
+                    if num_hashes == 0 {
+                        return Ok(());
+                    }
+
                     if let Some(current_latest) = self.latest_index {
-                        if num_hashes == 0 {
-                            // Empty update is a no-op.
-                            return Ok(());
-                        }
                         // Only the first update started at index 0: back to the fresh state.
                         if num_hashes > current_latest {
                             self.latest_index = None;

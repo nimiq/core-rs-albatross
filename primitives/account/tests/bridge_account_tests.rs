@@ -1,9 +1,9 @@
 use nimiq_account::{
-    Account, AccountsError, BasicAccount, BlockLogger, BlockState, BridgeContract,
+    Account, AccountsError, BasicAccount, BlockLogger, BlockState, BridgeContract, BurnProofError,
     OperationReceipt, OracleContract, Receipts, ReservedBalance, RevertInfo, TransactionLog,
 };
 use nimiq_database::traits::{Database, WriteTransaction};
-use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
+use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher, Sha256Hash};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
     account::{AccountError, AccountType},
@@ -288,6 +288,41 @@ fn rejected_block(test: &TestCommitRevert, txs: &[Transaction], bs: &BlockState)
     }
 }
 
+/// Like `rejected_block`, and also returns the bridge and the last nonce it released to `target`,
+/// read in the block's own write transaction after the rejection. An invalid block is discarded, so
+/// state read after that is unchanged whatever the release did; read before, it is what the
+/// rejected release itself left.
+fn rejected_block_state(
+    test: &TestCommitRevert,
+    txs: &[Transaction],
+    bs: &BlockState,
+    target: &Address,
+) -> (AccountError, BridgeContract, u64) {
+    let env = test.env();
+    let mut raw = env.write_transaction();
+    let mut txn: nimiq_trie::WriteTransactionProxy = (&mut raw).into();
+    let error = match test.commit(&mut txn, txs, &[], bs, &mut BlockLogger::empty()) {
+        Err(AccountsError::InvalidTransaction(error, tx)) => {
+            assert_eq!(
+                tx.sender_type,
+                AccountType::Bridge,
+                "the block must be invalid because of a release"
+            );
+            error
+        }
+        other => panic!("a block containing a failing release must be invalid, got {other:?}"),
+    };
+
+    let bridge = match test.get_complete(&bridge_addr(), Some(&txn)) {
+        Account::Bridge(bridge) => bridge,
+        other => panic!("the bridge must stay a bridge, found {other:?}"),
+    };
+    let nonce = bridge
+        .get_nonce(&test.data_store(&bridge_addr()).read(&txn), target)
+        .expect("the accounts tree is complete");
+    (error, bridge, nonce)
+}
+
 // =====================================================================
 // Bridge: create_new_contract
 // =====================================================================
@@ -542,6 +577,88 @@ fn bridge_create_checks_the_declared_algorithm_of_an_empty_oracle() {
                 hash_algorithm.name()
             );
         }
+    }
+}
+
+/// A release runs the validation program on its record with nothing expected of it, so `Assert`
+/// and every `PushExpected*` operation fail on every record. A bridge running one could take locks
+/// but never release them. Creation refuses each, both when the transaction is verified and when
+/// the bridge would be created, while the same program without it creates the bridge.
+#[test]
+fn bridge_creation_rejects_a_program_that_needs_expected_values() {
+    let owner = KeyPair::generate_default_csprng();
+    let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
+    let test = TestCommitRevert::with_initial_state(&[(
+        oracle_addr(),
+        Account::Oracle(make_single_state_oracle(&burn_data)),
+    )]);
+    let bs = BlockState::new(1, 1, Policy::max_supported_version());
+
+    // A creation transaction, signed by its sender, for the standard program followed by `op`.
+    let creation = |op: Option<ValidationOp>| {
+        let mut operations = standard_program().operations;
+        operations.extend(op);
+        let creation_data = BridgeCreationData {
+            owner: Address::from(&owner.public),
+            oracle_address: oracle_addr(),
+            source_chain_id: SOURCE_CHAIN_ID,
+            chain_config: ChainConfig {
+                validation_program: ValidationProgram::new(operations),
+                ..chain_config()
+            },
+        };
+        let mut tx = Transaction::new_contract_creation(
+            Address::from(&owner.public),
+            AccountType::Basic,
+            vec![],
+            AccountType::Bridge,
+            creation_data.serialize_to_vec(),
+            Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
+            Coin::ZERO,
+            1,
+            NetworkId::UnitAlbatross,
+        );
+        tx.proof = SignatureProof::from_ed25519(owner.public, owner.sign(&tx.serialize_content()))
+            .serialize_to_vec();
+        tx
+    };
+    let create = |tx: &Transaction| {
+        test.test_create_new_contract::<BridgeContract>(
+            tx,
+            Coin::ZERO,
+            &bs,
+            &mut TransactionLog::empty(),
+            false,
+        )
+    };
+
+    let tx = creation(None);
+    assert_eq!(
+        tx.verify(NetworkId::UnitAlbatross, Policy::max_supported_version()),
+        Ok(())
+    );
+    assert!(create(&tx).is_ok(), "the standard program creates a bridge");
+
+    for op in [
+        ValidationOp::PushExpectedAmount,
+        ValidationOp::PushExpectedAddress,
+        ValidationOp::PushExpectedNonce,
+        ValidationOp::PushExpectedValidityHeight,
+        ValidationOp::Assert,
+    ] {
+        let tx = creation(Some(op.clone()));
+        assert_eq!(
+            tx.verify(NetworkId::UnitAlbatross, Policy::max_supported_version()),
+            Err(TransactionError::InvalidData),
+            "a program with {op:?} must not pass verification",
+        );
+        assert_eq!(
+            create(&tx).err(),
+            Some(AccountError::InvalidTransaction(
+                TransactionError::InvalidData
+            )),
+            "a program with {op:?} must not create a bridge",
+        );
     }
 }
 
@@ -902,10 +1019,11 @@ fn bridge_outgoing_rejects_nonce_gap() {
     );
 }
 
-/// Same nonce submitted twice → second submission rejected.
+/// A released burn released again is refused, and the replay leaves the bridge and its nonce store
+/// as the first release left them.
 #[test]
 fn bridge_outgoing_rejects_duplicate_nonce() {
-    let (test, _, burn_data) = setup_outgoing_env();
+    let (test, owner, burn_data) = setup_outgoing_env();
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     let tx = make_outgoing_tx(
         &bridge_addr(),
@@ -918,11 +1036,22 @@ fn bridge_outgoing_rejects_duplicate_nonce() {
     // First submission succeeds
     let r1 = commit_block(&test, &[tx.clone()], &bs);
     assert!(matches!(r1.transactions[0], OperationReceipt::Ok(_)));
+    let released = BridgeContract {
+        balance: Coin::from_u64_unchecked(BRIDGE_DEPOSIT - RELEASE_AMOUNT),
+        transaction_count: 1,
+        ..bridge_with(&oracle_addr(), &owner)
+    };
+    assert_eq!(stored_bridge(&test), released);
+    assert_eq!(released_nonce(&test, &nimiq_target()), 1);
+
     // Second identical submission must fail (nonce=1 already used)
+    let (error, bridge, nonce) = rejected_block_state(&test, &[tx], &bs, &nimiq_target());
     assert_eq!(
-        rejected_block(&test, &[tx], &bs),
+        error,
         AccountError::InvalidTransaction(TransactionError::InvalidData),
     );
+    assert_eq!(bridge, released, "the replay must not debit the bridge");
+    assert_eq!(nonce, 1, "the replay must leave the target's nonce at 1");
 }
 
 /// Oracle state index out of bounds → rejected.
@@ -1016,10 +1145,11 @@ fn bridge_outgoing_succeeds_with_wrapped_oracle_index() {
     );
 }
 
-/// Merkle proof doesn't match oracle state hash → rejected.
+/// A path to a root no oracle slot holds is refused, and the release leaves the bridge and its
+/// nonce store as they were.
 #[test]
 fn bridge_outgoing_rejects_wrong_merkle_proof() {
-    let (test, _, _) = setup_outgoing_env();
+    let (test, owner, _) = setup_outgoing_env();
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
     // Use burn_data for a completely different transaction — leaf hash won't match oracle
     let wrong_burn_data = make_burn_data(&second_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
@@ -1031,70 +1161,127 @@ fn bridge_outgoing_rejects_wrong_merkle_proof() {
         0,
         &second_target_key(),
     );
+    let (error, bridge, nonce) = rejected_block_state(&test, &[tx], &bs, &second_target());
     assert_eq!(
-        rejected_block(&test, &[tx], &bs),
+        error,
         AccountError::InvalidTransaction(TransactionError::InvalidProof),
+    );
+    assert_eq!(
+        bridge,
+        bridge_with(&oracle_addr(), &owner),
+        "the refused release must not debit the bridge",
+    );
+    assert_eq!(
+        nonce, 0,
+        "the refused release must not take the target's nonce"
     );
 }
 
-/// Proof depth exceeds max_proof_depth → rejected.
+/// `max_proof_depth` bounds the record tree only. A path two tree levels deep, through a slot
+/// written once, would verify: a bridge allowing two levels releases it, so the slot's own level
+/// is not counted, and a bridge allowing one refuses it for its depth alone. The bound is checked
+/// before the path is folded: the same nodes as a SHA-256 path, which cannot fold onto the
+/// record's Blake2b leaf, are refused as too deep where the depth is exceeded and as a mismatch
+/// only where it is not.
 #[test]
-fn bridge_outgoing_rejects_proof_depth_exceeded() {
+fn a_release_that_would_verify_but_for_its_tree_depth_is_refused() {
     let owner = KeyPair::generate_default_csprng();
     let burn_data = make_burn_data(&nimiq_target(), RELEASE_AMOUNT, 1, SOURCE_CHAIN_ID);
-    let oracle = make_single_state_oracle(&burn_data);
 
-    // Bridge with a very tight max_proof_depth of 1
-    let mut cfg = chain_config();
-    cfg.max_proof_depth = 1;
-    let bridge = BridgeContract {
-        owner: Address::from(&owner.public),
-        oracle_address: oracle_addr(),
-        balance: Coin::from_u64_unchecked(BRIDGE_DEPOSIT),
-        source_chain_id: SOURCE_CHAIN_ID,
-        chain_config: cfg,
-        transaction_count: 0,
+    // The record is the leftmost leaf of a tree two levels deep, whose root was written once, to
+    // slot 0.
+    let siblings = [blake2b(b"a later burn"), blake2b(b"two later burns")];
+    let root = record_leaf(&burn_data)
+        .digest(&siblings[0])
+        .digest(&siblings[1]);
+    let zero = root.zero_of_same_type();
+    let mut oracle = make_single_state_oracle(&burn_data);
+    oracle.hashes[0] = zero.digest(&root);
+    let path = blake2b_path(&[(&siblings[0], false), (&siblings[1], false), (&zero, true)]);
+
+    let bridge_allowing = |max_proof_depth| BridgeContract {
+        chain_config: ChainConfig {
+            max_proof_depth,
+            ..chain_config()
+        },
+        ..bridge_with(&oracle_addr(), &owner)
     };
-    let test = TestCommitRevert::with_initial_state(&[
-        (oracle_addr(), Account::Oracle(oracle)),
-        (bridge_addr(), Account::Bridge(bridge)),
-    ]);
+    let env = |max_proof_depth| {
+        TestCommitRevert::with_initial_state(&[
+            (oracle_addr(), Account::Oracle(oracle.clone())),
+            (
+                bridge_addr(),
+                Account::Bridge(bridge_allowing(max_proof_depth)),
+            ),
+        ])
+    };
+    let release = make_outgoing_tx_with_path(
+        &bridge_addr(),
+        &nimiq_target(),
+        RELEASE_AMOUNT,
+        Coin::ZERO,
+        burn_data.clone(),
+        path,
+        0,
+        &target_key(),
+    );
+    let proof = OutgoingBridgeTransactionData::parse(&release)
+        .expect("the release must parse")
+        .burn_proof;
     let bs = BlockState::new(1, 1, Policy::max_supported_version());
 
-    // Build a path with 2 nodes — a sibling leaf in the record tree, then the slot's zero hash —
-    // which exceeds max_proof_depth=1: the bound counts tree and buffer levels together.
-    let dummy = blake2b(b"a");
-    let zero = dummy.zero_of_same_type();
-    let outgoing = OutgoingTransaction {
-        burn_transaction_data: burn_data,
-        merkle_proof: AnyMerkleProof::Blake2bPath(blake2b_path(&[(&dummy, false), (&zero, true)])),
-        oracle_state_index: 0,
-    };
-    let mut bd = OutgoingBridgeTransactionData {
-        burn_proof: outgoing,
-        proof: SignatureProof::default(),
-    };
-    let mut tx = Transaction::new_extended(
-        bridge_addr(),
-        AccountType::Bridge,
-        bd.serialize_to_vec(),
-        nimiq_target(),
-        AccountType::Basic,
-        vec![],
-        Coin::from_u64_unchecked(RELEASE_AMOUNT),
-        Coin::ZERO,
-        1,
-        NetworkId::UnitAlbatross,
-    );
-    let target = target_key();
-    let sig = target.sign(&tx.serialize_content());
-    bd.set_signature(SignatureProof::from_ed25519(target.public, sig));
-    tx.sender_data = bd.serialize_to_vec();
-
+    // One tree level too many: the block is invalid, and the bridge refuses the proof as too deep.
+    let test = env(1);
+    let (error, bridge, nonce) =
+        rejected_block_state(&test, std::slice::from_ref(&release), &bs, &nimiq_target());
     assert_eq!(
-        rejected_block(&test, &[tx], &bs),
+        error,
         AccountError::InvalidTransaction(TransactionError::InvalidProof),
     );
+    assert_eq!(bridge, bridge_allowing(1));
+    assert_eq!(nonce, 0);
+    assert!(
+        matches!(
+            bridge_allowing(1).verify_burn_proof(&oracle, &proof),
+            Err(BurnProofError::TooDeep {
+                depth: 2,
+                max_depth: 1
+            })
+        ),
+        "the path has two tree levels, and its slot level is not counted",
+    );
+
+    // Allowed two levels, the same release commits: only its depth stood in its way.
+    let test = env(2);
+    let receipts = test
+        .commit_and_test(&[release], &[], &bs, &mut BlockLogger::empty())
+        .expect("the release must commit where its depth is allowed");
+    assert!(matches!(receipts.transactions[0], OperationReceipt::Ok(_)));
+    assert_eq!(
+        stored_bridge(&test).balance,
+        Coin::from_u64_unchecked(BRIDGE_DEPOSIT - RELEASE_AMOUNT),
+    );
+    assert_eq!(released_nonce(&test, &nimiq_target()), 1);
+
+    // Checked before folding: a path that cannot fold onto the leaf is refused as too deep first.
+    let unfoldable = OutgoingTransaction {
+        merkle_proof: AnyMerkleProof::Sha256Path(MerklePath::from_sibling_hashes(
+            vec![Sha256Hash::default(); 3],
+            vec![false, false, true],
+        )),
+        ..proof
+    };
+    assert!(matches!(
+        bridge_allowing(1).verify_burn_proof(&oracle, &unfoldable),
+        Err(BurnProofError::TooDeep {
+            depth: 2,
+            max_depth: 1
+        })
+    ));
+    assert!(matches!(
+        bridge_allowing(2).verify_burn_proof(&oracle, &unfoldable),
+        Err(BurnProofError::SlotMismatch(0))
+    ));
 }
 
 // =====================================================================
