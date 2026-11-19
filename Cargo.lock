@@ -3087,7 +3087,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-dns",
  "libp2p-gossipsub",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-kad",
  "libp2p-mdns",
  "libp2p-metrics",
@@ -3114,7 +3114,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d16ccf824ee859ca83df301e1c0205270206223fd4b1f2e512a693e1912a8f4a"
 dependencies = [
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-swarm",
 ]
 
@@ -3131,7 +3131,7 @@ dependencies = [
  "futures-bounded",
  "futures-timer",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-request-response",
  "libp2p-swarm",
  "quick-protobuf",
@@ -3150,7 +3150,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a18b8b607cf3bfa2f8c57db9c7d8569a315d5cc0a282e6bfd5ebfc0a9840b2a0"
 dependencies = [
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-swarm",
 ]
 
@@ -3164,7 +3164,7 @@ dependencies = [
  "fnv",
  "futures",
  "futures-timer",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "multiaddr",
  "multihash",
  "multistream-select",
@@ -3189,7 +3189,7 @@ dependencies = [
  "futures",
  "hickory-resolver",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "parking_lot 0.12.5",
  "smallvec",
  "tracing",
@@ -3214,7 +3214,7 @@ dependencies = [
  "hashlink 0.9.1",
  "hex_fmt",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-swarm",
  "quick-protobuf",
  "quick-protobuf-codec",
@@ -3246,6 +3246,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "libp2p-identity"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4af6ad75465f6bf26a1001ddbf6f2b6b84a4673bf6de289f68cdbb1430098627"
+dependencies = [
+ "tracing",
+]
+
+[[package]]
 name = "libp2p-kad"
 version = "0.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3259,7 +3268,7 @@ dependencies = [
  "futures-bounded",
  "futures-timer",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-swarm",
  "quick-protobuf",
  "quick-protobuf-codec",
@@ -3283,7 +3292,7 @@ dependencies = [
  "hickory-proto",
  "if-watch",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-swarm",
  "rand 0.8.8",
  "smallvec",
@@ -3301,7 +3310,7 @@ dependencies = [
  "futures",
  "libp2p-core",
  "libp2p-gossipsub",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-kad",
  "libp2p-ping",
  "libp2p-swarm",
@@ -3320,7 +3329,7 @@ dependencies = [
  "bytes",
  "futures",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "multiaddr",
  "multihash",
  "quick-protobuf",
@@ -3342,7 +3351,7 @@ dependencies = [
  "futures",
  "futures-timer",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-swarm",
  "rand 0.8.8",
  "tracing",
@@ -3359,7 +3368,7 @@ dependencies = [
  "futures-timer",
  "if-watch",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-tls",
  "quinn",
  "quinn-proto",
@@ -3382,7 +3391,7 @@ dependencies = [
  "futures",
  "futures-bounded",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-swarm",
  "rand 0.8.8",
  "smallvec",
@@ -3402,7 +3411,7 @@ dependencies = [
  "getrandom 0.2.16",
  "hashlink 0.10.0",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "libp2p-swarm-derive",
  "multistream-select",
  "rand 0.8.8",
@@ -3449,7 +3458,7 @@ dependencies = [
  "futures",
  "futures-rustls",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "rcgen",
  "ring",
  "rustls",
@@ -3484,7 +3493,7 @@ dependencies = [
  "futures",
  "futures-rustls",
  "libp2p-core",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "parking_lot 0.12.5",
  "pin-project-lite",
  "rw-stream-sink",
@@ -3721,7 +3730,7 @@ dependencies = [
  "arrayref",
  "byteorder",
  "data-encoding",
- "libp2p-identity",
+ "libp2p-identity 0.2.14",
  "multibase",
  "multihash",
  "percent-encoding",
@@ -5049,7 +5058,7 @@ dependencies = [
  "futures-util",
  "hex",
  "instant",
- "libp2p-identity",
+ "libp2p-identity 0.3.1",
  "nimiq-collections",
  "nimiq-database-value",
  "nimiq-database-value-derive",
