@@ -1,10 +1,14 @@
 use std::sync::Arc;
 
 use nimiq_block::{Block, BlockError, MacroBlock};
-use nimiq_blockchain::Blockchain;
-use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
+use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, PushError, PushResult};
+use nimiq_database::traits::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_primitives::policy::{upgrades, Policy};
+use nimiq_primitives::{
+    networks::NetworkId,
+    policy::{upgrades, Policy},
+};
 use nimiq_tendermint::ProposalMessage;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -15,6 +19,7 @@ use nimiq_test_utils::{
     },
     versions::{assert_all_versions, bp},
 };
+use nimiq_utils::time::OffsetTime;
 
 fn produce_blocks(temp_producer: &TemporaryBlockProducer, count: u32) {
     for _ in 0..count {
@@ -126,6 +131,200 @@ fn prune_epoch_micro_blocks() {
         .chain_store
         .get_chain_info(&micro_block3.hash(), false, Some(&mut txs),)
         .is_err());
+}
+
+#[test]
+fn prune_epoch_removes_diffs_of_kept_blocks() {
+    // Goal: pruning an epoch removes the accounts diffs of the blocks it keeps
+    // (election block, non-prunable checkpoints), but not the blocks themselves.
+
+    let temp_producer = TemporaryBlockProducer::new();
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+
+    let election = Policy::election_block_of(1).unwrap();
+    let checkpoint = Policy::macro_block_before(election);
+    produce_blocks(&temp_producer, election - Policy::genesis_block_number());
+
+    let hash_at = |height| {
+        blockchain
+            .read()
+            .chain_store
+            .get_block_at(height, false, None)
+            .unwrap()
+            .hash()
+    };
+    let has_diff = |hash: &Blake2bHash| {
+        blockchain
+            .read()
+            .chain_store
+            .get_accounts_diff(hash, None)
+            .is_ok()
+    };
+    let micro_hash = hash_at(election - 1);
+    let checkpoint_hash = hash_at(checkpoint);
+    let election_hash = hash_at(election);
+    assert!(has_diff(&micro_hash) && has_diff(&checkpoint_hash) && has_diff(&election_hash));
+
+    // Mark the checkpoint non-prunable, as if its history exceeded `HISTORY_CHUNKS_MAX_SIZE`.
+    {
+        let bc = blockchain.read();
+        let mut chain_info = bc
+            .chain_store
+            .get_chain_info(&checkpoint_hash, false, None)
+            .unwrap();
+        chain_info.prunable = false;
+        let mut txn = bc.write_transaction();
+        bc.chain_store
+            .put_chain_info(&mut txn, &checkpoint_hash, &chain_info, false);
+        txn.commit();
+    }
+
+    // The next election block prunes epoch 1.
+    produce_blocks(&temp_producer, Policy::blocks_per_epoch());
+
+    let bc = blockchain.read();
+    assert!(bc
+        .chain_store
+        .get_chain_info(&micro_hash, false, None)
+        .is_err());
+    // Pruned blocks lose their diffs as well.
+    assert!(bc.chain_store.get_accounts_diff(&micro_hash, None).is_err());
+    for hash in [&checkpoint_hash, &election_hash] {
+        assert!(bc.chain_store.get_chain_info(hash, false, None).is_ok());
+        assert_eq!(
+            bc.chain_store.get_accounts_diff(hash, None).err(),
+            Some(BlockchainError::AccountsDiffNotFound)
+        );
+    }
+    assert_eq!(
+        bc.chain_store.get_block_hashes_at(election, None),
+        vec![election_hash]
+    );
+    assert!(bc
+        .chain_store
+        .get_accounts_diff(&bc.head_hash(), None)
+        .is_ok());
+}
+
+#[test]
+fn load_removes_diffs_left_in_pruned_epochs() {
+    // Goal: loading a stored chain removes the accounts diffs that older versions of
+    // `prune_epoch` left in every pruned epoch, but not those of the epochs that
+    // `max_epochs_stored` still stores.
+
+    let temp_producer = TemporaryBlockProducer::new();
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+
+    // In epochs 1 and 2, keep the checkpoint, as if its history exceeded
+    // `HISTORY_CHUNKS_MAX_SIZE`, and save the diffs that older versions did not prune.
+    let mut leaked = vec![];
+    for epoch in 1..=2 {
+        let election = Policy::election_block_of(epoch).unwrap();
+        let checkpoint = Policy::macro_block_before(election);
+        let head = blockchain.read().block_number();
+        produce_blocks(&temp_producer, election - head);
+
+        let bc = blockchain.read();
+        let checkpoint_hash = bc
+            .chain_store
+            .get_block_at(checkpoint, false, None)
+            .unwrap()
+            .hash();
+        let mut chain_info = bc
+            .chain_store
+            .get_chain_info(&checkpoint_hash, false, None)
+            .unwrap();
+        chain_info.prunable = false;
+        let mut txn = bc.write_transaction();
+        bc.chain_store
+            .put_chain_info(&mut txn, &checkpoint_hash, &chain_info, false);
+        txn.commit();
+
+        for height in [checkpoint, election] {
+            let hash = bc
+                .chain_store
+                .get_block_at(height, false, None)
+                .unwrap()
+                .hash();
+            let diff = bc.chain_store.get_accounts_diff(&hash, None).unwrap();
+            leaked.push((epoch, hash, diff));
+        }
+    }
+
+    // The next election block prunes epoch 2, then the head moves into epoch 4.
+    produce_blocks(&temp_producer, Policy::blocks_per_epoch() + 1);
+
+    // Puts the diffs back, as older versions left them.
+    let put_back = || {
+        let bc = blockchain.read();
+        let mut txn = bc.write_transaction();
+        for (_, hash, diff) in &leaked {
+            bc.chain_store.put_accounts_diff(&mut txn, hash, diff);
+        }
+        txn.commit();
+    };
+    let (env, genesis) = {
+        let bc = blockchain.read();
+        let genesis = bc
+            .chain_store
+            .get_block_at(Policy::genesis_block_number(), false, None)
+            .unwrap();
+        (bc.state.accounts.env.clone(), genesis)
+    };
+    let reload = |max_epochs_stored| {
+        Blockchain::with_genesis(
+            env.clone(),
+            BlockchainConfig {
+                max_epochs_stored,
+                ..Default::default()
+            },
+            Arc::new(OffsetTime::new()),
+            NetworkId::UnitAlbatross,
+            genesis.clone(),
+            None,
+        )
+        .unwrap()
+    };
+
+    // By default one epoch is stored, so the diffs of epochs 1 and 2 are removed. Zero is
+    // raised to that minimum.
+    put_back();
+    for max_epochs_stored in [Policy::MIN_EPOCHS_STORED, 0] {
+        let reloaded = reload(max_epochs_stored);
+        for (_, hash, _) in &leaked {
+            assert!(reloaded
+                .chain_store
+                .get_chain_info(hash, false, None)
+                .is_ok());
+            assert_eq!(
+                reloaded.chain_store.get_accounts_diff(hash, None).err(),
+                Some(BlockchainError::AccountsDiffNotFound)
+            );
+        }
+        // The epochs still stored keep their diffs, from their first block on.
+        for height in [
+            Policy::first_block_of(3).unwrap(),
+            Policy::election_block_of(3).unwrap(),
+            reloaded.block_number(),
+        ] {
+            let hash = reloaded
+                .chain_store
+                .get_block_at(height, false, None)
+                .unwrap()
+                .hash();
+            assert!(reloaded.chain_store.get_accounts_diff(&hash, None).is_ok());
+        }
+    }
+
+    // With two epochs stored, epoch 2 is still stored and keeps its diffs.
+    put_back();
+    let reloaded = reload(2);
+    for (epoch, hash, _) in &leaked {
+        assert_eq!(
+            reloaded.chain_store.get_accounts_diff(hash, None).is_ok(),
+            *epoch == 2
+        );
+    }
 }
 
 #[test]

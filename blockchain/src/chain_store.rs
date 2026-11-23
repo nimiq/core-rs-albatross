@@ -608,29 +608,53 @@ impl ChainStore {
             return;
         }
 
-        for height in Policy::first_block_of(epoch_number)
-            .expect("The supplied epoch_number is out of bounds")
-            ..Policy::election_block_of(epoch_number)
-                .expect("The supplied epoch_number is out of bounds")
-        {
+        let first_block = Policy::first_block_of(epoch_number)
+            .expect("The supplied epoch_number is out of bounds");
+        let election_block = Policy::election_block_of(epoch_number)
+            .expect("The supplied epoch_number is out of bounds");
+
+        for height in first_block..election_block {
             let hashes = self.get_block_hashes_at(height, Some(txn));
             for hash in hashes {
                 let chain_info: ChainInfo = txn
                     .get(&self.chain_table, &hash)
                     .expect("Corrupted store: ChainInfo referenced from index not found");
+                // Diffs are no longer needed, even for the blocks we keep.
+                txn.remove(&self.accounts_diff_table, &hash);
                 // If we detect a block whose prunable flag is set to false, we don't prune it
                 // Then we need to keep the previous macro block
                 if chain_info.prunable {
                     txn.remove(&self.chain_table, &hash);
                     txn.remove(&self.pushed_block_table, &hash);
-                    txn.remove(&self.accounts_diff_table, &hash);
                     txn.remove_item(&self.height_idx, &height, &hash);
                 }
             }
         }
 
+        // Keep the election block (its prunable flag may be set), only drop its diff.
+        for hash in self.get_block_hashes_at(election_block, Some(txn)) {
+            txn.remove(&self.accounts_diff_table, &hash);
+        }
+
         // Clear the stored block table since epoch is finalized
         txn.clear_table(&self.stored_block_table);
+    }
+
+    /// Removes the accounts diffs of all blocks up to the election block of `epoch_number`.
+    /// Older versions of `prune_epoch` kept the diffs of the blocks they did not prune.
+    pub fn prune_accounts_diffs(&self, epoch_number: u32, txn: &mut MdbxWriteTransaction) {
+        let election_block = Policy::election_block_of(epoch_number)
+            .expect("The supplied epoch_number is out of bounds");
+
+        let hashes: Vec<Blake2bHash> = ReadTransaction::dup_cursor(&*txn, &self.height_idx)
+            .into_iter_start()
+            .take_while(|(height, _)| *height <= election_block)
+            .map(|(_, hash)| hash)
+            .collect();
+
+        for hash in hashes {
+            txn.remove(&self.accounts_diff_table, &hash);
+        }
     }
 
     /// Finalizes a batch by removing blocks that were only stored
