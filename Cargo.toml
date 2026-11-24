@@ -20,7 +20,6 @@ members = [
   "handel",
   "hash",
   "hash/hash_derive",
-  "key-derivation",
   "keys",
   "lib",
   "light-blockchain",
@@ -29,7 +28,6 @@ members = [
   "mempool",
   "mempool/mempool-task",
   "metrics-server",
-  "mnemonic",
   "network-interface",
   "network-libp2p",
   "network-mock",
@@ -37,7 +35,6 @@ members = [
   "primitives/account",
   "primitives/block",
   "primitives/mmr",
-  "primitives/subscription",
   "primitives/transaction",
   "primitives/trie",
   "rpc-client",
@@ -159,7 +156,6 @@ nimiq-jsonrpc-client = { version = "0.5", default-features = false }
 nimiq-jsonrpc-core = { version = "0.5", default-features = false }
 nimiq-jsonrpc-derive = { version = "0.5", default-features = false }
 nimiq-jsonrpc-server = { version = "0.5", default-features = false }
-nimiq-key-derivation = { path = "key-derivation", default-features = false }
 nimiq-keys = { path = "keys", default-features = false }
 nimiq-light-blockchain = { path = "light-blockchain", default-features = false }
 nimiq-log = { path = "log", default-features = false }
@@ -168,7 +164,6 @@ nimiq-mempool = { path = "mempool", default-features = false }
 nimiq-mempool-task = { path = "mempool/mempool-task", default-features = false }
 nimiq-metrics-server = { path = "metrics-server", default-features = false }
 nimiq-mmr = { path = "primitives/mmr", default-features = false }
-nimiq-mnemonic = { path = "mnemonic", default-features = false }
 nimiq-network-interface = { path = "network-interface", default-features = false }
 nimiq-network-libp2p = { path = "network-libp2p", default-features = false }
 nimiq-network-mock = { path = "network-mock", default-features = false }
@@ -176,7 +171,6 @@ nimiq-primitives = { path = "primitives", default-features = false }
 nimiq-rpc-interface = { path = "rpc-interface", default-features = false }
 nimiq-rpc-server = { path = "rpc-server", default-features = false }
 nimiq-serde = { path = "serde", default-features = false }
-nimiq-subscription = { path = "primitives/subscription", default-features = false }
 nimiq-tendermint = { path = "tendermint", default-features = false }
 nimiq-test-log = { path = "test-log", default-features = false }
 nimiq-test-log-proc-macro = { path = "test-log/proc-macro", default-features = false }
