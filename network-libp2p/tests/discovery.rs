@@ -190,8 +190,10 @@ impl TestNode {
 
         let config = discovery::Config {
             genesis_hash: Blake2bHash::default(),
-            update_interval: Duration::from_secs(10),
-            min_send_update_interval: Duration::from_secs(5),
+            // Short enough that the peers send their first periodic update quickly, but still
+            // twice `min_recv_update_interval`, so no update is rejected as too frequent.
+            update_interval: Duration::from_secs(2),
+            min_send_update_interval: Duration::from_secs(2),
             update_limit: 64,
             required_services: Services::FULL_BLOCKS,
             min_recv_update_interval: Duration::from_secs(1),

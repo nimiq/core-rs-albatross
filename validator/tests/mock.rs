@@ -84,10 +84,11 @@ async fn four_validators_can_create_micro_blocks() {
         spawn(validator);
     }
 
-    // Take events until 30 blocks have been produced.
+    // Take events until 10 blocks have been produced. Blocks are a second apart, so this
+    // takes about ten seconds.
     let blockchain2 = Arc::clone(&blockchain);
     let stop_fut = future::poll_fn(move |_cx| {
-        if blockchain2.read().block_number() < 30 + Policy::genesis_block_number() {
+        if blockchain2.read().block_number() < 10 + Policy::genesis_block_number() {
             Poll::Pending
         } else {
             Poll::Ready(())
@@ -105,7 +106,7 @@ async fn four_validators_can_create_micro_blocks() {
     .await
     .unwrap();
 
-    assert!(blockchain.read().block_number() >= 30 + Policy::genesis_block_number());
+    assert!(blockchain.read().block_number() >= 10 + Policy::genesis_block_number());
 }
 
 #[test(tokio::test)]

@@ -258,6 +258,33 @@ impl dht::Verifier for RejectingVerifier {
     }
 }
 
+/// Puts `record` into the DHT from `net`, retrying while `net` knows no peer to store it at.
+///
+/// A network only adds the peers it dialed itself to its DHT routing table, so a network that was
+/// only dialed by the others cannot put records until it dials one of them. At the latest, that
+/// happens about five seconds after connecting, when it dials a peer back for AutoNAT.
+async fn dht_put_when_routable(
+    net: &Network,
+    key: &Address,
+    record: &ValidatorRecord<PeerId>,
+    keypair: &KeyPair,
+) {
+    let result = timeout(Duration::from_secs(30), async {
+        loop {
+            match net.dht_put(key, record, keypair).await {
+                Err(NetworkError::DhtPutRecord(kad::PutRecordError::QuorumFailed { .. })) => {
+                    sleep(Duration::from_millis(100)).await
+                }
+                result => break result,
+            }
+        }
+    })
+    .await;
+    result
+        .expect("the network found no DHT peer to put the record at")
+        .unwrap();
+}
+
 async fn create_network_with_n_peers(
     n_peers: usize,
 ) -> (
@@ -537,9 +564,6 @@ async fn dht_put_and_get() {
     let net1 = &networks[0];
     let net2 = &networks[1];
 
-    // FIXME: Add delay while networks share their addresses
-    sleep(Duration::from_secs(10)).await;
-
     // Generate a key
     let mut rng = test_rng(false);
     let keypair = KeyPair::generate(&mut rng);
@@ -556,7 +580,7 @@ async fn dht_put_and_get() {
     assert!(keys.write().insert(key.clone(), keypair.public).is_none());
 
     // Put the record into the dht, keyed by the address.
-    net1.dht_put(&key, &put_record, &keypair).await.unwrap();
+    dht_put_when_routable(net1, &key, &put_record, &keypair).await;
 
     // Fetch the record. and make sure they are identical.
     let fetched_record = net2
@@ -580,9 +604,6 @@ async fn dht_newest_record_wins_across_peer_id_change() {
     let net2 = &networks[1];
     let net3 = &networks[2];
 
-    // FIXME: Add delay while networks share their addresses
-    sleep(Duration::from_secs(10)).await;
-
     // The validator's signing key and address stay the same throughout.
     let mut rng = test_rng(false);
     let keypair = KeyPair::generate(&mut rng);
@@ -595,7 +616,7 @@ async fn dht_newest_record_wins_across_peer_id_change() {
         validator_address: key.clone(),
         timestamp: 0x42u64,
     };
-    net1.dht_put(&key, &old_record, &keypair).await.unwrap();
+    dht_put_when_routable(net1, &key, &old_record, &keypair).await;
 
     let fetched_record = net2
         .dht_get::<_, ValidatorRecord<PeerId>, KeyPair>(&key)
@@ -658,8 +679,6 @@ async fn dht_get_with_verifier_failure_returns_error() {
     let event2 = helper::get_next_peer_event(&mut events2).await;
     helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
 
-    sleep(Duration::from_secs(10)).await;
-
     let mut rng = test_rng(false);
     let keypair = KeyPair::generate(&mut rng);
     let key: Address = (&keypair.public).into();
@@ -671,7 +690,7 @@ async fn dht_get_with_verifier_failure_returns_error() {
     };
 
     assert!(keys.write().insert(key.clone(), keypair.public).is_none());
-    net1.dht_put(&key, &put_record, &keypair).await.unwrap();
+    dht_put_when_routable(&net1, &key, &put_record, &keypair).await;
 
     let result = timeout(
         Duration::from_secs(2),
