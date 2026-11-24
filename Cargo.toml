@@ -184,4 +184,3 @@ nimiq-validator = { path = "validator", default-features = false }
 nimiq-validator-network = { path = "validator-network", default-features = false }
 nimiq-vrf = { path = "vrf", default-features = false }
 nimiq-wallet = { path = "wallet", default-features = false }
-nimiq-web-client = { path = "web-client", default-features = false }

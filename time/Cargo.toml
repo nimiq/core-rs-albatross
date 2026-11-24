@@ -16,11 +16,15 @@ workspace = true
 
 [dependencies]
 futures = { workspace = true }
+instant = { version = "0.1", features = ["wasm-bindgen"] }
+pin-project-lite = "0.2.17"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { version = "1.52", features = ["time"] }
+tokio-stream = { version = "0.1", features = ["time"] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
 # Patched locally. See issue nimiq/core-rs-albatross#3844 and ranile/gloo#570.
 # Currently vendored via `patches/gloo-timers`; remove once the fix is upstream.
 gloo-timers = { version = "0.4", features = ["futures"] }
-instant = { version = "0.1", features = ["wasm-bindgen"] }
-pin-project-lite = "0.2.17"
 send_wrapper = { version = "0.6", features = ["futures"] }
-tokio = { version = "1.52", features = ["time"] }
-tokio-stream = { version = "0.1", features = ["time"] }

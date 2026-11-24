@@ -4557,7 +4557,6 @@ name = "nimiq-network-libp2p"
 version = "2.3.0"
 dependencies = [
  "async-trait",
- "base64 0.23.1",
  "bytes",
  "futures-util",
  "hex",
