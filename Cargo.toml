@@ -107,6 +107,40 @@ opt-level = 2
 [profile.test.package.ark-mnt6-753]
 opt-level = 2
 
+# Every produced or verified block hashes, signs and checks VRF seeds, so these
+# crypto crates dominate the run time of tests that build chains when they are
+# left unoptimized. curve25519-dalek is especially slow on x86_64, where its
+# AVX2 backend relies on intrinsics that are only inlined when optimizing.
+[profile.dev.package.blake2-rfc]
+opt-level = 2
+
+[profile.test.package.blake2-rfc]
+opt-level = 2
+
+[profile.dev.package.curve25519-dalek]
+opt-level = 2
+
+[profile.test.package.curve25519-dalek]
+opt-level = 2
+
+[profile.dev.package.ed25519-zebra]
+opt-level = 2
+
+[profile.test.package.ed25519-zebra]
+opt-level = 2
+
+[profile.dev.package.num-bigint]
+opt-level = 2
+
+[profile.test.package.num-bigint]
+opt-level = 2
+
+[profile.dev.package.sha2]
+opt-level = 2
+
+[profile.test.package.sha2]
+opt-level = 2
+
 [patch.crates-io]
 gloo-timers = { path = "patches/gloo-timers" }
 
