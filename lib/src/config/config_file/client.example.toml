@@ -140,6 +140,8 @@ network = "main-albatross"
 sync_mode = "full"
 
 # The number of epochs that the node stores. This only concerns nodes with "full" sync mode.
+# Lowering it takes effect gradually: each election block, about every 12 hours on mainnet,
+# prunes one of the epochs over the new limit.
 # Default: 1
 #max_epochs_stored = 1
 
