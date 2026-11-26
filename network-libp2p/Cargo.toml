@@ -21,7 +21,6 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-async-trait = "0.1"
 bytes = "1.11"
 futures = { workspace = true }
 hex = "0.4"
@@ -54,7 +53,7 @@ nimiq-utils = { workspace = true, features = [
 ] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-libp2p = { version = "0.56", default-features = false, features = [
+libp2p = { version = "0.57", default-features = false, features = [
     "autonat",
     "gossipsub",
     "kad",
@@ -68,7 +67,7 @@ libp2p = { version = "0.56", default-features = false, features = [
 ] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-libp2p = { version = "0.56", default-features = false, features = [
+libp2p = { version = "0.57", default-features = false, features = [
     "autonat",
     "gossipsub",
     "kad",
@@ -78,13 +77,14 @@ libp2p = { version = "0.56", default-features = false, features = [
     "request-response",
     "serde",
     "yamux",
-    "wasm-bindgen",
     "websocket-websys",
 ] }
 
 [dev-dependencies]
 # In dev/testing we require more tokio features
 tokio = { version = "1.52", features = ["macros", "rt", "rt-multi-thread", "test-util", "time", "tracing"] }
+# Points the DNS transport at a local server in the `tokio-websocket` tests
+hickory-resolver = { version = "0.26", default-features = false }
 
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }

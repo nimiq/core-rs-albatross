@@ -14,6 +14,8 @@ mod network;
 mod network_metrics;
 mod network_types;
 mod only_secure_ws_transport;
+#[cfg(feature = "tokio-websocket")]
+mod panic_safe_dns_transport;
 mod rate_limiting;
 mod swarm;
 mod utils;
@@ -35,6 +37,7 @@ pub use network::Network;
 use serde::{
     de::Error, ser::Error as SerializationError, Deserialize, Deserializer, Serialize, Serializer,
 };
+pub use utils::is_address_decodable_by_all_peers;
 
 /// Wrapper to libp2p Keypair identity that implements SerDe Serialize/Deserialize
 #[derive(Clone, Debug)]

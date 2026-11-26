@@ -1,7 +1,7 @@
 use std::{iter, sync::Arc};
 
 use libp2p::{
-    autonat::v2::{self as autonat, client::Config as AutonatConfig},
+    autonat::v2 as autonat,
     connection_limits, gossipsub,
     kad::{self, store::MemoryStore},
     ping, request_response,
@@ -113,11 +113,10 @@ impl Behaviour {
         );
 
         // AutoNAT server behaviour
-        let autonat_server = autonat::server::Behaviour::new(Default::default());
+        let autonat_server = autonat::server::Behaviour::default();
 
         // AutoNAT client behaviour
-        let autonat_client =
-            autonat::client::Behaviour::new(Default::default(), AutonatConfig::default());
+        let autonat_client = autonat::client::Behaviour::default();
 
         // Connection limits behaviour
         let limits = connection_limits::ConnectionLimits::default()

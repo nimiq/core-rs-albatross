@@ -10,6 +10,15 @@ use crate::{
     DHT_PROTOCOL,
 };
 
+/// Maximum size of the control messages and subscriptions in a gossipsub RPC.
+///
+/// A single IHAVE or IWANT from old and new peers alike carries up to `max_control_messages_sent`
+/// (5000) of our 32-byte message ids, about 170 KB, and the receiver drops the sender's whole
+/// inbound stream on an RPC over the limit, so the 16 KiB default is far too small. It shouldn't
+/// be much larger either: gossipsub compares every received IDONTWANT id with the whole send
+/// queue of that peer, so a larger limit lets a single RPC keep the swarm busy for longer.
+const GOSSIPSUB_MAX_CONTROL_MESSAGE_SIZE: usize = 256 * 1024;
+
 /// TLS settings for configuring a secure WebSocket
 pub struct TlsConfig {
     /// Private key (DER-encoded ASN.1 in either PKCS#8 or PKCS#1 format).
@@ -71,6 +80,7 @@ impl Config {
             .mesh_n_low(3)
             .validate_messages()
             .max_transmit_size(MIN_SUPPORTED_MSG_SIZE)
+            .max_control_message_size(GOSSIPSUB_MAX_CONTROL_MESSAGE_SIZE)
             .validation_mode(gossipsub::ValidationMode::Permissive)
             .heartbeat_interval(Duration::from_millis(700))
             // Use the message hash as the message ID instead of the default PeerId + sequence_number

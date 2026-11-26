@@ -30,8 +30,8 @@ use nimiq_network_interface::{
     Multiaddr, Protocol,
 };
 use nimiq_network_libp2p::{
-    discovery::peer_contacts::PeerContact, Config as NetworkConfig, Network,
-    TlsConfig as NetworkTls,
+    discovery::peer_contacts::PeerContact, is_address_decodable_by_all_peers,
+    Config as NetworkConfig, Network, TlsConfig as NetworkTls,
 };
 use nimiq_primitives::policy::Policy;
 #[cfg(feature = "full-consensus")]
@@ -182,6 +182,21 @@ impl ClientInner {
         #[cfg(feature = "validator")]
         if config.validator.is_some() {
             provided_services |= Services::VALIDATOR;
+        }
+
+        // Reject addresses with protocols that older peers cannot decode, as nodes on multiaddr
+        // 0.18 did. They drop discovery messages that carry such addresses.
+        if let Some(address) = config
+            .network
+            .listen_addresses
+            .iter()
+            .chain(config.network.advertised_addresses.iter().flatten())
+            .chain(config.network.seeds.iter().map(|seed| &seed.address))
+            .find(|address| !is_address_decodable_by_all_peers(address))
+        {
+            return Err(Error::config_error(format!(
+                "Address {address} uses a protocol that older peers cannot decode"
+            )));
         }
 
         // Generate my peer contact from identity keypair, our own addresses
