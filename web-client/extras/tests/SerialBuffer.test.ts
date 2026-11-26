@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ArrayUtils } from '../lib/ArrayUtils';
 import { BufferUtils } from '../lib/BufferUtils';
 import { SerialBuffer } from '../lib/SerialBuffer';
 
@@ -199,6 +200,43 @@ describe('SerialBuffer', () => {
         expect(() => {
             buffer.writePaddedString(string1, length1 - 2);
         }).toThrowError('Malformed value/length');
+    });
+
+    it('returns plain, ArrayBuffer-backed Uint8Arrays from subarray and read', () => {
+        const buffer = new SerialBuffer([1, 2, 3, 4, 5]);
+
+        const view = buffer.subarray(1, 3);
+        expect(view).not.toBeInstanceOf(SerialBuffer);
+        expect(view).toEqual(new Uint8Array([2, 3]));
+        expect(view.buffer).toBe(buffer.buffer);
+        expect(view.buffer).toBeInstanceOf(ArrayBuffer);
+        expect(buffer.subarray(3, 1)).toEqual(new Uint8Array([]));
+        expect(buffer.subarray(0, 10)).toEqual(new Uint8Array([1, 2, 3, 4, 5]));
+        // Negative indices count from the end, like in `Uint8Array.prototype.subarray`.
+        expect(buffer.subarray(-2)).toEqual(new Uint8Array([4, 5]));
+        expect(buffer.subarray(1, -1)).toEqual(new Uint8Array([2, 3, 4]));
+        expect(buffer.subarray(-10, 2)).toEqual(new Uint8Array([1, 2]));
+        // Views of views are relative to the view, not the underlying buffer.
+        expect(ArrayUtils.subarray(view, 1)).toEqual(new Uint8Array([3]));
+
+        buffer.readPos = 1;
+        const read = buffer.read(2);
+        expect(read).not.toBeInstanceOf(SerialBuffer);
+        expect(read).toEqual(new Uint8Array([2, 3]));
+        expect(read.buffer).not.toBe(buffer.buffer);
+        expect(read.buffer).toBeInstanceOf(ArrayBuffer);
+    });
+
+    it('throws when reading out of bounds', () => {
+        const buffer = new SerialBuffer([1, 2, 3, 4, 5]);
+        buffer.readPos = 3;
+        expect(() => buffer.read(3)).toThrowError('Malformed length');
+        expect(() => buffer.read(-1)).toThrowError('Malformed length');
+        expect(() => buffer.read(1.5)).toThrowError('Malformed length');
+        expect(buffer.readPos).toBe(3);
+        expect(buffer.read(2)).toEqual(new Uint8Array([4, 5]));
+        expect(buffer.read(0)).toEqual(new Uint8Array([]));
+        expect(() => buffer.readString(1)).toThrowError('Malformed length');
     });
 
     it('throws an error on invalid writes/reads', () => {

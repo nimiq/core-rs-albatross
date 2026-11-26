@@ -146,9 +146,18 @@ jobs:
     - name: Compile to wasm and generate bindings
       working-directory: ./web-client
       run: ./scripts/build.sh --only nodejs,types
-    - name: Validate type declarations
+    - name: Validate published type declarations
       working-directory: ./web-client/extras
-      run: yarn tsc ../dist/types/wasm/bundler.d.ts
+      run: yarn test:types
+    - name: Validate published type declarations with TypeScript 5
+      working-directory: ./web-client/extras
+      run: |
+        # Oldest supported, last before generic typed arrays (5.7), and latest 5.x version
+        for VERSION in 5.0 5.6 5.9; do
+          echo "Checking with TypeScript $VERSION"
+          npx --yes --package=typescript@$VERSION -- tsc -p tests/published-types
+          npx --yes --package=typescript@$VERSION -- tsc -p tests/published-types/tsconfig.esnext.json
+        done
     - name: Install dependencies in the web-client/dist folder
       working-directory: ./web-client/dist
       run: yarn install

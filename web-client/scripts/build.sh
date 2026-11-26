@@ -179,6 +179,24 @@ if contains "types" "$TARGETS"; then
     wasm-bindgen --weak-refs --target web --out-name web --out-dir dist/types/wasm "$CARGO_OUTPUT"
     wasm-bindgen --weak-refs --target bundler --out-name bundler --out-dir dist/types/wasm "$CARGO_OUTPUT"
     find dist/types/wasm ! -name 'web.d.ts' ! -name 'bundler.d.ts' -type f -exec rm {} +
+
+    # The generated classes implement `[Symbol.dispose]()`, but `Symbol.dispose` is only declared in TypeScript's
+    # `esnext.disposable` lib. Declare it in the declarations themselves, so they also typecheck for consumers whose
+    # `lib` setting doesn't include it (e.g. `"lib": ["ES2021", "DOM"]`, without `skipLibCheck`).
+    # We only declare `Symbol.dispose` instead of referencing the whole `esnext.disposable` lib, which would add types
+    # like `DisposableStack` to the consumer's globals (that might not exist at runtime) and fails on TypeScript < 5.2.
+    for DTS_FILE in dist/types/wasm/*.d.ts; do
+        if grep -q 'Symbol\.dispose' "$DTS_FILE" && ! grep -q 'readonly dispose: unique symbol;' "$DTS_FILE"; then
+            cat >> "$DTS_FILE" <<'DTS'
+
+declare global {
+    interface SymbolConstructor {
+        readonly dispose: unique symbol;
+    }
+}
+DTS
+        fi
+    done
 fi
 
 # Build launcher

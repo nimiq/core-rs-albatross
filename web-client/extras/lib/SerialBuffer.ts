@@ -1,4 +1,4 @@
-import { ArrayUtils } from './ArrayUtils';
+import { type ArrayBufferUint8Array, ArrayUtils } from './ArrayUtils';
 import { BufferUtils } from './BufferUtils';
 import { NumberUtils } from './NumberUtils';
 import { StringUtils } from './StringUtils';
@@ -19,7 +19,16 @@ export class SerialBuffer extends Uint8Array {
         this._writePos = 0;
     }
 
-    override subarray(start?: number, end?: number): Uint8Array {
+    /**
+     * Returns a plain `Uint8Array` view (not a `SerialBuffer`) of this buffer from `start` (inclusive) to `end`
+     * (exclusive), sharing the same underlying buffer.
+     */
+    override subarray(start?: number, end?: number): ArrayBufferUint8Array {
+        // Overridden, because the native `subarray` would create a `SerialBuffer` via the species constructor,
+        // which doesn't support the `byteOffset` and `length` arguments.
+        // The return type is `ArrayBufferUint8Array` instead of `Uint8Array`, because the base class resolves to
+        // `Uint8Array<ArrayBuffer>` on TypeScript >= 5.7, where a bare `Uint8Array` (= `Uint8Array<ArrayBufferLike>`)
+        // would be an invalid override (TS2416).
         return ArrayUtils.subarray(this, start, end);
     }
 
@@ -49,7 +58,10 @@ export class SerialBuffer extends Uint8Array {
         this._writePos = 0;
     }
 
-    read(length: number): Uint8Array {
+    read(length: number): ArrayBufferUint8Array {
+        if (!Number.isInteger(length) || length < 0 || this._readPos + length > this.byteLength) {
+            throw new Error('Malformed length');
+        }
         const value = this.subarray(this._readPos, this._readPos + length);
         this._readPos += length;
         return new Uint8Array(value);
@@ -194,7 +206,6 @@ export class SerialBuffer extends Uint8Array {
 
     readVarLengthString(): string {
         const length = this.readVarUint();
-        if (this._readPos + length > this.length) throw new Error('Malformed length');
         const bytes = this.read(length);
         return BufferUtils.toUtf8(bytes);
     }

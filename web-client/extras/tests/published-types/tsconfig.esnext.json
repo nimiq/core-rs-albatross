@@ -1,0 +1,8 @@
+{
+  // Same as tsconfig.json, but with the `esnext` lib, which already declares `Symbol.dispose`, `Disposable` etc.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM"]
+  }
+}
