@@ -1,5 +1,6 @@
 import type { Remote } from 'comlink';
 import type { Client, PlainClientConfiguration } from '../../dist/types/bundler';
+import { addEventListener, getEventData, removeEventListener } from './worker-utils';
 
 export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (worker: Worker) => Remote<Client>): {
     create(config: PlainClientConfiguration): Promise<Client>,
@@ -76,22 +77,4 @@ export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (work
             return client;
         },
     };
-}
-
-/** Abstractions over the differences between web workers and NodeJS worker_threads */
-
-function addEventListener(worker: Worker, type: string, listener: (event: MessageEvent | {}) => void): void {
-    const method = 'addListener' in worker ? 'addListener' : 'addEventListener';
-    worker[method](type, listener);
-}
-
-function removeEventListener(worker: Worker, type: string, listener: (event: MessageEvent | {}) => void): void {
-    const method = 'removeListener' in worker ? 'removeListener' : 'removeEventListener';
-    worker[method](type, listener);
-}
-
-function getEventData(event: MessageEvent | {}): {} {
-    return typeof event === 'object' && 'data' in event
-        ? event.data
-        : event;
 }

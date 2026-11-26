@@ -2,7 +2,8 @@
   "scripts": {
     "fmt": "dprint fmt",
     "test": "vitest",
-    "test:types": "tsc -p tests/published-types && tsc -p tests/published-types/tsconfig.esnext.json"
+    "test:types": "tsc -p tests/published-types && tsc -p tests/published-types/tsconfig.esnext.json",
+    "typecheck": "tsc -p ."
   },
   "dependencies": {
     "@nimiq/core": "link:../dist",
@@ -11,7 +12,7 @@
   "devDependencies": {
     "@types/node": "^22.7.5",
     "dprint": "^0.47.0",
-    "tsup": "^8.1.0",
+    "tsup": "^9.0.0",
     "typescript": "~6.0.3",
     "vitest": "^4.1.11"
   }

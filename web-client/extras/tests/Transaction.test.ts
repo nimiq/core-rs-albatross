@@ -6,6 +6,7 @@ import {
     PrivateKey,
     PublicKey,
     Transaction,
+    TransactionBuilder,
     TransactionFormat,
 } from '@nimiq/core';
 import { describe, expect, it } from 'vitest';
@@ -144,5 +145,37 @@ describe('Transaction', () => {
         // Cannot compare proof field yet, as re-serialization creates a PoS proof with a a leading 0x00-byte
         // expect(plain2.proof).toEqual(plain.proof);
         expect(plain2.size).toEqual(plain.size);
+    });
+
+    it('signs the inner proof of incoming staking transactions with the inner key pair, if provided', () => {
+        const outer = KeyPair.derive(
+            PrivateKey.fromHex('41771e617f4a847642f9c0cd0fdb9b22b0c9dfdd2548fe7a6cad0a782e588f63'),
+        );
+        const inner = KeyPair.derive(
+            PrivateKey.fromHex('0000000000000000000000000000000000000000000000000000000000000001'),
+        );
+        const toHex = (bytes: Uint8Array) => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+        const signedData = (innerKeyPair?: KeyPair | null) => {
+            const tx = TransactionBuilder.newCreateStaker(outer.toAddress(), undefined, 100_00000n, 0n, 1, 5);
+            tx.sign(outer, innerKeyPair as KeyPair | undefined);
+            expect(tx.proof.length).toBeGreaterThan(0);
+            return toHex(tx.data);
+        };
+
+        // With an inner key pair, the inner proof is signed by it.
+        const withInner = signedData(inner);
+        expect(withInner).toContain(inner.publicKey.toHex());
+        expect(withInner).not.toContain(outer.publicKey.toHex());
+
+        // Without an inner key pair (`undefined` or `null`), the outer key pair signs the inner proof.
+        const withOuter = signedData(outer);
+        expect(withOuter).toContain(outer.publicKey.toHex());
+        expect(signedData()).toEqual(withOuter);
+        expect(signedData(undefined)).toEqual(withOuter);
+        expect(signedData(null)).toEqual(withOuter);
+
+        // Anything else throws.
+        const tx = TransactionBuilder.newCreateStaker(outer.toAddress(), undefined, 100_00000n, 0n, 1, 5);
+        expect(() => tx.sign(outer, {} as KeyPair)).toThrow();
     });
 });

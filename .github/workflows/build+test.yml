@@ -158,6 +158,9 @@ jobs:
           npx --yes --package=typescript@$VERSION -- tsc -p tests/published-types
           npx --yes --package=typescript@$VERSION -- tsc -p tests/published-types/tsconfig.esnext.json
         done
+    - name: Typecheck web-client extras
+      working-directory: ./web-client/extras
+      run: yarn typecheck
     - name: Install dependencies in the web-client/dist folder
       working-directory: ./web-client/dist
       run: yarn install
