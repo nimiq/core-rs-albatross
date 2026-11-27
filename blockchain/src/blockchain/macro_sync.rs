@@ -1,5 +1,3 @@
-use std::cmp;
-
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
@@ -8,7 +6,7 @@ use nimiq_database::traits::{ReadTransaction, WriteTransaction};
 use nimiq_primitives::policy::Policy;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
-use crate::{interface::HistoryInterface, Blockchain};
+use crate::Blockchain;
 
 /// Implements methods to sync a full node via macro blocks.
 impl Blockchain {
@@ -127,24 +125,7 @@ impl Blockchain {
 
         // Since it's a macro block, we have to clear the ChainStore.
         if is_election_block {
-            let max_epochs_stored =
-                cmp::max(this.config.max_epochs_stored, Policy::MIN_EPOCHS_STORED);
-
-            // Calculate the epoch to be pruned.
-            let pruned_epoch = Policy::epoch_at(block_number).checked_sub(max_epochs_stored);
-
-            if let Some(pruned_epoch) = pruned_epoch {
-                // Prune the Chain Store.
-                this.chain_store.prune_epoch(pruned_epoch, &mut txn);
-
-                if !this.config.keep_history {
-                    // Prune the History Store.
-                    // We will never prune pre-genesis data here.
-                    if pruned_epoch > 0 {
-                        this.history_store.remove_history(&mut txn, pruned_epoch);
-                    }
-                }
-            }
+            this.prune_at_election_block(block_number, &mut txn);
         }
 
         txn.commit();

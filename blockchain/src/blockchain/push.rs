@@ -355,24 +355,7 @@ impl Blockchain {
         }
 
         if is_election_block {
-            let max_epochs_stored =
-                cmp::max(this.config.max_epochs_stored, Policy::MIN_EPOCHS_STORED);
-
-            // Calculate the epoch to be pruned.
-            let pruned_epoch = Policy::epoch_at(block_number).checked_sub(max_epochs_stored);
-
-            if let Some(pruned_epoch) = pruned_epoch {
-                // Prune the Chain Store.
-                this.chain_store.prune_epoch(pruned_epoch, &mut txn);
-
-                if !this.config.keep_history {
-                    // Prune the History Store.
-                    // We will never prune pre-genesis data here.
-                    if pruned_epoch > 0 {
-                        this.history_store.remove_history(&mut txn, pruned_epoch);
-                    }
-                }
-            }
+            this.prune_at_election_block(block_number, &mut txn);
         }
 
         // Call the post-validation hook before commiting to the database.
@@ -509,6 +492,10 @@ impl Blockchain {
         let new_head_info = &fork_chain[0].1;
         this.chain_store.set_head(&mut write_txn, new_head_hash);
 
+        if new_head_info.head.is_election() {
+            this.prune_at_election_block(new_head_info.head.block_number(), &mut write_txn);
+        }
+
         // Call the post-validation hook before commiting to the database.
         post_validation_hook.post_validation(Ok(&PushResult::Rebranched));
 
@@ -599,6 +586,40 @@ impl Blockchain {
         send_vec(&this.log_notifier, block_logs);
 
         Ok((PushResult::Rebranched, chunk_result))
+    }
+
+    /// Prunes the epoch that leaves the stored range at the election block `block_number`, and
+    /// catches up on the oldest earlier epoch that still holds blocks to prune, if any.
+    pub(super) fn prune_at_election_block(
+        &self,
+        block_number: u32,
+        txn: &mut MdbxWriteTransaction,
+    ) {
+        let max_epochs_stored = cmp::max(self.config.max_epochs_stored, Policy::MIN_EPOCHS_STORED);
+
+        // Calculate the epoch to be pruned.
+        let pruned_epoch = Policy::epoch_at(block_number).checked_sub(max_epochs_stored);
+
+        if let Some(pruned_epoch) = pruned_epoch {
+            // An older epoch is still stored if no election block pruned it when it was due, or
+            // if `max_epochs_stored` was lowered. Catch up on one of them per election block.
+            let older_epoch = self
+                .chain_store
+                .first_unpruned_epoch_before(pruned_epoch, Some(txn));
+
+            for epoch in older_epoch.into_iter().chain([pruned_epoch]) {
+                // Prune the Chain Store.
+                self.chain_store.prune_epoch(epoch, txn);
+
+                if !self.config.keep_history {
+                    // Prune the History Store.
+                    // We will never prune pre-genesis data here.
+                    if epoch > 0 {
+                        self.history_store.remove_history(txn, epoch);
+                    }
+                }
+            }
+        }
     }
 
     pub(super) fn check_and_commit(

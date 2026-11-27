@@ -602,6 +602,27 @@ impl ChainStore {
         Ok(blocks)
     }
 
+    /// Returns the oldest epoch before `epoch_number` that still holds blocks to prune, if any.
+    pub fn first_unpruned_epoch_before(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<u32> {
+        let txn = txn_option.or_new(&self.db);
+        let first_block = Policy::first_block_of(epoch_number)?;
+
+        txn.dup_cursor(&self.height_idx)
+            .into_iter_start()
+            .take_while(|(height, _)| *height < first_block)
+            // Election blocks are kept, whatever their prunable flag says.
+            .filter(|(height, _)| !Policy::is_election_block_at(*height))
+            .find(|(_, hash)| {
+                txn.get(&self.chain_table, hash)
+                    .is_some_and(|chain_info| chain_info.prunable)
+            })
+            .map(|(height, _)| Policy::epoch_at(height))
+    }
+
     pub fn prune_epoch(&self, epoch_number: u32, txn: &mut MdbxWriteTransaction) {
         // The zero-th epoch is already pruned.
         if epoch_number == 0 {

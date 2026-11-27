@@ -501,6 +501,9 @@ impl Blockchain {
             this.state.election_head_hash = block_hash.clone();
             this.state.previous_slots = this.state.current_slots.take();
             this.state.current_slots = macro_block.get_validators();
+
+            // History sync does not prune. Its own blocks are not prunable, and later live
+            // election blocks catch up on the epochs that the node applied live before.
         }
 
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
