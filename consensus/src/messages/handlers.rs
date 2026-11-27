@@ -448,7 +448,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTrieDiff {
             .get_accounts_diff(&self.block_hash, Some(&txn))
         {
             Ok(diff) => ResponseTrieDiff::PartialDiff(diff),
-            Err(BlockchainError::BlockNotFound(..)) => ResponseTrieDiff::UnknownBlockHash,
+            Err(BlockchainError::BlockNotFoundByHash(..)) => ResponseTrieDiff::UnknownBlockHash,
             Err(BlockchainError::AccountsDiffNotFound) => ResponseTrieDiff::IncompleteState,
             Err(e) => {
                 error!("unexpected error while querying accounts diff: {}", e);
