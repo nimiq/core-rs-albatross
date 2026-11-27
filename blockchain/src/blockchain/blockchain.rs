@@ -306,6 +306,16 @@ impl Blockchain {
             }
         };
 
+        // Remove the diffs that older versions left below the stored epochs. This reads the
+        // height index up to the last pruned epoch, which is cheap: a pruned epoch keeps only
+        // a few blocks there. An epoch that was never pruned keeps all of them.
+        let max_epochs_stored = config.max_epochs_stored.max(Policy::MIN_EPOCHS_STORED);
+        if let Some(pruned_epoch) = election_head.epoch_number().checked_sub(max_epochs_stored) {
+            let mut txn = env.write_transaction();
+            chain_store.prune_accounts_diffs(pruned_epoch, &mut txn);
+            txn.commit();
+        }
+
         Ok(Blockchain {
             db: env,
             config,
