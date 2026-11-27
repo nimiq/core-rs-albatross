@@ -33,4 +33,4 @@ If the contribution doesn't meet these criteria, a maintainer will discuss with 
 3. Create a new branch (e.g. `issue-12`, `feat.add_foo`, etc) and check it out.
 4. Make your changes and commit them. (Did the tests pass?)
 5. Push your new branch to your fork. (e.g. `git push myname issue-12`)
-6. Open a Pull Request from your new branch to the original repository's `master` branch.
+6. Open a Pull Request from your new branch to the original repository's `albatross` branch.
